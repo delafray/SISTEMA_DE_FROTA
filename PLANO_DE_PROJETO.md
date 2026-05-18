@@ -2418,7 +2418,7 @@ Antes de começar a codar, vamos configurar as plataformas na ordem abaixo:
 
 **Projeto e plataformas:**
 - [x] Criar repositório no GitHub (privado) e fazer commit inicial → `https://github.com/delafray/SISTEMA_DE_FROTA`
-- [ ] Inicializar projeto Next.js 14+ (App Router) com TailwindCSS + TypeScript
+- [x] Inicializar projeto Next.js 14+ (App Router) com TailwindCSS + TypeScript
 - [ ] Instalar dependências: `@supabase/ssr`, `zod`, `react-hook-form`, `@hookform/resolvers`, `react-imask`, `jszip`, `file-saver`
 - [x] Configurar variáveis de ambiente (`.env.local` criado com URL + keys do Supabase)
 - [ ] Criar `.env.example` com placeholders (sem valores reais) e commitar
