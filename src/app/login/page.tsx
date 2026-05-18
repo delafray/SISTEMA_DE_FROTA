@@ -15,16 +15,16 @@ export default function LoginPage() {
 
         <form className="space-y-6">
           <div>
-            <label className="block text-sm font-medium text-slate-300 mb-2" htmlFor="email">
-              E-mail
+            <label className="block text-sm font-medium text-slate-300 mb-2" htmlFor="username">
+              Usuário
             </label>
             <input
-              id="email"
-              name="email"
-              type="email"
+              id="username"
+              name="username"
+              type="text"
               required
               className="w-full px-4 py-3 bg-[#0f172a] border border-slate-600 text-white focus:outline-none focus:border-blue-500 rounded-none transition-colors"
-              placeholder="seu@email.com"
+              placeholder="Digite seu usuário"
             />
           </div>
 

@@ -7,8 +7,20 @@ import { createClient } from '@/lib/supabase/server'
 export async function login(formData: FormData) {
   const supabase = await createClient()
 
-  const email = formData.get('email') as string
+  const username = formData.get('username') as string
   const password = formData.get('password') as string
+
+  // Normaliza o nome: tira espaços, minúsculas, tira acentos
+  let email = username
+    .trim()
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+
+  // Se o usuário digitou só "ronaldo", completamos o domínio que usamos no Supabase
+  if (!email.includes('@')) {
+    email = `${email}@ronaldoborba.com.br`
+  }
 
   const { error } = await supabase.auth.signInWithPassword({
     email,

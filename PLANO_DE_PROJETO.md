@@ -2397,7 +2397,7 @@ Antes de começar a codar, vamos configurar as plataformas na ordem abaixo:
 | Repositório GitHub | `https://github.com/delafray/SISTEMA_DE_FROTA` — branch `main` | ✅ |
 | Arquivos no Git | `CLAUDE.md`, `PLANO_DE_PROJETO.md`, `.gitignore` | ✅ |
 | Supabase projeto | `sistema-de-frota` — região **South America (São Paulo)** | ✅ |
-| Supabase URL | `https://ltfhfbounngaubwsxfw.supabase.co` | ✅ |
+| Supabase URL | `https://ltfthfbounngaubwsxfw.supabase.co` | ✅ |
 | Auth — Confirm email | Desativado (gestor cria contas sem precisar confirmar email) | ✅ |
 | `.env.local` | Criado com `NEXT_PUBLIC_SUPABASE_URL`, `ANON_KEY` e `SECRET_KEY` | ✅ |
 | MCP Supabase | Token atualizado para conta `delafray` (projeto visível via MCP) | ✅ |
