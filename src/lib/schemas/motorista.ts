@@ -7,7 +7,7 @@ export const motoristaSchema = z.object({
   cnh_categoria: z.string().min(1, "Categoria obrigatória").toUpperCase(),
   cnh_vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida"),
   telefone: z.string().min(10, "Telefone inválido"),
-  status: z.enum(["ATIVO", "INATIVO"]).default("ATIVO"),
+  status: z.enum(["ATIVO", "INATIVO"]),
 });
 
 export type MotoristaData = z.infer<typeof motoristaSchema>;

@@ -13,7 +13,7 @@ export const clienteSchema = z.object({
   bairro: z.string().min(2, "Bairro obrigatório").toUpperCase(),
   cidade: z.string().min(2, "Cidade obrigatória").toUpperCase(),
   uf: z.string().length(2, "UF inválida").toUpperCase(),
-  status: z.enum(["ATIVO", "INATIVO"]).default("ATIVO"),
+  status: z.enum(["ATIVO", "INATIVO"]),
 });
 
 export type ClienteData = z.infer<typeof clienteSchema>;

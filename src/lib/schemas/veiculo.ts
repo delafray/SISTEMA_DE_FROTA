@@ -8,7 +8,7 @@ export const veiculoSchema = z.object({
   cor: z.string().min(2, "Cor obrigatória").toUpperCase(),
   renavam: z.string().min(9, "Renavam inválido"),
   capacidade_kg: z.number().positive("Capacidade deve ser maior que zero"),
-  status: z.enum(["ATIVO", "MANUTENCAO", "INATIVO"]).default("ATIVO"),
+  status: z.enum(["ATIVO", "MANUTENCAO", "INATIVO"]),
 });
 
 export type VeiculoData = z.infer<typeof veiculoSchema>;
