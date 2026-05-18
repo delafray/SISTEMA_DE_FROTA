@@ -522,6 +522,63 @@ export type Database = {
           },
         ]
       }
+      cliente_contatos: {
+        Row: {
+          cargo: string | null
+          cliente_id: string
+          created_at: string | null
+          email: string | null
+          empresa_id: string
+          id: string
+          nome: string
+          principal: boolean | null
+          telefone: string | null
+          updated_at: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          cargo?: string | null
+          cliente_id: string
+          created_at?: string | null
+          email?: string | null
+          empresa_id: string
+          id?: string
+          nome: string
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          cargo?: string | null
+          cliente_id?: string
+          created_at?: string | null
+          email?: string | null
+          empresa_id?: string
+          id?: string
+          nome?: string
+          principal?: boolean | null
+          telefone?: string | null
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cliente_contatos_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cliente_contatos_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       clientes: {
         Row: {
           ativo: boolean | null
