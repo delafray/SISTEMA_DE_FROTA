@@ -16,9 +16,11 @@ export default async function Dashboard() {
       <aside className="w-56 bg-[#313f50] flex flex-col p-4 border-r border-slate-700">
         <h2 className="text-xl font-bold mb-8 text-blue-400">FROTA</h2>
         <nav className="space-y-2">
-          <a href="#" className="block p-2 bg-blue-600 rounded-none">Início</a>
-          <a href="#" className="block p-2 hover:bg-[#1e293b] rounded-none">Fretes</a>
-          <a href="#" className="block p-2 hover:bg-[#1e293b] rounded-none">Veículos</a>
+          <a href="/" className="block p-2 bg-blue-600 rounded-none">Início</a>
+          <a href="/fretes" className="block p-2 hover:bg-[#1e293b] rounded-none">Fretes</a>
+          <a href="/veiculos" className="block p-2 hover:bg-[#1e293b] rounded-none">Veículos</a>
+          <a href="/motoristas" className="block p-2 hover:bg-[#1e293b] rounded-none">Motoristas</a>
+          <a href="/clientes" className="block p-2 hover:bg-[#1e293b] rounded-none">Clientes</a>
         </nav>
       </aside>
 
