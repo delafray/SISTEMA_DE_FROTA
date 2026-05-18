@@ -1,0 +1,53 @@
+# ── Dependências ────────────────────────────────────
+node_modules/
+.pnp
+.pnp.js
+
+# ── Ambiente (NUNCA vai ao Git) ──────────────────────
+.env
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+.env*.local
+
+# ── Next.js ─────────────────────────────────────────
+.next/
+out/
+build/
+dist/
+
+# ── Cache e ferramentas ──────────────────────────────
+.cache/
+.turbo/
+.vercel/
+.eslintcache
+*.tsbuildinfo
+next-env.d.ts
+
+# ── Logs ────────────────────────────────────────────
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+*.log
+
+# ── SO ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ── IDE ─────────────────────────────────────────────
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+
+# ── Pasta de referência (não faz parte do projeto) ──
+RBARROS-Galeria-Repositorio-SISTEMARB/
+
+# ── Backups e temporários ────────────────────────────
+*.zip
+*.bak
+tmp/
+temp/
