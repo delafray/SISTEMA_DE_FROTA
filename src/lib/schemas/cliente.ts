@@ -9,7 +9,7 @@ export const clienteSchema = z.object({
   cep: z.string().regex(/^\d{5}-\d{3}$/, "CEP inválido"),
   endereco: z.string().min(5, "Endereço obrigatório").toUpperCase(),
   numero: z.string().min(1, "Número obrigatório"),
-  complemento: z.string().optional().toUpperCase(),
+  complemento: z.string().toUpperCase().optional(),
   bairro: z.string().min(2, "Bairro obrigatório").toUpperCase(),
   cidade: z.string().min(2, "Cidade obrigatória").toUpperCase(),
   uf: z.string().length(2, "UF inválida").toUpperCase(),
