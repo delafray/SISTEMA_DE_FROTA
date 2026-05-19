@@ -9,6 +9,9 @@
  */
 
 import { createClient } from '@supabase/supabase-js';
+import { createLogger } from '@/lib/logger';
+
+const log = createLogger('sessionManager');
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseServiceKey = process.env.SUPABASE_SERVICE_ROLE_KEY!;
@@ -74,6 +77,7 @@ export type Sessao = {
   id: string;
   whatsapp: string;
   motorista_id: string | null;
+  /** Resolvido em runtime a partir de perfis.motorista_id — não persistido em sessoes_whatsapp */
   usuario_id: string | null;
   empresa_id: string;
   estado: EstadoSessao;
@@ -106,25 +110,29 @@ export async function getOrCreateSession(params: {
     .maybeSingle();
 
   if (existing) {
-    // Atualizar timestamp
     await supabase
       .from('sessoes_whatsapp')
       .update({ ultimo_contato: new Date().toISOString() })
       .eq('id', existing.id);
 
     return {
-      ...existing,
+      id: existing.id,
+      whatsapp: existing.whatsapp,
+      motorista_id: existing.motorista_id ?? null,
+      usuario_id: usuario_id ?? null,
+      empresa_id: existing.empresa_id ?? empresa_id,
+      estado: existing.estado as EstadoSessao,
       contexto: (existing.contexto as ContextoSessao) ?? {},
+      ultimo_contato: existing.ultimo_contato,
     };
   }
 
-  // 2. Criar nova sessão
+  // 2. Criar nova sessão (sessoes_whatsapp NÃO tem coluna usuario_id)
   const { data: newSession, error } = await supabase
     .from('sessoes_whatsapp')
     .insert({
       whatsapp,
       motorista_id: motorista_id ?? null,
-      usuario_id: usuario_id ?? null,
       empresa_id,
       estado: 'novo',
       contexto: {},
@@ -134,8 +142,11 @@ export async function getOrCreateSession(params: {
     .single();
 
   if (error || !newSession) {
-    console.error('[sessionManager] Erro ao criar sessão:', error);
-    // Retorna sessão temporária em memória para não travar o fluxo
+    log.error('insert_failed', {
+      code: error?.code,
+      message: error?.message,
+      details: error?.details,
+    });
     return {
       id: 'temp-' + Date.now(),
       whatsapp,
@@ -149,8 +160,14 @@ export async function getOrCreateSession(params: {
   }
 
   return {
-    ...newSession,
+    id: newSession.id,
+    whatsapp: newSession.whatsapp,
+    motorista_id: newSession.motorista_id ?? null,
+    usuario_id: usuario_id ?? null,
+    empresa_id: newSession.empresa_id ?? empresa_id,
+    estado: newSession.estado as EstadoSessao,
     contexto: (newSession.contexto as ContextoSessao) ?? {},
+    ultimo_contato: newSession.ultimo_contato,
   };
 }
 
@@ -195,7 +212,11 @@ export async function updateSession(
     .eq('id', sessionId);
 
   if (error) {
-    console.error('[sessionManager] Erro ao atualizar sessão:', error);
+    log.error('update_failed', {
+      code: error.code,
+      message: error.message,
+      session_id: sessionId,
+    });
   }
 }
 
@@ -244,7 +265,7 @@ export async function limparSessoesExpiradas(): Promise<number> {
     .select('id');
 
   if (error) {
-    console.error('[sessionManager] Erro ao limpar sessões:', error);
+    log.error('cleanup_failed', { code: error.code, message: error.message });
     return 0;
   }
 
