@@ -92,18 +92,22 @@ export const PageHeader: React.FC<{
   children?: React.ReactNode;
   actions?: React.ReactNode;
 }> = ({ title, subtitle, count, children, actions }) => (
-  <div style={{
-    display: "flex",
-    alignItems: "center",
-    justifyContent: "space-between",
-    padding: "6px 16px",
-    borderBottom: "1px solid #e2e8f0",
-    background: "#ffffff",
-    flexShrink: 0,
-  }}>
+  <div
+    className="page-header"
+    style={{
+      display: "flex",
+      alignItems: "center",
+      justifyContent: "space-between",
+      padding: "6px 16px",
+      borderBottom: "1px solid #e2e8f0",
+      background: "#ffffff",
+      flexShrink: 0,
+      gap: "8px",
+    }}
+  >
     <div style={{ display: "flex", alignItems: "center", gap: "12px", minWidth: 0 }}>
       <div>
-        <div style={{ display: "flex", alignItems: "baseline", gap: "8px" }}>
+        <div style={{ display: "flex", alignItems: "baseline", gap: "8px", flexWrap: "wrap" }}>
           <h1 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>{title}</h1>
           {count !== undefined && (
             <span style={{ fontSize: "11px", color: "#94a3b8", fontWeight: 400 }}>{count} registros</span>
@@ -112,7 +116,7 @@ export const PageHeader: React.FC<{
         {subtitle && <p style={{ fontSize: "11px", color: "#64748b", margin: "0" }}>{subtitle}</p>}
       </div>
     </div>
-    <div style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
+    <div className="page-header-actions" style={{ display: "flex", alignItems: "center", gap: "8px", flexShrink: 0 }}>
       {children}
       {actions}
       <UserProfile />
@@ -353,7 +357,8 @@ export const SearchInput: React.FC<
   <input
     style={{
       ...inputStyle,
-      width: "280px",
+      width: "100%",
+      maxWidth: "280px",
       paddingLeft: "12px",
     }}
     {...props}

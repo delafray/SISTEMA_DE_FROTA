@@ -149,7 +149,7 @@ export default async function DashboardPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Painel de Controle" subtitle="Visão geral do sistema" />
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }} className="has-bottom-nav">
 
         {/* Alertas */}
         {alertas.length > 0 && (
@@ -171,14 +171,14 @@ export default async function DashboardPage() {
         )}
 
         {/* KPIs — fretes */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+        <div className="kpi-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
           <KpiCard label="Total de Fretes"   value={totalFretes ?? 0}      color="info" />
           <KpiCard label="Em Andamento"      value={fretesAndamento ?? 0}  color="warning" />
           <KpiCard label="Agendados"         value={fretesAgendados ?? 0}  color="default" />
         </div>
 
         {/* KPIs — recursos + financeiro */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="kpi-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
           <KpiCard label="Veículos Ativos"       value={veiculosAtivos ?? 0}   color="success" />
           <KpiCard label="Motoristas Ativos"     value={motoristasAtivos ?? 0} color="success" />
           <KpiCard label="Receita do Mês"        value={fmtBRL(receitaMes)}    color="success" />
@@ -235,7 +235,9 @@ export default async function DashboardPage() {
               <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Fretes Recentes</span>
               <Link href="/fretes" style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>Ver todos →</Link>
             </div>
-            <div style={{ overflowX: "auto" }}>
+
+            {/* Desktop table */}
+            <div className="responsive-table" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <tbody>
                   {(fretesRecentes as FreteRecente[]).map(f => {
@@ -270,6 +272,54 @@ export default async function DashboardPage() {
                 </tbody>
               </table>
             </div>
+
+            {/* Mobile cards */}
+            <div className="responsive-cards" style={{ display: "none", flexDirection: "column", gap: "0" }}>
+              {(fretesRecentes as FreteRecente[]).map(f => {
+                const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
+                const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
+                return (
+                  <Link key={f.id} href={`/fretes/${f.id}`} style={{ textDecoration: "none" }}>
+                    <div style={{
+                      padding: "12px 16px",
+                      borderBottom: "1px solid #f1f5f9",
+                      display: "flex",
+                      flexDirection: "column",
+                      gap: "6px",
+                    }}>
+                      {/* Row 1: Rota + Status */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>
+                          {f.origem} <span style={{ color: "#94a3b8" }}>→</span> {f.destino}
+                        </span>
+                        <span style={{
+                          background: STATUS_BG[f.status] ?? "#f1f5f9",
+                          color: STATUS_VAR[f.status] ?? "#475569",
+                          borderRadius: "9999px",
+                          padding: "2px 8px",
+                          fontSize: "10px",
+                          fontWeight: 700,
+                          flexShrink: 0,
+                        }}>
+                          {STATUS_LABEL[f.status] ?? f.status}
+                        </span>
+                      </div>
+                      {/* Row 2: Motorista + Placa + Valor */}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
+                        <div style={{ display: "flex", gap: "8px", color: "#64748b", flexWrap: "wrap" }}>
+                          {m && <span>👤 {m.nome}</span>}
+                          {v && <span>🚚 {v.placa}</span>}
+                        </div>
+                        <span style={{ color: "#16a34a", fontWeight: 600, flexShrink: 0 }}>
+                          {f.valor_frete != null ? fmtBRL(f.valor_frete) : ""}
+                        </span>
+                      </div>
+                    </div>
+                  </Link>
+                );
+              })}
+            </div>
+
           </div>
         )}
 

@@ -19,20 +19,27 @@ const RouteIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24
 const PhoneIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>;
 const FuelIcon     = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6a2 2 0 012-2h8a2 2 0 012 2v12H3V6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 10h2a2 2 0 012 2v3a1 1 0 001 1 1 1 0 001-1V9l-3-3" /></svg>;
 const ChartIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
+const CloseIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
 
-/* ─── NavItem (inline styles para garantir renderização correta) ──────────── */
-function NavItem({ href, label, icon: Icon }: { href: string; label: string; icon: React.ComponentType<SvgProps> }) {
+/* ─── NavItem ────────────────────────────────────────────────── */
+function NavItem({ href, label, icon: Icon, onNavigate }: {
+  href: string;
+  label: string;
+  icon: React.ComponentType<SvgProps>;
+  onNavigate?: () => void;
+}) {
   const pathname = usePathname();
   const isActive = pathname === href || (href !== "/" && pathname.startsWith(href));
 
   return (
     <Link
       href={href}
+      onClick={onNavigate}
       style={{
         display: "flex",
         alignItems: "center",
         gap: "10px",
-        padding: "8px 12px",
+        padding: "10px 12px",
         borderRadius: "8px",
         color: isActive ? "#ffffff" : "#A8ACC0",
         backgroundColor: isActive ? "#3d4f63" : "transparent",
@@ -52,7 +59,7 @@ function NavItem({ href, label, icon: Icon }: { href: string; label: string; ico
   );
 }
 
-/* ─── Section Label ───────────────────────────────────────────────────────── */
+/* ─── Section Label ───────────────────────────────────────────── */
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
     <div style={{
@@ -68,8 +75,8 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
   );
 }
 
-/* ─── Sidebar ─────────────────────────────────────────────────────────────── */
-export function Sidebar() {
+/* ─── Sidebar Content (shared between desktop + drawer) ──────── */
+function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
 
   const handleSignOut = async () => {
@@ -79,82 +86,37 @@ export function Sidebar() {
   };
 
   return (
-    <aside style={{
-      width: "224px",
-      flexShrink: 0,
-      display: "flex",
-      flexDirection: "column",
-      background: "#313f50",
-      height: "100%",
-    }}>
-
-      {/* Header */}
-      <div style={{
-        padding: "16px 12px",
-        display: "flex",
-        flexDirection: "column",
-        alignItems: "center",
-      }}>
-        <h1 style={{
-          fontSize: "18px",
-          fontWeight: 700,
-          color: "#ffffff",
-          letterSpacing: "-0.02em",
-          lineHeight: 1,
-          textAlign: "center",
-        }}>
-          FROTA
-        </h1>
-        <span style={{
-          fontSize: "13px",
-          color: "#ffffff",
-          fontWeight: 500,
-          letterSpacing: "0.04em",
-          textAlign: "center",
-          marginTop: "2px",
-        }}>
-          gestão inteligente
-        </span>
-        <span style={{
-          fontSize: "12px",
-          color: "rgba(147, 197, 253, 0.5)",
-          fontFamily: "monospace",
-          marginTop: "4px",
-        }}>
-          v0.1.0
-        </span>
-      </div>
-
+    <>
       {/* Nav */}
       <div style={{ flex: 1, overflowY: "auto" }}>
         <nav style={{ padding: "0 12px" }}>
 
           <SectionLabel>Operação</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <NavItem href="/"               label="Início"         icon={HomeIcon} />
-            <NavItem href="/viagens"        label="Viagens"        icon={RouteIcon} />
-            <NavItem href="/fretes"         label="Fretes"         icon={FreteIcon} />
-            <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon} />
+            <NavItem href="/"               label="Início"         icon={HomeIcon}  onNavigate={onNavigate} />
+            <NavItem href="/viagens"        label="Viagens"        icon={RouteIcon} onNavigate={onNavigate} />
+            <NavItem href="/fretes"         label="Fretes"         icon={FreteIcon} onNavigate={onNavigate} />
+            <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon}  onNavigate={onNavigate} />
           </div>
 
           <SectionLabel>Financeiro</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <NavItem href="/adiantamentos" label="Adiantamentos" icon={MoneyIcon} />
-            <NavItem href="/relatorios"    label="Relatórios"    icon={ChartIcon} />
+            <NavItem href="/adiantamentos" label="Adiantamentos" icon={MoneyIcon} onNavigate={onNavigate} />
+            <NavItem href="/relatorios"    label="Relatórios"    icon={ChartIcon} onNavigate={onNavigate} />
           </div>
 
           <SectionLabel>Cadastros</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <NavItem href="/veiculos"    label="Veículos"    icon={TruckIcon} />
-            <NavItem href="/motoristas"  label="Motoristas"  icon={DriverIcon} />
-            <NavItem href="/clientes"    label="Clientes"    icon={ClientIcon} />
+            <NavItem href="/veiculos"    label="Veículos"    icon={TruckIcon}  onNavigate={onNavigate} />
+            <NavItem href="/motoristas"  label="Motoristas"  icon={DriverIcon} onNavigate={onNavigate} />
+            <NavItem href="/clientes"    label="Clientes"    icon={ClientIcon} onNavigate={onNavigate} />
           </div>
 
           <SectionLabel>Administração</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
-            <NavItem href="/empresas"     label="Empresas"    icon={BuildingIcon} />
-            <NavItem href="/usuarios"     label="Usuários"    icon={UsersIcon} />
-            <NavItem href="/preview-app"  label="Preview App" icon={PhoneIcon} />
+            <NavItem href="/empresas"     label="Empresas"    icon={BuildingIcon} onNavigate={onNavigate} />
+            <NavItem href="/usuarios"     label="Usuários"    icon={UsersIcon}    onNavigate={onNavigate} />
+            <NavItem href="/preview-app"  label="Preview App" icon={PhoneIcon}    onNavigate={onNavigate} />
           </div>
 
         </nav>
@@ -201,7 +163,138 @@ export function Sidebar() {
           </p>
         </div>
       </div>
+    </>
+  );
+}
 
+/* ─── Desktop Sidebar (hidden on mobile) ──────────────────────── */
+export function Sidebar() {
+  return (
+    <aside
+      className="hide-mobile"
+      style={{
+        width: "224px",
+        flexShrink: 0,
+        display: "flex",
+        flexDirection: "column",
+        background: "#313f50",
+        height: "100%",
+      }}
+    >
+      {/* Header */}
+      <div style={{
+        padding: "16px 12px",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+      }}>
+        <h1 style={{
+          fontSize: "18px",
+          fontWeight: 700,
+          color: "#ffffff",
+          letterSpacing: "-0.02em",
+          lineHeight: 1,
+          textAlign: "center",
+        }}>
+          FROTA
+        </h1>
+        <span style={{
+          fontSize: "13px",
+          color: "#ffffff",
+          fontWeight: 500,
+          letterSpacing: "0.04em",
+          textAlign: "center",
+          marginTop: "2px",
+        }}>
+          gestão inteligente
+        </span>
+        <span style={{
+          fontSize: "12px",
+          color: "rgba(147, 197, 253, 0.5)",
+          fontFamily: "monospace",
+          marginTop: "4px",
+        }}>
+          v0.1.0
+        </span>
+      </div>
+
+      <SidebarContent />
     </aside>
+  );
+}
+
+/* ─── Mobile Drawer (only rendered on mobile) ─────────────────── */
+export function MobileDrawer({ open, onClose }: { open: boolean; onClose: () => void }) {
+  return (
+    <>
+      {/* Overlay */}
+      <div
+        className={`drawer-overlay ${open ? "open" : ""}`}
+        onClick={onClose}
+        aria-hidden="true"
+      />
+
+      {/* Panel */}
+      <div
+        className={`drawer-panel ${open ? "open" : ""}`}
+        style={{
+          display: "flex",
+          flexDirection: "column",
+          background: "#313f50",
+        }}
+        role="dialog"
+        aria-modal="true"
+        aria-label="Menu de navegação"
+      >
+        {/* Drawer header */}
+        <div style={{
+          padding: "12px",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "space-between",
+        }}>
+          <div>
+            <h1 style={{
+              fontSize: "18px",
+              fontWeight: 700,
+              color: "#ffffff",
+              letterSpacing: "-0.02em",
+              lineHeight: 1,
+            }}>
+              FROTA
+            </h1>
+            <span style={{
+              fontSize: "11px",
+              color: "rgba(147, 197, 253, 0.5)",
+              fontWeight: 500,
+            }}>
+              gestão inteligente
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar menu"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              width: "36px",
+              height: "36px",
+              borderRadius: "8px",
+              background: "rgba(255,255,255,0.08)",
+              border: "none",
+              color: "#A8ACC0",
+              cursor: "pointer",
+              transition: "all 150ms",
+            }}
+          >
+            <CloseIcon style={{ width: "20px", height: "20px" }} />
+          </button>
+        </div>
+
+        <SidebarContent onNavigate={onClose} />
+      </div>
+    </>
   );
 }
