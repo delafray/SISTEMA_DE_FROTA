@@ -16,16 +16,23 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
   const mode = searchParams.get('hub.mode');
-  const token = searchParams.get('hub.verify_token');
+  const token = (searchParams.get('hub.verify_token') ?? '').trim();
   const challenge = searchParams.get('hub.challenge');
 
-  const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
+  const verifyToken = (process.env.META_WEBHOOK_VERIFY_TOKEN ?? '').trim();
 
-  console.log('[webhook] GET recebido:', { mode, token: token?.slice(0, 10) + '...', challenge, verifyToken: verifyToken?.slice(0, 10) + '...' });
+  console.log('[webhook] GET recebido:', {
+    mode,
+    tokenLen: token.length,
+    tokenPreview: token.slice(0, 15),
+    verifyTokenLen: verifyToken.length,
+    verifyTokenPreview: verifyToken.slice(0, 15),
+    match: token === verifyToken,
+    challenge,
+  });
 
   if (mode === 'subscribe' && token === verifyToken) {
     console.log('[webhook] ✅ Verificação do webhook bem-sucedida');
-    // Retornar o challenge como texto puro — formato exigido pela Meta
     return new Response(challenge ?? '', {
       status: 200,
       headers: { 'Content-Type': 'text/plain' },
