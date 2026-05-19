@@ -10,6 +10,7 @@ import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
 import { Plus, Trash2, User } from "lucide-react";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn } from "@/components/ui/ds";
 
 // --- Schemas ---
 const contatoSchema = z.object({
@@ -22,13 +23,11 @@ const contatoSchema = z.object({
 });
 
 const clienteComContatosSchema = z.object({
-  // Dados Principais
   cnpj_cpf: z.string().min(14, "Documento inválido"),
   razao_social: z.string().min(3, "Razão Social obrigatória").toUpperCase(),
   nome_fantasia: z.string().optional(),
   telefone: z.string().optional(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
-  // Endereço
   cep: z.string().optional(),
   endereco: z.string().optional(),
   numero: z.string().optional(),
@@ -37,18 +36,10 @@ const clienteComContatosSchema = z.object({
   cidade: z.string().optional(),
   uf: z.string().optional(),
   status: z.enum(["ATIVO", "INATIVO"]),
-  // Contatos (sub-lista)
   contatos: z.array(contatoSchema),
 });
 
 type ClienteComContatosData = z.infer<typeof clienteComContatosSchema>;
-
-// --- Estilos reutilizáveis ---
-const inputClass =
-  "w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500";
-const labelClass =
-  "block text-[10px] font-bold text-slate-400 uppercase tracking-widest";
-const errorClass = "text-red-400 text-[10px] mt-0.5";
 
 export default function NovoClientePage() {
   const router = useRouter();
@@ -92,23 +83,10 @@ export default function NovoClientePage() {
   const onSubmit = async (data: ClienteComContatosData) => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return;
-
-    // Busca a empresa_id do usuário logado
-    const { data: ue } = await supabase
-      .from("usuario_empresas")
-      .select("empresa_id")
-      .eq("usuario_id", authData.user.id)
-      .eq("is_padrao", true)
-      .single();
-
-    if (!ue?.empresa_id) {
-      alert("Empresa não encontrada para este usuário.");
-      return;
-    }
-
+    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id").eq("usuario_id", authData.user.id).eq("is_padrao", true).single();
+    if (!ue?.empresa_id) { alert("Empresa não encontrada."); return; }
     const empresa_id = ue.empresa_id;
 
-    // 1. Salvar o Cliente
     const { data: clienteSalvo, error: clienteError } = await supabase
       .from("clientes")
       .insert({
@@ -131,12 +109,8 @@ export default function NovoClientePage() {
       .select("id")
       .single();
 
-    if (clienteError) {
-      alert("Erro ao salvar cliente: " + clienteError.message);
-      return;
-    }
+    if (clienteError) { alert("Erro ao salvar cliente: " + clienteError.message); return; }
 
-    // 2. Salvar os Contatos
     if (data.contatos.length > 0 && clienteSalvo?.id) {
       const contatosParaSalvar = data.contatos.map((c) => ({
         empresa_id,
@@ -148,285 +122,205 @@ export default function NovoClientePage() {
         email: c.email || null,
         principal: c.principal,
       }));
-
-      const { error: contatosError } = await supabase
-        .from("cliente_contatos")
-        .insert(contatosParaSalvar);
-
-      if (contatosError) {
-        console.warn("Erro ao salvar contatos:", contatosError.message);
-      }
+      const { error: contatosError } = await supabase.from("cliente_contatos").insert(contatosParaSalvar);
+      if (contatosError) console.warn("Erro ao salvar contatos:", contatosError.message);
     }
 
-    router.push("/clientes");
-    router.refresh();
+    router.push("/clientes"); router.refresh();
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      {/* Cabeçalho */}
-      <div className="flex items-center gap-4 mb-4 pb-4 border-b border-slate-800">
-        <Link href="/clientes" className="text-slate-400 hover:text-white transition-colors">
-          ← Voltar
-        </Link>
-        <h1 className="text-2xl font-bold text-white uppercase tracking-tight">
-          Cadastrar Cliente
-        </h1>
-      </div>
+    <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PageHeader 
+        title="Cadastrar Cliente" 
+        actions={
+          <>
+            <Btn href="/clientes" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/clientes" variant="outline">Cancelar</Btn>
+            <Btn type="submit" disabled={isSubmitting}>
+              {isSubmitting ? "Salvando..." : "Salvar Cliente"}
+            </Btn>
+          </>
+        }
+      />
 
-      {/* Abas */}
-      <div className="flex border-b border-slate-700 mb-4">
-        <button
-          type="button"
-          onClick={() => setActiveTab("dados")}
-          className={`px-5 py-2 text-[12px] font-bold uppercase tracking-wider transition-colors border-b-2 -mb-[2px] ${
-            activeTab === "dados"
-              ? "border-blue-500 text-blue-400"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          Dados do Cliente
-        </button>
-        <button
-          type="button"
-          onClick={() => setActiveTab("contatos")}
-          className={`px-5 py-2 text-[12px] font-bold uppercase tracking-wider transition-colors border-b-2 -mb-[2px] ${
-            activeTab === "contatos"
-              ? "border-blue-500 text-blue-400"
-              : "border-transparent text-slate-400 hover:text-slate-200"
-          }`}
-        >
-          Contatos{fields.length > 0 && (
-            <span className="ml-2 bg-blue-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
-              {fields.length}
-            </span>
-          )}
-        </button>
-      </div>
-
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-
-        {/* ===== ABA: DADOS DO CLIENTE ===== */}
-        <div className={activeTab === "dados" ? "block space-y-4" : "hidden"}>
-          {/* Bloco: Dados Principais */}
-          <div className="bg-[#0f172a] border border-slate-700 p-4 space-y-4">
-            <h2 className="text-slate-300 text-xs font-bold uppercase tracking-widest border-b border-slate-800 pb-2">
-              Dados Principais
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>CNPJ / CPF</label>
-                <IMaskInput
-                  mask={[{ mask: "000.000.000-00" }, { mask: "00.000.000/0000-00" }]}
-                  onAccept={(val) => setValue("cnpj_cpf", val as string, { shouldValidate: true })}
-                  className={inputClass}
-                />
-                {errors.cnpj_cpf && <p className={errorClass}>{errors.cnpj_cpf.message}</p>}
-              </div>
-              <div className="space-y-1 md:col-span-3">
-                <label className={labelClass}>Razão Social / Nome</label>
-                <input {...register("razao_social")} type="text" className={`${inputClass} uppercase`} />
-                {errors.razao_social && <p className={errorClass}>{errors.razao_social.message}</p>}
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <label className={labelClass}>Nome Fantasia</label>
-                <input {...register("nome_fantasia")} type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>Telefone</label>
-                <IMaskInput
-                  mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
-                  onAccept={(val) => setValue("telefone", val as string)}
-                  className={inputClass}
-                />
-              </div>
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>E-mail</label>
-                <input {...register("email")} type="email" className={`${inputClass} lowercase`} />
-                {errors.email && <p className={errorClass}>{errors.email.message}</p>}
-              </div>
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>Status</label>
-                <select {...register("status")} className={`${inputClass} uppercase`}>
-                  <option value="ATIVO">ATIVO</option>
-                  <option value="INATIVO">INATIVO</option>
-                </select>
-              </div>
-            </div>
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        <div style={{ width: "100%" }}>
+          <div style={{ marginBottom: "16px", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", fontSize: "13px", color: "#3b82f6", display: "flex", alignItems: "center", gap: "8px" }}>
+            <span>ℹ️</span> Preencha os dados básicos e salve para liberar o cadastro de endereços e contatos adicionais.
           </div>
-
-          {/* Bloco: Endereço */}
-          <div className="bg-[#0f172a] border border-slate-700 p-4 space-y-4">
-            <h2 className="text-slate-300 text-xs font-bold uppercase tracking-widest border-b border-slate-800 pb-2">
-              Endereço
-            </h2>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>CEP (Busca Automática)</label>
-                <IMaskInput
-                  mask="00000-000"
-                  onAccept={(val) => setValue("cep", val as string)}
-                  onBlur={handleCepBlur}
-                  className="w-full px-3 py-1.5 bg-blue-900/20 border border-blue-900/50 text-blue-200 text-[13px] rounded-none focus:outline-none focus:border-blue-500"
-                  placeholder="00000-000"
-                />
-                {errors.cep && <p className={errorClass}>{errors.cep.message}</p>}
-              </div>
-              <div className="space-y-1 md:col-span-3">
-                <label className={labelClass}>Logradouro / Endereço</label>
-                <input {...register("endereco")} type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1">
-                <label className={labelClass}>Número</label>
-                <input {...register("numero")} id="numero" type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1">
-                <label className={labelClass}>Complemento</label>
-                <input {...register("complemento")} type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1 md:col-span-2">
-                <label className={labelClass}>Bairro</label>
-                <input {...register("bairro")} type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1 md:col-span-3">
-                <label className={labelClass}>Cidade</label>
-                <input {...register("cidade")} type="text" className={`${inputClass} uppercase`} />
-              </div>
-              <div className="space-y-1 md:col-span-1">
-                <label className={labelClass}>UF</label>
-                <input {...register("uf")} type="text" maxLength={2} className={`${inputClass} uppercase text-center`} />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* ===== ABA: CONTATOS ===== */}
-        <div className={activeTab === "contatos" ? "block space-y-3" : "hidden"}>
-          <div className="flex justify-between items-center">
-            <p className="text-slate-400 text-[12px]">
-              Adicione os contatos responsáveis deste cliente (compradores, logística, financeiro, etc.)
-            </p>
-            <button
-              type="button"
-              onClick={adicionarContato}
-              className="flex items-center gap-2 px-4 py-1.5 bg-blue-600 text-white text-[12px] font-bold uppercase hover:bg-blue-700 transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" />
-              Adicionar Contato
+          
+          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
+            <button type="button" onClick={() => setActiveTab("dados")}
+              style={{
+                padding: "10px 20px", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
+                borderBottom: `2px solid ${activeTab === "dados" ? "#2563eb" : "transparent"}`,
+                color: activeTab === "dados" ? "#2563eb" : "#64748b",
+                background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
+                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px"
+              }}>
+              Dados Básicos
+            </button>
+            <button type="button" onClick={() => setActiveTab("contatos")}
+              style={{
+                padding: "10px 20px", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
+                borderBottom: `2px solid ${activeTab === "contatos" ? "#2563eb" : "transparent"}`,
+                color: activeTab === "contatos" ? "#2563eb" : "#64748b",
+                background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
+                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px"
+              }}>
+              Contatos
+              {fields.length > 0 && <span style={{ marginLeft: "8px", background: "#2563eb", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "10px" }}>{fields.length}</span>}
             </button>
           </div>
 
-          {fields.length === 0 ? (
-            <div className="bg-[#0f172a] border border-dashed border-slate-700 p-10 text-center">
-              <User className="w-8 h-8 text-slate-600 mx-auto mb-3" />
-              <p className="text-slate-500 text-[13px]">Nenhum contato adicionado.</p>
-              <p className="text-slate-600 text-[11px] mt-1">
-                Clique em "+ Adicionar Contato" para incluir responsáveis.
-              </p>
-            </div>
-          ) : (
-            fields.map((field, index) => (
-              <div
-                key={field.id}
-                className="bg-[#0f172a] border border-slate-700 p-4 space-y-3"
-              >
-                <div className="flex justify-between items-center border-b border-slate-800 pb-2">
-                  <span className="text-slate-300 text-[11px] font-bold uppercase tracking-widest">
-                    Contato #{index + 1}
-                  </span>
-                  <div className="flex items-center gap-4">
-                    <label className="flex items-center gap-2 cursor-pointer">
-                      <input
-                        type="checkbox"
-                        {...register(`contatos.${index}.principal`)}
-                        className="accent-blue-500"
-                      />
-                      <span className="text-[11px] text-slate-400">Principal</span>
-                    </label>
-                    <button
-                      type="button"
-                      onClick={() => remove(index)}
-                      className="text-red-500 hover:text-red-400 transition-colors"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+            
+            {/* ABA: DADOS DO CLIENTE */}
+            <div style={{ display: activeTab === "dados" ? "block" : "none" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+                <FormSection title="Dados Principais">
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                    <FormField label="CNPJ / CPF">
+                      <IMaskInput mask={[{ mask: "000.000.000-00" }, { mask: "00.000.000/0000-00" }]}
+                        onAccept={(val) => setValue("cnpj_cpf", val as string, { shouldValidate: true })}
+                        style={inputStyle} />
+                      {errors.cnpj_cpf && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cnpj_cpf.message}</p>}
+                    </FormField>
+                    <div style={{ gridColumn: "span 3" }}>
+                      <FormField label="Razão Social / Nome">
+                        <input {...register("razao_social")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                        {errors.razao_social && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.razao_social.message}</p>}
+                      </FormField>
+                    </div>
+                    <div style={{ gridColumn: "span 2" }}>
+                      <FormField label="Nome Fantasia">
+                        <input {...register("nome_fantasia")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                    </div>
+                    <FormField label="Telefone">
+                      <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue("telefone", val as string)} style={inputStyle} />
+                    </FormField>
+                    <FormField label="E-mail">
+                      <input {...register("email")} type="email" style={inputStyle} />
+                      {errors.email && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.email.message}</p>}
+                    </FormField>
+                    <FormField label="Status">
+                      <select {...register("status")} style={selectStyle}>
+                        <option value="ATIVO">ATIVO</option>
+                        <option value="INATIVO">INATIVO</option>
+                      </select>
+                    </FormField>
                   </div>
-                </div>
-                <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
-                  <div className="space-y-1 md:col-span-2">
-                    <label className={labelClass}>Nome</label>
-                    <input
-                      {...register(`contatos.${index}.nome`)}
-                      type="text"
-                      className={`${inputClass} uppercase`}
-                      placeholder="Nome do responsável"
-                    />
-                    {errors.contatos?.[index]?.nome && (
-                      <p className={errorClass}>{errors.contatos[index]?.nome?.message}</p>
-                    )}
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <label className={labelClass}>Cargo / Setor</label>
-                    <input
-                      {...register(`contatos.${index}.cargo`)}
-                      type="text"
-                      className={`${inputClass} uppercase`}
-                      placeholder="Ex: Gerente de Logística"
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelClass}>Telefone</label>
-                    <IMaskInput
-                      key={`tel-${field.id}`}
-                      mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
-                      onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="space-y-1">
-                    <label className={labelClass}>WhatsApp</label>
-                    <IMaskInput
-                      key={`wa-${field.id}`}
-                      mask="(00) 00000-0000"
-                      onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)}
-                      className={inputClass}
-                    />
-                  </div>
-                  <div className="space-y-1 md:col-span-2">
-                    <label className={labelClass}>E-mail</label>
-                    <input
-                      {...register(`contatos.${index}.email`)}
-                      type="email"
-                      className={`${inputClass} lowercase`}
-                      placeholder="email@empresa.com.br"
-                    />
-                    {errors.contatos?.[index]?.email && (
-                      <p className={errorClass}>{errors.contatos[index]?.email?.message}</p>
-                    )}
-                  </div>
-                </div>
-              </div>
-            ))
-          )}
-        </div>
+                </FormSection>
 
-        {/* Botões de Ação */}
-        <div className="flex justify-end gap-3 pt-4 border-t border-slate-800">
-          <Link
-            href="/clientes"
-            className="px-6 py-2 bg-slate-800 text-white text-[13px] font-bold uppercase hover:bg-slate-700 transition-colors border border-slate-700"
-          >
-            Cancelar
-          </Link>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-2 bg-blue-600 text-white text-[13px] font-bold uppercase hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {isSubmitting ? "Salvando..." : "Salvar Cliente"}
-          </button>
+                <FormSection title="Endereço">
+                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                    <FormField label="CEP (Busca Automática)">
+                      <IMaskInput mask="00000-000" onAccept={(val) => setValue("cep", val as string)} onBlur={handleCepBlur} style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} placeholder="00000-000" />
+                      {errors.cep && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cep.message}</p>}
+                    </FormField>
+                    <div style={{ gridColumn: "span 3" }}>
+                      <FormField label="Logradouro / Endereço">
+                        <input {...register("endereco")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                    </div>
+                    <FormField label="Número">
+                      <input {...register("numero")} id="numero" type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    </FormField>
+                    <FormField label="Complemento">
+                      <input {...register("complemento")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                    </FormField>
+                    <div style={{ gridColumn: "span 2" }}>
+                      <FormField label="Bairro">
+                        <input {...register("bairro")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                    </div>
+                    <div style={{ gridColumn: "span 3" }}>
+                      <FormField label="Cidade">
+                        <input {...register("cidade")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                    </div>
+                    <FormField label="UF">
+                      <input {...register("uf")} type="text" maxLength={2} style={{ ...inputStyle, textTransform: "uppercase", textAlign: "center" }} />
+                    </FormField>
+                  </div>
+                </FormSection>
+              </div>
+            </div>
+
+            {/* ABA: CONTATOS */}
+            <div style={{ display: activeTab === "contatos" ? "block" : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <p style={{ color: "#64748b", fontSize: "14px" }}>Adicione os contatos responsáveis (compradores, logística, etc.)</p>
+                <button type="button" onClick={adicionarContato}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", background: "#2563eb", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                  <Plus size={16} /> Adicionar Contato
+                </button>
+              </div>
+
+              {fields.length === 0 ? (
+                <div style={{ padding: "48px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "12px", textAlign: "center" }}>
+                  <User size={32} style={{ margin: "0 auto 12px", color: "#94a3b8" }} />
+                  <p style={{ color: "#475569", fontSize: "14px", fontWeight: 500 }}>Nenhum contato adicionado.</p>
+                  <p style={{ color: "#94a3b8", fontSize: "13px", marginTop: "4px" }}>Clique em "+ Adicionar Contato" para incluir responsáveis.</p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {fields.map((field, index) => (
+                    <FormSection key={field.id} title={`Contato #${index + 1}`}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-36px", marginBottom: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                            <input type="checkbox" {...register(`contatos.${index}.principal`)} style={{ accentColor: "#2563eb" }} />
+                            <span style={{ fontSize: "13px", color: "#475569" }}>Principal</span>
+                          </label>
+                          <button type="button" onClick={() => remove(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="Nome">
+                            <input {...register(`contatos.${index}.nome`)} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Nome do responsável" />
+                            {errors.contatos?.[index]?.nome && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.contatos[index]?.nome?.message}</p>}
+                          </FormField>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="Cargo / Setor">
+                            <input {...register(`contatos.${index}.cargo`)} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Ex: Gerente de Logística" />
+                          </FormField>
+                        </div>
+                        <FormField label="Telefone">
+                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} style={inputStyle} />
+                        </FormField>
+                        <FormField label="WhatsApp">
+                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} style={inputStyle} />
+                        </FormField>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="E-mail">
+                            <input {...register(`contatos.${index}.email`)} type="email" style={inputStyle} placeholder="email@empresa.com.br" />
+                            {errors.contatos?.[index]?.email && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.contatos[index]?.email?.message}</p>}
+                          </FormField>
+                        </div>
+                      </div>
+                    </FormSection>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+              <Btn href="/clientes" variant="outline">Cancelar</Btn>
+              <Btn type="submit" disabled={isSubmitting}>
+                {isSubmitting ? "Salvando..." : "Salvar Cliente"}
+              </Btn>
+            </div>
+          </div>
         </div>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }

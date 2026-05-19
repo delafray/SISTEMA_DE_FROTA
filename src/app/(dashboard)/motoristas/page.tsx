@@ -1,83 +1,79 @@
 import { createClient } from "@/lib/supabase/server";
-import { DataTable } from "@/components/ui/DataTable";
-import Link from "next/link";
 import { redirect } from "next/navigation";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState } from "@/components/ui/ds";
+
+export const dynamic = "force-dynamic";
 
 export default async function MotoristasPage() {
   const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect("/login");
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    return redirect("/login");
-  }
-
-  // Busca os motoristas
   const { data: motoristas } = await supabase
     .from("motoristas")
     .select("*")
     .order("nome");
 
-  const columns = [
-    { key: "nome", label: "Nome" },
-    { key: "cpf", label: "CPF" },
-    { key: "cnh", label: "CNH" },
-    { key: "cnh_categoria", label: "Cat. CNH" },
-    {
-      key: "cnh_vencimento",
-      label: "Vencimento CNH",
-      render: (row: any) => {
-        if (!row.cnh_vencimento) return "-";
-        // Formata data YYYY-MM-DD para DD/MM/YYYY
-        const [y, m, d] = row.cnh_vencimento.split("-");
-        return `${d}/${m}/${y}`;
-      },
-    },
-    {
-      key: "status",
-      label: "Status",
-      render: (row: any) => (
-        <span
-          className={`px-2 py-0.5 rounded-none text-[10px] font-bold uppercase border
-            ${
-              row.status === "ATIVO"
-                ? "bg-emerald-900/30 text-emerald-400 border-emerald-800"
-                : "bg-slate-800 text-slate-400 border-slate-700"
-            }
-          `}
-        >
-          {row.status}
-        </span>
-      ),
-    },
-  ];
-
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white uppercase tracking-tight">
-            Motoristas
-          </h1>
-          <p className="text-slate-400 text-sm">Gerencie os motoristas da frota</p>
-        </div>
-      </div>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PageHeader title="Motoristas" subtitle="Gerencie os motoristas da frota" count={motoristas?.length}>
+        <Btn href="/motoristas/novo" size="sm">+ Cadastrar Motorista</Btn>
+      </PageHeader>
 
-      <DataTable
-        data={motoristas || []}
-        columns={columns}
-        searchPlaceholder="Buscar por nome ou CPF..."
-        primaryAction={
-          <Link
-            href="/motoristas/novo"
-            className="px-4 py-2 bg-blue-600 text-white text-[13px] font-bold uppercase rounded-none hover:bg-blue-700 transition-colors inline-block"
-          >
-            + Cadastrar Motorista
-          </Link>
-        }
-      />
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        <DataTable count={motoristas?.length ?? 0} label="motoristas">
+          <thead>
+            <tr>
+              <Th>Nome</Th>
+              <Th>CPF</Th>
+              <Th>CNH</Th>
+              <Th>Cat. CNH</Th>
+              <Th>Vencimento CNH</Th>
+              <Th>Status</Th>
+              <Th style={{ textAlign: "right" }}>Ações</Th>
+            </tr>
+          </thead>
+          <tbody>
+            {!motoristas || motoristas.length === 0 ? (
+              <tr>
+                <td colSpan={7}>
+                  <EmptyState
+                    message="Nenhum motorista cadastrado."
+                    icon="👤"
+                    action={<Btn href="/motoristas/novo">+ Cadastrar primeiro motorista</Btn>}
+                  />
+                </td>
+              </tr>
+            ) : (
+              motoristas.map(m => {
+                const cnhDate = m.cnh_validade ? new Date(m.cnh_validade + "T00:00:00") : null;
+                const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - Date.now()) / 86400000) : null;
+                const cnhVar  = diasCnh === null ? "default" : diasCnh < 0 ? "danger" : diasCnh < 30 ? "warning" : "success";
+
+                return (
+                  <Tr key={m.id}>
+                    <Td>{m.nome}</Td>
+                    <Td>{m.cpf}</Td>
+                    <Td>{m.cnh_numero ?? "—"}</Td>
+                    <Td>{m.cnh_categoria ?? "—"}</Td>
+                    <Td>
+                      {cnhDate
+                        ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge>
+                        : <span style={{ color: "#cbd5e1" }}>—</span>}
+                    </Td>
+                    <Td><Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "ATIVO" : "INATIVO"}</Badge></Td>
+                    <Td style={{ textAlign: "right" }}>
+                      <a href={`/motoristas/${m.id}/editar`} style={{ color: "#2563eb", textDecoration: "none" }}>
+                        Editar
+                      </a>
+                    </Td>
+                  </Tr>
+                );
+              })
+            )}
+          </tbody>
+        </DataTable>
+      </div>
     </div>
   );
 }

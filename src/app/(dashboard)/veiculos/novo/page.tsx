@@ -1,184 +1,207 @@
 "use client";
+import { VEICULO_TIPOS, VEICULO_CATEGORIAS, VEICULO_COMBUSTIVEIS } from "@/lib/schemas/veiculo";
 
-import { useForm } from "react-hook-form";
-import { zodResolver } from "@hookform/resolvers/zod";
-import { veiculoSchema, VeiculoData } from "@/lib/schemas/veiculo";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 export default function NovoVeiculoPage() {
   const router = useRouter();
   const supabase = createClient();
-  const {
-    register,
-    handleSubmit,
-    setValue,
-    formState: { errors, isSubmitting },
-  } = useForm<VeiculoData>({
-    resolver: zodResolver(veiculoSchema),
-    defaultValues: { status: "ATIVO" },
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  const [f, setF] = useState({
+    placa: "", marca: "", modelo: "", ano: "", chassi: "", renavam: "",
+    combustivel: "diesel", tipo: "caminhao", categoria: "", cor: "", apelido: "",
+    km_atual: "", capacidade_carga_kg: "", eixos: "", pbt_kg: "", capacidade_tanque: "",
+    ipva_vencimento: "", licenciamento_vencimento: "", seguro_vencimento: "",
+    seguradora: "", apolice_numero: "", data_aquisicao: "", valor_aquisicao: "",
   });
 
-  const onSubmit = async (data: VeiculoData) => {
-    // Busca a empresa_id do usuário logado antes de salvar
-    const { data: userAuth } = await supabase.auth.getUser();
-    if (!userAuth.user) return;
+  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setF(p => ({ ...p, [k]: e.target.value }));
 
-    // TODO: A lógica real precisa pegar a empresa_id do usuário.
-    // Usaremos um valor placeholder ou buscaremos do banco.
-    // Vamos apenas imprimir no log para a "outra IA" cuidar da gravação exata depois,
-    // ou gravar direto se já soubermos.
-    console.log("Salvar veículo:", data);
-    
-    // Simula salvamento
-    await new Promise((resolve) => setTimeout(resolve, 800));
-    router.push("/veiculos");
-    router.refresh();
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    if (!f.placa || !f.marca || !f.modelo || !f.ano || !f.chassi || !f.renavam) {
+      setErr("Preencha todos os campos obrigatórios (*)"); return;
+    }
+    setSaving(true);
+    const { data: auth } = await supabase.auth.getUser();
+    if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
+    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
+      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+    if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
+
+    const { error: dbErr } = await supabase.from("veiculos").insert({
+      empresa_id: ue.empresa_id,
+      placa: f.placa.replace(/[-\s]/g, "").toUpperCase(),
+      marca: f.marca.toUpperCase(), modelo: f.modelo.toUpperCase(),
+      ano: parseInt(f.ano), chassi: f.chassi.toUpperCase(), renavam: f.renavam,
+      combustivel: f.combustivel, tipo: f.tipo,
+      cor: f.cor || null, apelido: f.apelido || null,
+      categoria: f.categoria || null,
+      km_atual: f.km_atual ? parseFloat(f.km_atual) : null,
+      capacidade_carga_kg: f.capacidade_carga_kg ? parseFloat(f.capacidade_carga_kg) : null,
+      eixos: f.eixos ? parseInt(f.eixos) : null,
+      pbt_kg: f.pbt_kg ? parseFloat(f.pbt_kg) : null,
+      capacidade_tanque: f.capacidade_tanque ? parseFloat(f.capacidade_tanque) : null,
+      ipva_vencimento: f.ipva_vencimento || null,
+      licenciamento_vencimento: f.licenciamento_vencimento || null,
+      seguro_vencimento: f.seguro_vencimento || null,
+      seguradora: f.seguradora || null, apolice_numero: f.apolice_numero || null,
+      data_aquisicao: f.data_aquisicao || null,
+      valor_aquisicao: f.valor_aquisicao ? parseFloat(f.valor_aquisicao) : null,
+      ativo: true,
+    });
+    setSaving(false);
+    if (dbErr) { setErr(dbErr.message); return; }
+    router.push("/veiculos"); router.refresh();
   };
 
   return (
-    <div className="p-6 max-w-4xl mx-auto">
-      <div className="flex items-center gap-4 mb-6 pb-4 border-b border-slate-800">
-        <Link
-          href="/veiculos"
-          className="text-slate-400 hover:text-white transition-colors"
-        >
-          ← Voltar
-        </Link>
-        <h1 className="text-2xl font-bold text-white uppercase tracking-tight">
-          Cadastrar Veículo
-        </h1>
-      </div>
+    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+      <PageHeader 
+        title="Cadastrar Veículo" 
+        actions={
+          <>
+            <Btn href="/veiculos" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/veiculos" variant="outline">Cancelar</Btn>
+            <Btn type="submit" variant="primary" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar"}
+            </Btn>
+          </>
+        }
+      />
 
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-4">
-        <div className="bg-[#0f172a] border border-slate-700 p-4 rounded-none">
-          {/* Grid denso */}
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        <div style={{ width: "100%" }}>
+          {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
+
+          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Placa
-              </label>
-              <IMaskInput
-                mask="aaa-0*00"
-                definitions={{
-                  '*': /[a-zA-Z0-9]/
-                }}
-                prepare={(str) => str.toUpperCase()}
-                onAccept={(val) => setValue("placa", val as string, { shouldValidate: true })}
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500 uppercase"
-                placeholder="ABC-1D23"
-              />
-              {errors.placa && <p className="text-red-400 text-[10px]">{errors.placa.message}</p>}
-            </div>
+            <FormSection title="Identificação *">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                <FormField label="Placa *">
+                  <IMaskInput mask={[{ mask: "aaa-0000" }, { mask: "aaa-0a00" }]}
+                    definitions={{ a: /[a-zA-Z]/ }} prepare={(s) => s.toUpperCase()}
+                    onAccept={(v) => setF(p => ({ ...p, placa: v as string }))}
+                    style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="ABC-1234" />
+                </FormField>
+                <FormField label="Renavam *">
+                  <IMaskInput mask="00000000000" onAccept={(v) => setF(p => ({ ...p, renavam: v as string }))} style={inputStyle} />
+                </FormField>
+                <div style={{ gridColumn: "span 2" }}>
+                  <FormField label="Chassi (17 chars) *">
+                    <input value={f.chassi} onChange={(e) => setF(p => ({ ...p, chassi: e.target.value.toUpperCase() }))}
+                      maxLength={17} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                  </FormField>
+                </div>
+                <FormField label="Apelido">
+                  <input value={f.apelido} onChange={set("apelido")} style={inputStyle} placeholder="Volvo Branco" />
+                </FormField>
+              </div>
+            </FormSection>
 
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Renavam
-              </label>
-              <input
-                {...register("renavam")}
-                type="text"
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500"
-              />
-              {errors.renavam && <p className="text-red-400 text-[10px]">{errors.renavam.message}</p>}
-            </div>
+            <FormSection title="Dados Técnicos">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                <div style={{ gridColumn: "span 2" }}>
+                  <FormField label="Marca *">
+                    <input value={f.marca} onChange={set("marca")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="VOLVO" />
+                  </FormField>
+                </div>
+                <div style={{ gridColumn: "span 2" }}>
+                  <FormField label="Modelo *">
+                    <input value={f.modelo} onChange={set("modelo")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="FH 540" />
+                  </FormField>
+                </div>
+                <FormField label="Ano *">
+                  <IMaskInput mask="0000" onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} placeholder="2022" />
+                </FormField>
 
-            <div className="space-y-1 md:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Marca
-              </label>
-              <input
-                {...register("marca")}
-                type="text"
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500 uppercase"
-              />
-              {errors.marca && <p className="text-red-400 text-[10px]">{errors.marca.message}</p>}
-            </div>
+                <FormField label="Tipo *">
+                  <select value={f.tipo} onChange={set("tipo")} style={selectStyle}>
+                    <option value="caminhao">Caminhão</option>
+                    <option value="van">Van</option>
+                    <option value="carro">Carro</option>
+                    <option value="utilitario">Utilitário</option>
+                  </select>
+                </FormField>
+                <FormField label="Categoria">
+                  <select value={f.categoria} onChange={set("categoria")} style={selectStyle}>
+                    <option value="">— Nenhuma —</option>
+                    <option value="toco">Toco</option>
+                    <option value="truck">Truck</option>
+                    <option value="bitruck">Bi-Truck</option>
+                    <option value="carreta">Carreta</option>
+                    <option value="cavalo">Cavalo Mecânico</option>
+                    <option value="3_4">3/4</option>
+                  </select>
+                </FormField>
+                <FormField label="Combustível *">
+                  <select value={f.combustivel} onChange={set("combustivel")} style={selectStyle}>
+                    <option value="diesel">Diesel</option>
+                    <option value="diesel_s10">Diesel S10</option>
+                    <option value="gasolina">Gasolina</option>
+                    <option value="etanol">Etanol</option>
+                    <option value="flex">Flex</option>
+                  </select>
+                </FormField>
+                <FormField label="Cor">
+                  <input value={f.cor} onChange={set("cor")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="BRANCO" />
+                </FormField>
+                <FormField label="Eixos">
+                  <input value={f.eixos} onChange={set("eixos")} type="number" style={inputStyle} />
+                </FormField>
 
-            <div className="space-y-1 md:col-span-2">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Modelo
-              </label>
-              <input
-                {...register("modelo")}
-                type="text"
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500 uppercase"
-              />
-              {errors.modelo && <p className="text-red-400 text-[10px]">{errors.modelo.message}</p>}
-            </div>
+                <FormField label="KM Atual">
+                  <input value={f.km_atual} onChange={set("km_atual")} type="number" style={inputStyle} />
+                </FormField>
+                <FormField label="Cap. Carga (kg)">
+                  <input value={f.capacidade_carga_kg} onChange={set("capacidade_carga_kg")} type="number" style={inputStyle} />
+                </FormField>
+                <FormField label="PBT (kg)">
+                  <input value={f.pbt_kg} onChange={set("pbt_kg")} type="number" style={inputStyle} />
+                </FormField>
+                <FormField label="Tanque (L)">
+                  <input value={f.capacidade_tanque} onChange={set("capacidade_tanque")} type="number" style={inputStyle} />
+                </FormField>
+              </div>
+            </FormSection>
 
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Ano
-              </label>
-              <IMaskInput
-                mask="0000"
-                onAccept={(val) => setValue("ano", val as string, { shouldValidate: true })}
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500"
-              />
-              {errors.ano && <p className="text-red-400 text-[10px]">{errors.ano.message}</p>}
-            </div>
+            <FormSection title="Documentação e Seguros">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                {([["ipva_vencimento","IPVA Venc."],["licenciamento_vencimento","Licenciamento Venc."],["seguro_vencimento","Seguro Venc."],["data_aquisicao","Data Aquisição"]] as const).map(([k, label]) => (
+                  <FormField key={k} label={label}>
+                    <input value={f[k]} onChange={set(k)} type="date" style={inputStyle} />
+                  </FormField>
+                ))}
+                <FormField label="Seguradora">
+                  <input value={f.seguradora} onChange={set("seguradora")} style={inputStyle} />
+                </FormField>
+                <FormField label="Apólice Nº">
+                  <input value={f.apolice_numero} onChange={set("apolice_numero")} style={inputStyle} />
+                </FormField>
+                <FormField label="Valor Aquisição (R$)">
+                  <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" style={inputStyle} />
+                </FormField>
+              </div>
+            </FormSection>
 
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Cor
-              </label>
-              <input
-                {...register("cor")}
-                type="text"
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500 uppercase"
-              />
-              {errors.cor && <p className="text-red-400 text-[10px]">{errors.cor.message}</p>}
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Capacidade (KG)
-              </label>
-              <input
-                {...register("capacidade_kg", { valueAsNumber: true })}
-                type="number"
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500"
-              />
-              {errors.capacidade_kg && <p className="text-red-400 text-[10px]">{errors.capacidade_kg.message}</p>}
-            </div>
-
-            <div className="space-y-1">
-              <label className="block text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Status
-              </label>
-              <select
-                {...register("status")}
-                className="w-full px-3 py-1.5 bg-slate-900 border border-slate-700 text-white text-[13px] rounded-none focus:outline-none focus:border-blue-500 uppercase"
-              >
-                <option value="ATIVO">ATIVO</option>
-                <option value="MANUTENCAO">MANUTENÇÃO</option>
-                <option value="INATIVO">INATIVO</option>
-              </select>
-              {errors.status && <p className="text-red-400 text-[10px]">{errors.status.message}</p>}
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+              <Btn href="/veiculos" variant="outline">Cancelar</Btn>
+              <Btn type="submit" disabled={saving}>
+                {saving ? "Salvando..." : "Salvar Veículo"}
+              </Btn>
             </div>
           </div>
         </div>
-
-        <div className="flex justify-end gap-3 pt-4">
-          <Link
-            href="/veiculos"
-            className="px-6 py-2 bg-slate-800 text-white text-[13px] font-bold uppercase rounded-none hover:bg-slate-700 transition-colors border border-slate-700"
-          >
-            Cancelar
-          </Link>
-          <button
-            type="submit"
-            disabled={isSubmitting}
-            className="px-6 py-2 bg-blue-600 text-white text-[13px] font-bold uppercase rounded-none hover:bg-blue-700 transition-colors disabled:opacity-50"
-          >
-            {isSubmitting ? "Salvando..." : "Salvar Veículo"}
-          </button>
-        </div>
-      </form>
-    </div>
+      </div>
+    </form>
   );
 }
