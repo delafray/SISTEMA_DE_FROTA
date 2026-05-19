@@ -222,7 +222,7 @@ export function ReportPdfButton({
             {/* Orange Premium Header Banner */}
             <div
               style={{
-                background: "linear-gradient(135deg, #ff6b00 0%, #ff5000 100%)",
+                background: "linear-gradient(135deg, #e05200 0%, #a63200 100%)",
                 padding: "18px 20px",
                 display: "flex",
                 alignItems: "center",
