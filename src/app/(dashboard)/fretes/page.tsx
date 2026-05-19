@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 
 type Frete = {
@@ -83,6 +83,8 @@ export default function FretesPage() {
     receita:      todos.filter(f => f.status === "concluido").reduce((s, f) => s + (f.valor_frete ?? 0), 0),
   }), [todos]);
 
+  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "status", "asc");
+
   const toolbar = (
     <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
       <SearchInput
@@ -125,13 +127,13 @@ export default function FretesPage() {
         <DataTable count={filtrados.length} label="fretes" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Status</Th>
-              <Th>Rota</Th>
-              <Th>Veículo</Th>
-              <Th>Motorista</Th>
-              <Th>Coleta</Th>
-              <Th style={{ textAlign: "right" }}>Valor (R$)</Th>
-              <Th style={{ textAlign: "right" }}>KM</Th>
+              <Th sortKey="status" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
+              <Th sortKey="origem" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Rota</Th>
+              <Th sortKey="veiculos.placa" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Veículo</Th>
+              <Th sortKey="motoristas.nome" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Motorista</Th>
+              <Th sortKey="data_coleta_prevista" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Coleta</Th>
+              <Th sortKey="valor_frete" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>Valor (R$)</Th>
+              <Th sortKey="km_total" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>KM</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -148,7 +150,7 @@ export default function FretesPage() {
                 </td>
               </tr>
             ) : (
-              filtrados.map(frete => {
+              ordenados.map(frete => {
                 const veiculo   = Array.isArray(frete.veiculos) ? frete.veiculos[0] : frete.veiculos;
                 const motorista = Array.isArray(frete.motoristas) ? frete.motoristas[0] : frete.motoristas;
                 return (

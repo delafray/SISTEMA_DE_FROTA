@@ -184,27 +184,124 @@ export const DataTable: React.FC<{
   </div>
 );
 
-// ─── Th / Td / Tr ──────────────────────────────────────────────────────────────
-export const Th: React.FC<React.ThHTMLAttributes<HTMLTableCellElement>> = ({ children, style: userStyle, ...props }) => (
-  <th
-    style={{
-      padding: "4px 8px",
-      textAlign: "left",
-      fontSize: "10px",
-      fontWeight: 600,
-      color: "#64748b",
-      textTransform: "uppercase",
-      letterSpacing: "0.05em",
-      background: "#f8fafc",
-      borderBottom: "1px solid #e2e8f0",
-      whiteSpace: "nowrap",
-      ...userStyle,
-    }}
-    {...props}
-  >
-    {children}
-  </th>
-);
+export const Th: React.FC<
+  React.ThHTMLAttributes<HTMLTableCellElement> & {
+    sortKey?: string;
+    activeSortKey?: string;
+    sortDirection?: "asc" | "desc";
+    onSort?: (key: string) => void;
+  }
+> = ({ children, sortKey, activeSortKey, sortDirection, onSort, style: userStyle, ...props }) => {
+  const isSorted = sortKey && activeSortKey === sortKey;
+  const isClickable = !!sortKey && !!onSort;
+
+  return (
+    <th
+      style={{
+        padding: "8px 12px",
+        textAlign: "left",
+        fontSize: "10px",
+        fontWeight: 600,
+        color: isSorted ? "#1e293b" : "#64748b",
+        textTransform: "uppercase",
+        letterSpacing: "0.05em",
+        background: "#f8fafc",
+        borderBottom: "1px solid #e2e8f0",
+        whiteSpace: "nowrap",
+        cursor: isClickable ? "pointer" : "default",
+        userSelect: "none",
+        transition: "all 150ms",
+        ...userStyle,
+      }}
+      onClick={() => isClickable && onSort(sortKey)}
+      {...props}
+    >
+      <div style={{ display: "inline-flex", alignItems: "center", gap: "4px" }}>
+        {children}
+        {isClickable && (
+          <span style={{ 
+            display: "inline-flex", 
+            flexDirection: "column", 
+            fontSize: "8px", 
+            lineHeight: 1, 
+            color: isSorted ? "#2563eb" : "#cbd5e1",
+            marginLeft: "2px",
+            transition: "color 150ms"
+          }}>
+            {isSorted ? (sortDirection === "asc" ? "▲" : "▼") : "▲▼"}
+          </span>
+        )}
+      </div>
+    </th>
+  );
+};
+
+export function useTableSort<T>(
+  data: T[],
+  defaultKey: string = "",
+  defaultDirection: "asc" | "desc" = "asc"
+) {
+  const [sortKey, setSortKey] = React.useState<string>(defaultKey);
+  const [sortDirection, setSortDirection] = React.useState<"asc" | "desc">(defaultDirection);
+
+  const handleSort = (key: string) => {
+    if (sortKey === key) {
+      setSortDirection((prev) => (prev === "asc" ? "desc" : "asc"));
+    } else {
+      setSortKey(key);
+      setSortDirection("asc");
+    }
+  };
+
+  const sortedData = React.useMemo(() => {
+    if (!sortKey) return data;
+
+    return [...data].sort((a: any, b: any) => {
+      const getValue = (obj: any, path: string) => {
+        if (!obj) return "";
+        return path.split(".").reduce((acc, part) => {
+          if (acc && typeof acc === "object" && part in acc) {
+            return acc[part];
+          }
+          return acc;
+        }, obj);
+      };
+
+      let valA = getValue(a, sortKey);
+      let valB = getValue(b, sortKey);
+
+      if (valA && typeof valA === "object" && !Array.isArray(valA)) {
+        valA = Object.values(valA)[0] || "";
+      }
+      if (valB && typeof valB === "object" && !Array.isArray(valB)) {
+        valB = Object.values(valB)[0] || "";
+      }
+
+      const isNumA = typeof valA === "number" || (!isNaN(Number(valA)) && valA !== "" && valA !== null);
+      const isNumB = typeof valB === "number" || (!isNaN(Number(valB)) && valB !== "" && valB !== null);
+
+      if (isNumA && isNumB) {
+        const numA = Number(valA);
+        const numB = Number(valB);
+        return sortDirection === "asc" ? numA - numB : numB - numA;
+      }
+
+      const strA = String(valA ?? "").toLowerCase().trim();
+      const strB = String(valB ?? "").toLowerCase().trim();
+
+      if (strA < strB) return sortDirection === "asc" ? -1 : 1;
+      if (strA > strB) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+  }, [data, sortKey, sortDirection]);
+
+  return {
+    sortedData,
+    sortKey,
+    sortDirection,
+    handleSort,
+  };
+}
 
 export const Td: React.FC<React.TdHTMLAttributes<HTMLTableCellElement>> = ({ children, style: userStyle, ...props }) => (
   <td style={{ padding: "4px 8px", fontSize: "12px", color: "#334155", ...userStyle }} {...props}>

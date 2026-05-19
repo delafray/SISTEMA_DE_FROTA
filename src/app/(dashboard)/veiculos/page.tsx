@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { ReportPdfButton } from "@/components/ui/ReportPdfButton";
 
@@ -67,6 +67,8 @@ export default function VeiculosPage() {
   const ativos   = todos.filter(v => v.ativo).length;
   const inativos = todos.filter(v => !v.ativo).length;
   const hoje     = new Date();
+
+  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "placa", "asc");
 
   const toolbar = (
     <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
@@ -291,15 +293,15 @@ export default function VeiculosPage() {
         <DataTable count={filtrados.length} label="veículos" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Placa</Th>
-              <Th>Apelido</Th>
-              <Th>Marca / Modelo</Th>
-              <Th>Tipo</Th>
-              <Th>Combustível</Th>
-              <Th>Ano</Th>
-              <Th style={{ textAlign: "right" }}>KM Atual</Th>
-              <Th>Venc. IPVA</Th>
-              <Th>Status</Th>
+              <Th sortKey="placa" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Placa</Th>
+              <Th sortKey="apelido" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Apelido</Th>
+              <Th sortKey="marca" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Marca / Modelo</Th>
+              <Th sortKey="tipo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Tipo</Th>
+              <Th sortKey="combustivel" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Combustível</Th>
+              <Th sortKey="ano" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Ano</Th>
+              <Th sortKey="km_atual" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>KM Atual</Th>
+              <Th sortKey="ipva_vencimento" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Venc. IPVA</Th>
+              <Th sortKey="ativo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -316,7 +318,7 @@ export default function VeiculosPage() {
                 </td>
               </tr>
             ) : (
-              filtrados.map(v => {
+              ordenados.map(v => {
                 const ipvaDate = v.ipva_vencimento ? new Date(v.ipva_vencimento + "T00:00:00") : null;
                 const diasIpva = ipvaDate ? Math.ceil((ipvaDate.getTime() - hoje.getTime()) / 86400000) : null;
                 const ipvaVar  = diasIpva === null ? "default" : diasIpva < 0 ? "danger" : diasIpva < 30 ? "warning" : "success";
