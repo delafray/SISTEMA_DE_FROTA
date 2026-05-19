@@ -48,14 +48,72 @@ const statusVar: Record<string, "warning" | "info" | "success" | "danger" | "def
   agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
 };
 
+type Modo = "mes" | "ano" | "range";
+
+const isoDate = (d: Date) => d.toISOString().slice(0, 10);
+
+function AgrupadoTable({ rows }: { rows: Agrupado[] }) {
+  if (rows.length === 0) {
+    return <EmptyState message="Nenhum frete concluído neste período." icon="📊" />;
+  }
+  return (
+    <DataTable count={rows.length} label="registros">
+      <thead>
+        <tr>
+          <Th>Nome</Th>
+          <Th style={{ textAlign: "right" }}>Fretes</Th>
+          <Th style={{ textAlign: "right" }}>Receita</Th>
+          <Th style={{ textAlign: "right" }}>Custo</Th>
+          <Th style={{ textAlign: "right" }}>Lucro</Th>
+          <Th style={{ textAlign: "right" }}>Margem</Th>
+          <Th style={{ textAlign: "right" }}>KM</Th>
+        </tr>
+      </thead>
+      <tbody>
+        {rows.map(r => (
+          <Tr key={r.chave}>
+            <Td style={{ fontWeight: 600 }}>{r.label}</Td>
+            <Td style={{ textAlign: "right" }}>{r.qtd}</Td>
+            <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
+            <Td style={{ textAlign: "right", color: "#dc2626" }}>{fmtBRL(r.custo)}</Td>
+            <Td style={{ textAlign: "right", fontWeight: 700, color: r.lucro >= 0 ? "#16a34a" : "#dc2626" }}>{fmtBRL(r.lucro)}</Td>
+            <Td style={{ textAlign: "right", color: r.margem >= 0 ? "#16a34a" : "#dc2626" }}>{fmtPct(r.margem)}</Td>
+            <Td style={{ textAlign: "right" }}>{r.km.toLocaleString("pt-BR")}</Td>
+          </Tr>
+        ))}
+      </tbody>
+    </DataTable>
+  );
+}
+
 export default function RelatoriosPage() {
   const router = useRouter();
   const now = new Date();
-  const [ano, setAno]     = useState(String(now.getFullYear()));
-  const [mes, setMes]     = useState(String(now.getMonth() + 1).padStart(2, "0"));
+  const [modo, setModo] = useState<Modo>("mes");
+  const [ano, setAno]   = useState(String(now.getFullYear()));
+  const [mes, setMes]   = useState(String(now.getMonth() + 1).padStart(2, "0"));
+  const [dataInicio, setDataInicio] = useState(isoDate(new Date(now.getFullYear(), now.getMonth(), 1)));
+  const [dataFim,    setDataFim]    = useState(isoDate(now));
   const [todos, setTodos] = useState<FreteResultado[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]     = useState<"periodo" | "motorista" | "veiculo">("periodo");
+
+  const periodo = useMemo(() => {
+    if (modo === "range") {
+      return { inicio: dataInicio, fim: dataFim };
+    }
+    if (modo === "ano") {
+      return { inicio: `${ano}-01-01`, fim: `${ano}-12-31` };
+    }
+    const fim = new Date(parseInt(ano), parseInt(mes), 0).toISOString().slice(0, 10);
+    return { inicio: `${ano}-${mes}-01`, fim };
+  }, [modo, ano, mes, dataInicio, dataFim]);
+
+  const periodoLabel = useMemo(() => {
+    if (modo === "range") return `${dataInicio} → ${dataFim}`;
+    if (modo === "ano") return ano;
+    return `${ano}-${mes}`;
+  }, [modo, ano, mes, dataInicio, dataFim]);
 
   useEffect(() => {
     const load = async () => {
@@ -67,15 +125,12 @@ export default function RelatoriosPage() {
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
-      const inicioMes = `${ano}-${mes}-01`;
-      const fimMes    = new Date(parseInt(ano), parseInt(mes), 0).toISOString().slice(0, 10);
-
       const data = await loadAll<FreteResultado>((from, to) =>
         supabase.from("fretes_com_resultado")
           .select("id,origem,destino,status,data_inicio,data_fim,receita,custo_combustivel,custo_comissao,custo_despesas,custo_total,lucro_bruto,margem_pct,km_total,motorista_id,veiculo_id,motoristas(nome),veiculos(placa,modelo)")
           .eq("empresa_id", ue.empresa_id)
-          .gte("data_inicio", inicioMes)
-          .lte("data_inicio", fimMes)
+          .gte("data_inicio", periodo.inicio)
+          .lte("data_inicio", periodo.fim)
           .order("data_inicio", { ascending: false })
           .range(from, to)
       );
@@ -84,7 +139,7 @@ export default function RelatoriosPage() {
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [ano, mes]);
+  }, [periodo.inicio, periodo.fim]);
 
   const kpis = useMemo(() => {
     const concluidos = todos.filter(f => f.status === "concluido");
@@ -165,7 +220,7 @@ export default function RelatoriosPage() {
           v ? `${v.placa} ${v.modelo}` : "",
         ];
       });
-      saveAs(toCSV(headers, rows), `relatorio-periodo-${ano}-${mes}.csv`);
+      saveAs(toCSV(headers, rows), `relatorio-periodo-${periodoLabel}.csv`);
     } else {
       const source = tab === "motorista" ? porMotorista : porVeiculo;
       const headers = ["Nome","Fretes","Receita","Custo","Lucro","Margem %","KM"];
@@ -178,7 +233,7 @@ export default function RelatoriosPage() {
         r.margem.toFixed(1).replace(".", ","),
         r.km.toString(),
       ]);
-      saveAs(toCSV(headers, rows), `relatorio-${tab}-${ano}-${mes}.csv`);
+      saveAs(toCSV(headers, rows), `relatorio-${tab}-${periodoLabel}.csv`);
     }
   };
 
@@ -189,36 +244,6 @@ export default function RelatoriosPage() {
   ];
   const anos = Array.from({ length: 5 }, (_, i) => String(now.getFullYear() - i));
 
-  const AgrupadoTable = ({ rows }: { rows: Agrupado[] }) => (
-    rows.length === 0
-      ? <EmptyState message="Nenhum frete concluído neste período." icon="📊" />
-      : <DataTable count={rows.length} label="registros">
-          <thead>
-            <tr>
-              <Th>Nome</Th>
-              <Th style={{ textAlign: "right" }}>Fretes</Th>
-              <Th style={{ textAlign: "right" }}>Receita</Th>
-              <Th style={{ textAlign: "right" }}>Custo</Th>
-              <Th style={{ textAlign: "right" }}>Lucro</Th>
-              <Th style={{ textAlign: "right" }}>Margem</Th>
-              <Th style={{ textAlign: "right" }}>KM</Th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map(r => (
-              <Tr key={r.chave}>
-                <Td style={{ fontWeight: 600 }}>{r.label}</Td>
-                <Td style={{ textAlign: "right" }}>{r.qtd}</Td>
-                <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
-                <Td style={{ textAlign: "right", color: "#dc2626" }}>{fmtBRL(r.custo)}</Td>
-                <Td style={{ textAlign: "right", fontWeight: 700, color: r.lucro >= 0 ? "#16a34a" : "#dc2626" }}>{fmtBRL(r.lucro)}</Td>
-                <Td style={{ textAlign: "right", color: r.margem >= 0 ? "#16a34a" : "#dc2626" }}>{fmtPct(r.margem)}</Td>
-                <Td style={{ textAlign: "right" }}>{r.km.toLocaleString("pt-BR")}</Td>
-              </Tr>
-            ))}
-          </tbody>
-        </DataTable>
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -231,14 +256,51 @@ export default function RelatoriosPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
         {/* Filtro */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 600 }}>Período:</span>
-          <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...selectStyle, width: "150px" }}>
-            {meses.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-          </select>
-          <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, width: "90px" }}>
-            {anos.map(a => <option key={a}>{a}</option>)}
-          </select>
+
+          <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+            {([
+              ["mes", "Mês"],
+              ["ano", "Ano"],
+              ["range", "Range livre"],
+            ] as const).map(([key, label]) => (
+              <button key={key} onClick={() => setModo(key)} style={{
+                padding: "6px 14px", border: "none", cursor: "pointer", fontSize: "12px",
+                fontWeight: modo === key ? 700 : 500,
+                background: modo === key ? "#2563eb" : "#fff",
+                color: modo === key ? "#fff" : "#475569",
+              }}>{label}</button>
+            ))}
+          </div>
+
+          {modo === "mes" && (
+            <>
+              <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...selectStyle, width: "150px" }}>
+                {meses.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+              </select>
+              <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, width: "90px" }}>
+                {anos.map(a => <option key={a}>{a}</option>)}
+              </select>
+            </>
+          )}
+
+          {modo === "ano" && (
+            <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, width: "100px" }}>
+              {anos.map(a => <option key={a}>{a}</option>)}
+            </select>
+          )}
+
+          {modo === "range" && (
+            <>
+              <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
+                style={{ ...selectStyle, width: "150px" }} />
+              <span style={{ color: "#94a3b8", fontSize: "13px" }}>→</span>
+              <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
+                style={{ ...selectStyle, width: "150px" }} />
+            </>
+          )}
+
           {loading && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Carregando...</span>}
         </div>
 

@@ -110,22 +110,47 @@ export default function FreteDetalhePage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader
-        title={`${frete.origem ?? "—"} → ${frete.destino ?? "—"}`}
-        subtitle={`Criado em ${frete.created_at ? new Date(frete.created_at).toLocaleDateString("pt-BR") : "—"}`}
-        actions={
-          <>
-            <Btn href="/fretes" variant="ghost">← Voltar</Btn>
-            <Btn href={`/fretes/${id}/editar`} variant="outline">Editar</Btn>
-          </>
+      <style>{`
+        @media print {
+          body * { visibility: hidden !important; }
+          .frete-print, .frete-print * { visibility: visible !important; }
+          .frete-print { position: absolute; inset: 0; padding: 24px !important; background: #fff !important; overflow: visible !important; }
+          .frete-print .frete-print-header { display: block !important; }
+          .no-print, .no-print * { visibility: hidden !important; display: none !important; }
+          .frete-print a, .frete-print button { color: inherit !important; }
+          @page { margin: 1.5cm; }
         }
-      >
-        <Badge variant={STATUS_VAR[frete.status] ?? "default"}>
-          {STATUS_LABEL[frete.status] ?? frete.status}
-        </Badge>
-      </PageHeader>
+      `}</style>
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+      <div className="no-print">
+        <PageHeader
+          title={`${frete.origem ?? "—"} → ${frete.destino ?? "—"}`}
+          subtitle={`Criado em ${frete.created_at ? new Date(frete.created_at).toLocaleDateString("pt-BR") : "—"}`}
+          actions={
+            <>
+              <Btn href="/fretes" variant="ghost">← Voltar</Btn>
+              <Btn variant="outline" onClick={() => window.print()}>🖨️ Imprimir</Btn>
+              <Btn href={`/fretes/${id}/editar`} variant="outline">Editar</Btn>
+            </>
+          }
+        >
+          <Badge variant={STATUS_VAR[frete.status] ?? "default"}>
+            {STATUS_LABEL[frete.status] ?? frete.status}
+          </Badge>
+        </PageHeader>
+      </div>
+
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }} className="frete-print">
+        <div className="frete-print-header" style={{ display: "none", marginBottom: "16px" }}>
+          <h1 style={{ fontSize: "20px", margin: 0 }}>Ordem de Serviço — Frete</h1>
+          <div style={{ fontSize: "12px", color: "#475569", marginTop: "4px" }}>
+            {frete.origem ?? "—"} → {frete.destino ?? "—"} ·{" "}
+            {STATUS_LABEL[frete.status] ?? frete.status} ·{" "}
+            Criado em {frete.created_at ? new Date(frete.created_at).toLocaleDateString("pt-BR") : "—"}
+          </div>
+          <hr style={{ marginTop: "10px", marginBottom: "10px", border: "none", borderTop: "1px solid #cbd5e1" }} />
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
 
           <FormSection title="Rota e Datas">

@@ -263,7 +263,7 @@ export default function NovoClientePage() {
                 <div style={{ padding: "48px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "12px", textAlign: "center" }}>
                   <User size={32} style={{ margin: "0 auto 12px", color: "#94a3b8" }} />
                   <p style={{ color: "#475569", fontSize: "14px", fontWeight: 500 }}>Nenhum contato adicionado.</p>
-                  <p style={{ color: "#94a3b8", fontSize: "13px", marginTop: "4px" }}>Clique em "+ Adicionar Contato" para incluir responsáveis.</p>
+                  <p style={{ color: "#94a3b8", fontSize: "13px", marginTop: "4px" }}>Clique em &ldquo;+ Adicionar Contato&rdquo; para incluir responsáveis.</p>
                 </div>
               ) : (
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>

@@ -233,7 +233,7 @@ export default function NovaViagemPage() {
           <FormSection title={`Fretes a Incluir (${selectedFretes.size} selecionados)`}>
             {fretesDisp.length === 0 ? (
               <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
-                Nenhum frete agendado disponível. Os fretes aparecem aqui quando têm status "Agendado" e ainda não estão em outra viagem.
+                Nenhum frete agendado disponível. Os fretes aparecem aqui quando têm status &ldquo;Agendado&rdquo; e ainda não estão em outra viagem.
               </p>
             ) : (
               <>

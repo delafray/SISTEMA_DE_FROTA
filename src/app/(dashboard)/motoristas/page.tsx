@@ -81,6 +81,9 @@ export default function MotoristasPage() {
     </div>
   );
 
+  // eslint-disable-next-line react-hooks/purity -- Date.now() é a fonte do "agora" para cálculo de dias até CNH vencer
+  const agora = useMemo(() => Date.now(), [todos]);
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Motoristas" subtitle="Gerencie os motoristas da frota" count={loading ? undefined : todos.length}>
@@ -115,7 +118,7 @@ export default function MotoristasPage() {
             ) : (
               filtrados.map(m => {
                 const cnhDate = m.cnh_validade ? new Date(m.cnh_validade + "T00:00:00") : null;
-                const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - Date.now()) / 86400000) : null;
+                const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - agora) / 86400000) : null;
                 const cnhVar  = diasCnh === null ? "default" : diasCnh < 0 ? "danger" : diasCnh < 30 ? "warning" : "success";
 
                 return (

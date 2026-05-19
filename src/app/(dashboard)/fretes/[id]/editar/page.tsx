@@ -111,8 +111,11 @@ export default function EditarFretePage() {
           v = kmRodado * motoristaSel.valor_por_km;
         break;
     }
-    if (v !== null)
-      setF(p => ({ ...p, comissao_motorista_valor: v!.toFixed(2) }));
+    if (v !== null) {
+      const newVal = v.toFixed(2);
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setF(p => p.comissao_motorista_valor === newVal ? p : { ...p, comissao_motorista_valor: newVal });
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [f.status, f.valor_frete, f.km_inicial, f.km_final, motoristaSel]);
 

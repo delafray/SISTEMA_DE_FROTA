@@ -6,6 +6,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import * as Sentry from '@sentry/nextjs';
 import { parseWebhookPayload, type WebhookPayload } from '@/lib/whatsapp/messageParser';
 import { marcarComoLida } from '@/lib/whatsapp/messageSender';
 import { processarMensagem } from '@/lib/whatsapp/messageRouter';
@@ -72,6 +73,7 @@ export async function POST(request: NextRequest) {
     await Promise.all(messages.map((msg) => processarMensagemAsync(msg)));
     return NextResponse.json({ status: 'ok' });
   } catch (err) {
+    Sentry.captureException(err, { tags: { scope: 'whatsapp_webhook' } });
     log.error('post_error', { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.json({ status: 'error' }, { status: 200 });
   }
@@ -87,6 +89,10 @@ async function processarMensagemAsync(msg: Awaited<ReturnType<typeof parseWebhoo
     await processarMensagem(msg);
     log.info('message_processed', ctx);
   } catch (err) {
+    Sentry.captureException(err, {
+      tags: { scope: 'whatsapp_message' },
+      extra: ctx,
+    });
     log.error('message_failed', {
       ...ctx,
       error: err instanceof Error ? err.message : String(err),
