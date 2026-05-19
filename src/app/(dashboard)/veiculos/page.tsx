@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { ReportPdfButton } from "@/components/ui/ReportPdfButton";
 
 type Veiculo = {
   id: string; placa: string; marca: string; modelo: string; tipo: string;
@@ -86,10 +87,197 @@ export default function VeiculosPage() {
     </div>
   );
 
+  const buildPdf = (doc: any) => {
+    // 1. Column configuration (total width = 269mm)
+    const columns = [
+      { title: "Placa", width: 25 },
+      { title: "Apelido", width: 40 },
+      { title: "Marca / Modelo", width: 60 },
+      { title: "Tipo", width: 40 },
+      { title: "Combustível", width: 35 },
+      { title: "Ano", width: 18 },
+      { title: "KM Atual", width: 27, align: "right" },
+      { title: "Status", width: 24, align: "center" }
+    ];
+
+    // 2. Page header and footer drawing helpers
+    const drawHeader = (pageNumber: number) => {
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(14);
+      doc.setTextColor(30, 41, 59); // Slate-800
+      doc.text("SISTEMA DE FROTA", 14, 15);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10);
+      doc.setTextColor(100, 116, 139); // Slate-500
+      doc.text("RELATÓRIO GERENCIAL DE VEÍCULOS", 14, 20);
+
+      const emitidoEm = new Date().toLocaleString("pt-BR");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate-400
+      doc.text(`Emitido em: ${emitidoEm}`, 283, 15, { align: "right" });
+      doc.text(`Registros Exibidos: ${filtrados.length}`, 283, 19, { align: "right" });
+
+      doc.setDrawColor(226, 232, 240); // Slate-200
+      doc.setLineWidth(0.5);
+      doc.line(14, 23, 283, 23);
+    };
+
+    const drawFooter = (pageNumber: number) => {
+      doc.setDrawColor(226, 232, 240); // Slate-200
+      doc.setLineWidth(0.5);
+      doc.line(14, 192, 283, 192);
+
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(8);
+      doc.setTextColor(148, 163, 184); // Slate-400
+      doc.text("Sistema de Frota — Relatório Gerencial", 14, 197);
+      doc.text(`Página ${pageNumber}`, 283, 197, { align: "right" });
+    };
+
+    const drawTableHeader = (yPos: number) => {
+      doc.setFillColor(37, 99, 235); // #2563eb
+      doc.rect(14, yPos, 269, 8, "F");
+
+      doc.setFont("helvetica", "bold");
+      doc.setFontSize(9);
+      doc.setTextColor(255, 255, 255);
+
+      let xPos = 14;
+      columns.forEach(col => {
+        const textX = col.align === "right" ? xPos + col.width - 2 : col.align === "center" ? xPos + col.width / 2 : xPos + 2;
+        doc.text(col.title, textX, yPos + 5.5, { align: col.align || "left" });
+        xPos += col.width;
+      });
+    };
+
+    // 3. Populate Rows
+    let page = 1;
+    drawHeader(page);
+    drawFooter(page);
+
+    let y = 30;
+    drawTableHeader(y);
+    y += 8;
+
+    filtrados.forEach((v, index) => {
+      // Page break check (Landscape A4 height is 210mm, footer at 192mm)
+      if (y > 180) {
+        doc.addPage();
+        page += 1;
+        drawHeader(page);
+        drawFooter(page);
+        
+        y = 30;
+        drawTableHeader(y);
+        y += 8;
+      }
+
+      // Alternate row backgrounds
+      if (index % 2 === 0) {
+        doc.setFillColor(248, 250, 252); // #f8fafc
+        doc.rect(14, y, 269, 7.5, "F");
+      }
+
+      // Draw horizontal bottom border
+      doc.setDrawColor(241, 245, 249); // #f1f5f9
+      doc.setLineWidth(0.3);
+      doc.line(14, y + 7.5, 283, y + 7.5);
+
+      const apelido = v.apelido || "—";
+      const modelo = `${v.marca} ${v.modelo}`;
+      const tipo = `${v.tipo}${v.categoria ? ` / ${v.categoria}` : ""}`;
+      const combustivel = v.combustivel?.replace("_", " ") || "—";
+      const ano = v.ano ? String(v.ano) : "—";
+      const km = v.km_atual ? v.km_atual.toLocaleString("pt-BR") : "—";
+      const status = v.ativo ? "Ativo" : "Inativo";
+
+      const rowData = [
+        { text: v.placa, width: 25, bold: true },
+        { text: apelido, width: 40 },
+        { text: modelo, width: 60 },
+        { text: tipo, width: 40 },
+        { text: combustivel, width: 35 },
+        { text: ano, width: 18 },
+        { text: km, width: 27, align: "right" },
+        { text: status, width: 24, align: "center" }
+      ];
+
+      let xPos = 14;
+      rowData.forEach((cell, idx) => {
+        doc.setFont("helvetica", cell.bold ? "bold" : "normal");
+        doc.setFontSize(8.5);
+        
+        if (idx === 0) {
+          doc.setTextColor(15, 23, 42); // slate-900 for Placa
+        } else {
+          doc.setTextColor(71, 85, 105); // slate-600
+        }
+
+        const textX = cell.align === "right" ? xPos + cell.width - 2 : cell.align === "center" ? xPos + cell.width / 2 : xPos + 2;
+        
+        // Truncate text if it exceeds column width
+        const maxTextW = cell.width - 4;
+        let cellText = String(cell.text);
+        if (doc.getTextWidth(cellText) > maxTextW) {
+          cellText = doc.splitTextToSize(cellText, maxTextW)[0] + "...";
+        }
+
+        doc.text(cellText, textX, y + 5, { align: cell.align || "left" });
+        xPos += cell.width;
+      });
+
+      y += 7.5;
+    });
+
+    // Draw summary block
+    if (y > 165) {
+      doc.addPage();
+      page += 1;
+      drawHeader(page);
+      drawFooter(page);
+      y = 30;
+    } else {
+      y += 5;
+    }
+
+    doc.setFillColor(241, 245, 249); // #f1f5f9
+    doc.rect(14, y, 269, 15, "F");
+
+    doc.setDrawColor(203, 213, 225); // #cbd5e1
+    doc.setLineWidth(0.5);
+    doc.rect(14, y, 269, 15, "S");
+
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(8.5);
+    doc.setTextColor(30, 41, 59); // slate-800
+
+    const ativosVal = filtrados.filter(v => v.ativo).length;
+    const inativosVal = filtrados.filter(v => !v.ativo).length;
+
+    doc.text("RESUMO DO RELATÓRIO", 18, y + 5.5);
+    doc.setFont("helvetica", "normal");
+    doc.text(`Total de Veículos Exibidos: ${filtrados.length}`, 18, y + 10.5);
+    doc.text(`Ativos: ${ativosVal}`, 120, y + 10.5);
+    doc.text(`Inativos: ${inativosVal}`, 180, y + 10.5);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Veículos" count={loading ? undefined : todos.length}>
-        <Btn href="/veiculos/novo" size="sm">+ Cadastrar Veículo</Btn>
+        <div style={{ display: "flex", gap: "8px" }}>
+          {!loading && todos.length > 0 && (
+            <ReportPdfButton
+              title="Relatório Gerencial de Veículos"
+              fileName={`relatorio_veiculos_${new Date().toISOString().split("T")[0]}.pdf`}
+              orientation="landscape"
+              buildPdf={buildPdf}
+            >
+              Relatório
+            </ReportPdfButton>
+          )}
+          <Btn href="/veiculos/novo" size="sm">+ Cadastrar Veículo</Btn>
+        </div>
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
