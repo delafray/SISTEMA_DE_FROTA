@@ -46,30 +46,26 @@ export async function GET(request: NextRequest) {
 // ─── POST: Receber mensagens ─────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
+  console.log('[webhook] 🔔 POST recebido', new Date().toISOString());
+
   try {
     const body = (await request.json()) as WebhookPayload;
+    console.log('[webhook] 📦 Payload:', JSON.stringify(body));
 
-    // A Meta espera resposta 200 IMEDIATAMENTE (< 5s).
-    // Processamos a mensagem de forma assíncrona.
     const messages = parseWebhookPayload(body);
+    console.log(`[webhook] ➡️  ${messages.length} mensagem(ns) extraída(s)`);
 
     if (messages.length === 0) {
-      // Pode ser status update (delivered, read) — ignorar
       return NextResponse.json({ status: 'ok' });
     }
 
-    // Processar cada mensagem em background
-    for (const msg of messages) {
-      // Fire-and-forget: não bloquear a resposta ao webhook
-      processarMensagemAsync(msg).catch((err) => {
-        console.error('[webhook] Erro ao processar mensagem:', err);
-      });
-    }
+    // Aguarda processamento dentro da janela de 5s da Meta para que
+    // os logs sejam drenados antes de o container serverless encerrar.
+    await Promise.all(messages.map((msg) => processarMensagemAsync(msg)));
 
     return NextResponse.json({ status: 'ok' });
   } catch (err) {
     console.error('[webhook] Erro ao processar payload:', err);
-    // Sempre retornar 200 para a Meta não ficar reenviando
     return NextResponse.json({ status: 'error' }, { status: 200 });
   }
 }

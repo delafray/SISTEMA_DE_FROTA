@@ -21,7 +21,15 @@ function getConfig() {
   return { token, phoneNumberId };
 }
 
-async function sendRequest(phoneNumberId: string, token: string, body: Record<string, unknown>): Promise<boolean> {
+async function sendRequest(
+  phoneNumberId: string,
+  token: string,
+  body: Record<string, unknown>,
+  timeoutMs = 8000
+): Promise<boolean> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+
   try {
     const res = await fetch(`${GRAPH_API_URL}/${phoneNumberId}/messages`, {
       method: 'POST',
@@ -33,6 +41,7 @@ async function sendRequest(phoneNumberId: string, token: string, body: Record<st
         messaging_product: 'whatsapp',
         ...body,
       }),
+      signal: controller.signal,
     });
 
     if (!res.ok) {
@@ -43,8 +52,14 @@ async function sendRequest(phoneNumberId: string, token: string, body: Record<st
 
     return true;
   } catch (err) {
-    console.error('[messageSender] Erro de rede:', err);
+    if ((err as Error).name === 'AbortError') {
+      console.error('[messageSender] Timeout ao chamar Graph API após', timeoutMs, 'ms');
+    } else {
+      console.error('[messageSender] Erro de rede:', err);
+    }
     return false;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -200,8 +215,10 @@ export async function enviarDocumento(
 export async function marcarComoLida(messageId: string): Promise<boolean> {
   const { token, phoneNumberId } = getConfig();
 
-  return sendRequest(phoneNumberId, token, {
-    status: 'read',
-    message_id: messageId,
-  });
+  return sendRequest(
+    phoneNumberId,
+    token,
+    { status: 'read', message_id: messageId },
+    3000
+  );
 }
