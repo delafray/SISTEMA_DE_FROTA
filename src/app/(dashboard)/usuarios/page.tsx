@@ -1,44 +1,117 @@
-import { createClient } from "@/lib/supabase/server";
-import { redirect } from "next/navigation";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState } from "@/components/ui/ds";
+"use client";
 
-export default async function UsuariosPage() {
-  const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) return redirect("/login");
+import { useState, useEffect, useMemo, useDeferredValue } from "react";
+import { useRouter } from "next/navigation";
+import { createClient } from "@/lib/supabase/client";
+import { normalizar } from "@/lib/utils/normalizar";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { RemoverUsuarioBtn } from "@/components/ui/RemoverUsuarioBtn";
 
-  const { data: ue } = await supabase
-    .from("usuario_empresas")
-    .select("empresa_id")
-    .eq("usuario_id", user.id)
-    .eq("is_padrao", true)
-    .single();
+type Usuario = {
+  usuario_id: string;
+  role: string;
+  is_padrao: boolean | null;
+  empresa_id: string;
+  perfis: { nome: string } | { nome: string }[] | null;
+};
 
-  const { data: usuarios } = await supabase
-    .from("usuario_empresas")
-    .select("role, is_padrao, usuario_id, perfis(nome), empresa_id")
-    .eq("empresa_id", ue?.empresa_id ?? "")
-    .order("role");
+const ROLE_LABEL: Record<string, string> = { master: "Master", gestor: "Gestor", motorista: "Motorista" };
+const ROLE_VAR: Record<string, "purple" | "info" | "success" | "default"> = {
+  master: "purple", gestor: "info", motorista: "success",
+};
 
-  const roleLabel: Record<string, string> = {
-    master: "Master",
-    gestor: "Gestor",
-    motorista: "Motorista",
+export default function UsuariosPage() {
+  const router = useRouter();
+  const [todos, setTodos]       = useState<Usuario[]>([]);
+  const [meId, setMeId]         = useState("");
+  const [empresaId, setEmpresaId] = useState("");
+  const [loading, setLoading]   = useState(true);
+  const [busca, setBusca]       = useState("");
+  const [filtroRole, setFiltroRole] = useState("");
+  const buscaDeferred = useDeferredValue(busca);
+
+  useEffect(() => {
+    const load = async () => {
+      const supabase = createClient();
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) { router.push("/login"); return; }
+      setMeId(auth.user.id);
+
+      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
+        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+      if (!ue?.empresa_id) return;
+      setEmpresaId(ue.empresa_id);
+
+      const { data } = await supabase
+        .from("usuario_empresas")
+        .select("role, is_padrao, usuario_id, perfis(nome), empresa_id")
+        .eq("empresa_id", ue.empresa_id)
+        .order("role");
+
+      setTodos(data ?? []);
+      setLoading(false);
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const getNome = (u: Usuario) => {
+    const p = Array.isArray(u.perfis) ? u.perfis[0] : u.perfis;
+    return p?.nome ?? "";
   };
-  const roleVar: Record<string, "purple" | "info" | "success" | "default"> = {
-    master: "purple",
-    gestor: "info",
-    motorista: "success",
-  };
+
+  const getLogin = (nome: string) =>
+    nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
+  const haystack = useMemo(() => {
+    const m = new Map<string, string>();
+    for (const u of todos) {
+      const nome = getNome(u);
+      m.set(u.usuario_id, normalizar([nome, getLogin(nome), u.role].join(" ")));
+    }
+    return m;
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [todos]);
+
+  const filtrados = useMemo(() => {
+    const termo = normalizar(buscaDeferred);
+    const palavras = termo.split(/\s+/).filter(Boolean);
+    return todos.filter(u => {
+      if (filtroRole && u.role !== filtroRole) return false;
+      if (palavras.length === 0) return true;
+      const h = haystack.get(u.usuario_id) ?? "";
+      return palavras.every(p => h.includes(p));
+    });
+  }, [todos, haystack, buscaDeferred, filtroRole]);
+
+  const toolbar = (
+    <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
+      <SearchInput
+        placeholder="Buscar por nome ou login..."
+        value={busca}
+        onChange={e => setBusca(e.target.value)}
+      />
+      <select value={filtroRole} onChange={e => setFiltroRole(e.target.value)}
+        style={{ ...selectStyle, width: "150px" }}>
+        <option value="">Todos os perfis</option>
+        <option value="master">Master</option>
+        <option value="gestor">Gestor</option>
+        <option value="motorista">Motorista</option>
+      </select>
+      <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "auto", whiteSpace: "nowrap" }}>
+        {filtrados.length} de {todos.length} usuários
+      </span>
+    </div>
+  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader title="Usuários" count={usuarios?.length}>
+      <PageHeader title="Usuários" count={loading ? undefined : todos.length}>
         <Btn href="/usuarios/novo" size="sm">+ Novo Usuário</Btn>
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <DataTable count={usuarios?.length ?? 0} label="usuários">
+        <DataTable count={filtrados.length} label="usuários" toolbar={toolbar}>
           <thead>
             <tr>
               <Th>Nome</Th>
@@ -49,36 +122,31 @@ export default async function UsuariosPage() {
             </tr>
           </thead>
           <tbody>
-            {!usuarios || usuarios.length === 0 ? (
+            {loading ? (
+              <tr><td colSpan={5} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
+            ) : filtrados.length === 0 ? (
               <tr>
                 <td colSpan={5}>
-                  <EmptyState
-                    message="Nenhum usuário cadastrado."
-                    icon="👥"
-                    action={<Btn href="/usuarios/novo">+ Cadastrar primeiro usuário</Btn>}
-                  />
+                  {todos.length === 0
+                    ? <EmptyState message="Nenhum usuário cadastrado." icon="👥" action={<Btn href="/usuarios/novo">+ Cadastrar primeiro usuário</Btn>} />
+                    : <EmptyState message="Nenhum usuário encontrado para esta busca." icon="🔍" />
+                  }
                 </td>
               </tr>
             ) : (
-              usuarios.map(u => {
-                const perfil = Array.isArray(u.perfis) ? u.perfis[0] : u.perfis;
-                const isMe = u.usuario_id === user.id;
+              filtrados.map(u => {
+                const nome  = getNome(u);
+                const isMe  = u.usuario_id === meId;
                 return (
                   <Tr key={u.usuario_id}>
                     <Td>
-                      {perfil?.nome ?? "—"}
-                      {isMe && (
-                        <Badge variant="default"> VOCÊ</Badge>
-                      )}
+                      {nome || "—"}
+                      {isMe && <Badge variant="default"> VOCÊ</Badge>}
                     </Td>
+                    <Td>{getLogin(nome) || "—"}</Td>
                     <Td>
-                      {perfil?.nome
-                        ? perfil.nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "")
-                        : "—"}
-                    </Td>
-                    <Td>
-                      <Badge variant={roleVar[u.role] ?? "default"}>
-                        {roleLabel[u.role] ?? u.role}
+                      <Badge variant={ROLE_VAR[u.role] ?? "default"}>
+                        {ROLE_LABEL[u.role] ?? u.role}
                       </Badge>
                     </Td>
                     <Td>
@@ -88,9 +156,10 @@ export default async function UsuariosPage() {
                     </Td>
                     <Td style={{ textAlign: "right" }}>
                       {!isMe && (
-                        <a href={`/usuarios/${u.usuario_id}/editar`} style={{ color: "#2563eb", textDecoration: "none" }}>
-                          Editar
-                        </a>
+                        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                          <a href={`/usuarios/${u.usuario_id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                          <RemoverUsuarioBtn usuarioId={u.usuario_id} empresaId={empresaId} />
+                        </div>
                       )}
                     </Td>
                   </Tr>

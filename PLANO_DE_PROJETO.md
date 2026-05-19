@@ -956,9 +956,12 @@ export async function lookupCep(cep: string): Promise<EnderecoCep | null> {
 |---|---|---|
 | Maioria dentro da janela 24h (motorista inicia) | ~500–1000 msg | **~R$ 0–10/mês** |
 | Alertas proativos do gestor (manutenção, avisos) | ~30–50 msg | **~R$ 5–15/mês** |
-| **Total estimado mensal** | | **R$ 5 a R$ 25/mês** |
+| **Total estimado mensal** | | **R$ 0/mês (Regra Estrita)** |
 
-> 💡 Como os motoristas **sempre iniciam** a conversa ("Oi"), praticamente toda a interação cai na **janela gratuita de 24h**. O custo real será próximo de zero na operação diária.
+> 💡 Como os motoristas **sempre iniciam** a conversa ("Oi"), praticamente toda a interação cai na **janela gratuita de 24h**.
+> 
+> 🚨 **REGRA DE NEGÓCIO CRÍTICA (CUSTO ZERO):**
+> **NUNCA** disparar alertas, notificações ou mensagens proativas (HSM) para os motoristas ou gestores usando a API da Meta. **100%** da comunicação via WhatsApp deve ser iniciada pelo usuário. Qualquer tipo de notificação ou aviso (ex: "Nova viagem criada", "Falha na IA") deve ser feita **exclusivamente via Dashboard/Sistema** para evitar qualquer cobrança da Meta.
 
 ---
 
@@ -2383,12 +2386,13 @@ Antes de começar a codar, vamos configurar as plataformas na ordem abaixo:
 | 1️⃣ | **GitHub** | Criar repositório privado e subir o projeto inicial | ✅ **Concluído** |
 | 2️⃣ | **Supabase** | Criar projeto, aplicar migrations, configurar Auth e RLS | ✅ **Concluído** |
 | 3️⃣ | **Vercel** | Conectar ao repositório GitHub, configurar variáveis de ambiente | ✅ **Concluído** |
-| 4️⃣ | **Sentry** | Criar projeto, obter DSN, integrar ao Next.js | ⏳ Aguardando |
-| 5️⃣ | **Cloudflare R2** | Criar bucket, gerar credenciais de acesso | ⏳ Aguardando |
-| 6️⃣ | **Meta Cloud API** | Criar conta Business, configurar número WhatsApp (Fase 3) | ⏳ Aguardando |
-| 7️⃣ | **OpenAI** | Gerar API Key GPT-4o (Fase 4) | ⏳ Aguardando |
+| 4️⃣ | **Sentry** | Criar projeto, obter DSN, integrar ao Next.js | ✅ **Concluído** |
+| 5️⃣ | **Cloudflare R2** | Criar bucket, gerar credenciais de acesso | ✅ **Concluído** |
+| 6️⃣ | **Meta Cloud API** | Criar conta Business, configurar número WhatsApp (Fase 3) | ✅ **Concluído** |
+| 7️⃣ | **OpenAI** | Gerar API Key GPT-4o (Fase 4) | ✅ **Concluído** |
 
-> ✅ **Progresso atual:** Passos 1, 2 e 3 concluídos. Repositório, Banco de Dados e Vercel (CI/CD) estão no ar e conectados. Próximo passo sugerido: **Inicializar o projeto Next.js localmente.**
+> ✅ **Progresso atual:** TODOS OS 7 PILARES CONCLUÍDOS COM SUCESSO! 🚀 
+> Infraestrutura base externa 100% finalizada (Supabase, Vercel, R2, Sentry, Meta WhatsApp e OpenAI). O sistema está pronto para ser desenvolvido localmente (Início da Fase 2).
 
 ### Detalhes do que já foi feito:
 

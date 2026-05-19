@@ -8,7 +8,11 @@ import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 type Veiculo = { id: string; placa: string; modelo: string; marca: string; km_atual: number | null };
-type Motorista = { id: string; nome: string; tipo_comissao: string; percentual_frete: number | null };
+type Motorista = {
+  id: string; nome: string; tipo_comissao: string;
+  percentual_frete: number | null; valor_fixo_por_viagem: number | null;
+  valor_por_km: number | null; salario_fixo: number | null;
+};
 type Cliente = { id: string; nome_fantasia: string; razao_social: string | null };
 
 export default function NovoFretePage() {
@@ -32,12 +36,28 @@ export default function NovoFretePage() {
   });
 
   const [motoristaSel, setMotoristaSel] = useState<Motorista | null>(null);
-  const comissaoEstimada = () => {
-    if (!motoristaSel || !f.valor_frete) return null;
-    if (motoristaSel.tipo_comissao === "percentual_frete" && motoristaSel.percentual_frete) {
-      return ((parseFloat(f.valor_frete) * motoristaSel.percentual_frete) / 100).toFixed(2);
+
+  const comissaoHint = () => {
+    if (!motoristaSel) return null;
+    const m = motoristaSel;
+    switch (m.tipo_comissao) {
+      case "percentual_frete":
+      case "salario_mais_percentual":
+        if (!f.valor_frete || !m.percentual_frete) return `${m.percentual_frete ?? "?"}% do frete`;
+        return `R$ ${((parseFloat(f.valor_frete) * m.percentual_frete) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${m.percentual_frete}%)`;
+      case "valor_fixo_viagem":
+        return m.valor_fixo_por_viagem != null
+          ? `R$ ${m.valor_fixo_por_viagem.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por viagem`
+          : "Valor fixo por viagem";
+      case "valor_por_km":
+      case "salario_mais_km":
+        return m.valor_por_km != null ? `R$ ${m.valor_por_km.toFixed(2)}/km` : "Por km rodado";
+      case "salario_fixo":
+        return m.salario_fixo != null
+          ? `Salário fixo: R$ ${m.salario_fixo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : "Salário fixo";
+      default: return m.tipo_comissao.replace(/_/g, " ");
     }
-    return null;
   };
 
   useEffect(() => {
@@ -48,7 +68,7 @@ export default function NovoFretePage() {
       if (!ue?.empresa_id) return;
       const [v, m, c] = await Promise.all([
         supabase.from("veiculos").select("id,placa,modelo,marca,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motoristas").select("id,nome,tipo_comissao,percentual_frete").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
+        supabase.from("motoristas").select("id,nome,tipo_comissao,percentual_frete,valor_fixo_por_viagem,valor_por_km,salario_fixo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
         supabase.from("clientes").select("id,nome_fantasia,razao_social").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome_fantasia"),
       ]);
       setVeiculos(v.data ?? []);
@@ -134,7 +154,12 @@ export default function NovoFretePage() {
             <FormSection title="Veículo e Motorista *">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
-                  <select value={f.veiculo_id} onChange={(e) => set("veiculo_id")(e)} style={selectStyle}>
+                  <select value={f.veiculo_id} onChange={(e) => {
+                    set("veiculo_id")(e);
+                    const v = veiculos.find(v => v.id === e.target.value);
+                    if (v?.km_atual != null)
+                      setF(p => ({ ...p, veiculo_id: e.target.value, km_inicial: String(v.km_atual) }));
+                  }} style={selectStyle}>
                     <option value="">— Selecione —</option>
                     {veiculos.map(v => (
                       <option key={v.id} value={v.id}>{v.placa} — {v.marca} {v.modelo}</option>
@@ -152,8 +177,8 @@ export default function NovoFretePage() {
                     {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                   </select>
                   {motoristaSel && (
-                    <p style={{ fontSize: "11px", color: "#2563eb", marginTop: "4px" }}>
-                      Comissão: {motoristaSel.tipo_comissao === "percentual_frete" ? `${motoristaSel.percentual_frete}% do frete` : motoristaSel.tipo_comissao.replace(/_/g, " ")}
+                    <p style={{ fontSize: "11px", color: "#7c3aed", marginTop: "4px" }}>
+                      Comissão: {comissaoHint()}
                     </p>
                   )}
                 </FormField>
@@ -219,10 +244,10 @@ export default function NovoFretePage() {
                     <option value="outros">Outros</option>
                   </select>
                 </FormField>
-                {comissaoEstimada() && (
-                  <FormField label="Comissão Estimada (R$)">
-                    <div style={{ padding: "10px 16px", background: "#f0fdf4", border: "1px solid #bbf7d0", color: "#166534", fontSize: "13px", fontWeight: 700, borderRadius: "6px" }}>
-                      R$ {parseFloat(comissaoEstimada()!).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                {motoristaSel && comissaoHint() && (
+                  <FormField label="Comissão Estimada">
+                    <div style={{ padding: "10px 16px", background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", fontSize: "13px", fontWeight: 700, borderRadius: "6px" }}>
+                      {comissaoHint()}
                     </div>
                   </FormField>
                 )}

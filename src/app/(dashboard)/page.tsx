@@ -1,13 +1,278 @@
+import { createClient } from "@/lib/supabase/server";
+import { redirect } from "next/navigation";
+import Link from "next/link";
 import { PageHeader, KpiCard } from "@/components/ui/ds";
 
-export default function DashboardPage() {
+export const dynamic = "force-dynamic";
+
+type FreteRecente = {
+  id: string; status: string; origem: string; destino: string;
+  valor_frete: number | null; created_at: string;
+  data_coleta_prevista: string | null; data_entrega_prevista: string | null;
+  motoristas: { nome: string } | null;
+  veiculos: { placa: string; modelo: string } | null;
+};
+
+type Alerta = { tipo: "danger" | "warning"; msg: string; href: string };
+
+const STATUS_VAR: Record<string, string> = {
+  agendado: "#854d0e", em_andamento: "#1e40af", concluido: "#166534", cancelado: "#991b1b",
+};
+const STATUS_BG: Record<string, string> = {
+  agendado: "#fef9c3", em_andamento: "#dbeafe", concluido: "#dcfce7", cancelado: "#fee2e2",
+};
+const STATUS_LABEL: Record<string, string> = {
+  agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
+};
+
+const alertaBg:     Record<string, string> = { danger: "#fef2f2", warning: "#fffbeb" };
+const alertaBorder: Record<string, string> = { danger: "#fecaca", warning: "#fde68a" };
+const alertaColor:  Record<string, string> = { danger: "#991b1b", warning: "#92400e" };
+const alertaIcon:   Record<string, string> = { danger: "🚫",      warning: "⚠️" };
+
+export default async function DashboardPage() {
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return redirect("/login");
+
+  const { data: ue } = await supabase
+    .from("usuario_empresas").select("empresa_id,role")
+    .eq("usuario_id", user.id).eq("is_padrao", true).single();
+
+  if (ue?.role === "motorista") return redirect("/motorista");
+
+  const empresaId = ue?.empresa_id ?? "";
+
+  const now       = new Date();
+  const hoje      = now.toISOString().slice(0, 10);
+  const em30dias  = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30).toISOString().slice(0, 10);
+  const mesInicio = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+  const mesFim    = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59).toISOString();
+
+  const [
+    { count: totalFretes },
+    { count: fretesAndamento },
+    { count: fretesAgendados },
+    { count: veiculosAtivos },
+    { data: fretesMes },
+    { count: motoristasAtivos },
+    { data: cnhVencidas },
+    { data: cnhVencendo },
+    { data: docVencidos },
+    { data: docVencendo },
+    { count: adtPendentes },
+    { data: fretesRecentes },
+  ] = await Promise.all([
+    supabase.from("fretes").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId),
+    supabase.from("fretes").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId).eq("status", "em_andamento"),
+    supabase.from("fretes").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId).eq("status", "agendado"),
+    supabase.from("veiculos").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId).eq("ativo", true),
+    supabase.from("fretes").select("valor_frete").eq("empresa_id", empresaId).eq("status", "concluido")
+      .gte("updated_at", mesInicio).lte("updated_at", mesFim),
+    supabase.from("motoristas").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId).eq("ativo", true),
+    // CNH vencida
+    supabase.from("motoristas").select("id,nome,cnh_validade").eq("empresa_id", empresaId).eq("ativo", true)
+      .lt("cnh_validade", hoje),
+    // CNH vencendo em 30 dias
+    supabase.from("motoristas").select("id,nome,cnh_validade").eq("empresa_id", empresaId).eq("ativo", true)
+      .gte("cnh_validade", hoje).lte("cnh_validade", em30dias),
+    // Docs veículo vencidos (IPVA, licenciamento, seguro)
+    supabase.from("veiculos").select("id,placa,apelido,ipva_vencimento,licenciamento_vencimento,seguro_vencimento")
+      .eq("empresa_id", empresaId).eq("ativo", true)
+      .or(`ipva_vencimento.lt.${hoje},licenciamento_vencimento.lt.${hoje},seguro_vencimento.lt.${hoje}`),
+    // Docs veículo vencendo em 30 dias
+    supabase.from("veiculos").select("id,placa,apelido,ipva_vencimento,licenciamento_vencimento,seguro_vencimento")
+      .eq("empresa_id", empresaId).eq("ativo", true)
+      .or(`ipva_vencimento.gte.${hoje},licenciamento_vencimento.gte.${hoje},seguro_vencimento.gte.${hoje}`)
+      .or(`ipva_vencimento.lte.${em30dias},licenciamento_vencimento.lte.${em30dias},seguro_vencimento.lte.${em30dias}`),
+    // Adiantamentos pendentes de aprovação
+    supabase.from("adiantamentos").select("*", { count: "exact", head: true })
+      .eq("empresa_id", empresaId).eq("status", "solicitado"),
+    supabase.from("fretes")
+      .select("id,status,origem,destino,valor_frete,created_at,data_coleta_prevista,data_entrega_prevista,motoristas(nome),veiculos(placa,modelo)")
+      .eq("empresa_id", empresaId)
+      .order("created_at", { ascending: false })
+      .limit(8),
+  ]);
+
+  const receitaMes = (fretesMes ?? []).reduce((s, f) => s + (f.valor_frete ?? 0), 0);
+  const fmtBRL  = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
+  const fmtDate = (d: string) => new Date(d + "T00:00:00").toLocaleDateString("pt-BR");
+  const diasAte = (d: string) => Math.ceil((new Date(d + "T00:00:00").getTime() - now.getTime()) / 86400000);
+
+  // Monta alertas CNH
+  const alertas: Alerta[] = [
+    ...(cnhVencidas ?? []).map(m => ({
+      tipo: "danger" as const,
+      msg: `CNH vencida: ${m.nome} (${fmtDate(m.cnh_validade)})`,
+      href: `/motoristas/${m.id}/editar`,
+    })),
+    ...(cnhVencendo ?? []).map(m => {
+      const dias = diasAte(m.cnh_validade);
+      return {
+        tipo: "warning" as const,
+        msg: `CNH vence em ${dias} dia${dias !== 1 ? "s" : ""}: ${m.nome} (${fmtDate(m.cnh_validade)})`,
+        href: `/motoristas/${m.id}/editar`,
+      };
+    }),
+  ];
+
+  // Monta alertas docs veículo
+  const DOC_LABEL: Record<string, string> = {
+    ipva_vencimento: "IPVA",
+    licenciamento_vencimento: "Licenciamento",
+    seguro_vencimento: "Seguro",
+  };
+  const docCols = ["ipva_vencimento", "licenciamento_vencimento", "seguro_vencimento"] as const;
+
+  for (const v of docVencidos ?? []) {
+    const nome = v.apelido ?? v.placa;
+    for (const col of docCols) {
+      const val = v[col];
+      if (val && val < hoje) {
+        alertas.push({ tipo: "danger", msg: `${DOC_LABEL[col]} vencido: ${nome} (${fmtDate(val)})`, href: `/veiculos/${v.id}/editar` });
+      }
+    }
+  }
+  for (const v of docVencendo ?? []) {
+    const nome = v.apelido ?? v.placa;
+    for (const col of docCols) {
+      const val = v[col];
+      if (val && val >= hoje && val <= em30dias) {
+        const dias = diasAte(val);
+        alertas.push({ tipo: "warning", msg: `${DOC_LABEL[col]} vence em ${dias} dia${dias !== 1 ? "s" : ""}: ${nome} (${fmtDate(val)})`, href: `/veiculos/${v.id}/editar` });
+      }
+    }
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Painel de Controle" subtitle="Visão geral do sistema" />
-      <div style={{ padding: "16px", display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
-        <KpiCard label="Total de Fretes" value={0} color="info" />
-        <KpiCard label="Veículos Ativos" value={0} color="success" />
-        <KpiCard label="Lucro do Mês" value="R$ 0,00" color="success" />
+
+      <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
+
+        {/* Alertas */}
+        {alertas.length > 0 && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+            {alertas.map((a, i) => (
+              <Link key={i} href={a.href} style={{
+                display: "flex", alignItems: "center", gap: "10px",
+                padding: "10px 14px",
+                background: alertaBg[a.tipo], border: `1px solid ${alertaBorder[a.tipo]}`,
+                borderRadius: "8px", color: alertaColor[a.tipo],
+                fontSize: "13px", fontWeight: 600, textDecoration: "none",
+              }}>
+                <span>{alertaIcon[a.tipo]}</span>
+                <span>{a.msg}</span>
+                <span style={{ marginLeft: "auto", fontSize: "11px", opacity: 0.7 }}>Editar →</span>
+              </Link>
+            ))}
+          </div>
+        )}
+
+        {/* KPIs — fretes */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+          <KpiCard label="Total de Fretes"   value={totalFretes ?? 0}      color="info" />
+          <KpiCard label="Em Andamento"      value={fretesAndamento ?? 0}  color="warning" />
+          <KpiCard label="Agendados"         value={fretesAgendados ?? 0}  color="default" />
+        </div>
+
+        {/* KPIs — recursos + financeiro */}
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+          <KpiCard label="Veículos Ativos"       value={veiculosAtivos ?? 0}   color="success" />
+          <KpiCard label="Motoristas Ativos"     value={motoristasAtivos ?? 0} color="success" />
+          <KpiCard label="Receita do Mês"        value={fmtBRL(receitaMes)}    color="success" />
+          <KpiCard
+            label="Adiantamentos Pendentes"
+            value={adtPendentes ?? 0}
+            color={(adtPendentes ?? 0) > 0 ? "warning" : "default"}
+            sub={(adtPendentes ?? 0) > 0 ? "aguardando aprovação" : undefined}
+          />
+        </div>
+
+        {/* Fretes em andamento — destaque */}
+        {(() => {
+          const ativos = (fretesRecentes as FreteRecente[]).filter(f => f.status === "em_andamento");
+          if (ativos.length === 0) return null;
+          return (
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                🚛 Em Rota Agora
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
+                {ativos.map(f => {
+                  const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
+                  const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
+                  return (
+                    <Link key={f.id} href={`/fretes/${f.id}`} style={{ textDecoration: "none" }}>
+                      <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "12px 14px" }}>
+                        <div style={{ fontWeight: 700, fontSize: "14px", color: "#1e40af", marginBottom: "4px" }}>
+                          {f.origem} <span style={{ fontWeight: 400, color: "#93c5fd" }}>→</span> {f.destino}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#3b82f6", display: "flex", gap: "12px", flexWrap: "wrap" }}>
+                          {v && <span>🚚 {v.placa} {v.modelo}</span>}
+                          {m && <span>👤 {m.nome}</span>}
+                          {f.data_entrega_prevista && (
+                            <span>📅 Entrega: {new Date(f.data_entrega_prevista + "T00:00:00").toLocaleDateString("pt-BR")}</span>
+                          )}
+                        </div>
+                        {f.valor_frete != null && (
+                          <div style={{ fontSize: "13px", fontWeight: 700, color: "#1d4ed8", marginTop: "6px" }}>{fmtBRL(f.valor_frete)}</div>
+                        )}
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Fretes recentes */}
+        {(fretesRecentes ?? []).length > 0 && (
+          <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Fretes Recentes</span>
+              <Link href="/fretes" style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>Ver todos →</Link>
+            </div>
+            <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse" }}>
+                <tbody>
+                  {(fretesRecentes as FreteRecente[]).map(f => {
+                    const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
+                    const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
+                    return (
+                      <tr key={f.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                        <td style={{ padding: "8px 16px", fontSize: "12px" }}>
+                          <span style={{ fontWeight: 600, color: "#1e293b" }}>{f.origem}</span>
+                          <span style={{ color: "#94a3b8", margin: "0 4px" }}>→</span>
+                          <span style={{ color: "#475569" }}>{f.destino}</span>
+                        </td>
+                        <td style={{ padding: "8px 8px", fontSize: "12px", color: "#64748b" }}>{m?.nome ?? "—"}</td>
+                        <td style={{ padding: "8px 8px", fontSize: "12px", color: "#64748b" }}>{v?.placa ?? "—"}</td>
+                        <td style={{ padding: "8px 8px" }}>
+                          <span style={{ background: STATUS_BG[f.status] ?? "#f1f5f9", color: STATUS_VAR[f.status] ?? "#475569", borderRadius: "9999px", padding: "2px 8px", fontSize: "10px", fontWeight: 700 }}>
+                            {STATUS_LABEL[f.status] ?? f.status}
+                          </span>
+                        </td>
+                        <td style={{ padding: "8px 8px", fontSize: "12px", color: "#16a34a", fontWeight: 600, textAlign: "right" }}>
+                          {f.valor_frete != null ? fmtBRL(f.valor_frete) : "—"}
+                        </td>
+                        <td style={{ padding: "8px 16px", fontSize: "11px", color: "#94a3b8", textAlign: "right" }}>
+                          {new Date(f.created_at).toLocaleDateString("pt-BR")}
+                        </td>
+                        <td style={{ padding: "8px 16px", textAlign: "right" }}>
+                          <Link href={`/fretes/${f.id}`} style={{ fontSize: "11px", color: "#2563eb", textDecoration: "none", fontWeight: 600 }}>Ver</Link>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );
