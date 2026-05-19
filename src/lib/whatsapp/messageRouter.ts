@@ -398,7 +398,7 @@ async function enviarStatusVeiculo(para: string, sessao: Sessao): Promise<void> 
 
 // ─── HELPERS ─────────────────────────────────────────────────────────
 
-function isSaudacao(msg: ParsedMessage): boolean {
+export function isSaudacao(msg: ParsedMessage): boolean {
   if (msg.tipo !== 'texto' || !msg.texto) return false;
   const texto = msg.texto.toLowerCase().trim();
   const saudacoes = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hi', 'hello', 'e aí', 'eai', 'fala'];
