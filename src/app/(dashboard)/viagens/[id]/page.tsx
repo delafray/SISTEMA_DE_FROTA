@@ -18,7 +18,7 @@ type Viagem = {
   km_inicial: number | null;
   km_final: number | null;
   observacoes: string | null;
-  created_at: string;
+  created_at: string | null;
   motoristas: { id: string; nome: string } | null;
   veiculos: { id: string; placa: string; marca: string; modelo: string } | null;
 };
@@ -71,11 +71,11 @@ export default function ViagemDetalhePage() {
     const load = async () => {
       const supabase = createClient();
       const [viagemRes, fretesRes] = await Promise.all([
-        (supabase as any).from("viagens")
+        supabase.from("viagens")
           .select("id,status,data_saida_prevista,data_chegada_prevista,data_saida_real,data_chegada_real,km_inicial,km_final,observacoes,created_at,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
           .eq("id", id)
           .single(),
-        (supabase as any).from("fretes")
+        supabase.from("fretes")
           .select("id,origem,destino,status,data_coleta_prevista,valor_frete,clientes(nome_fantasia)")
           .eq("viagem_id", id)
           .order("data_coleta_prevista", { ascending: true }),
@@ -94,14 +94,14 @@ export default function ViagemDetalhePage() {
     const extra: Record<string, string> = {};
     if (novoStatus === "em_andamento") extra.data_saida_real  = new Date().toISOString();
     if (novoStatus === "concluida")    extra.data_chegada_real = new Date().toISOString();
-    await (supabase as any).from("viagens").update({ status: novoStatus, ...extra }).eq("id", id);
+    await supabase.from("viagens").update({ status: novoStatus, ...extra }).eq("id", id);
     setViagem(p => p ? { ...p, status: novoStatus, ...extra } : p);
     setUpdatingStatus(false);
   };
 
   const desvincularFrete = async (freteId: string) => {
     const supabase = createClient();
-    await (supabase as any).from("fretes").update({ viagem_id: null }).eq("id", freteId);
+    await supabase.from("fretes").update({ viagem_id: null }).eq("id", freteId);
     setFretes(p => p.filter(f => f.id !== freteId));
   };
 

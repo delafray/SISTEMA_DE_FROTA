@@ -82,7 +82,7 @@ export default function MotoristaPage() {
       if (!mId) { setLoading(false); return; }
 
       const [viagensRes, adtRes, abastRes] = await Promise.all([
-        (supabase as any).from("viagens")
+        supabase.from("viagens")
           .select("id,status,data_saida_prevista,data_chegada_prevista,observacoes,veiculos(placa,modelo,marca),fretes(id,origem,destino,valor_frete,status,clientes(nome_fantasia))")
           .eq("motorista_id", mId)
           .order("data_saida_prevista", { ascending: false })
@@ -117,7 +117,7 @@ export default function MotoristaPage() {
 
   const iniciarViagem = async (viagemId: string) => {
     const supabase = createClient();
-    await (supabase as any).from("viagens").update({
+    await supabase.from("viagens").update({
       status: "em_andamento",
       data_saida_real: new Date().toISOString(),
     }).eq("id", viagemId);
@@ -126,7 +126,7 @@ export default function MotoristaPage() {
 
   const concluirViagem = async (viagemId: string) => {
     const supabase = createClient();
-    await (supabase as any).from("viagens").update({
+    await supabase.from("viagens").update({
       status: "concluida",
       data_chegada_real: new Date().toISOString(),
     }).eq("id", viagemId);

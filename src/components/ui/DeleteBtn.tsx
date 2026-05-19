@@ -2,10 +2,13 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import type { Database } from "@/types/database.types";
+
+type TableName = keyof Database["public"]["Tables"];
 
 export function DeleteBtn({ id, table, label = "registro" }: {
   id: string;
-  table: string;
+  table: TableName;
   label?: string;
 }) {
   const [loading, setLoading] = useState(false);
@@ -15,8 +18,7 @@ export function DeleteBtn({ id, table, label = "registro" }: {
     if (!confirm(`Confirma exclusão deste ${label}? Esta ação não pode ser desfeita.`)) return;
     setLoading(true);
     const supabase = createClient();
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error } = await (supabase.from(table as any).delete() as any).eq("id", id);
+    const { error } = await supabase.from(table).delete().eq("id", id);
     setLoading(false);
     if (error) { alert("Erro ao excluir: " + error.message); return; }
     router.refresh();

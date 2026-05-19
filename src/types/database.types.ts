@@ -840,6 +840,7 @@ export type Database = {
           updated_at: string | null
           valor_frete: number | null
           veiculo_id: string
+          viagem_id: string | null
         }
         Insert: {
           aceito_pelo_motorista_em?: string | null
@@ -871,6 +872,7 @@ export type Database = {
           updated_at?: string | null
           valor_frete?: number | null
           veiculo_id: string
+          viagem_id?: string | null
         }
         Update: {
           aceito_pelo_motorista_em?: string | null
@@ -902,6 +904,7 @@ export type Database = {
           updated_at?: string | null
           valor_frete?: number | null
           veiculo_id?: string
+          viagem_id?: string | null
         }
         Relationships: [
           {
@@ -937,6 +940,13 @@ export type Database = {
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fretes_viagem_id_fkey"
+            columns: ["viagem_id"]
+            isOneToOne: false
+            referencedRelation: "viagens"
             referencedColumns: ["id"]
           },
         ]
@@ -1597,6 +1607,131 @@ export type Database = {
             columns: ["usuario_id"]
             isOneToOne: false
             referencedRelation: "perfis"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      motorista_veiculo: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          empresa_id: string
+          id: string
+          motorista_id: string
+          updated_at: string | null
+          veiculo_id: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          empresa_id: string
+          id?: string
+          motorista_id: string
+          updated_at?: string | null
+          veiculo_id?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          empresa_id?: string
+          id?: string
+          motorista_id?: string
+          updated_at?: string | null
+          veiculo_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "motorista_veiculo_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_veiculo_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "motorista_veiculo_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      viagens: {
+        Row: {
+          created_at: string | null
+          data_chegada_prevista: string | null
+          data_chegada_real: string | null
+          data_saida_prevista: string | null
+          data_saida_real: string | null
+          empresa_id: string
+          id: string
+          km_final: number | null
+          km_inicial: number | null
+          motorista_id: string
+          observacoes: string | null
+          status: string
+          updated_at: string | null
+          veiculo_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          data_chegada_prevista?: string | null
+          data_chegada_real?: string | null
+          data_saida_prevista?: string | null
+          data_saida_real?: string | null
+          empresa_id: string
+          id?: string
+          km_final?: number | null
+          km_inicial?: number | null
+          motorista_id: string
+          observacoes?: string | null
+          status?: string
+          updated_at?: string | null
+          veiculo_id: string
+        }
+        Update: {
+          created_at?: string | null
+          data_chegada_prevista?: string | null
+          data_chegada_real?: string | null
+          data_saida_prevista?: string | null
+          data_saida_real?: string | null
+          empresa_id?: string
+          id?: string
+          km_final?: number | null
+          km_inicial?: number | null
+          motorista_id?: string
+          observacoes?: string | null
+          status?: string
+          updated_at?: string | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "viagens_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viagens_motorista_id_fkey"
+            columns: ["motorista_id"]
+            isOneToOne: false
+            referencedRelation: "motoristas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "viagens_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
             referencedColumns: ["id"]
           },
         ]

@@ -64,7 +64,7 @@ export default function MotoristaViagemDetalhePage() {
       const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
-      const { data } = await (supabase as any).from("viagens")
+      const { data } = await supabase.from("viagens")
         .select("id,status,data_saida_prevista,data_chegada_prevista,data_saida_real,data_chegada_real,km_inicial,km_final,observacoes,veiculos(placa,marca,modelo),fretes(id,origem,destino,valor_frete,comissao_motorista_valor,status,pago,tipo_carga,clientes(nome_fantasia))")
         .eq("id", id)
         .single();
@@ -81,7 +81,7 @@ export default function MotoristaViagemDetalhePage() {
     const extra: Record<string, string> = {};
     if (novoStatus === "em_andamento") extra.data_saida_real   = new Date().toISOString();
     if (novoStatus === "concluida")    extra.data_chegada_real = new Date().toISOString();
-    await (supabase as any).from("viagens").update({ status: novoStatus, ...extra }).eq("id", id);
+    await supabase.from("viagens").update({ status: novoStatus, ...extra }).eq("id", id);
     setViagem(p => p ? { ...p, status: novoStatus, ...extra } : p);
     setAtualizando(false);
   };

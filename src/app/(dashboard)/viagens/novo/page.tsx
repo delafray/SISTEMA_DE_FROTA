@@ -57,7 +57,7 @@ export default function NovaViagemPage() {
       const [motRes, veicRes, fretRes] = await Promise.all([
         supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
         supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        (supabase as any).from("fretes")
+        supabase.from("fretes")
           .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
           .eq("empresa_id", ue.empresa_id)
           .is("viagem_id", null)
@@ -77,16 +77,17 @@ export default function NovaViagemPage() {
   useEffect(() => {
     if (!f.motorista_id || !empresaId) return;
     const supabase = createClient();
-    (supabase as any).from("motorista_veiculo")
+    supabase.from("motorista_veiculo")
       .select("veiculo_id")
       .eq("empresa_id", empresaId)
       .eq("motorista_id", f.motorista_id)
       .eq("ativo", true)
       .single()
-      .then(({ data }: { data: { veiculo_id: string } | null }) => {
-        if (data?.veiculo_id) {
-          setF(p => ({ ...p, veiculo_id: data.veiculo_id }));
-          setVinculoVeiculoId(data.veiculo_id);
+      .then(({ data }) => {
+        const veiculoId = data?.veiculo_id;
+        if (veiculoId) {
+          setF(p => ({ ...p, veiculo_id: veiculoId }));
+          setVinculoVeiculoId(veiculoId);
         } else {
           setVinculoVeiculoId(null);
         }
@@ -109,7 +110,7 @@ export default function NovaViagemPage() {
     setSaving(true);
 
     const supabase = createClient();
-    const { data: viagem, error } = await (supabase as any).from("viagens").insert({
+    const { data: viagem, error } = await supabase.from("viagens").insert({
       empresa_id:            empresaId,
       motorista_id:          f.motorista_id,
       veiculo_id:            f.veiculo_id,
@@ -124,7 +125,7 @@ export default function NovaViagemPage() {
 
     // Vincular fretes selecionados
     if (selectedFretes.size > 0) {
-      await (supabase as any).from("fretes")
+      await supabase.from("fretes")
         .update({
           viagem_id:    viagem.id,
           motorista_id: f.motorista_id,

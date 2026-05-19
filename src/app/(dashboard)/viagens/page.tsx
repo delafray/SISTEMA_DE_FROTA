@@ -51,7 +51,7 @@ export default function ViagensPage() {
       if (!ue?.empresa_id) return;
 
       const data = await loadAll<Viagem>((from, to) =>
-        (supabase as any).from("viagens")
+        supabase.from("viagens")
           .select("id,status,data_saida_prevista,data_chegada_prevista,km_inicial,km_final,motoristas(nome),veiculos(placa,modelo,marca),fretes(id)")
           .eq("empresa_id", ue.empresa_id)
           .order("data_saida_prevista", { ascending: false })
@@ -89,8 +89,8 @@ export default function ViagensPage() {
   const handleDelete = async (id: string) => {
     const supabase = createClient();
     // Desvincular fretes antes de deletar
-    await (supabase as any).from("fretes").update({ viagem_id: null }).eq("viagem_id", id);
-    await (supabase as any).from("viagens").delete().eq("id", id);
+    await supabase.from("fretes").update({ viagem_id: null }).eq("viagem_id", id);
+    await supabase.from("viagens").delete().eq("id", id);
     setTodas(p => p.filter(v => v.id !== id));
   };
 
