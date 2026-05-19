@@ -99,18 +99,28 @@ export function ReportPdfButton({
   const handleShare = async () => {
     if (!pdfBlob) return;
     
-    // Blob to File transmutation for Web Share API Nível 2
+    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
     const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
 
-    try {
-      await navigator.share({
-        title: title,
-        text: `Seguem as informações contidas no relatório: ${title}.`,
-        files: [pdfFile],
-      });
-    } catch (e) {
-      console.log("Compartilhamento cancelado ou indisponível:", e);
+    if (nav && nav.share && nav.canShare && nav.canShare({ files: [pdfFile] })) {
+      try {
+        await nav.share({
+          title: title,
+          text: `Seguem as informações contidas no relatório: ${title}.`,
+          files: [pdfFile],
+        });
+        return;
+      } catch (e) {
+        console.log("Compartilhamento nativo cancelado ou falhou:", e);
+        if ((e as Error).name === "AbortError") {
+          return;
+        }
+      }
     }
+    
+    // Fallback para navegadores de desktop que não suportam compartilhamento de arquivo
+    handleDownload();
+    alert("O relatório foi baixado com sucesso! Agora você pode compartilhá-lo manualmente.");
   };
 
   return (
@@ -192,187 +202,220 @@ export function ReportPdfButton({
               background: "#ffffff",
               borderRadius: "16px",
               width: "100%",
-              maxWidth: "400px",
-              padding: "24px",
-              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.25)",
+              maxWidth: "420px",
+              boxShadow: "0 25px 50px -12px rgba(0, 0, 0, 0.3)",
               display: "flex",
               flexDirection: "column",
-              alignItems: "center",
               position: "relative",
               animation: "scaleUp 0.3s cubic-bezier(0.34, 1.56, 0.64, 1)",
+              overflow: "hidden",
             }}
             onClick={(e) => e.stopPropagation()}
           >
             <style>{`
               @keyframes scaleUp {
-                from { opacity: 0; transform: scale(0.9) translateY(10px); }
+                from { opacity: 0; transform: scale(0.95) translateY(10px); }
                 to { opacity: 1; transform: scale(1) translateY(0); }
               }
             `}</style>
 
-            {/* Close Button */}
-            <button
-              onClick={() => setShowModal(false)}
-              style={{
-                position: "absolute",
-                top: "16px",
-                right: "16px",
-                background: "rgba(0, 0, 0, 0.05)",
-                border: "none",
-                borderRadius: "50%",
-                width: "28px",
-                height: "28px",
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "center",
-                cursor: "pointer",
-                color: "#64748b",
-                fontWeight: "bold",
-                fontSize: "14px",
-                transition: "background 150ms",
-              }}
-              onMouseEnter={(e) => (e.currentTarget.style.background = "rgba(0, 0, 0, 0.1)")}
-              onMouseLeave={(e) => (e.currentTarget.style.background = "rgba(0, 0, 0, 0.05)")}
-            >
-              ✕
-            </button>
-
-            {/* Document Red Accent Icon */}
+            {/* Orange Premium Header Banner */}
             <div
               style={{
-                width: "56px",
-                height: "56px",
-                borderRadius: "12px",
-                background: "linear-gradient(135deg, #ef4444, #b91c1c)",
+                background: "linear-gradient(135deg, #ff6b00 0%, #ff5000 100%)",
+                padding: "18px 20px",
                 display: "flex",
                 alignItems: "center",
-                justifyContent: "center",
-                fontSize: "28px",
+                justifyContent: "space-between",
                 color: "#ffffff",
-                marginBottom: "16px",
-                boxShadow: "0 10px 15px -3px rgba(239, 68, 68, 0.3)",
+                width: "100%",
               }}
             >
-              📄
+              <div style={{ display: "flex", alignItems: "center", flexGrow: 1, gap: "14px" }}>
+                {/* Custom White PDF Document Icon */}
+                <svg
+                  width="28"
+                  height="28"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  style={{ flexShrink: 0 }}
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" fill="rgba(255, 255, 255, 0.15)" />
+                  <polyline points="14 2 14 8 20 8" />
+                  <line x1="16" y1="13" x2="8" y2="13" />
+                  <line x1="16" y1="17" x2="8" y2="17" />
+                  <polyline points="10 9 9 9 8 9" />
+                </svg>
+                {/* Text Block */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+                  <span style={{ fontWeight: 700, fontSize: "15px", letterSpacing: "-0.01em", wordBreak: "break-all", lineHeight: 1.2 }}>
+                    {fileName}
+                  </span>
+                  <span style={{ fontSize: "11px", opacity: 0.9, fontWeight: 500 }}>
+                    PDF gerado com sucesso
+                  </span>
+                </div>
+              </div>
+
+              {/* Close Icon Button */}
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#ffffff",
+                  fontSize: "18px",
+                  cursor: "pointer",
+                  padding: "4px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  marginLeft: "12px",
+                  opacity: 0.8,
+                  transition: "opacity 150ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.opacity = "1")}
+                onMouseLeave={(e) => (e.currentTarget.style.opacity = "0.8")}
+              >
+                ✕
+              </button>
             </div>
 
-            {/* Text Title & Subtitle */}
-            <h3
+            {/* Modal Body with Action Buttons Stack */}
+            <div
               style={{
-                fontSize: "16px",
-                fontWeight: 700,
-                color: "#0f172a",
-                margin: "0 0 6px 0",
-                textAlign: "center",
+                padding: "24px",
+                display: "flex",
+                flexDirection: "column",
+                gap: "12px",
+                width: "100%",
               }}
             >
-              Relatório Pronto!
-            </h3>
-            <p
-              style={{
-                fontSize: "12px",
-                color: "#64748b",
-                margin: "0 0 20px 0",
-                textAlign: "center",
-                wordBreak: "break-all",
-                padding: "0 12px",
-              }}
-            >
-              {fileName}
-            </p>
-
-            {/* Action Buttons Stack */}
-            <div style={{ display: "flex", flexDirection: "column", gap: "10px", width: "100%" }}>
               
-              {/* Gold Option: Share via WhatsApp (if Web Share API supported) */}
-              {canShare ? (
-                <button
-                  onClick={handleShare}
-                  style={{
-                    width: "100%",
-                    padding: "12px",
-                    borderRadius: "8px",
-                    background: "linear-gradient(135deg, #22c55e, #15803d)",
-                    color: "#ffffff",
-                    border: "none",
-                    fontWeight: 600,
-                    fontSize: "13px",
-                    cursor: "pointer",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                    gap: "8px",
-                    boxShadow: "0 4px 12px rgba(34, 197, 94, 0.2)",
-                    transition: "transform 150ms",
-                  }}
-                  onMouseEnter={(e) => (e.currentTarget.style.transform = "scale(1.02)")}
-                  onMouseLeave={(e) => (e.currentTarget.style.transform = "scale(1)")}
-                >
-                  🟢 Encaminhar via Zap / Compartilhar
-                </button>
-              ) : (
-                <div
-                  style={{
-                    fontSize: "10px",
-                    color: "#94a3b8",
-                    textAlign: "center",
-                    margin: "0 0 4px 0",
-                  }}
-                >
-                  (Opção de WhatsApp nativo indisponível neste navegador)
-                </div>
-              )}
-
-              {/* View Button */}
+              {/* Option 1: View in New Tab (Blue Style) */}
               <button
                 onClick={handleView}
                 style={{
                   width: "100%",
-                  padding: "11px",
-                  borderRadius: "8px",
-                  background: "#ffffff",
-                  color: "#334155",
-                  border: "1px solid #cbd5e1",
+                  height: "48px",
+                  borderRadius: "10px",
+                  background: "#eff6ff",
+                  color: "#2563eb",
+                  border: "none",
                   fontWeight: 600,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "6px",
-                  transition: "background 150ms",
+                  gap: "10px",
+                  transition: "background 150ms, transform 100ms",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#ffffff")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#dbeafe")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#eff6ff")}
+                onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+                onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
               >
-                🔍 Visualizar em Nova Aba
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+                  <circle cx="12" cy="12" r="3" />
+                </svg>
+                Visualizar no navegador
               </button>
 
-              {/* Download Button */}
+              {/* Option 2: Download PDF (Orange Style) */}
               <button
                 onClick={handleDownload}
                 style={{
                   width: "100%",
-                  padding: "11px",
-                  borderRadius: "8px",
-                  background: "#ffffff",
-                  color: "#334155",
-                  border: "1px solid #cbd5e1",
+                  height: "48px",
+                  borderRadius: "10px",
+                  background: "#fff7ed",
+                  color: "#ea580c",
+                  border: "none",
                   fontWeight: 600,
-                  fontSize: "13px",
+                  fontSize: "14px",
                   cursor: "pointer",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  gap: "6px",
-                  transition: "background 150ms",
+                  gap: "10px",
+                  transition: "background 150ms, transform 100ms",
                 }}
-                onMouseEnter={(e) => (e.currentTarget.style.background = "#f8fafc")}
-                onMouseLeave={(e) => (e.currentTarget.style.background = "#ffffff")}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#ffedd5")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#fff7ed")}
+                onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+                onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
               >
-                💾 Baixar para o Dispositivo
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ flexShrink: 0 }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="7 10 12 15 17 10" />
+                  <line x1="12" y1="15" x2="12" y2="3" />
+                </svg>
+                Baixar PDF
               </button>
 
+              {/* Option 3: Share (Green Style) */}
+              <button
+                onClick={handleShare}
+                style={{
+                  width: "100%",
+                  height: "48px",
+                  borderRadius: "10px",
+                  background: "#f0fdf4",
+                  color: "#16a34a",
+                  border: "none",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  gap: "10px",
+                  transition: "background 150ms, transform 100ms",
+                }}
+                onMouseEnter={(e) => (e.currentTarget.style.background = "#dcfce7")}
+                onMouseLeave={(e) => (e.currentTarget.style.background = "#f0fdf4")}
+                onMouseDown={(e) => (e.currentTarget.style.transform = "scale(0.98)")}
+                onMouseUp={(e) => (e.currentTarget.style.transform = "scale(1)")}
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ transform: "rotate(-30deg)", flexShrink: 0 }}>
+                  <line x1="22" y1="2" x2="11" y2="13" />
+                  <polygon points="22 2 15 22 11 13 2 9 22 2" />
+                </svg>
+                Compartilhar
+              </button>
+
+              {/* Close Text Link Button */}
+              <button
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: "none",
+                  border: "none",
+                  color: "#64748b",
+                  fontWeight: 600,
+                  fontSize: "14px",
+                  cursor: "pointer",
+                  marginTop: "8px",
+                  padding: "8px 16px",
+                  alignSelf: "center",
+                  transition: "color 150ms, text-decoration 150ms",
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.color = "#334155";
+                  e.currentTarget.style.textDecoration = "underline";
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.color = "#64748b";
+                  e.currentTarget.style.textDecoration = "none";
+                }}
+              >
+                Fechar
+              </button>
             </div>
           </div>
         </div>
