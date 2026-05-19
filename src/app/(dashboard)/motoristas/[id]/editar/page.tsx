@@ -45,7 +45,7 @@ export default function EditarMotoristaPage() {
       if (!ue?.empresa_id) return;
       const [veicRes, vincRes] = await Promise.all([
         supabase.from("veiculos").select("id,placa,marca,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        (supabase as any).from("motorista_veiculo").select("id,veiculo_id,ativo").eq("empresa_id", ue.empresa_id).eq("motorista_id", id).single(),
+        supabase.from("motorista_veiculo").select("id,veiculo_id,ativo").eq("empresa_id", ue.empresa_id).eq("motorista_id", id).single(),
       ]);
       setVeiculos(veicRes.data ?? []);
       if (vincRes.data) {
@@ -148,12 +148,12 @@ export default function EditarMotoristaPage() {
       .eq("usuario_id", auth.user!.id).eq("is_padrao", true).single();
     if (!ue?.empresa_id) { setSavingVinculo(false); return; }
     if (vinculoId) {
-      await (supabase as any).from("motorista_veiculo").update({
+      await supabase.from("motorista_veiculo").update({
         veiculo_id: vinculoVeiculoId || null,
         ativo: vinculoAtivo,
       }).eq("id", vinculoId);
     } else if (vinculoVeiculoId) {
-      const { data } = await (supabase as any).from("motorista_veiculo").insert({
+      const { data } = await supabase.from("motorista_veiculo").insert({
         empresa_id:   ue.empresa_id,
         motorista_id: id,
         veiculo_id:   vinculoVeiculoId,

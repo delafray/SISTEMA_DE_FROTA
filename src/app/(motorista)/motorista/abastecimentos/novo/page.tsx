@@ -60,7 +60,7 @@ function NovoAbastecimentoForm() {
 
       if (viagemId) {
         // busca viagem para pegar veículo e fretes
-        const { data: viagem } = await (supabase as any).from("viagens")
+        const { data: viagem } = await supabase.from("viagens")
           .select("veiculo_id,veiculos(id,placa,marca,modelo),fretes(id,origem,destino)")
           .eq("id", viagemId)
           .single();
@@ -69,7 +69,7 @@ function NovoAbastecimentoForm() {
         setFretes(Array.isArray(viagem?.fretes) ? viagem.fretes : []);
       } else if (mId) {
         // fallback: vínculo padrão motorista↔veículo
-        const { data: vinculo } = await (supabase as any).from("motorista_veiculo")
+        const { data: vinculo } = await supabase.from("motorista_veiculo")
           .select("veiculos(id,placa,marca,modelo)")
           .eq("empresa_id", ue.empresa_id)
           .eq("motorista_id", mId)

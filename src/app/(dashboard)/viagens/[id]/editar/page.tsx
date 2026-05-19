@@ -64,14 +64,14 @@ export default function EditarViagemPage() {
       setEmpresaId(ue.empresa_id);
 
       const [viagemRes, motRes, veicRes, fretesAtRes, fretesDispRes] = await Promise.all([
-        (supabase as any).from("viagens").select("*").eq("id", id).single(),
+        supabase.from("viagens").select("*").eq("id", id).single(),
         supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
         supabase.from("veiculos").select("id,placa,marca,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        (supabase as any).from("fretes")
+        supabase.from("fretes")
           .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
           .eq("viagem_id", id)
           .order("data_coleta_prevista", { ascending: true }),
-        (supabase as any).from("fretes")
+        supabase.from("fretes")
           .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
           .eq("empresa_id", ue.empresa_id)
           .is("viagem_id", null)
@@ -109,13 +109,13 @@ export default function EditarViagemPage() {
   useEffect(() => {
     if (!f.motorista_id || !empresaId) return;
     const supabase = createClient();
-    (supabase as any).from("motorista_veiculo")
+    supabase.from("motorista_veiculo")
       .select("veiculo_id")
       .eq("empresa_id", empresaId)
       .eq("motorista_id", f.motorista_id)
       .eq("ativo", true)
       .single()
-      .then(({ data }: { data: { veiculo_id: string } | null }) => {
+      .then(({ data }) => {
         if (data?.veiculo_id) setVinculoVeiculoId(data.veiculo_id);
         else setVinculoVeiculoId(null);
       });
@@ -131,7 +131,7 @@ export default function EditarViagemPage() {
 
   const desvincularFrete = async (freteId: string) => {
     const supabase = createClient();
-    await (supabase as any).from("fretes").update({ viagem_id: null }).eq("id", freteId);
+    await supabase.from("fretes").update({ viagem_id: null }).eq("id", freteId);
     const frete = fretesAtuais.find(fr => fr.id === freteId);
     setFretesAtuais(p => p.filter(fr => fr.id !== freteId));
     if (frete) setFretesDisp(p => [...p, frete]);
@@ -145,7 +145,7 @@ export default function EditarViagemPage() {
     setSaving(true);
 
     const supabase = createClient();
-    const { error } = await (supabase as any).from("viagens").update({
+    const { error } = await supabase.from("viagens").update({
       motorista_id:          f.motorista_id,
       veiculo_id:            f.veiculo_id,
       status:                f.status,
@@ -163,7 +163,7 @@ export default function EditarViagemPage() {
 
     // Vincular novos fretes selecionados
     if (selectedFretes.size > 0) {
-      await (supabase as any).from("fretes")
+      await supabase.from("fretes")
         .update({ viagem_id: id, motorista_id: f.motorista_id, veiculo_id: f.veiculo_id })
         .in("id", Array.from(selectedFretes));
     }
