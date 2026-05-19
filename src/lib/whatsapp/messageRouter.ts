@@ -12,7 +12,10 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
+import { createLogger } from '@/lib/logger';
 import { identificarRemetente, type UserIdentity } from '@/lib/whatsapp/auth';
+
+const log = createLogger('router');
 import { getOrCreateSession, updateSession, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
 import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
@@ -31,8 +34,7 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
   const identity = await identificarRemetente(msg.from);
 
   if (identity.tipo === 'desconhecido') {
-    // Não responder — conforme decisão do plano
-    console.log(`[router] Número desconhecido: ${msg.from}. Ignorando.`);
+    log.warn('remetente_desconhecido', { from: msg.from, msg_id: msg.messageId });
     return;
   }
 
