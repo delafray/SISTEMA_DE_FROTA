@@ -66,6 +66,22 @@ export async function POST(request: NextRequest) {
     const messages = parseWebhookPayload(body);
     log.info('payload_parsed', { messages_count: messages.length });
 
+    // Extrai status updates da Meta (sent/delivered/read/failed)
+    for (const entry of body.entry ?? []) {
+      for (const change of entry.changes ?? []) {
+        for (const st of change.value?.statuses ?? []) {
+          const errors = (st as { errors?: Array<{ code: number; title: string; message?: string }> }).errors;
+          const level = st.status === 'failed' ? 'error' : 'info';
+          log[level]('status_update', {
+            wamid: st.id,
+            status: st.status,
+            recipient: st.recipient_id,
+            errors: errors ?? null,
+          });
+        }
+      }
+    }
+
     if (messages.length === 0) {
       return NextResponse.json({ status: 'ok' });
     }
