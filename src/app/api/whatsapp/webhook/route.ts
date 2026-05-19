@@ -13,7 +13,7 @@ import { processarMensagem } from '@/lib/whatsapp/messageRouter';
 // ─── GET: Verificação do webhook ──────────────────────────────────────
 
 export async function GET(request: NextRequest) {
-  const searchParams = request.nextUrl.searchParams;
+  const { searchParams } = new URL(request.url);
 
   const mode = searchParams.get('hub.mode');
   const token = searchParams.get('hub.verify_token');
@@ -21,13 +21,19 @@ export async function GET(request: NextRequest) {
 
   const verifyToken = process.env.META_WEBHOOK_VERIFY_TOKEN;
 
+  console.log('[webhook] GET recebido:', { mode, token: token?.slice(0, 10) + '...', challenge, verifyToken: verifyToken?.slice(0, 10) + '...' });
+
   if (mode === 'subscribe' && token === verifyToken) {
     console.log('[webhook] ✅ Verificação do webhook bem-sucedida');
-    return new NextResponse(challenge, { status: 200 });
+    // Retornar o challenge como texto puro — formato exigido pela Meta
+    return new Response(challenge ?? '', {
+      status: 200,
+      headers: { 'Content-Type': 'text/plain' },
+    });
   }
 
   console.warn('[webhook] ❌ Verificação falhou — token inválido');
-  return new NextResponse('Forbidden', { status: 403 });
+  return new Response('Forbidden', { status: 403 });
 }
 
 // ─── POST: Receber mensagens ─────────────────────────────────────────
