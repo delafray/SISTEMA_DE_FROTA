@@ -1,6 +1,5 @@
 "use client";
 
-import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 /* ─── SVG Icons (compact) ──────────────────────────────────── */
@@ -11,6 +10,7 @@ const IcoFrete = (p: SvgP) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke
 const IcoTruck = (p: SvgP) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M13 16V6a1 1 0 00-1-1H4a1 1 0 00-1 1v10l2 2h2m6-2h4l2-2V9a1 1 0 00-1-1h-2l-3 3" /><circle cx="7" cy="18" r="2" /><circle cx="17" cy="18" r="2" /></svg>;
 const IcoMenu  = (p: SvgP) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" /></svg>;
 
+/* Itens mostram a página ativa, mas todos abrem o drawer ao clicar */
 const NAV_ITEMS = [
   { href: "/",         label: "Início",   icon: IcoHome },
   { href: "/viagens",  label: "Viagens",  icon: IcoRoute },
@@ -42,9 +42,10 @@ export function MobileBottomNav({ onMenuPress }: { onMenuPress: () => void }) {
       {NAV_ITEMS.map(({ href, label, icon: Icon }) => {
         const active = pathname === href || (href !== "/" && pathname.startsWith(href));
         return (
-          <Link
+          <button
             key={href}
-            href={href}
+            type="button"
+            onClick={onMenuPress}
             style={{
               display: "flex",
               flexDirection: "column",
@@ -53,7 +54,9 @@ export function MobileBottomNav({ onMenuPress }: { onMenuPress: () => void }) {
               flex: 1,
               gap: "2px",
               color: active ? "#60a5fa" : "rgba(168,172,192,0.7)",
-              textDecoration: "none",
+              background: "transparent",
+              border: "none",
+              cursor: "pointer",
               fontSize: "10px",
               fontWeight: active ? 700 : 500,
               transition: "color 150ms",
@@ -74,7 +77,7 @@ export function MobileBottomNav({ onMenuPress }: { onMenuPress: () => void }) {
             )}
             <Icon style={{ width: "22px", height: "22px" }} />
             <span>{label}</span>
-          </Link>
+          </button>
         );
       })}
 
