@@ -10,6 +10,23 @@
 
 const GRAPH_API_URL = 'https://graph.facebook.com/v21.0';
 
+/**
+ * A Meta entrega o `from` sem o 9 do nono dígito brasileiro
+ * (ex: 553189791317), mas exige o formato com 9 ao enviar (5531989791317).
+ * Aplica apenas para números BR de celular com 12 dígitos.
+ */
+export function formatarDestinatarioMeta(numero: string): string {
+  const apenasDigitos = numero.replace(/\D/g, '');
+  if (apenasDigitos.startsWith('55') && apenasDigitos.length === 12) {
+    const ddd = apenasDigitos.slice(2, 4);
+    const resto = apenasDigitos.slice(4);
+    if (resto.length === 8) {
+      return `55${ddd}9${resto}`;
+    }
+  }
+  return apenasDigitos;
+}
+
 function getConfig() {
   const token = process.env.META_WHATSAPP_TOKEN;
   const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
@@ -27,6 +44,11 @@ async function sendRequest(
   body: Record<string, unknown>,
   timeoutMs = 8000
 ): Promise<boolean> {
+  // Normaliza o destinatário para o formato que a Meta exige no envio (com 9 brasileiro).
+  if (typeof body.to === 'string') {
+    body = { ...body, to: formatarDestinatarioMeta(body.to) };
+  }
+
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 

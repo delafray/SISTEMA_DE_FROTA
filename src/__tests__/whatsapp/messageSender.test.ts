@@ -6,6 +6,7 @@ import {
   enviarImagem,
   enviarDocumento,
   marcarComoLida,
+  formatarDestinatarioMeta,
 } from '@/lib/whatsapp/messageSender';
 
 const ORIG_ENV = { ...process.env };
@@ -177,7 +178,40 @@ describe('messageSender', () => {
     expect(ok).toBe(true);
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({ status: 'read', message_id: 'wamid.xyz' });
-    // verifica que um AbortSignal foi passado (timeout configurado)
     expect(fetchMock.mock.calls[0][1].signal).toBeDefined();
+  });
+
+  it('normaliza destinatário BR sem 9 para formato com 9 ao enviar', async () => {
+    const fetchMock = mockFetchOk();
+    vi.stubGlobal('fetch', fetchMock);
+    await enviarTexto('553189791317', 'oi');
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.to).toBe('5531989791317');
+  });
+
+  it('mantém destinatário BR que já tem o 9', async () => {
+    const fetchMock = mockFetchOk();
+    vi.stubGlobal('fetch', fetchMock);
+    await enviarTexto('5531989791317', 'oi');
+    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
+    expect(body.to).toBe('5531989791317');
+  });
+});
+
+describe('formatarDestinatarioMeta', () => {
+  it('adiciona o 9 em celular BR de 12 dígitos', () => {
+    expect(formatarDestinatarioMeta('553189791317')).toBe('5531989791317');
+  });
+
+  it('mantém celular BR de 13 dígitos', () => {
+    expect(formatarDestinatarioMeta('5531989791317')).toBe('5531989791317');
+  });
+
+  it('limpa caracteres não numéricos', () => {
+    expect(formatarDestinatarioMeta('+55 (31) 8979-1317')).toBe('5531989791317');
+  });
+
+  it('mantém número internacional não-BR', () => {
+    expect(formatarDestinatarioMeta('14155552671')).toBe('14155552671');
   });
 });
