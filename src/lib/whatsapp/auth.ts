@@ -54,7 +54,7 @@ export async function identificarRemetente(whatsappNumber: string): Promise<User
   // 1. Buscar como motorista (testando variações)
   const { data: motorista, error: errMot } = await supabase
     .from('motoristas')
-    .select('id, nome, empresa_id, usuario_id, whatsapp')
+    .select('id, nome, empresa_id, whatsapp')
     .in('whatsapp', variacoes)
     .eq('ativo', true)
     .maybeSingle();
@@ -68,13 +68,26 @@ export async function identificarRemetente(whatsappNumber: string): Promise<User
   }
 
   if (motorista) {
-    log.info('motorista_encontrado', { id: motorista.id, nome: motorista.nome, whatsapp_db: motorista.whatsapp });
+    // O vínculo motorista↔usuário existe via perfis.motorista_id.
+    // perfis.id = auth.users.id, então perfil.id é o usuario_id efetivo.
+    const { data: perfilDoMotorista } = await supabase
+      .from('perfis')
+      .select('id')
+      .eq('motorista_id', motorista.id)
+      .maybeSingle();
+
+    log.info('motorista_encontrado', {
+      id: motorista.id,
+      nome: motorista.nome,
+      whatsapp_db: motorista.whatsapp,
+      usuario_id: perfilDoMotorista?.id ?? null,
+    });
     return {
       tipo: 'motorista',
       motorista_id: motorista.id,
       nome: motorista.nome,
       empresa_id: motorista.empresa_id,
-      usuario_id: motorista.usuario_id,
+      usuario_id: perfilDoMotorista?.id ?? null,
     };
   }
 
@@ -83,7 +96,7 @@ export async function identificarRemetente(whatsappNumber: string): Promise<User
     .from('perfis')
     .select(`
       id,
-      nome_completo,
+      nome,
       usuario_empresas!inner (
         empresa_id,
         role
@@ -107,7 +120,7 @@ export async function identificarRemetente(whatsappNumber: string): Promise<User
       return {
         tipo: ue.role as 'gestor' | 'master',
         usuario_id: perfil.id,
-        nome: perfil.nome_completo ?? 'Gestor',
+        nome: perfil.nome ?? 'Gestor',
         empresa_id: ue.empresa_id,
       };
     }
