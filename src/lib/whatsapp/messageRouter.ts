@@ -46,6 +46,13 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     empresa_id: identity.empresa_id,
   });
 
+  log.info('sessao_resolvida', {
+    session_id: sessao.id,
+    estado: sessao.estado,
+    is_temp: sessao.id.startsWith('temp-'),
+    empresa_id: sessao.empresa_id,
+  });
+
   // 3. Rotear com base no role
   if (identity.tipo === 'motorista') {
     await rotearMotorista(msg, sessao, identity);
@@ -159,27 +166,34 @@ async function enviarSelecaoVeiculo(
   empresaId: string,
   sessionId: string
 ): Promise<void> {
+  log.info('enviar_selecao_veiculo_inicio', { para, empresa_id: empresaId });
+
   const { createClient } = await import('@supabase/supabase-js');
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  // Buscar veículos ativos da empresa
-  const { data: veiculos } = await supabase
+  const { data: veiculos, error } = await supabase
     .from('veiculos')
     .select('id, placa, apelido, marca, modelo')
     .eq('empresa_id', empresaId)
     .eq('ativo', true)
     .order('placa');
 
+  if (error) {
+    log.error('veiculos_query_failed', { code: error.code, message: error.message });
+  }
+
+  log.info('veiculos_carregados', { count: veiculos?.length ?? 0, empresa_id: empresaId });
+
   if (!veiculos || veiculos.length === 0) {
-    await enviarTexto(para, `Olá, ${nomeMotorista}! 👋\n\nNenhum caminhão cadastrado na empresa. Fale com o gestor.`);
+    const enviado = await enviarTexto(para, `Olá, ${nomeMotorista}! 👋\n\nNenhum caminhão cadastrado na empresa. Fale com o gestor.`);
+    log.info('aviso_sem_veiculo_enviado', { para, enviado });
     return;
   }
 
-  // Enviar lista de veículos
-  await enviarLista(
+  const enviado = await enviarLista(
     para,
     `Olá, ${nomeMotorista}! 👋\nQual caminhão você vai usar hoje?`,
     '🚛 Selecionar',
@@ -194,6 +208,7 @@ async function enviarSelecaoVeiculo(
       },
     ]
   );
+  log.info('lista_veiculos_enviada', { para, count: veiculos.length, enviado });
 
   await updateSession(sessionId, { estado: 'aguardando_veiculo' });
 }

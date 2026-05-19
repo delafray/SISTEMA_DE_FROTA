@@ -16,6 +16,7 @@ function mockFetchOk() {
     ok: true,
     status: 200,
     text: async () => '',
+    json: async () => ({ messages: [{ id: 'wamid.mock-response' }] }),
   });
 }
 

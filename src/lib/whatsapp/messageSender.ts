@@ -72,6 +72,16 @@ async function sendRequest(
       return false;
     }
 
+    const data = await res.json().catch(() => null);
+    const msgId = data?.messages?.[0]?.id;
+    console.log(JSON.stringify({
+      level: 'info',
+      scope: 'messageSender',
+      event: 'send_ok',
+      ts: new Date().toISOString(),
+      to: body.to,
+      wamid: msgId ?? null,
+    }));
     return true;
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
