@@ -5,6 +5,7 @@ import {
   Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert,
   useTableSort, inputStyle, selectStyle, FormField, FormSection, ActionBtn,
 } from "@/components/ui/ds";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -219,6 +220,8 @@ export default function AvulsasTab({ empresaId }: { empresaId: string }) {
       {sortedData.length === 0
         ? <EmptyState icon="🧾" message="Nenhuma despesa avulsa cadastrada." action={<Btn onClick={abrirNovo}>+ Nova Despesa</Btn>} />
         : (
+          <>
+          <div className="m-hide">
           <DataTable count={sortedData.length} label="despesas">
             <thead>
               <tr>
@@ -270,6 +273,35 @@ export default function AvulsasTab({ empresaId }: { empresaId: string }) {
               })}
             </tbody>
           </DataTable>
+          </div>
+
+          {/* Mobile: cards */}
+          <MobileList count={sortedData.length} label="despesas">
+            {sortedData.map(d => {
+              const atrasado = !d.pago && d.data_vencimento < hoje_;
+              return (
+                <MobileCard
+                  key={d.id}
+                  onClick={() => abrirEditar(d)}
+                  title={d.descricao}
+                  subtitle={d.fornecedor ?? d.categoria.replace(/_/g, " ")}
+                  badge={
+                    d.pago ? <Badge variant="success">✓ Pago</Badge>
+                    : atrasado ? <Badge variant="danger">Atrasado</Badge>
+                    : <Badge variant="warning">Pendente</Badge>
+                  }
+                  highlight={atrasado ? "#dc2626" : d.pago ? "#16a34a" : "#eab308"}
+                  details={[
+                    { label: "Venc.", value: fmtDate(d.data_vencimento) },
+                    { label: "Valor", value: fmtBRL(d.valor) },
+                  ]}
+                />
+              );
+            })}
+          </MobileList>
+
+          <MobileFAB onClick={abrirNovo} label="Nova Despesa" />
+          </>
         )}
 
       {/* Modal CRUD */}

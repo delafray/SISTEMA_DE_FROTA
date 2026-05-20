@@ -5,6 +5,7 @@ import {
   Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert,
   useTableSort, inputStyle, ActionBtn,
 } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -160,6 +161,8 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
       {sortedData.length === 0
         ? <EmptyState icon="💚" message="Nenhum frete encontrado para este filtro." />
         : (
+          <>
+          <div className="m-hide">
           <DataTable count={sortedData.length} label="fretes">
             <thead>
               <tr>
@@ -210,6 +213,39 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
               })}
             </tbody>
           </DataTable>
+          </div>
+
+          {/* Mobile: cards */}
+          <MobileList count={sortedData.length} label="fretes">
+            {sortedData.map(fr => {
+              const motorista = Array.isArray(fr.motoristas) ? fr.motoristas[0] : fr.motoristas;
+              const dataRef = fr.data_entrega_prevista ?? fr.data_coleta_prevista;
+              const atrasado = !fr.pago && dataRef != null && dataRef < hoje_;
+              const statusBadge = fr.pago
+                ? <Badge variant="success">✓ Recebido</Badge>
+                : atrasado ? <Badge variant="danger">Atrasado</Badge>
+                : <Badge variant="warning">Pendente</Badge>;
+              return (
+                <MobileCard
+                  key={fr.id}
+                  title={`${fr.origem} → ${fr.destino}`}
+                  subtitle={motorista?.nome ?? ""}
+                  badge={statusBadge}
+                  highlight={atrasado ? "#dc2626" : fr.pago ? "#16a34a" : "#eab308"}
+                  details={[
+                    { label: "Data", value: fmtDate(dataRef) },
+                    { label: "Valor", value: fmtBRL(fr.valor_frete ?? 0) },
+                  ]}
+                  actions={
+                    fr.pago
+                      ? <ActionBtn title="Desfazer" variant="default" onClick={() => desfazerBaixa(fr.id)}>↩</ActionBtn>
+                      : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(fr)}>Baixar</Btn>
+                  }
+                />
+              );
+            })}
+          </MobileList>
+          </>
         )}
 
       {/* Modal Baixa */}
@@ -218,7 +254,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
           alignItems: "center", justifyContent: "center", zIndex: 1000,
         }}>
-          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "360px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "360px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>Confirmar Recebimento</h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 16px" }}>{modalBaixa.descricao}</p>
 

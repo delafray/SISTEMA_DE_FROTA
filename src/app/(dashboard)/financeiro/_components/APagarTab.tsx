@@ -6,6 +6,7 @@ import {
   useTableSort, inputStyle, ActionBtn,
 } from "@/components/ui/ds";
 import { coletarEventos, type EventoFinanceiro, CAT_LABEL, CAT_COR } from "@/lib/financeiro/coletor";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -156,6 +157,8 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
       {sortedData.length === 0
         ? <EmptyState icon="📤" message="Nenhum lançamento a pagar encontrado para este filtro." />
         : (
+          <>
+          <div className="m-hide">
           <DataTable count={sortedData.length} label="lançamentos">
             <thead>
               <tr>
@@ -210,6 +213,40 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
               })}
             </tbody>
           </DataTable>
+          </div>
+
+          {/* Mobile: cards */}
+          <MobileList count={sortedData.length} label="lançamentos">
+            {sortedData.map(ev => {
+              const atrasado = !ev.pago && ev.data < hoje_;
+              const statusBadge = ev.pago
+                ? <Badge variant="success">✓ Pago</Badge>
+                : atrasado ? <Badge variant="danger">Atrasado</Badge>
+                : <Badge variant="warning">Pendente</Badge>;
+              return (
+                <MobileCard
+                  key={ev.id}
+                  title={ev.descricao}
+                  subtitle={ev.contexto ?? CAT_LABEL[ev.categoria]}
+                  badge={statusBadge}
+                  highlight={atrasado ? "#dc2626" : ev.pago ? "#16a34a" : "#eab308"}
+                  details={[
+                    { label: "Venc.", value: fmtDate(ev.data) },
+                    { label: "Valor", value: fmtBRL(ev.valor) },
+                  ]}
+                  actions={
+                    !ev.pago && !ev.isProvisao && podeMarcarPago(ev.origem.tabela) ? (
+                      <Btn size="xs" variant="danger"
+                        onClick={() => setModalBaixa({ evento: ev, dataPagamento: hoje_ })}>
+                        Pagar
+                      </Btn>
+                    ) : undefined
+                  }
+                />
+              );
+            })}
+          </MobileList>
+          </>
         )}
 
       {/* Modal Baixa */}
@@ -218,7 +255,7 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
           alignItems: "center", justifyContent: "center", zIndex: 1000,
         }}>
-          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "360px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "360px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>Confirmar Pagamento</h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 16px" }}>{modalBaixa.evento.descricao}</p>
 

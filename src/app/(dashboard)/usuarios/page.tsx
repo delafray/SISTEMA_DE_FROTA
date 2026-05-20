@@ -6,6 +6,7 @@ import { createClient } from "@/lib/supabase/client";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { RemoverUsuarioBtn } from "@/components/ui/RemoverUsuarioBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Usuario = {
   usuario_id: string;
@@ -111,6 +112,7 @@ export default function UsuariosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="usuários" toolbar={toolbar}>
           <thead>
             <tr>
@@ -168,6 +170,30 @@ export default function UsuariosPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        <MobileList count={filtrados.length} label="usuários">
+          {loading ? null : filtrados.map(u => {
+            const nome = getNome(u);
+            const isMe = u.usuario_id === meId;
+            return (
+              <MobileCard
+                key={u.usuario_id}
+                href={isMe ? undefined : `/usuarios/${u.usuario_id}/editar`}
+                title={nome || "—"}
+                subtitle={getLogin(nome)}
+                badge={
+                  <Badge variant={ROLE_VAR[u.role] ?? "default"}>
+                    {ROLE_LABEL[u.role] ?? u.role}
+                  </Badge>
+                }
+                highlight={isMe ? "#2563eb" : undefined}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/usuarios/novo" label="Novo Usuário" />
       </div>
     </div>
   );

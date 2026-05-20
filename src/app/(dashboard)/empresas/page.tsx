@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Empresa = {
   id: string; nome_fantasia: string | null; razao_social: string | null;
@@ -83,6 +84,7 @@ export default function EmpresasPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        <div className="m-hide">
         <DataTable count={filtradas.length} label="empresas" toolbar={toolbar}>
           <thead>
             <tr>
@@ -130,6 +132,25 @@ export default function EmpresasPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        <MobileList count={filtradas.length} label="empresas">
+          {loading ? null : filtradas.map(e => (
+            <MobileCard
+              key={e.id}
+              href={`/empresas/${e.id}/editar`}
+              title={e.nome_fantasia ?? "Sem nome"}
+              subtitle={e.cnpj ? fmtCnpj(e.cnpj) : "Sem CNPJ"}
+              badge={e.id === empresaId ? <Badge variant="info">ATUAL</Badge> : undefined}
+              details={[
+                { label: "Cidade", value: e.cidade ?? "—" },
+                { label: "UF", value: e.uf ?? "—" },
+              ]}
+            />
+          ))}
+        </MobileList>
+
+        <MobileFAB href="/empresas/novo" label="Nova Empresa" />
       </div>
     </div>
   );

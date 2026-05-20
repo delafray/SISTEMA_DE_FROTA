@@ -3,6 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert, inputStyle } from "@/components/ui/ds";
 import { coletarEventos, type EventoFinanceiro, CAT_LABEL, CAT_COR } from "@/lib/financeiro/coletor";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
 const fmtDate = (s: string) => new Date(s + "T00:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit" });
@@ -181,6 +182,8 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
       {linhas.length === 0
         ? <EmptyState icon="💸" message="Nenhum lançamento no período. Cadastre fretes, despesas ou recorrências." />
         : (
+          <>
+          <div className="m-hide">
           <DataTable count={eventos.length} label="lançamentos">
             <thead>
               <tr>
@@ -280,6 +283,31 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
               ))}
             </tbody>
           </DataTable>
+          </div>
+
+          {/* Mobile: daily cards */}
+          <MobileList count={eventos.length} label="lançamentos">
+            {linhas.map(l => (
+              <MobileCard
+                key={l.data}
+                title={`${fmtDate(l.data)} ${fmtDiaSemana(l.data)}`}
+                subtitle={`${l.eventos.length} lançamento(s)`}
+                badge={
+                  l.data === range.dataAtual ? <Badge variant="info">HOJE</Badge>
+                  : l.data < range.dataAtual ? <Badge variant="danger">Passado</Badge>
+                  : <Badge variant="default">Futuro</Badge>
+                }
+                highlight={l.saldoDia >= 0 ? "#16a34a" : "#dc2626"}
+                details={[
+                  { label: "Entradas", value: l.entradas > 0 ? fmtBRL(l.entradas) : "—" },
+                  { label: "Saídas", value: l.saidas > 0 ? fmtBRL(l.saidas) : "—" },
+                  { label: "Saldo Dia", value: fmtBRL(l.saldoDia) },
+                  { label: "Acumulado", value: fmtBRL(l.saldoAcum) },
+                ]}
+              />
+            ))}
+          </MobileList>
+          </>
         )}
     </div>
   );

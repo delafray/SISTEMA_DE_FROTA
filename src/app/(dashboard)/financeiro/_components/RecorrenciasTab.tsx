@@ -5,6 +5,7 @@ import {
   Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert,
   useTableSort, inputStyle, selectStyle, FormField, FormSection, ActionBtn,
 } from "@/components/ui/ds";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 const fmtBRL = (v: number) =>
   v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -213,6 +214,8 @@ export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
             action={<Btn onClick={abrirNovo}>+ Nova Recorrência</Btn>} />
         )
         : (
+          <>
+          <div className="m-hide">
           <DataTable count={sortedData.length} label="recorrências">
             <thead>
               <tr>
@@ -258,6 +261,32 @@ export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
               ))}
             </tbody>
           </DataTable>
+          </div>
+
+          {/* Mobile: cards */}
+          <MobileList count={sortedData.length} label="recorrências">
+            {sortedData.map(r => (
+              <MobileCard
+                key={r.id}
+                onClick={() => abrirEditar(r)}
+                title={r.descricao}
+                subtitle={`Dia ${r.dia_vencimento} • ${r.categoria.replace(/_/g, " ")}`}
+                badge={
+                  <Badge variant={r.tipo === "entrada" ? "success" : "danger"}>
+                    {r.tipo === "entrada" ? "↑ Entrada" : "↓ Saída"}
+                  </Badge>
+                }
+                highlight={r.ativo ? (r.tipo === "entrada" ? "#16a34a" : "#dc2626") : "#94a3b8"}
+                details={[
+                  { label: "Valor/Mês", value: fmtBRL(r.valor) },
+                  { label: "Status", value: r.ativo ? "Ativa" : "Inativa" },
+                ]}
+              />
+            ))}
+          </MobileList>
+
+          <MobileFAB onClick={abrirNovo} label="Nova Recorrência" />
+          </>
         )}
 
       {/* Modal CRUD */}
