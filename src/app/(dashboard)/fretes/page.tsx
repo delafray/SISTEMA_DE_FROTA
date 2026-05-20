@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Frete = {
   id: string; status: string; origem: string; destino: string;
@@ -221,7 +222,7 @@ export default function FretesPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <KpiCard label="Agendados"      value={loading ? "..." : totais.agendado}     color="warning" />
           <KpiCard label="Em Andamento"   value={loading ? "..." : totais.em_andamento} color="info" />
           <KpiCard
@@ -238,6 +239,8 @@ export default function FretesPage() {
           />
         </div>
 
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="fretes" toolbar={toolbar}>
           <thead>
             <tr>
@@ -364,6 +367,38 @@ export default function FretesPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="fretes">
+          {loading ? null : ordenados.map(frete => {
+            const veiculo   = Array.isArray(frete.veiculos) ? frete.veiculos[0] : frete.veiculos;
+            const motorista = Array.isArray(frete.motoristas) ? frete.motoristas[0] : frete.motoristas;
+            const statusColor = frete.status === "concluido" ? "#16a34a" : frete.status === "em_andamento" ? "#2563eb" : frete.status === "cancelado" ? "#ef4444" : "#eab308";
+            return (
+              <MobileCard
+                key={frete.id}
+                href={`/fretes/${frete.id}/editar`}
+                title={`${frete.origem} → ${frete.destino}`}
+                subtitle={motorista?.nome ?? "Sem motorista"}
+                badge={
+                  <Badge variant={STATUS_VAR[frete.status] ?? "default"}>
+                    {STATUS_LABEL[frete.status] ?? frete.status}
+                  </Badge>
+                }
+                highlight={statusColor}
+                details={[
+                  { label: "Valor", value: frete.valor_frete ? `R$ ${frete.valor_frete.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—" },
+                  { label: "Veículo", value: veiculo?.placa ?? "—" },
+                  { label: "Coleta", value: frete.data_coleta_prevista ? new Date(frete.data_coleta_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
+                  { label: "Pgto", value: frete.pago ? <Badge variant="success">Pago</Badge> : frete.status === "concluido" ? <Badge variant="danger">Pendente</Badge> : "A faturar" },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/fretes/novo" label="Novo Frete" />
       </div>
     </div>
   );

@@ -94,7 +94,7 @@ export default function NovaEmpresaPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             
             <FormSection title="Dados da Empresa">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="CNPJ">
                   <IMaskInput
                     mask="00.000.000/0000-00"
@@ -137,7 +137,7 @@ export default function NovaEmpresaPage() {
             </FormSection>
 
             <FormSection title="Endereço">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="CEP (Busca Automática)">
                   <IMaskInput
                     mask="00000-000"

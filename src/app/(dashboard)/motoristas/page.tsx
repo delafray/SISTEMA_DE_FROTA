@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Motorista = {
   id: string; nome: string; cpf: string; cnh_numero: string | null;
@@ -91,6 +92,8 @@ export default function MotoristasPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="motoristas" toolbar={toolbar}>
           <thead>
             <tr>
@@ -145,6 +148,32 @@ export default function MotoristasPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="motoristas">
+          {loading ? null : filtrados.map(m => {
+            const cnhDate = m.cnh_validade ? new Date(m.cnh_validade + "T00:00:00") : null;
+            const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - agora) / 86400000) : null;
+            const cnhVar  = diasCnh === null ? "default" as const : diasCnh < 0 ? "danger" as const : diasCnh < 30 ? "warning" as const : "success" as const;
+            return (
+              <MobileCard
+                key={m.id}
+                href={`/motoristas/${m.id}/editar`}
+                title={m.nome}
+                subtitle={m.cargo ?? "Motorista"}
+                badge={<Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "Ativo" : "Inativo"}</Badge>}
+                highlight={!m.ativo ? "#cbd5e1" : undefined}
+                details={[
+                  { label: "CNH", value: m.cnh_categoria ?? "—" },
+                  { label: "Venc. CNH", value: cnhDate ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge> : "—" },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/motoristas/novo" label="Cadastrar Motorista" />
       </div>
     </div>
   );

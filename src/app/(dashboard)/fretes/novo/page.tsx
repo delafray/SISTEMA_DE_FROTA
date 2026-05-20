@@ -168,7 +168,7 @@ export default function NovoFretePage() {
         {tab === "operacional" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Veículo, Motorista e Cliente">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={(e) => {
                     set("veiculo_id")(e);
@@ -245,7 +245,7 @@ export default function NovoFretePage() {
         {tab === "cronograma" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Quilometragem">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *" hint={veiculoSel?.km_atual != null ? `Sugestão: ${veiculoSel.km_atual.toLocaleString("pt-BR")} km (atual do veículo)` : undefined}>
                   <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
                   {veiculoSel?.km_atual && parseFloat(f.km_inicial || "0") < veiculoSel.km_atual && f.km_inicial && (
@@ -256,7 +256,7 @@ export default function NovoFretePage() {
             </FormSection>
 
             <FormSection title="Datas previstas">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Data Coleta Prevista">
                   <input value={f.data_coleta_prevista} onChange={set("data_coleta_prevista")} type="date" style={inputStyle} />
                 </FormField>
@@ -267,7 +267,7 @@ export default function NovoFretePage() {
             </FormSection>
 
             <FormSection title="Carga">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Tipo de Carga">
                   <input value={f.tipo_carga} onChange={set("tipo_carga")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SOJA, CIMENTO" />
                 </FormField>
@@ -282,7 +282,7 @@ export default function NovoFretePage() {
         {tab === "financeiro" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Valor e Pagamento">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Frete (R$)">
                   <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
                     onAccept={(_, m) => setF(p => ({ ...p, valor_frete: String(m.unmaskedValue) }))}

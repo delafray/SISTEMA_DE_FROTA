@@ -117,7 +117,7 @@ export default function EditarEmpresaPage() {
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <FormSection title="Dados da Empresa">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="CNPJ">
                   <IMaskInput mask="00.000.000/0000-00" value={form.cnpj}
                     onAccept={(v) => setForm(f => ({ ...f, cnpj: v as string }))}
@@ -152,7 +152,7 @@ export default function EditarEmpresaPage() {
             </FormSection>
 
             <FormSection title="Endereço">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="CEP (Busca Automática)">
                   <IMaskInput mask="00000-000" value={form.cep}
                     onAccept={(v) => setForm(f => ({ ...f, cep: v as string }))}

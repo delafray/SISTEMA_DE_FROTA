@@ -10,6 +10,7 @@ import {
   KpiCard, EmptyState, SearchInput, selectStyle,
 } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Viagem = {
   id: string;
@@ -104,13 +105,15 @@ export default function ViagensPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
           <KpiCard label="Total"       value={kpis.total}      />
           <KpiCard label="Agendadas"   value={kpis.agendadas}  color="warning" />
           <KpiCard label="Em Andamento" value={kpis.andamento} color="info" />
           <KpiCard label="Concluídas"  value={kpis.concluidas} color="success" />
         </div>
 
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable
           toolbar={
             <>
@@ -174,6 +177,35 @@ export default function ViagensPage() {
             })}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtradas.length} label="viagens">
+          {loading ? null : filtradas.map(v => {
+            const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
+            const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
+            const fretes    = Array.isArray(v.fretes)     ? v.fretes        : [];
+            const statusColor = v.status === "concluida" ? "#16a34a" : v.status === "em_andamento" ? "#2563eb" : v.status === "cancelada" ? "#ef4444" : "#eab308";
+            return (
+              <MobileCard
+                key={v.id}
+                href={`/viagens/${v.id}`}
+                title={motorista?.nome ?? "Sem motorista"}
+                subtitle={veiculo ? `${veiculo.placa} • ${veiculo.marca} ${veiculo.modelo}` : "Sem veículo"}
+                badge={<Badge variant={STATUS_VAR[v.status] ?? "default"}>{STATUS_LABEL[v.status] ?? v.status}</Badge>}
+                highlight={statusColor}
+                details={[
+                  { label: "Saída", value: fmtDate(v.data_saida_prevista) },
+                  { label: "Chegada", value: fmtDate(v.data_chegada_prevista) },
+                  { label: "Fretes", value: String(fretes.length) },
+                  { label: "Status", value: STATUS_LABEL[v.status] ?? v.status },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/viagens/novo" label="Nova Viagem" />
       </div>
     </div>
   );

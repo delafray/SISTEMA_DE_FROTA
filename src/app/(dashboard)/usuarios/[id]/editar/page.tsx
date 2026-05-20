@@ -76,7 +76,7 @@ export default function EditarUsuarioPage() {
             <input type="hidden" name="usuario_id" value={id} />
 
             <FormSection title="Dados do Usuário">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Nome Completo">
                     <input

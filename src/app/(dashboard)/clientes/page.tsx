@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Cliente = {
   id: string; nome_fantasia: string | null; razao_social: string | null;
@@ -88,6 +89,8 @@ export default function ClientesPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="clientes" toolbar={toolbar}>
           <thead>
             <tr>
@@ -132,6 +135,26 @@ export default function ClientesPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="clientes">
+          {loading ? null : filtrados.map(c => (
+            <MobileCard
+              key={c.id}
+              href={`/clientes/${c.id}/editar`}
+              title={c.nome_fantasia ?? c.razao_social ?? "Sem nome"}
+              subtitle={c.documento ?? "Sem documento"}
+              badge={<Badge variant={c.ativo !== false ? "success" : "default"}>{c.ativo !== false ? "Ativo" : "Inativo"}</Badge>}
+              details={[
+                { label: "Cidade", value: c.cidade ?? "—" },
+                { label: "UF", value: c.uf ?? "—" },
+              ]}
+            />
+          ))}
+        </MobileList>
+
+        <MobileFAB href="/clientes/novo" label="Cadastrar Cliente" />
       </div>
     </div>
   );

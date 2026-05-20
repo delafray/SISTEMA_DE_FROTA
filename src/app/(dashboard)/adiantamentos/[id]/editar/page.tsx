@@ -119,7 +119,7 @@ export default function EditarAdiantamentoPage() {
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
           <FormSection title="Dados do Adiantamento">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+            <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
               <div style={{ gridColumn: "span 2" }}>
                 <FormField label="Motorista *">
                   <select value={f.motorista_id} onChange={set("motorista_id")} style={selectStyle}>

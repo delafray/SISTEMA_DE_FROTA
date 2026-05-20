@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import "../components/mobile/mobile.css";
 
 /* ──────────────────────────────────────────────────────────────
    SISTEMA DE FROTA — Base CSS  (padrão RBARROS: light + sidebar dark)

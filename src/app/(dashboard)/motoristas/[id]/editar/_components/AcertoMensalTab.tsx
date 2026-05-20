@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FormSection, Btn, Alert, inputStyle, selectStyle, Th } from "@/components/ui/ds";
 import { format, startOfMonth, endOfMonth, addMonths, subMonths, isSameMonth } from "date-fns";
@@ -166,11 +166,6 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
   const sortedFretes = useMemo(() => {
     return [...fretes].sort((a, b) => {
-      const aIncl = a.acerto_status === "incluido";
-      const bIncl = b.acerto_status === "incluido";
-      if (aIncl && !bIncl) return 1;
-      if (!aIncl && bIncl) return -1;
-
       let valA: any = "";
       let valB: any = "";
 
@@ -183,6 +178,12 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
       } else if (freteSortKey === "saldo_pendente") {
         valA = Number(a.saldo_pendente || 0);
         valB = Number(b.saldo_pendente || 0);
+      } else if (freteSortKey === "valor_pagar_agora") {
+        valA = Number(a.valor_pagar_agora || 0);
+        valB = Number(b.valor_pagar_agora || 0);
+      } else if (freteSortKey === "acerto_status") {
+        valA = a.acerto_status === "incluido" ? 1 : 0;
+        valB = b.acerto_status === "incluido" ? 1 : 0;
       }
 
       if (valA < valB) return freteSortDirection === "asc" ? -1 : 1;
@@ -319,17 +320,139 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
       
-      {/* HEADER NAV */}
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", background: "#f8fafc", padding: "16px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
-        <Btn type="button" variant="outline" onClick={prevMonth}>◀ Mês Anterior</Btn>
-        <h3 style={{ margin: 0, fontWeight: 600, fontSize: "16px", color: "#334155" }}>{monthLabel}</h3>
-        <Btn type="button" variant="outline" onClick={nextMonth} disabled={isSameMonth(refDate, new Date())}>Próximo Mês ▶</Btn>
-      </div>
+      {/* DATE PICKER PANEL */}
+      {(() => {
+        const currentYear = new Date().getFullYear();
+        // 6 anos em ordem crescente (mais antigo → mais recente)
+        const allYears = Array.from({ length: 6 }, (_, i) => currentYear - 5 + i);
+        const yearsFirst = allYears.slice(0, 3);  // ex: 2021 2022 2023
+        const yearsSecond = allYears.slice(3);    // ex: 2024 2025 2026
+        const selectedYear = refDate.getFullYear();
+        const selectedMonth = refDate.getMonth() + 1;
+        const monthsFirst = [1, 2, 3, 4, 5, 6];
+        const monthsSecond = [7, 8, 9, 10, 11, 12];
+
+        const selectDate = (year: number, month: number) => {
+          setRefDate(startOfMonth(new Date(year, month - 1, 1)));
+        };
+
+        const chipBase: React.CSSProperties = {
+          padding: "4px 10px",
+          borderRadius: "6px",
+          fontSize: "13px",
+          fontWeight: 500,
+          cursor: "pointer",
+          border: "1px solid transparent",
+          transition: "all 120ms",
+          userSelect: "none",
+        };
+        const chipInactive: React.CSSProperties = {
+          ...chipBase,
+          background: "#f1f5f9",
+          color: "#475569",
+          borderColor: "#e2e8f0",
+        };
+        const chipActive: React.CSSProperties = {
+          ...chipBase,
+          background: "#1e40af",
+          color: "#fff",
+          borderColor: "#1e40af",
+        };
+
+        return (
+          <div style={{
+            background: "#f8fafc",
+            border: "1px solid #e2e8f0",
+            borderRadius: "10px",
+            padding: "14px 18px",
+            display: "flex",
+            alignItems: "center",
+            gap: "20px",
+            flexWrap: "wrap",
+          }}>
+            {/* ANOS — dois blocos de 3 em ordem crescente */}
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Ano</div>
+              <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                {yearsFirst.map(y => (
+                  <span
+                    key={y}
+                    style={y === selectedYear ? chipActive : chipInactive}
+                    onClick={() => selectDate(y, selectedMonth)}
+                  >
+                    {y}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {yearsSecond.map(y => (
+                  <span
+                    key={y}
+                    style={y === selectedYear ? chipActive : chipInactive}
+                    onClick={() => selectDate(y, selectedMonth)}
+                  >
+                    {y}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* DIVISOR */}
+            <div style={{ width: "1px", height: "44px", background: "#e2e8f0" }} />
+
+            {/* MESES 01-06 */}
+            <div>
+              <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Mês</div>
+              <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+                {monthsFirst.map(m => (
+                  <span
+                    key={m}
+                    style={m === selectedMonth ? chipActive : chipInactive}
+                    onClick={() => selectDate(selectedYear, m)}
+                  >
+                    {String(m).padStart(2, "0")}
+                  </span>
+                ))}
+              </div>
+              <div style={{ display: "flex", gap: "4px" }}>
+                {monthsSecond.map(m => (
+                  <span
+                    key={m}
+                    style={m === selectedMonth ? chipActive : chipInactive}
+                    onClick={() => selectDate(selectedYear, m)}
+                  >
+                    {String(m).padStart(2, "0")}
+                  </span>
+                ))}
+              </div>
+            </div>
+
+            {/* DIVISOR */}
+            <div style={{ width: "1px", height: "44px", background: "#e2e8f0" }} />
+
+            {/* MÊS SELECIONADO */}
+            <div style={{
+              background: "#1e40af",
+              color: "#fff",
+              borderRadius: "8px",
+              padding: "8px 18px",
+              fontWeight: 700,
+              fontSize: "15px",
+              letterSpacing: "0.04em",
+              textTransform: "uppercase",
+              whiteSpace: "nowrap",
+              boxShadow: "0 2px 8px rgba(30,64,175,0.25)",
+            }}>
+              {format(refDate, "MMMM 'de' yyyy", { locale: ptBR })}
+            </div>
+          </div>
+        );
+      })()}
 
       {isFechado && <Alert variant="success">Este acerto já foi finalizado e pago.</Alert>}
       {acerto?.status === "agendado" && <Alert variant="warning">Este acerto está agendado mas ainda não foi pago.</Alert>}
 
-      <div style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }}>
+      <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }}>
         
         {/* LEFT COLUMN: Fretes & Ajustes */}
         <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -368,10 +491,22 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                     >
                       Saldo Restante
                     </Th>
-                    <Th style={{ padding: "8px", textAlign: "right" }}>
+                    <Th
+                      sortKey="valor_pagar_agora"
+                      activeSortKey={freteSortKey}
+                      sortDirection={freteSortDirection}
+                      onSort={handleFreteSort}
+                      style={{ padding: "8px", textAlign: "right" }}
+                    >
                       Pagar Agora
                     </Th>
-                    <Th style={{ padding: "8px", textAlign: "center" }}>
+                    <Th
+                      sortKey="acerto_status"
+                      activeSortKey={freteSortKey}
+                      sortDirection={freteSortDirection}
+                      onSort={handleFreteSort}
+                      style={{ padding: "8px", textAlign: "center" }}
+                    >
                       Ação
                     </Th>
                   </tr>
@@ -380,7 +515,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                   {sortedFretes.map(f => {
                     const incl = f.acerto_status === "incluido";
                     return (
-                      <tr key={f.id} style={{ borderBottom: "1px solid #f1f5f9", background: incl ? "transparent" : "#fef2f2", opacity: incl ? 1 : 0.6 }}>
+                      <tr key={f.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "8px" }}>{f.origem?.split("-")[0]} → {f.destino?.split("-")[0]}</td>
                         <td style={{ padding: "8px" }}>{f.data_fim ? format(new Date(f.data_fim), "dd/MM") : ""}</td>
                         <td style={{ padding: "8px", textAlign: "right", color: "#64748b" }}>
@@ -680,14 +815,76 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                 </div>
 
                 <div style={{ display: "flex", gap: "12px", flexDirection: "column" }}>
-                  <Btn type="button" variant="primary" onClick={() => fecharAcerto(true)} disabled={saving} style={{ justifyContent: "center", padding: "12px" }}>
-                    {saving ? "Processando..." : "Confirmar que já paguei (Finalizar)"}
-                  </Btn>
-                  <Btn type="button" variant="outline" onClick={() => fecharAcerto(false)} disabled={saving} style={{ justifyContent: "center" }}>
-                    Apenas Agendar / Deixar pendente
-                  </Btn>
-                  <button type="button" onClick={() => setModalStep(1)} style={{ background: "transparent", border: "none", color: "#64748b", marginTop: "8px", cursor: "pointer" }}>
-                    ← Voltar
+                  {/* BOTÃO PRINCIPAL: Confirmar Pagamento */}
+                  <button
+                    type="button"
+                    onClick={() => fecharAcerto(true)}
+                    disabled={saving}
+                    style={{
+                      width: "100%",
+                      padding: "16px 24px",
+                      borderRadius: "10px",
+                      border: "none",
+                      background: saving ? "#86efac" : "#16a34a",
+                      color: "#fff",
+                      fontSize: "16px",
+                      fontWeight: 700,
+                      cursor: saving ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "10px",
+                      boxShadow: saving ? "none" : "0 4px 14px rgba(22,163,74,0.4)",
+                      transition: "all 150ms",
+                      letterSpacing: "0.01em",
+                    }}
+                  >
+                    <span style={{ fontSize: "20px" }}>✅</span>
+                    {saving ? "Processando..." : "Confirmar que já paguei — Finalizar"}
+                  </button>
+
+                  {/* BOTÃO SECUNDÁRIO: Apenas Agendar */}
+                  <button
+                    type="button"
+                    onClick={() => fecharAcerto(false)}
+                    disabled={saving}
+                    style={{
+                      width: "100%",
+                      padding: "14px 24px",
+                      borderRadius: "10px",
+                      border: "2px solid #f59e0b",
+                      background: "#fffbeb",
+                      color: "#92400e",
+                      fontSize: "15px",
+                      fontWeight: 600,
+                      cursor: saving ? "not-allowed" : "pointer",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      gap: "10px",
+                      transition: "all 150ms",
+                    }}
+                  >
+                    <span style={{ fontSize: "18px" }}>🕐</span>
+                    Apenas Agendar — Deixar pendente
+                  </button>
+
+                  {/* VOLTAR */}
+                  <button
+                    type="button"
+                    onClick={() => setModalStep(1)}
+                    style={{
+                      background: "transparent",
+                      border: "1px solid #e2e8f0",
+                      borderRadius: "8px",
+                      color: "#64748b",
+                      fontSize: "14px",
+                      padding: "10px",
+                      cursor: "pointer",
+                      width: "100%",
+                    }}
+                  >
+                    ← Voltar à revisão
                   </button>
                 </div>
               </div>

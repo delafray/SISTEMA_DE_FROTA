@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
@@ -15,6 +15,7 @@ type FreteHist = { id: string; origem: string; destino: string; status: string; 
 const fmtPlaca = (v: string) => v.length >= 4 ? v.slice(0, 3) + "-" + v.slice(3) : v;
 
 type TabId = "dados" | "plano" | "manutencoes" | "avarias" | "logs" | "historico";
+type DadosSubTabId = "principal" | "especificacoes" | "documentos";
 
 export default function EditarVeiculoPage() {
   const { id } = useParams<{ id: string }>();
@@ -27,6 +28,7 @@ export default function EditarVeiculoPage() {
   const [freteHist, setFreteHist] = useState<FreteHist[]>([]);
   const [histTab, setHistTab] = useState<"abast" | "fretes">("abast");
   const [tab, setTab] = useState<TabId>("dados");
+  const [dadosSubTab, setDadosSubTab] = useState<DadosSubTabId>("principal");
   const [empresaId, setEmpresaId] = useState<string>("");
 
   const [f, setF] = useState({
@@ -166,138 +168,193 @@ export default function EditarVeiculoPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
-        {tab === "dados" && (
-          <form onSubmit={handleSubmit}>
-            <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-              <FormSection title="Identificação *">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
-                  <FormField label="Placa *">
-                    <IMaskInput mask={[{ mask: "aaa-0000" }, { mask: "aaa-0a00" }]}
-                      definitions={{ a: /[a-zA-Z]/ }} prepare={(s) => s.toUpperCase()}
-                      value={f.placa}
-                      onAccept={(v) => setF(p => ({ ...p, placa: v as string }))}
-                      style={{ ...inputStyle, textTransform: "uppercase" }} />
-                  </FormField>
-                  <FormField label="Renavam *">
-                    <IMaskInput mask="00000000000" value={f.renavam}
-                      onAccept={(v) => setF(p => ({ ...p, renavam: v as string }))} style={inputStyle} />
-                  </FormField>
-                  <div style={{ gridColumn: "span 2" }}>
-                    <FormField label="Chassi (17 chars) *">
-                      <input value={f.chassi} onChange={(e) => setF(p => ({ ...p, chassi: e.target.value.toUpperCase() }))}
-                        maxLength={17} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                    </FormField>
-                  </div>
-                  <FormField label="Apelido">
-                    <input value={f.apelido} onChange={set("apelido")} style={inputStyle} />
-                  </FormField>
-                </div>
-              </FormSection>
+        {tab === "dados" && (() => {
+          const subTabStyle = (active: boolean): React.CSSProperties => ({
+            padding: "8px 16px",
+            border: "none",
+            background: active ? "#1e40af" : "#f1f5f9",
+            color: active ? "#fff" : "#475569",
+            fontSize: "13px",
+            fontWeight: active ? 600 : 500,
+            borderRadius: "6px",
+            cursor: "pointer",
+            transition: "all 120ms",
+          });
 
-              <FormSection title="Dados Técnicos">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
-                  <div style={{ gridColumn: "span 2" }}>
-                    <FormField label="Marca *">
-                      <input value={f.marca} onChange={set("marca")} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                    </FormField>
-                  </div>
-                  <div style={{ gridColumn: "span 2" }}>
-                    <FormField label="Modelo *">
-                      <input value={f.modelo} onChange={set("modelo")} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                    </FormField>
-                  </div>
-                  <FormField label="Ano *">
-                    <IMaskInput mask="0000" value={f.ano}
-                      onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} />
-                  </FormField>
+          return (
+            <form onSubmit={handleSubmit}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
-                  <FormField label="Tipo *">
-                    <select value={f.tipo} onChange={set("tipo")} style={selectStyle}>
-                      <option value="caminhao">Caminhão</option>
-                      <option value="van">Van</option>
-                      <option value="carro">Carro</option>
-                      <option value="utilitario">Utilitário</option>
-                    </select>
-                  </FormField>
-                  <FormField label="Categoria">
-                    <select value={f.categoria} onChange={set("categoria")} style={selectStyle}>
-                      <option value="">— Nenhuma —</option>
-                      <option value="toco">Toco</option>
-                      <option value="truck">Truck</option>
-                      <option value="bitruck">Bi-Truck</option>
-                      <option value="carreta">Carreta</option>
-                      <option value="cavalo">Cavalo Mecânico</option>
-                      <option value="3_4">3/4</option>
-                    </select>
-                  </FormField>
-                  <FormField label="Combustível *">
-                    <select value={f.combustivel} onChange={set("combustivel")} style={selectStyle}>
-                      <option value="diesel">Diesel</option>
-                      <option value="diesel_s10">Diesel S10</option>
-                      <option value="gasolina">Gasolina</option>
-                      <option value="etanol">Etanol</option>
-                      <option value="flex">Flex</option>
-                    </select>
-                  </FormField>
-                  <FormField label="Cor">
-                    <input value={f.cor} onChange={set("cor")} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                  </FormField>
-                  <FormField label="Eixos">
-                    <input value={f.eixos} onChange={set("eixos")} type="number" style={inputStyle} />
-                  </FormField>
-
-                  <FormField label="KM Atual 🔒" hint="Campo protegido — altere pela aba 'Manutenções'">
-                    <input value={f.km_atual} readOnly disabled type="number"
-                      style={{ ...inputStyle, background: "#f1f5f9", color: "#64748b", cursor: "not-allowed" }} />
-                  </FormField>
-                  <FormField label="Cap. Carga (kg)">
-                    <input value={f.capacidade_carga_kg} onChange={set("capacidade_carga_kg")} type="number" style={inputStyle} />
-                  </FormField>
-                  <FormField label="PBT (kg)">
-                    <input value={f.pbt_kg} onChange={set("pbt_kg")} type="number" style={inputStyle} />
-                  </FormField>
-                  <FormField label="Tanque (L)">
-                    <input value={f.capacidade_tanque} onChange={set("capacidade_tanque")} type="number" style={inputStyle} />
-                  </FormField>
-                </div>
-              </FormSection>
-
-              <FormSection title="Documentação e Seguros">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-                  {([["ipva_vencimento","IPVA Venc."],["licenciamento_vencimento","Licenciamento Venc."],["seguro_vencimento","Seguro Venc."],["data_aquisicao","Data Aquisição"]] as const).map(([k, label]) => (
-                    <FormField key={k} label={label}>
-                      <input value={f[k]} onChange={set(k)} type="date" style={inputStyle} />
-                    </FormField>
+                {/* SUB-TABS */}
+                <div style={{
+                  display: "flex",
+                  gap: "6px",
+                  background: "#f8fafc",
+                  padding: "8px",
+                  borderRadius: "8px",
+                  border: "1px solid #e2e8f0",
+                }}>
+                  {([
+                    { id: "principal", label: "🚛 Principal" },
+                    { id: "especificacoes", label: "📐 Especificações" },
+                    { id: "documentos", label: "📄 Documentos e Seguros" },
+                  ] as const).map(s => (
+                    <button
+                      key={s.id}
+                      type="button"
+                      style={subTabStyle(dadosSubTab === s.id)}
+                      onClick={() => setDadosSubTab(s.id)}
+                    >
+                      {s.label}
+                    </button>
                   ))}
-                  <FormField label="Seguradora">
-                    <input value={f.seguradora} onChange={set("seguradora")} style={inputStyle} />
-                  </FormField>
-                  <FormField label="Apólice Nº">
-                    <input value={f.apolice_numero} onChange={set("apolice_numero")} style={inputStyle} />
-                  </FormField>
-                  <FormField label="Valor Aquisição (R$)">
-                    <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" style={inputStyle} />
-                  </FormField>
-                  <FormField label="Status">
-                    <select value={f.ativo ? "true" : "false"}
-                      onChange={(e) => setF(p => ({ ...p, ativo: e.target.value === "true" }))}
-                      style={selectStyle}>
-                      <option value="true">Ativo</option>
-                      <option value="false">Inativo</option>
-                    </select>
-                  </FormField>
                 </div>
-              </FormSection>
 
-              <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-                <Btn href="/veiculos" variant="outline">Cancelar</Btn>
-                <Btn type="submit" disabled={saving}>
-                  {saving ? "Salvando..." : "Atualizar Veículo"}
-                </Btn>
+                {/* SUB-TAB: PRINCIPAL */}
+                {dadosSubTab === "principal" && (
+                  <>
+                    <FormSection title="Identificação *">
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                        <FormField label="Placa *">
+                          <IMaskInput mask={[{ mask: "aaa-0000" }, { mask: "aaa-0a00" }]}
+                            definitions={{ a: /[a-zA-Z]/ }} prepare={(s) => s.toUpperCase()}
+                            value={f.placa}
+                            onAccept={(v) => setF(p => ({ ...p, placa: v as string }))}
+                            style={{ ...inputStyle, textTransform: "uppercase" }} />
+                        </FormField>
+                        <FormField label="Renavam *">
+                          <IMaskInput mask="00000000000" value={f.renavam}
+                            onAccept={(v) => setF(p => ({ ...p, renavam: v as string }))} style={inputStyle} />
+                        </FormField>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="Chassi (17 chars) *">
+                            <input value={f.chassi} onChange={(e) => setF(p => ({ ...p, chassi: e.target.value.toUpperCase() }))}
+                              maxLength={17} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                          </FormField>
+                        </div>
+                        <FormField label="Apelido">
+                          <input value={f.apelido} onChange={set("apelido")} style={inputStyle} />
+                        </FormField>
+                      </div>
+                    </FormSection>
+
+                    <FormSection title="Dados do Veículo">
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="Marca *">
+                            <input value={f.marca} onChange={set("marca")} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                          </FormField>
+                        </div>
+                        <div style={{ gridColumn: "span 2" }}>
+                          <FormField label="Modelo *">
+                            <input value={f.modelo} onChange={set("modelo")} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                          </FormField>
+                        </div>
+                        <FormField label="Ano *">
+                          <IMaskInput mask="0000" value={f.ano}
+                            onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} />
+                        </FormField>
+
+                        <FormField label="Tipo *">
+                          <select value={f.tipo} onChange={set("tipo")} style={selectStyle}>
+                            <option value="caminhao">Caminhão</option>
+                            <option value="van">Van</option>
+                            <option value="carro">Carro</option>
+                            <option value="utilitario">Utilitário</option>
+                          </select>
+                        </FormField>
+                        <FormField label="Categoria">
+                          <select value={f.categoria} onChange={set("categoria")} style={selectStyle}>
+                            <option value="">— Nenhuma —</option>
+                            <option value="toco">Toco</option>
+                            <option value="truck">Truck</option>
+                            <option value="bitruck">Bi-Truck</option>
+                            <option value="carreta">Carreta</option>
+                            <option value="cavalo">Cavalo Mecânico</option>
+                            <option value="3_4">3/4</option>
+                          </select>
+                        </FormField>
+                        <FormField label="Combustível *">
+                          <select value={f.combustivel} onChange={set("combustivel")} style={selectStyle}>
+                            <option value="diesel">Diesel</option>
+                            <option value="diesel_s10">Diesel S10</option>
+                            <option value="gasolina">Gasolina</option>
+                            <option value="etanol">Etanol</option>
+                            <option value="flex">Flex</option>
+                          </select>
+                        </FormField>
+                        <FormField label="KM Atual 🔒" hint="Campo protegido — altere pela aba 'Manutenções'">
+                          <input value={f.km_atual} readOnly disabled type="number"
+                            style={{ ...inputStyle, background: "#f1f5f9", color: "#64748b", cursor: "not-allowed" }} />
+                        </FormField>
+                        <FormField label="Status">
+                          <select value={f.ativo ? "true" : "false"}
+                            onChange={(e) => setF(p => ({ ...p, ativo: e.target.value === "true" }))}
+                            style={selectStyle}>
+                            <option value="true">Ativo</option>
+                            <option value="false">Inativo</option>
+                          </select>
+                        </FormField>
+                      </div>
+                    </FormSection>
+                  </>
+                )}
+
+                {/* SUB-TAB: ESPECIFICAÇÕES */}
+                {dadosSubTab === "especificacoes" && (
+                  <FormSection title="Especificações Técnicas">
+                    <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                      <FormField label="Cor">
+                        <input value={f.cor} onChange={set("cor")} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                      <FormField label="Eixos">
+                        <input value={f.eixos} onChange={set("eixos")} type="number" style={inputStyle} />
+                      </FormField>
+                      <FormField label="Cap. Carga (kg)">
+                        <input value={f.capacidade_carga_kg} onChange={set("capacidade_carga_kg")} type="number" style={inputStyle} />
+                      </FormField>
+                      <FormField label="PBT (kg)">
+                        <input value={f.pbt_kg} onChange={set("pbt_kg")} type="number" style={inputStyle} />
+                      </FormField>
+                      <FormField label="Tanque (L)">
+                        <input value={f.capacidade_tanque} onChange={set("capacidade_tanque")} type="number" style={inputStyle} />
+                      </FormField>
+                    </div>
+                  </FormSection>
+                )}
+
+                {/* SUB-TAB: DOCUMENTOS */}
+                {dadosSubTab === "documentos" && (
+                  <FormSection title="Documentação e Seguros">
+                    <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                      {([["ipva_vencimento","IPVA Venc."],["licenciamento_vencimento","Licenciamento Venc."],["seguro_vencimento","Seguro Venc."],["data_aquisicao","Data Aquisição"]] as const).map(([k, label]) => (
+                        <FormField key={k} label={label}>
+                          <input value={f[k]} onChange={set(k)} type="date" style={inputStyle} />
+                        </FormField>
+                      ))}
+                      <FormField label="Seguradora">
+                        <input value={f.seguradora} onChange={set("seguradora")} style={inputStyle} />
+                      </FormField>
+                      <FormField label="Apólice Nº">
+                        <input value={f.apolice_numero} onChange={set("apolice_numero")} style={inputStyle} />
+                      </FormField>
+                      <FormField label="Valor Aquisição (R$)">
+                        <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" style={inputStyle} />
+                      </FormField>
+                    </div>
+                  </FormSection>
+                )}
+
+                <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+                  <Btn href="/veiculos" variant="outline">Cancelar</Btn>
+                  <Btn type="submit" disabled={saving}>
+                    {saving ? "Salvando..." : "Atualizar Veículo"}
+                  </Btn>
+                </div>
               </div>
-            </div>
-          </form>
-        )}
+            </form>
+          );
+        })()}
 
         {tab === "plano" && empresaId && <PlanoTab veiculoId={id} empresaId={empresaId} />}
         {tab === "manutencoes" && empresaId && <ManutencoesTab veiculoId={id} empresaId={empresaId} kmAtualVeiculo={kmAtualNum} />}

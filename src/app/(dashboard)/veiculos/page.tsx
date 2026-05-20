@@ -8,6 +8,7 @@ import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { ReportPdfButton } from "@/components/ui/ReportPdfButton";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Veiculo = {
   id: string; placa: string; marca: string; modelo: string; tipo: string;
@@ -283,13 +284,15 @@ export default function VeiculosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <KpiCard label="Total"     value={loading ? "..." : todos.length}  />
           <KpiCard label="Ativos"    value={loading ? "..." : ativos}   color="success" />
           <KpiCard label="Inativos"  value={loading ? "..." : inativos} color="danger" />
           <KpiCard label="Em viagem" value={0}                          color="info" />
         </div>
 
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="veículos" toolbar={toolbar}>
           <thead>
             <tr>
@@ -352,6 +355,27 @@ export default function VeiculosPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="veículos">
+          {loading ? null : ordenados.map(v => (
+            <MobileCard
+              key={v.id}
+              href={`/veiculos/${v.id}/editar`}
+              title={`${v.placa}${v.apelido ? ` — ${v.apelido}` : ""}`}
+              subtitle={`${v.marca} ${v.modelo}${v.ano ? ` • ${v.ano}` : ""}`}
+              badge={<Badge variant={v.ativo ? "success" : "default"}>{v.ativo ? "Ativo" : "Inativo"}</Badge>}
+              highlight={!v.ativo ? "#cbd5e1" : undefined}
+              details={[
+                { label: "KM Atual", value: v.km_atual?.toLocaleString("pt-BR") ?? "—" },
+                { label: "Tipo", value: `${v.tipo}${v.categoria ? ` / ${v.categoria}` : ""}` },
+              ]}
+            />
+          ))}
+        </MobileList>
+
+        <MobileFAB href="/veiculos/novo" label="Cadastrar Veículo" />
       </div>
     </div>
   );

@@ -199,7 +199,7 @@ export default function EditarFretePage() {
         {tab === "operacional" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Status do Frete">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="Status">
                   <select value={f.status} onChange={set("status")} style={selectStyle}>
                     <option value="agendado">Agendado</option>
@@ -212,7 +212,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Veículo, Motorista e Cliente">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={set("veiculo_id")} style={selectStyle}>
                     <option value="">— Selecione —</option>
@@ -246,7 +246,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Rota">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <FormField label="Origem *">
                   <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
                 </FormField>
@@ -266,7 +266,7 @@ export default function EditarFretePage() {
         {tab === "cronograma" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Quilometragem">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *">
                   <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} />
                 </FormField>
@@ -282,7 +282,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Datas previstas">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Data Coleta Prevista">
                   <input value={f.data_coleta_prevista} onChange={set("data_coleta_prevista")} type="date" style={inputStyle} />
                 </FormField>
@@ -293,7 +293,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Carga">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Tipo de Carga">
                   <input value={f.tipo_carga} onChange={set("tipo_carga")} style={{ ...inputStyle, textTransform: "uppercase" }} />
                 </FormField>
@@ -308,7 +308,7 @@ export default function EditarFretePage() {
         {tab === "financeiro" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Valor e Pagamento">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Frete (R$)">
                   <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
                     value={f.valor_frete}
@@ -342,7 +342,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Comissão do Motorista">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Comissão Motorista (R$)" hint={f.status === "concluido" ? "Auto-calculado pelo tipo de comissão do motorista" : "Disponível após concluir o frete"}>
                   <input
                     value={f.comissao_motorista_valor}

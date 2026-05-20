@@ -48,7 +48,7 @@ export default function NovoUsuarioPage() {
 
           <form id="user-form" action={formAction} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <FormSection title="Dados de Acesso">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Nome Completo">
                     <input

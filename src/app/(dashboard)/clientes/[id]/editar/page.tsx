@@ -205,7 +205,7 @@ export default function EditarClientePage() {
             <div style={{ display: activeTab === "dados" ? "block" : "none" }}>
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
                 <FormSection title="Dados Principais">
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                  <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                     <FormField label="CNPJ / CPF">
                       <IMaskInput mask={[{ mask: "000.000.000-00" }, { mask: "00.000.000/0000-00" }]}
                         value={typeof (register("cnpj_cpf") as unknown as {value?: string}).value === "string" ? undefined : undefined}
@@ -243,7 +243,7 @@ export default function EditarClientePage() {
                 </FormSection>
 
                 <FormSection title="Endereço">
-                  <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                  <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                     <FormField label="CEP (Busca Automática)">
                       <IMaskInput mask="00000-000" onAccept={(val) => setValue("cep", val as string)} onBlur={handleCepBlur}
                         style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} />
@@ -307,7 +307,7 @@ export default function EditarClientePage() {
                           </button>
                         </div>
                       </div>
-                      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="Nome">
                             <input {...register(`contatos.${index}.nome`)} style={{ ...inputStyle, textTransform: "uppercase" }} />

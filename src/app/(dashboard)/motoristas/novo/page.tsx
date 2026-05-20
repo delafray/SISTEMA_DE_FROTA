@@ -113,7 +113,7 @@ export default function NovoMotoristaPage() {
             {/* ABA: DADOS PESSOAIS */}
             <div style={{ display: tab === "dados" ? "block" : "none" }}>
               <FormSection title="Dados Pessoais">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 3" }}>
                     <FormField label="Nome Completo *">
                       <input value={f.nome} onChange={(e) => setF(p => ({ ...p, nome: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
@@ -149,7 +149,7 @@ export default function NovoMotoristaPage() {
             {/* ABA: CNH */}
             <div style={{ display: tab === "cnh" ? "block" : "none" }}>
               <FormSection title="Habilitação (CNH)">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Número CNH *">
                       <IMaskInput mask="00000000000" onAccept={(v) => setF(p => ({ ...p, cnh_numero: v as string }))} style={inputStyle} />
@@ -179,7 +179,7 @@ export default function NovoMotoristaPage() {
             {/* ABA: COMISSÃO */}
             <div style={{ display: tab === "comissao" ? "block" : "none" }}>
               <FormSection title="Tipo de Comissão">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Modelo de Comissão">
                       <select value={f.tipo_comissao} onChange={set("tipo_comissao")} style={selectStyle}>
@@ -239,7 +239,7 @@ export default function NovoMotoristaPage() {
             {/* ABA: ENDEREÇO */}
             <div style={{ display: tab === "endereco" ? "block" : "none" }}>
               <FormSection title="Endereço">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <FormField label="CEP">
                     <IMaskInput mask="00000-000" onAccept={(v) => setF(p => ({ ...p, cep: v as string }))}
                       onBlur={handleCepBlur}

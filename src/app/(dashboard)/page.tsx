@@ -259,14 +259,14 @@ export default async function DashboardPage() {
         })()}
 
         {/* KPIs — fretes */}
-        <div className="kpi-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+        <div className="kpi-grid-3 m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
           <KpiCard label="Total de Fretes"   value={totalFretes ?? 0}      color="info" />
           <KpiCard label="Em Andamento"      value={fretesAndamento ?? 0}  color="warning" />
           <KpiCard label="Agendados"         value={fretesAgendados ?? 0}  color="default" />
         </div>
 
         {/* KPIs — recursos + financeiro */}
-        <div className="kpi-grid-4" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div className="kpi-grid-4 m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
           <KpiCard label="Veículos Ativos"       value={veiculosAtivos ?? 0}   color="success" />
           <KpiCard label="Motoristas Ativos"     value={motoristasAtivos ?? 0} color="success" />
           <KpiCard label="Receita do Mês"        value={fmtBRL(receitaMes)}    color="success" />
@@ -325,7 +325,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Desktop table */}
-            <div className="responsive-table" style={{ overflowX: "auto" }}>
+            <div className="m-hide" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse" }}>
                 <tbody>
                   {(fretesRecentes as FreteRecente[]).map(f => {
@@ -362,7 +362,7 @@ export default async function DashboardPage() {
             </div>
 
             {/* Mobile cards */}
-            <div className="responsive-cards" style={{ display: "none", flexDirection: "column", gap: "0" }}>
+            <div className="m-show" style={{ display: "none", flexDirection: "column", gap: "0" }}>
               {(fretesRecentes as FreteRecente[]).map(f => {
                 const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
                 const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;

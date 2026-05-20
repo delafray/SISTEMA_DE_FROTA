@@ -261,7 +261,7 @@ export default function EditarViagemPage() {
         {tab === "dados" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Motorista e Veículo">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <FormField label="Motorista *">
                   <select value={f.motorista_id} onChange={set("motorista_id")} style={selectStyle} required>
                     <option value="">Selecione...</option>
@@ -296,7 +296,7 @@ export default function EditarViagemPage() {
             </FormSection>
 
             <FormSection title="Status">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="Status">
                   <select value={f.status} onChange={set("status")} style={selectStyle}>
                     <option value="agendada">Agendada</option>
@@ -309,7 +309,7 @@ export default function EditarViagemPage() {
             </FormSection>
 
             <FormSection title="Datas previstas">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Saída Prevista">
                   <input type="date" value={f.data_saida_prevista} onChange={set("data_saida_prevista")} style={inputStyle} />
                 </FormField>
@@ -320,7 +320,7 @@ export default function EditarViagemPage() {
             </FormSection>
 
             <FormSection title="Datas reais">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Saída Real">
                   <input type="datetime-local" value={f.data_saida_real} onChange={set("data_saida_real")} style={inputStyle} />
                 </FormField>
@@ -331,7 +331,7 @@ export default function EditarViagemPage() {
             </FormSection>
 
             <FormSection title="Quilometragem">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
                 <FormField label="KM Inicial">
                   <input type="number" value={f.km_inicial} onChange={set("km_inicial")} style={inputStyle} />
                 </FormField>

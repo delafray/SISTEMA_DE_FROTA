@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Abastecimento = {
   id: string;
@@ -109,13 +110,15 @@ export default function AbastecimentosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <KpiCard label="Total Abastecimentos" value={loading ? "..." : todos.length} />
           <KpiCard label="Total Litros"         value={loading ? "..." : totalLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
           <KpiCard label="Custo Total"          value={loading ? "..." : custoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
           <KpiCard label="Ticket Médio"         value={loading ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
         </div>
 
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="abastecimentos" toolbar={toolbar}>
           <thead>
             <tr>
@@ -179,6 +182,33 @@ export default function AbastecimentosPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="abastecimentos">
+          {loading ? null : filtrados.map(a => {
+            const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
+            return (
+              <MobileCard
+                key={a.id}
+                href={`/abastecimentos/${a.id}/editar`}
+                title={a.veiculos ? `${a.veiculos.placa}` : "Sem veículo"}
+                subtitle={`${data} • ${a.motoristas?.nome ?? "Sem motorista"}`}
+                badge={
+                  <Badge variant={a.confirmado ? "success" : "warning"}>
+                    {a.confirmado ? "✓" : "Pend."}
+                  </Badge>
+                }
+                details={[
+                  { label: "Litros", value: `${a.litros.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} L` },
+                  { label: "Total", value: a.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/abastecimentos/novo" label="Registrar Abastecimento" />
       </div>
     </div>
   );

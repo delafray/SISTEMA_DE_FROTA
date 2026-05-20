@@ -111,7 +111,7 @@ export default function NovoAbastecimentoPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
             <FormSection title="Vínculos *">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={set("veiculo_id")} style={selectStyle}>
                     <option value="">— Selecione —</option>
@@ -142,7 +142,7 @@ export default function NovoAbastecimentoPage() {
             </FormSection>
 
             <FormSection title="Dados do Abastecimento">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="KM no Abastecimento">
                   <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" min="0" style={inputStyle} placeholder="150000" />
                 </FormField>

@@ -7,6 +7,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Adiantamento = {
   id: string;
@@ -120,13 +121,15 @@ export default function AdiantamentosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px", marginBottom: "16px" }}>
           <KpiCard label="Total Solicitado" value={fmt.format(totalSolicitado)} color="default" />
           <KpiCard label="Total Aprovado"   value={fmt.format(totalAprovado)}   color="success" />
           <KpiCard label="Total Pendente"   value={fmt.format(totalPendente)}   color="warning" />
           <KpiCard label="Total Prestado"   value={fmt.format(totalPrestado)}   color="info" />
         </div>
 
+        {/* Desktop: tabela */}
+        <div className="m-hide">
         <DataTable count={filtrados.length} label="adiantamentos" toolbar={toolbar}>
           <thead>
             <tr>
@@ -178,6 +181,35 @@ export default function AdiantamentosPage() {
             )}
           </tbody>
         </DataTable>
+        </div>
+
+        {/* Mobile: cards */}
+        <MobileList count={filtrados.length} label="adiantamentos">
+          {loading ? null : filtrados.map(a => {
+            const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
+            const statusColor = a.status === "aprovado" ? "#16a34a" : a.status === "recusado" ? "#ef4444" : a.status === "prestado" ? "#2563eb" : "#eab308";
+            return (
+              <MobileCard
+                key={a.id}
+                href={`/adiantamentos/${a.id}/editar`}
+                title={a.motoristas?.nome ?? "Sem motorista"}
+                subtitle={`${data} • ${TIPO_LABEL[a.tipo] ?? a.tipo}`}
+                badge={
+                  <Badge variant={STATUS_BADGE[a.status] ?? "default"}>
+                    {a.status.toUpperCase()}
+                  </Badge>
+                }
+                highlight={statusColor}
+                details={[
+                  { label: "Valor", value: fmt.format(a.valor) },
+                  { label: "Status", value: a.status.charAt(0).toUpperCase() + a.status.slice(1) },
+                ]}
+              />
+            );
+          })}
+        </MobileList>
+
+        <MobileFAB href="/adiantamentos/novo" label="Novo Adiantamento" />
       </div>
     </div>
   );

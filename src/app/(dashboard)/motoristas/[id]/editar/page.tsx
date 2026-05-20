@@ -215,7 +215,7 @@ export default function EditarMotoristaPage() {
 
             <div style={{ display: tab === "dados" ? "block" : "none" }}>
               <FormSection title="Dados Pessoais">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 3" }}>
                     <FormField label="Nome Completo *">
                       <input value={f.nome} onChange={(e) => setF(p => ({ ...p, nome: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
@@ -273,7 +273,7 @@ export default function EditarMotoristaPage() {
 
             <div style={{ display: tab === "cnh" ? "block" : "none" }}>
               <FormSection title="Habilitação (CNH)">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Número CNH *">
                       <IMaskInput mask="00000000000" value={f.cnh_numero}
@@ -303,7 +303,7 @@ export default function EditarMotoristaPage() {
 
             <div style={{ display: tab === "comissao" ? "block" : "none" }}>
               <FormSection title="Tipo de Comissão">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Modelo de Comissão">
                       <select value={f.tipo_comissao} onChange={set("tipo_comissao")} style={selectStyle}>
@@ -362,7 +362,7 @@ export default function EditarMotoristaPage() {
 
             <div style={{ display: tab === "endereco" ? "block" : "none" }}>
               <FormSection title="Endereço">
-                <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <FormField label="CEP">
                     <IMaskInput mask="00000-000" value={f.cep}
                       onAccept={(v) => setF(p => ({ ...p, cep: v as string }))}
@@ -403,7 +403,7 @@ export default function EditarMotoristaPage() {
                   O veículo selecionado aqui é automaticamente pré-preenchido ao criar uma nova viagem para este motorista.
                   Marque como inativo quando o veículo estiver em manutenção.
                 </p>
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "16px", alignItems: "flex-end" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "16px", alignItems: "flex-end" }}>
                   <FormField label="Veículo">
                     <select value={vinculoVeiculoId} onChange={e => setVinculoVeiculoId(e.target.value)} style={selectStyle}>
                       <option value="">Sem veículo vinculado</option>

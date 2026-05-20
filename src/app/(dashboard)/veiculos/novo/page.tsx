@@ -86,7 +86,7 @@ export default function NovoVeiculoPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             
             <FormSection title="Identificação *">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
                 <FormField label="Placa *">
                   <IMaskInput mask={[{ mask: "aaa-0000" }, { mask: "aaa-0a00" }]}
                     definitions={{ a: /[a-zA-Z]/ }} prepare={(s) => s.toUpperCase()}
@@ -109,7 +109,7 @@ export default function NovoVeiculoPage() {
             </FormSection>
 
             <FormSection title="Dados Técnicos">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Marca *">
                     <input value={f.marca} onChange={set("marca")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="VOLVO" />
@@ -175,7 +175,7 @@ export default function NovoVeiculoPage() {
             </FormSection>
 
             <FormSection title="Documentação e Seguros">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 {([["ipva_vencimento","IPVA Venc."],["licenciamento_vencimento","Licenciamento Venc."],["seguro_vencimento","Seguro Venc."],["data_aquisicao","Data Aquisição"]] as const).map(([k, label]) => (
                   <FormField key={k} label={label}>
                     <input value={f[k]} onChange={set(k)} type="date" style={inputStyle} />

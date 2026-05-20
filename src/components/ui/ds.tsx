@@ -418,7 +418,7 @@ export const Tabs: React.FC<{
   active: string;
   onChange: (id: string) => void;
 }> = ({ tabs, active, onChange }) => (
-  <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
+  <div className="m-tabs-scroll" style={{ display: "flex", borderBottom: "1px solid #e2e8f0", overflowX: "auto" }}>
     {tabs.map(t => (
       <button
         key={t.id}
@@ -439,6 +439,7 @@ export const Tabs: React.FC<{
           borderBottomColor: active === t.id ? "#2563eb" : "transparent",
           cursor: "pointer",
           transition: "all 150ms",
+          minHeight: "44px",
         }}
       >
         {t.label}
