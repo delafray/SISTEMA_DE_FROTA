@@ -324,7 +324,7 @@ export default function VeiculosPage() {
                 const ipvaVar  = diasIpva === null ? "default" : diasIpva < 0 ? "danger" : diasIpva < 30 ? "warning" : "success";
 
                 return (
-                  <Tr key={v.id} muted={!v.ativo}>
+                  <Tr key={v.id} muted={!v.ativo} onClick={() => router.push(`/veiculos/${v.id}/editar`)}>
                     <Td>{v.placa}</Td>
                     <Td>{v.apelido ?? "—"}</Td>
                     <Td>{v.marca} {v.modelo}</Td>

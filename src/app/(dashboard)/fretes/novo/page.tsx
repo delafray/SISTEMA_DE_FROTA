@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
 
 type Veiculo = { id: string; placa: string; modelo: string; marca: string; km_atual: number | null };
 type Motorista = {
@@ -15,11 +15,14 @@ type Motorista = {
 };
 type Cliente = { id: string; nome_fantasia: string; razao_social: string | null };
 
+type TabId = "operacional" | "cronograma" | "financeiro";
+
 export default function NovoFretePage() {
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [tab, setTab] = useState<TabId>("operacional");
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -27,6 +30,7 @@ export default function NovoFretePage() {
 
   const [f, setF] = useState({
     veiculo_id: "", motorista_id: "", cliente_id: "",
+    nome_cliente_avulso: "",
     origem: "", destino: "",
     valor_frete: "", km_inicial: "",
     tipo_carga: "", peso_carga_kg: "",
@@ -98,6 +102,7 @@ export default function NovoFretePage() {
       veiculo_id: f.veiculo_id,
       motorista_id: f.motorista_id,
       cliente_id: f.cliente_id || null,
+      nome_cliente_avulso: (!f.cliente_id && f.nome_cliente_avulso) ? f.nome_cliente_avulso : null,
       origem: f.origem.toUpperCase(),
       destino: f.destino.toUpperCase(),
       valor_frete: f.valor_frete ? parseFloat(f.valor_frete) : null,
@@ -118,40 +123,51 @@ export default function NovoFretePage() {
   };
 
   const veiculoSel = veiculos.find(v => v.id === f.veiculo_id);
+  const sem_recursos = veiculos.length === 0 || motoristas.length === 0;
 
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader 
-        title="Novo Frete / Viagem" 
+      <PageHeader
+        title="Novo Frete / Viagem"
         actions={
           <>
-            <Btn href="/fretes" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/fretes" variant="ghost">← Voltar</Btn>
             <Btn href="/fretes" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving || veiculos.length === 0 || motoristas.length === 0}>
+            <Btn type="submit" variant="primary" disabled={saving || sem_recursos}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
           </>
         }
       />
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <div style={{ width: "100%" }}>
-          
-          {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
-          
-          {(veiculos.length === 0 || motoristas.length === 0) && (
-            <div style={{ marginBottom: "16px" }}>
-              <Alert variant="warning">
-                ⚠ Cadastre pelo menos 1 veículo e 1 motorista antes de criar um frete.
-                {veiculos.length === 0 && <Link href="/veiculos/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Veículo</Link>}
-                {motoristas.length === 0 && <Link href="/motoristas/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Motorista</Link>}
-              </Alert>
-            </div>
-          )}
+      <div style={{ padding: "0 16px", background: "#fff" }}>
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as TabId)}
+          tabs={[
+            { id: "operacional", label: "Operacional" },
+            { id: "cronograma", label: "Cronograma & Carga" },
+            { id: "financeiro", label: "Financeiro" },
+          ]}
+        />
+      </div>
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            
-            <FormSection title="Veículo e Motorista *">
+      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
+
+        {sem_recursos && (
+          <div style={{ marginBottom: "16px" }}>
+            <Alert variant="warning">
+              ⚠ Cadastre pelo menos 1 veículo e 1 motorista antes de criar um frete.
+              {veiculos.length === 0 && <Link href="/veiculos/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Veículo</Link>}
+              {motoristas.length === 0 && <Link href="/motoristas/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Motorista</Link>}
+            </Alert>
+          </div>
+        )}
+
+        {tab === "operacional" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Veículo, Motorista e Cliente">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={(e) => {
@@ -185,25 +201,62 @@ export default function NovoFretePage() {
 
                 <FormField label="Cliente (opcional)">
                   <select value={f.cliente_id} onChange={set("cliente_id")} style={selectStyle}>
-                    <option value="">— Sem cliente —</option>
+                    <option value="">— Sem cliente cadastrado —</option>
                     {clientes.map(c => <option key={c.id} value={c.id}>{c.nome_fantasia}</option>)}
                   </select>
+                </FormField>
+
+                {!f.cliente_id && (
+                  <FormField label="Identificação do Frete Avulso">
+                    <input
+                      value={f.nome_cliente_avulso}
+                      onChange={set("nome_cliente_avulso")}
+                      style={inputStyle}
+                      placeholder='Ex: "Nego Doido — carga de batata BH→Brasília"'
+                      maxLength={200}
+                    />
+                    <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
+                      Opcional. Identifica o contratante sem precisar cadastrá-lo no sistema.
+                    </p>
+                  </FormField>
+                )}
+              </div>
+            </FormSection>
+
+            <FormSection title="Rota">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <FormField label="Origem *">
+                  <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SÃO PAULO, SP" />
+                </FormField>
+                <FormField label="Destino *">
+                  <input value={f.destino} onChange={(e) => setF(p => ({ ...p, destino: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: CAMPINAS, SP" />
                 </FormField>
               </div>
             </FormSection>
 
-            <FormSection title="Rota e Datas">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-                <div style={{ gridColumn: "span 2" }}>
-                  <FormField label="Origem *">
-                    <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SÃO PAULO, SP" />
-                  </FormField>
-                </div>
-                <div style={{ gridColumn: "span 2" }}>
-                  <FormField label="Destino *">
-                    <input value={f.destino} onChange={(e) => setF(p => ({ ...p, destino: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: CAMPINAS, SP" />
-                  </FormField>
-                </div>
+            <FormSection title="Observações">
+              <textarea value={f.observacoes} onChange={set("observacoes")} rows={3}
+                style={{ ...inputStyle, resize: "vertical", height: "auto" }}
+                placeholder="Instruções de entrega, tipo de embalagem, referências..." />
+            </FormSection>
+          </div>
+        )}
+
+        {tab === "cronograma" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Quilometragem">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+                <FormField label="KM Inicial *" hint={veiculoSel?.km_atual != null ? `Sugestão: ${veiculoSel.km_atual.toLocaleString("pt-BR")} km (atual do veículo)` : undefined}>
+                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
+                  {veiculoSel?.km_atual && parseFloat(f.km_inicial || "0") < veiculoSel.km_atual && f.km_inicial && (
+                    <p style={{ color: "#eab308", fontSize: "10px", marginTop: "4px" }}>⚠ KM menor que o atual do veículo ({veiculoSel.km_atual.toLocaleString("pt-BR")})</p>
+                  )}
+                </FormField>
+              </div>
+            </FormSection>
+
+            <FormSection title="Datas previstas">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Data Coleta Prevista">
                   <input value={f.data_coleta_prevista} onChange={set("data_coleta_prevista")} type="date" style={inputStyle} />
                 </FormField>
@@ -213,24 +266,27 @@ export default function NovoFretePage() {
               </div>
             </FormSection>
 
-            <FormSection title="Carga e Financeiro">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-                <FormField label="KM Inicial *">
-                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
-                  {veiculoSel?.km_atual && parseFloat(f.km_inicial || "0") < veiculoSel.km_atual && f.km_inicial && (
-                    <p style={{ color: "#eab308", fontSize: "10px", marginTop: "4px" }}>⚠ KM menor que o atual do veículo ({veiculoSel.km_atual.toLocaleString("pt-BR")})</p>
-                  )}
-                </FormField>
-                <FormField label="Valor do Frete (R$)">
-                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
-                    onAccept={(_, m) => setF(p => ({ ...p, valor_frete: String(m.unmaskedValue) }))}
-                    style={inputStyle} placeholder="R$ 0,00" />
-                </FormField>
+            <FormSection title="Carga">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Tipo de Carga">
                   <input value={f.tipo_carga} onChange={set("tipo_carga")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SOJA, CIMENTO" />
                 </FormField>
                 <FormField label="Peso (kg)">
                   <input value={f.peso_carga_kg} onChange={set("peso_carga_kg")} type="number" style={inputStyle} />
+                </FormField>
+              </div>
+            </FormSection>
+          </div>
+        )}
+
+        {tab === "financeiro" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Valor e Pagamento">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+                <FormField label="Valor do Frete (R$)">
+                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
+                    onAccept={(_, m) => setF(p => ({ ...p, valor_frete: String(m.unmaskedValue) }))}
+                    style={inputStyle} placeholder="R$ 0,00" />
                 </FormField>
                 <FormField label="Forma de Pagamento">
                   <select value={f.forma_pagamento} onChange={set("forma_pagamento")} style={selectStyle}>
@@ -244,29 +300,27 @@ export default function NovoFretePage() {
                     <option value="outros">Outros</option>
                   </select>
                 </FormField>
-                {motoristaSel && comissaoHint() && (
-                  <FormField label="Comissão Estimada">
-                    <div style={{ padding: "10px 16px", background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", fontSize: "13px", fontWeight: 700, borderRadius: "6px" }}>
-                      {comissaoHint()}
-                    </div>
-                  </FormField>
-                )}
               </div>
             </FormSection>
 
-            <FormSection title="Observações">
-              <textarea value={f.observacoes} onChange={set("observacoes")} rows={3}
-                style={{ ...inputStyle, resize: "vertical", height: "auto" }}
-                placeholder="Instruções de entrega, tipo de embalagem, referências..." />
-            </FormSection>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-              <Btn href="/fretes" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={saving || veiculos.length === 0 || motoristas.length === 0}>
-                {saving ? "Salvando..." : "Criar Frete"}
-              </Btn>
-            </div>
+            {motoristaSel && comissaoHint() && (
+              <FormSection title="Comissão estimada">
+                <div style={{ padding: "12px 16px", background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", fontSize: "14px", fontWeight: 700, borderRadius: "8px" }}>
+                  {comissaoHint()}
+                </div>
+                <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>
+                  O valor final é calculado automaticamente ao concluir o frete.
+                </p>
+              </FormSection>
+            )}
           </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+          <Btn href="/fretes" variant="outline">Cancelar</Btn>
+          <Btn type="submit" disabled={saving || sem_recursos}>
+            {saving ? "Salvando..." : "Criar Frete"}
+          </Btn>
         </div>
       </div>
     </form>

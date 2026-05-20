@@ -1,47 +1,84 @@
 "use client";
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { DataTable, Th, Td, Tr, Btn, Badge, EmptyState, inputStyle, SearchInput, Alert } from "@/components/ui/ds";
+import { DataTable, Th, Td, Tr, Badge, EmptyState, inputStyle, selectStyle, SearchInput, Alert, Btn, FormField } from "@/components/ui/ds";
 import { normalizar } from "@/lib/utils/normalizar";
 
 type Tipo = {
   id: string; codigo: string; nome: string; categoria: string; criticidade: string;
-  intervalo_km: number | null; intervalo_meses: number | null;
+  intervalo_km: number | null; intervalo_meses: number | null; empresa_id: string | null;
 };
 type Plano = {
   id: string; tipo_id: string; ativo: boolean | null;
   intervalo_km: number | null; intervalo_meses: number | null; observacoes: string | null;
+};
+type ProximaInfo = {
+  tipo_id: string | null;
+  data_ultima: string | null; km_ultima: number | null;
+  data_proxima: string | null; km_proxima: number | null;
+  km_faltando: number | null; status: string | null;
 };
 
 const CRIT_VARIANT: Record<string, "danger" | "warning" | "default"> = {
   alta: "danger", media: "warning", baixa: "default",
 };
 
+const CATEGORIAS = ["motor", "filtros", "freios", "suspensao", "transmissao", "arrefecimento", "eletrica", "pneus", "documentacao", "geral"];
+
+const slug = (s: string) => normalizar(s).replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "").toUpperCase().slice(0, 30);
+
+const fmtDate = (s: string | null) => s ? new Date(s + "T00:00:00").toLocaleDateString("pt-BR") : null;
+
 export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; empresaId: string }) {
   const supabase = createClient();
   const [tipos, setTipos] = useState<Tipo[]>([]);
   const [planos, setPlanos] = useState<Plano[]>([]);
+  const [proximas, setProximas] = useState<Map<string, ProximaInfo>>(new Map());
+  const [manutCount, setManutCount] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
   const [cat, setCat] = useState<string>("");
 
-  useEffect(() => {
-    Promise.all([
+  // Novo tipo
+  const [showNovo, setShowNovo] = useState(false);
+  const [salvandoNovo, setSalvandoNovo] = useState(false);
+  const [nf, setNf] = useState({
+    nome: "", categoria: "geral", criticidade: "media",
+    intervalo_km: "", intervalo_meses: "",
+  });
+
+  const carregar = async () => {
+    const [t, p, m, pm] = await Promise.all([
       supabase.from("tipos_manutencao")
-        .select("id,codigo,nome,categoria,criticidade,intervalo_km,intervalo_meses")
+        .select("id,codigo,nome,categoria,criticidade,intervalo_km,intervalo_meses,empresa_id")
         .eq("ativo", true)
         .or(`empresa_id.is.null,empresa_id.eq.${empresaId}`)
         .order("categoria").order("nome"),
       supabase.from("plano_manutencao_veiculo")
         .select("id,tipo_id,ativo,intervalo_km,intervalo_meses,observacoes")
         .eq("veiculo_id", veiculoId),
-    ]).then(([t, p]) => {
-      setTipos(t.data ?? []);
-      setPlanos(p.data ?? []);
-      setLoading(false);
-    });
+      supabase.from("manutencoes")
+        .select("tipo_id")
+        .eq("veiculo_id", veiculoId),
+      supabase.from("proxima_manutencao_veiculo")
+        .select("tipo_id,data_ultima,km_ultima,data_proxima,km_proxima,km_faltando,status")
+        .eq("veiculo_id", veiculoId),
+    ]);
+    setTipos((t.data ?? []) as Tipo[]);
+    setPlanos(p.data ?? []);
+    const cMap = new Map<string, number>();
+    for (const row of m.data ?? []) cMap.set(row.tipo_id, (cMap.get(row.tipo_id) ?? 0) + 1);
+    setManutCount(cMap);
+    const pMap = new Map<string, ProximaInfo>();
+    for (const row of (pm.data ?? []) as ProximaInfo[]) if (row.tipo_id) pMap.set(row.tipo_id, row);
+    setProximas(pMap);
+  };
+
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregar().then(() => setLoading(false));
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [veiculoId, empresaId]);
 
@@ -58,6 +95,11 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
 
   const toggleAtivo = async (tipo: Tipo, ativar: boolean) => {
     setErro("");
+    const count = manutCount.get(tipo.id) ?? 0;
+    if (!ativar && count > 0) {
+      alert(`Não é possível desativar: existem ${count} manutenç${count !== 1 ? "ões" : "ão"} lançada${count !== 1 ? "s" : ""} para este tipo. Exclua os registros na aba "Manutenções" primeiro.`);
+      return;
+    }
     setSavingId(tipo.id);
     const existente = planoDe(tipo.id);
     if (ativar && !existente) {
@@ -87,14 +129,32 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
     if (error) setErro(error.message);
   };
 
-  if (loading) return <p style={{ color: "#94a3b8", padding: "16px" }}>Carregando catálogo...</p>;
+  const setNF = (k: keyof typeof nf) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setNf(p => ({ ...p, [k]: e.target.value }));
 
-  if (tipos.length === 0) return (
-    <EmptyState
-      icon="📋"
-      message="Nenhum tipo de manutenção cadastrado. Rode o seed em db/seed_tipos_manutencao.sql."
-    />
-  );
+  const salvarNovoTipo = async () => {
+    setErro("");
+    if (!nf.nome.trim()) { setErro("Informe o nome do tipo"); return; }
+    if (!nf.intervalo_km && !nf.intervalo_meses) {
+      setErro("Informe ao menos um intervalo (km ou meses)"); return;
+    }
+    setSalvandoNovo(true);
+    const codigo = `CUSTOM_${slug(nf.nome)}_${Date.now().toString(36).slice(-4).toUpperCase()}`;
+    const { error } = await supabase.from("tipos_manutencao").insert({
+      codigo, nome: nf.nome.trim(),
+      categoria: nf.categoria, criticidade: nf.criticidade,
+      intervalo_km: nf.intervalo_km ? parseInt(nf.intervalo_km) : null,
+      intervalo_meses: nf.intervalo_meses ? parseInt(nf.intervalo_meses) : null,
+      empresa_id: empresaId, ativo: true,
+    });
+    setSalvandoNovo(false);
+    if (error) { setErro(error.message); return; }
+    setShowNovo(false);
+    setNf({ nome: "", categoria: "geral", criticidade: "media", intervalo_km: "", intervalo_meses: "" });
+    await carregar();
+  };
+
+  if (loading) return <p style={{ color: "#94a3b8", padding: "16px" }}>Carregando catálogo...</p>;
 
   const ativosCount = planos.filter(p => p.ativo).length;
 
@@ -108,68 +168,160 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
           <option value="">Todas categorias</option>
           {categorias.map(c => <option key={c} value={c}>{c}</option>)}
         </select>
+        <Btn type="button" onClick={() => setShowNovo(s => !s)} variant={showNovo ? "outline" : "primary"}>
+          {showNovo ? "Cancelar" : "+ Novo tipo"}
+        </Btn>
         <span style={{ marginLeft: "auto", fontSize: "12px", color: "#64748b" }}>
           <strong style={{ color: "#1e293b" }}>{ativosCount}</strong> ativo{ativosCount !== 1 ? "s" : ""} de {tipos.length}
         </span>
       </div>
 
-      <DataTable count={filtrados.length} label="tipos">
-        <thead>
-          <tr>
-            <Th style={{ width: "40px" }}>Ativo</Th>
-            <Th>Tipo</Th>
-            <Th>Categoria</Th>
-            <Th>Criticidade</Th>
-            <Th style={{ textAlign: "right" }}>Intervalo KM</Th>
-            <Th style={{ textAlign: "right" }}>Intervalo Meses</Th>
-          </tr>
-        </thead>
-        <tbody>
-          {filtrados.map(t => {
-            const p = planoDe(t.id);
-            const ativo = !!p?.ativo;
-            return (
-              <Tr key={t.id} muted={!ativo}>
-                <Td>
-                  <input
-                    type="checkbox"
-                    checked={ativo}
-                    disabled={savingId === t.id}
-                    onChange={e => toggleAtivo(t, e.target.checked)}
-                    style={{ cursor: "pointer" }}
-                  />
-                </Td>
-                <Td>
-                  <div style={{ fontWeight: 600, color: "#1e293b" }}>{t.nome}</div>
-                  <div style={{ fontSize: "10px", color: "#94a3b8" }}>{t.codigo}</div>
-                </Td>
-                <Td style={{ textTransform: "capitalize" }}>{t.categoria}</Td>
-                <Td><Badge variant={CRIT_VARIANT[t.criticidade] ?? "default"}>{t.criticidade}</Badge></Td>
-                <Td style={{ textAlign: "right" }}>
-                  {ativo && p
-                    ? <input
-                        type="number" value={p.intervalo_km ?? ""}
-                        onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)}
-                        placeholder="—"
-                        style={{ ...inputStyle, width: "100px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
+      {showNovo && (
+        <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+            <div style={{ gridColumn: "span 2" }}>
+              <FormField label="Nome do tipo *" hint="Ex: Troca do filtro do separador">
+                <input value={nf.nome} onChange={setNF("nome")} style={inputStyle} />
+              </FormField>
+            </div>
+            <FormField label="Categoria">
+              <select value={nf.categoria} onChange={setNF("categoria")} style={selectStyle}>
+                {CATEGORIAS.map(c => <option key={c} value={c}>{c}</option>)}
+              </select>
+            </FormField>
+            <FormField label="Criticidade">
+              <select value={nf.criticidade} onChange={setNF("criticidade")} style={selectStyle}>
+                <option value="alta">Alta</option>
+                <option value="media">Média</option>
+                <option value="baixa">Baixa</option>
+              </select>
+            </FormField>
+            <FormField label="Intervalo KM" hint="Deixe em branco se for só por tempo">
+              <input type="number" value={nf.intervalo_km} onChange={setNF("intervalo_km")} style={inputStyle} />
+            </FormField>
+            <FormField label="Intervalo Meses" hint="Deixe em branco se for só por km">
+              <input type="number" value={nf.intervalo_meses} onChange={setNF("intervalo_meses")} style={inputStyle} />
+            </FormField>
+          </div>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+            <Btn type="button" variant="outline" onClick={() => setShowNovo(false)}>Cancelar</Btn>
+            <Btn type="button" onClick={salvarNovoTipo} disabled={salvandoNovo}>
+              {salvandoNovo ? "Salvando..." : "Cadastrar tipo"}
+            </Btn>
+          </div>
+        </div>
+      )}
+
+      {tipos.length === 0
+        ? <EmptyState icon="📋" message="Nenhum tipo cadastrado. Rode db/seed_tipos_manutencao.sql ou clique em '+ Novo tipo'." />
+        : (
+          <DataTable count={filtrados.length} label="tipos">
+            <thead>
+              <tr>
+                <Th style={{ width: "40px" }}>Ativo</Th>
+                <Th>Tipo</Th>
+                <Th>Categoria</Th>
+                <Th>Criticidade</Th>
+                <Th style={{ textAlign: "right" }}>Intervalo KM</Th>
+                <Th style={{ textAlign: "right" }}>Intervalo Meses</Th>
+                <Th>Última</Th>
+                <Th>Próxima</Th>
+              </tr>
+            </thead>
+            <tbody>
+              {filtrados.map(t => {
+                const p = planoDe(t.id);
+                const ativo = !!p?.ativo;
+                const count = manutCount.get(t.id) ?? 0;
+                const prox = proximas.get(t.id);
+                const locked = ativo && count > 0;
+                return (
+                  <Tr key={t.id} muted={!ativo}>
+                    <Td>
+                      <input
+                        type="checkbox"
+                        checked={ativo}
+                        disabled={savingId === t.id || locked}
+                        onChange={e => toggleAtivo(t, e.target.checked)}
+                        style={{ cursor: locked ? "not-allowed" : "pointer" }}
+                        title={locked ? `Bloqueado: ${count} manutenç${count !== 1 ? "ão(ões)" : "ão"} registrada${count !== 1 ? "s" : ""}` : ""}
                       />
-                    : <span style={{ color: "#94a3b8" }}>{t.intervalo_km?.toLocaleString("pt-BR") ?? "—"}</span>}
-                </Td>
-                <Td style={{ textAlign: "right" }}>
-                  {ativo && p
-                    ? <input
-                        type="number" value={p.intervalo_meses ?? ""}
-                        onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)}
-                        placeholder="—"
-                        style={{ ...inputStyle, width: "70px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
-                      />
-                    : <span style={{ color: "#94a3b8" }}>{t.intervalo_meses ?? "—"}</span>}
-                </Td>
-              </Tr>
-            );
-          })}
-        </tbody>
-      </DataTable>
+                    </Td>
+                    <Td>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{t.nome}</div>
+                          <div style={{ fontSize: "10px", color: "#94a3b8" }}>
+                            {t.codigo}
+                            {t.empresa_id && <span style={{ marginLeft: "4px", color: "#9333ea" }}>• personalizado</span>}
+                          </div>
+                        </div>
+                        {locked && <span title={`${count} manutenção(ões) registrada(s)`} style={{ fontSize: "11px" }}>🔒</span>}
+                      </div>
+                    </Td>
+                    <Td style={{ textTransform: "capitalize" }}>{t.categoria}</Td>
+                    <Td><Badge variant={CRIT_VARIANT[t.criticidade] ?? "default"}>{t.criticidade}</Badge></Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {ativo && p
+                        ? <input
+                            type="number" value={p.intervalo_km ?? ""}
+                            onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)}
+                            placeholder="—"
+                            style={{ ...inputStyle, width: "100px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
+                          />
+                        : <span style={{ color: "#94a3b8" }}>{t.intervalo_km?.toLocaleString("pt-BR") ?? "—"}</span>}
+                    </Td>
+                    <Td style={{ textAlign: "right" }}>
+                      {ativo && p
+                        ? <input
+                            type="number" value={p.intervalo_meses ?? ""}
+                            onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)}
+                            placeholder="—"
+                            style={{ ...inputStyle, width: "70px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
+                          />
+                        : <span style={{ color: "#94a3b8" }}>{t.intervalo_meses ?? "—"}</span>}
+                    </Td>
+                    <Td style={{ fontSize: "11px", color: "#64748b" }}>
+                      {!ativo
+                        ? "—"
+                        : prox?.data_ultima || prox?.km_ultima
+                          ? <div>
+                              {prox?.km_ultima != null && <div>{prox.km_ultima.toLocaleString("pt-BR")} km</div>}
+                              {prox?.data_ultima && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{fmtDate(prox.data_ultima)}</div>}
+                            </div>
+                          : <span style={{ color: "#94a3b8" }}>sem histórico</span>}
+                    </Td>
+                    <Td style={{ fontSize: "11px" }}>
+                      {!ativo
+                        ? "—"
+                        : prox?.data_proxima || prox?.km_proxima != null
+                          ? <div>
+                              {prox?.km_proxima != null && (
+                                <div style={{ color: "#1e293b", fontWeight: 500 }}>
+                                  {prox.km_proxima.toLocaleString("pt-BR")} km
+                                  {prox.km_faltando != null && (
+                                    <span style={{
+                                      marginLeft: "4px", fontSize: "10px",
+                                      color: prox.km_faltando < 0 ? "#dc2626" : prox.km_faltando < 2000 ? "#ca8a04" : "#64748b",
+                                    }}>
+                                      ({prox.km_faltando < 0 ? `-${Math.abs(prox.km_faltando).toLocaleString("pt-BR")}` : `faltam ${prox.km_faltando.toLocaleString("pt-BR")}`})
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                              {prox?.data_proxima && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{fmtDate(prox.data_proxima)}</div>}
+                              {prox?.status && prox.status !== "ok" && (
+                                <Badge variant={prox.status === "vencido" ? "danger" : "warning"}>{prox.status}</Badge>
+                              )}
+                            </div>
+                          : <span style={{ color: "#94a3b8" }}>—</span>}
+                    </Td>
+                  </Tr>
+                );
+              })}
+            </tbody>
+          </DataTable>
+        )}
     </div>
   );
 }

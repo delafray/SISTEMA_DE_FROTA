@@ -1,0 +1,22 @@
+# Windsurf / Cascade — Regras Obrigatórias
+
+⚠️ **LEIA `TESTING.md` ANTES DE QUALQUER ALTERAÇÃO.**
+
+## Política de Testes (Obrigatória)
+
+1. Toda mudança de código exige **teste novo ou atualizado** (vitest).
+2. Antes de finalizar qualquer tarefa, rode `npm test` e veja **todos passarem**.
+3. Reporte ao usuário: X passaram, Y falharam, novos testes adicionados.
+4. **Tarefa SEM teste = tarefa NÃO concluída.** Sem exceções.
+
+Áreas sem cobertura estão listadas em `TESTING.md`. Priorize-as.
+
+Anexe sua execução no "Log de Execução" no fim de `TESTING.md`.
+
+## Next.js — Versão diferente
+
+Esta versão do Next.js tem breaking changes. Leia `node_modules/next/dist/docs/` antes de escrever código novo.
+
+## Outras instruções
+
+Veja também: `AGENTS.md`, `CLAUDE.md`, `TESTING.md`, `log.md`.

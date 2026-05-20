@@ -13,6 +13,17 @@ type FreteRecente = {
   veiculos: { placa: string; modelo: string } | null;
 };
 
+type StatusFrota = {
+  veiculo_id: string;
+  placa: string;
+  apelido: string | null;
+  marca: string;
+  modelo: string;
+  status_operacional: "disponivel" | "em_viagem" | "em_manutencao";
+  motorista_nome: string | null;
+  tipo_manutencao_nome: string | null;
+};
+
 type Alerta = { tipo: "danger" | "warning"; msg: string; href: string };
 
 const STATUS_VAR: Record<string, string> = {
@@ -62,6 +73,8 @@ export default async function DashboardPage() {
     { data: docVencendo },
     { count: adtPendentes },
     { data: fretesRecentes },
+    { data: manutProximas },
+    { data: statusFrota },
   ] = await Promise.all([
     supabase.from("fretes").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId),
     supabase.from("fretes").select("*", { count: "exact", head: true }).eq("empresa_id", empresaId).eq("status", "em_andamento"),
@@ -93,6 +106,15 @@ export default async function DashboardPage() {
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
       .limit(8),
+    // Manutenções vencendo: filtra em JS (km_faltando<=2000 OU data_proxima<=30d)
+    supabase.from("proxima_manutencao_veiculo")
+      .select("veiculo_id,placa,tipo_nome,criticidade,data_proxima,km_proxima,km_faltando,status")
+      .eq("empresa_id", empresaId),
+    // Status operacional da frota
+    supabase.from("status_operacional_veiculos")
+      .select("veiculo_id,placa,apelido,marca,modelo,status_operacional,motorista_nome,tipo_manutencao_nome")
+      .eq("empresa_id", empresaId)
+      .order("placa"),
   ]);
 
   const receitaMes = (fretesMes ?? []).reduce((s, f) => s + (f.valor_frete ?? 0), 0);
@@ -145,6 +167,28 @@ export default async function DashboardPage() {
     }
   }
 
+  // Alertas de manutenção (km faltando <= 2000 OU vence em 30 dias)
+  for (const m of manutProximas ?? []) {
+    if (!m.veiculo_id) continue;
+    const venceEmDias = m.data_proxima ? diasAte(m.data_proxima) : null;
+    const kmFalt = m.km_faltando;
+    const vencidoKm = kmFalt != null && kmFalt < 0;
+    const vencidoData = venceEmDias != null && venceEmDias < 0;
+    const proximoKm = kmFalt != null && kmFalt >= 0 && kmFalt <= 2000;
+    const proximoData = venceEmDias != null && venceEmDias >= 0 && venceEmDias <= 30;
+
+    if (!vencidoKm && !vencidoData && !proximoKm && !proximoData) continue;
+
+    const tipo = vencidoKm || vencidoData ? "danger" : "warning";
+    let msg = `${tipo === "danger" ? "Manutenção vencida" : "Manutenção próxima"}: ${m.tipo_nome} — ${m.placa}`;
+    if (vencidoKm) msg += ` (${Math.abs(kmFalt!).toLocaleString("pt-BR")} km atrasada)`;
+    else if (proximoKm) msg += ` (faltam ${kmFalt!.toLocaleString("pt-BR")} km)`;
+    else if (vencidoData) msg += ` (vencida há ${Math.abs(venceEmDias!)} dia${Math.abs(venceEmDias!) !== 1 ? "s" : ""})`;
+    else if (proximoData) msg += ` (vence em ${venceEmDias} dia${venceEmDias !== 1 ? "s" : ""})`;
+
+    alertas.push({ tipo, msg, href: `/veiculos/${m.veiculo_id}/editar` });
+  }
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Painel de Controle" subtitle="Visão geral do sistema" />
@@ -169,6 +213,50 @@ export default async function DashboardPage() {
             ))}
           </div>
         )}
+
+
+        {/* === PAINEL STATUS DA FROTA === */}
+        {(statusFrota ?? []).length > 0 && (() => {
+          const frota = statusFrota as StatusFrota[];
+          const STATUS_CFG = {
+            disponivel:    { icon: "🟢", label: "Disponível",    cor: "#166534", bg: "#dcfce7", border: "#86efac" },
+            em_viagem:     { icon: "🔵", label: "Em Rota",       cor: "#1e40af", bg: "#dbeafe", border: "#93c5fd" },
+            em_manutencao: { icon: "🟠", label: "Em Manutenção", cor: "#92400e", bg: "#fef3c7", border: "#fcd34d" },
+          };
+          return (
+            <div>
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
+                🚛 Status da Frota Agora
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "8px" }}>
+                {frota.map(v => {
+                  const cfg = STATUS_CFG[v.status_operacional] ?? STATUS_CFG["disponivel"];
+                  return (
+                    <div key={v.veiculo_id} style={{
+                      background: cfg.bg,
+                      border: `1px solid ${cfg.border}`,
+                      borderRadius: "8px",
+                      padding: "10px 12px",
+                    }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", marginBottom: "2px" }}>
+                        <span style={{ fontSize: "14px" }}>{cfg.icon}</span>
+                        <span style={{ fontWeight: 700, fontSize: "13px", color: cfg.cor }}>{v.placa}</span>
+                      </div>
+                      <div style={{ fontSize: "11px", color: cfg.cor, opacity: 0.85 }}>
+                        {v.apelido ?? `${v.marca} ${v.modelo}`}
+                      </div>
+                      <div style={{ fontSize: "10px", color: cfg.cor, opacity: 0.7, marginTop: "2px" }}>
+                        {v.status_operacional === "em_viagem" && v.motorista_nome ? `👤 ${v.motorista_nome}` :
+                          v.status_operacional === "em_manutencao" && v.tipo_manutencao_nome ? `🔧 ${v.tipo_manutencao_nome}` :
+                          cfg.label}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          );
+        })()}
 
         {/* KPIs — fretes */}
         <div className="kpi-grid-3" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>

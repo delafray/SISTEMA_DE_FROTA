@@ -15,6 +15,10 @@ export function PWAInstallPrompt() {
   const [dismissed, setDismissed] = useState(false)
 
   useEffect(() => {
+    // Detectar se é dispositivo móvel (celular/tablet)
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent)
+    if (!isMobile) return
+
     // Detectar iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as { MSStream?: unknown }).MSStream
     setIsIOS(ios)
@@ -27,7 +31,7 @@ export function PWAInstallPrompt() {
     const wasDismissed = localStorage.getItem('pwa-install-dismissed')
     if (wasDismissed) return
 
-    // Capturar evento de instalação (Android/Desktop)
+    // Capturar evento de instalação (Android)
     const handler = (e: Event) => {
       e.preventDefault()
       setDeferredPrompt(e as BeforeInstallPromptEvent)

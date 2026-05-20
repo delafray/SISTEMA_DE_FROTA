@@ -1,12 +1,14 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, FormSection, FormField, inputStyle, selectStyle,
-  Btn, Alert, DataTable, Th, Td, Tr,
+  Btn, Alert, DataTable, Th, Td, Tr, EmptyState,
 } from "@/components/ui/ds";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 type Motorista = { id: string; nome: string };
 type Veiculo   = { id: string; placa: string; marca: string; modelo: string; km_atual: number | null };
@@ -15,38 +17,58 @@ type FreteDisp = {
   origem: string | null;
   destino: string | null;
   data_coleta_prevista: string | null;
+  data_entrega_prevista: string | null;
   valor_frete: number | null;
   status: string;
   clientes: { nome_fantasia: string } | null;
 };
 
+type StatusVeiculo = "disponivel" | "em_viagem" | "em_manutencao";
+type InfoVeiculo = {
+  status: StatusVeiculo;
+  detalhe: string | null; // motorista em rota ou tipo de manutenção
+};
+
 const fmtBRL  = (v: number | null) => v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
-const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+const fmtDate = (d: string | null) => d ? format(new Date(d + "T00:00:00"), "dd/MM/yyyy") : "—";
+
+const STATUS_BADGE: Record<StatusVeiculo, { icon: string; label: string; cor: string; bg: string }> = {
+  disponivel:     { icon: "🟢", label: "Disponível",      cor: "#166534", bg: "#dcfce7" },
+  em_viagem:      { icon: "🔴", label: "Em Viagem",       cor: "#991b1b", bg: "#fee2e2" },
+  em_manutencao:  { icon: "🟠", label: "Em Manutenção",   cor: "#92400e", bg: "#fef3c7" },
+};
 
 export default function NovaViagemPage() {
   const router = useRouter();
-  const [empresaId, setEmpresaId]         = useState("");
-  const [motoristas, setMotoristas]       = useState<Motorista[]>([]);
-  const [veiculos, setVeiculos]           = useState<Veiculo[]>([]);
-  const [fretesDisp, setFretesDisp]       = useState<FreteDisp[]>([]);
+  const supabase = createClient();
+
+  const [empresaId, setEmpresaId] = useState("");
+  const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
+  const [fretesDisp, setFretesDisp] = useState<FreteDisp[]>([]);
+  const [statusVeiculos, setStatusVeiculos] = useState<Record<string, InfoVeiculo>>({});
+
+  const [step, setStep] = useState(1);
+  const [saving, setSaving] = useState(false);
+  const [err, setErr] = useState("");
+
+  // Form State
+  const [motoristaId, setMotoristaId] = useState("");
+  const [veiculoId, setVeiculoId] = useState("");
+  const [veiculoPadrao, setVeiculoPadrao] = useState<Veiculo | null>(null);
+  const [veiculoWarning, setVeiculoWarning] = useState<{ tipo: "error" | "warning"; msg: string } | null>(null);
+  const [checkingVeiculo, setCheckingVeiculo] = useState(false);
   const [selectedFretes, setSelectedFretes] = useState<Set<string>>(new Set());
-  const [saving, setSaving]               = useState(false);
-  const [err, setErr]                     = useState("");
-  const [vinculoVeiculoId, setVinculoVeiculoId] = useState<string | null>(null);
 
   const [f, setF] = useState({
-    motorista_id: "",
-    veiculo_id:   "",
-    status:       "agendada",
-    data_saida_prevista:   "",
-    data_chegada_prevista: "",
+    status: "agendada",
+    data_saida_prevista: "",
     km_inicial: "",
     observacoes: "",
   });
 
   useEffect(() => {
     const load = async () => {
-      const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
@@ -58,78 +80,222 @@ export default function NovaViagemPage() {
         supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
         supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
         supabase.from("fretes")
-          .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
+          .select("id,origem,destino,data_coleta_prevista,data_entrega_prevista,valor_frete,status,clientes(nome_fantasia)")
           .eq("empresa_id", ue.empresa_id)
           .is("viagem_id", null)
           .in("status", ["agendado"])
           .order("data_coleta_prevista", { ascending: true }),
       ]);
 
+      const veicsList = veicRes.data ?? [];
       setMotoristas(motRes.data ?? []);
-      setVeiculos(veicRes.data ?? []);
+      setVeiculos(veicsList);
       setFretesDisp(fretRes.data ?? []);
+
+      // Carrega o status operacional de todos os veículos de uma vez
+      if (veicsList.length > 0) {
+        await carregarStatusVeiculos(veicsList.map(v => v.id), ue.empresa_id);
+      }
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Auto-preencher veículo ao selecionar motorista
-  useEffect(() => {
-    if (!f.motorista_id || !empresaId) return;
-    const supabase = createClient();
-    supabase.from("motorista_veiculo")
+  // Carrega status de todos os veículos em paralelo (viagem ativa + manutenção ativa)
+  const carregarStatusVeiculos = async (veicIds: string[], empId: string) => {
+    const [viagRes, manutRes] = await Promise.all([
+      supabase.from("viagens")
+        .select("veiculo_id, motoristas(nome)")
+        .in("veiculo_id", veicIds)
+        .eq("status", "em_andamento"),
+      supabase.from("manutencoes")
+        .select("veiculo_id, tipos_manutencao(nome)")
+        .in("veiculo_id", veicIds)
+        .in("status", ["planejada", "pendente", "aprovada", "em_execucao"])
+        .is("data_realizada", null),
+    ]);
+
+    const mapa: Record<string, InfoVeiculo> = {};
+
+    // Marcar veículos em viagem
+    for (const v of (viagRes.data ?? [])) {
+      if (!v.veiculo_id) continue;
+      const nomeMot = (Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas)?.nome ?? "motorista";
+      mapa[v.veiculo_id] = { status: "em_viagem", detalhe: `Em rota com ${nomeMot}` };
+    }
+
+    // Marcar veículos em manutenção (só se ainda não está em viagem)
+    for (const m of (manutRes.data ?? [])) {
+      if (!m.veiculo_id) continue;
+      if (!mapa[m.veiculo_id]) {
+        const tipoNome = (Array.isArray(m.tipos_manutencao) ? m.tipos_manutencao[0] : m.tipos_manutencao)?.nome ?? "manutenção";
+        mapa[m.veiculo_id] = { status: "em_manutencao", detalhe: tipoNome };
+      }
+    }
+
+    // Todos os outros são disponíveis
+    for (const id of veicIds) {
+      if (!mapa[id]) mapa[id] = { status: "disponivel", detalhe: null };
+    }
+
+    setStatusVeiculos(mapa);
+  };
+
+  // Workflow Handlers
+
+  const handleMotoristaNext = async () => {
+    if (!motoristaId) { setErr("Selecione um motorista primeiro."); return; }
+    setErr("");
+    setCheckingVeiculo(true);
+
+    // Find default veiculo in background
+    const { data: mv } = await supabase.from("motorista_veiculo")
       .select("veiculo_id")
       .eq("empresa_id", empresaId)
-      .eq("motorista_id", f.motorista_id)
+      .eq("motorista_id", motoristaId)
       .eq("ativo", true)
-      .single()
-      .then(({ data }) => {
-        const veiculoId = data?.veiculo_id;
-        if (veiculoId) {
-          setF(p => ({ ...p, veiculo_id: veiculoId }));
-          setVinculoVeiculoId(veiculoId);
-        } else {
-          setVinculoVeiculoId(null);
-        }
+      .single();
+
+    if (mv?.veiculo_id) {
+      setVeiculoId(mv.veiculo_id);
+      const vp = veiculos.find(v => v.id === mv.veiculo_id);
+      setVeiculoPadrao(vp || null);
+      verificarStatusVeiculo(mv.veiculo_id);
+    } else {
+      setVeiculoId("");
+      setVeiculoPadrao(null);
+      setVeiculoWarning(null);
+    }
+
+    setCheckingVeiculo(false);
+    setStep(2);
+  };
+
+  const verificarStatusVeiculo = (vId: string) => {
+    if (!vId) { setVeiculoWarning(null); return; }
+    const info = statusVeiculos[vId];
+    if (!info) { setVeiculoWarning(null); return; }
+
+    if (info.status === "em_manutencao") {
+      setVeiculoWarning({
+        tipo: "error",
+        msg: `🔧 Este caminhão está em manutenção${info.detalhe ? ` (${info.detalhe})` : ""}. Conclua ou cancele a manutenção antes de colocá-lo em viagem.`,
       });
-  }, [f.motorista_id, empresaId]);
+    } else if (info.status === "em_viagem") {
+      setVeiculoWarning({
+        tipo: "warning",
+        msg: `⚠️ Atenção: ${info.detalhe ?? "Este caminhão já está em uma viagem ativa"}. Verifique antes de prosseguir.`,
+      });
+    } else {
+      setVeiculoWarning(null);
+    }
+  };
+
+  const handleVeiculoChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
+    const vId = e.target.value;
+    setVeiculoId(vId);
+    if (vId) verificarStatusVeiculo(vId);
+    else setVeiculoWarning(null);
+  };
 
   const toggleFrete = (id: string) => {
     setSelectedFretes(prev => {
       const next = new Set(prev);
-      next.has(id) ? next.delete(id) : next.add(id);
+      if (next.has(id)) next.delete(id); else next.add(id);
       return next;
     });
   };
 
+  const handleFretesNext = () => {
+    if (selectedFretes.size === 0) {
+      const confirmEmpty = window.confirm("Você não selecionou nenhum frete. Deseja criar uma viagem vazia?");
+      if (!confirmEmpty) return;
+    }
+    setErr("");
+    setStep(3);
+  };
+
+  // Generate Itinerary
+  const itinerario = useMemo(() => {
+    const stops: any[] = [];
+    const selected = fretesDisp.filter(fr => selectedFretes.has(fr.id));
+
+    selected.forEach(fr => {
+      if (fr.origem) {
+        stops.push({
+          frete_id: fr.id,
+          tipo: "Coleta",
+          local: fr.origem,
+          data: fr.data_coleta_prevista,
+          cliente: Array.isArray(fr.clientes) ? fr.clientes[0]?.nome_fantasia : fr.clientes?.nome_fantasia,
+        });
+      }
+      if (fr.destino) {
+        stops.push({
+          frete_id: fr.id,
+          tipo: "Entrega",
+          local: fr.destino,
+          data: fr.data_entrega_prevista,
+          cliente: Array.isArray(fr.clientes) ? fr.clientes[0]?.nome_fantasia : fr.clientes?.nome_fantasia,
+        });
+      }
+    });
+
+    stops.sort((a, b) => {
+      if (!a.data && !b.data) return 0;
+      if (!a.data) return 1;
+      if (!b.data) return -1;
+      return new Date(a.data).getTime() - new Date(b.data).getTime();
+    });
+
+    return stops;
+  }, [fretesDisp, selectedFretes]);
+
+  const veiculoEmManutencao = veiculoId && statusVeiculos[veiculoId]?.status === "em_manutencao";
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
-    if (!f.veiculo_id)   { setErr("Selecione um veículo");   return; }
+
+    if (!veiculoId) {
+      setErr("Por favor, selecione um veículo para a viagem.");
+      return;
+    }
+
+    if (veiculoEmManutencao) {
+      setErr("Não é possível criar a viagem: o veículo selecionado está em manutenção ativa. Conclua ou cancele a manutenção primeiro.");
+      return;
+    }
+
     setSaving(true);
 
-    const supabase = createClient();
     const { data: viagem, error } = await supabase.from("viagens").insert({
       empresa_id:            empresaId,
-      motorista_id:          f.motorista_id,
-      veiculo_id:            f.veiculo_id,
+      motorista_id:          motoristaId,
+      veiculo_id:            veiculoId,
       status:                f.status,
-      data_saida_prevista:   f.data_saida_prevista   || null,
-      data_chegada_prevista: f.data_chegada_prevista || null,
+      data_saida_prevista:   f.data_saida_prevista || null,
       km_inicial:            f.km_inicial ? parseFloat(f.km_inicial) : null,
       observacoes:           f.observacoes || null,
     }).select("id").single();
 
-    if (error || !viagem) { setErr(error?.message ?? "Erro ao criar viagem"); setSaving(false); return; }
+    if (error || !viagem) {
+      // Mensagem amigável para o erro do trigger de manutenção
+      const msgErr = error?.message?.includes("VEICULO_EM_MANUTENCAO")
+        ? "Não é possível criar a viagem: o veículo selecionado possui manutenção ativa. Conclua ou cancele a manutenção primeiro."
+        : (error?.message ?? "Erro ao criar viagem");
+      setErr(msgErr);
+      setSaving(false);
+      return;
+    }
 
     // Vincular fretes selecionados
     if (selectedFretes.size > 0) {
       await supabase.from("fretes")
         .update({
           viagem_id:    viagem.id,
-          motorista_id: f.motorista_id,
-          veiculo_id:   f.veiculo_id,
+          motorista_id: motoristaId,
+          veiculo_id:   veiculoId,
         })
         .in("id", Array.from(selectedFretes));
     }
@@ -138,160 +304,309 @@ export default function NovaViagemPage() {
     router.refresh();
   };
 
-  const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
+  const setFVal = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF(p => ({ ...p, [k]: e.target.value }));
 
-  const kmVeiculo = veiculos.find(v => v.id === f.veiculo_id)?.km_atual;
-
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f1f5f9" }}>
       <PageHeader
-        title="Nova Viagem"
-        actions={
-          <>
-            <Btn href="/viagens" variant="ghost">← Voltar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Criar Viagem"}
-            </Btn>
-          </>
-        }
+        title="Planejar Nova Viagem"
+        actions={<Btn href="/viagens" variant="outline">Voltar para Lista</Btn>}
       />
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <div style={{ maxWidth: "900px", display: "flex", flexDirection: "column", gap: "16px" }}>
+      <div style={{ flex: 1, padding: "24px", maxWidth: "1000px", margin: "0 auto", width: "100%" }}>
 
-          {err && <Alert variant="error">⚠ {err}</Alert>}
+        {/* PROGRESS BAR */}
+        <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "32px", position: "relative" }}>
+          <div style={{ position: "absolute", top: "12px", left: "0", right: "0", height: "2px", background: "#cbd5e1", zIndex: 0 }}></div>
+          {[
+            { s: 1, label: "1. Motorista" },
+            { s: 2, label: "2. Cargas (Fretes)" },
+            { s: 3, label: "3. Veículo e Resumo" }
+          ].map(item => {
+            const active = step >= item.s;
+            const current = step === item.s;
+            return (
+              <div key={item.s} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1, background: "#f1f5f9", padding: "0 16px" }}>
+                <div style={{
+                  width: "24px", height: "24px", borderRadius: "12px",
+                  background: active ? "#2563eb" : "#e2e8f0",
+                  color: active ? "#fff" : "#94a3b8",
+                  display: "flex", alignItems: "center", justifyContent: "center",
+                  fontWeight: "bold", fontSize: "12px",
+                  boxShadow: current ? "0 0 0 4px rgba(37,99,235,0.2)" : "none"
+                }}>
+                  {item.s}
+                </div>
+                <span style={{ fontSize: "13px", marginTop: "8px", color: active ? "#1e293b" : "#94a3b8", fontWeight: current ? 600 : 400 }}>
+                  {item.label}
+                </span>
+              </div>
+            );
+          })}
+        </div>
 
-          {/* Motorista e Veículo */}
-          <FormSection title="Motorista e Veículo">
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-              <FormField label="Motorista *">
-                <select value={f.motorista_id} onChange={set("motorista_id")} style={selectStyle} required>
-                  <option value="">Selecione o motorista...</option>
+        {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">{err}</Alert></div>}
+
+        <div style={{ background: "#fff", padding: "32px", borderRadius: "12px", boxShadow: "0 1px 3px rgba(0,0,0,0.1)" }}>
+
+          {/* STEP 1: MOTORISTA */}
+          {step === 1 && (
+            <div>
+              <h2 style={{ fontSize: "20px", fontWeight: 600, marginBottom: "8px", color: "#1e293b" }}>Quem é o motorista?</h2>
+              <p style={{ color: "#64748b", marginBottom: "24px", fontSize: "14px" }}>Selecione o motorista responsável por esta viagem.</p>
+
+              <FormField label="Motorista Selecionado">
+                <select value={motoristaId} onChange={e => setMotoristaId(e.target.value)} style={{ ...selectStyle, fontSize: "16px", padding: "12px" }}>
+                  <option value="">Selecione na lista...</option>
                   {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
               </FormField>
-              <FormField
-                label="Veículo *"
-                hint={vinculoVeiculoId === f.veiculo_id && f.veiculo_id ? "✓ Veículo padrão deste motorista" : undefined}
-              >
-                <select value={f.veiculo_id} onChange={set("veiculo_id")} style={selectStyle} required>
-                  <option value="">Selecione o veículo...</option>
-                  {veiculos.map(v => (
-                    <option key={v.id} value={v.id}>
-                      {v.placa} — {v.marca} {v.modelo}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
+
+              <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
+                <Btn type="button" variant="primary" onClick={handleMotoristaNext} disabled={checkingVeiculo}>
+                  Avançar para Cargas →
+                </Btn>
+              </div>
             </div>
-          </FormSection>
+          )}
 
-          {/* Datas e KM */}
-          <FormSection title="Datas e Quilometragem">
-            <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-              <FormField label="Status">
-                <select value={f.status} onChange={set("status")} style={selectStyle}>
-                  <option value="agendada">Agendada</option>
-                  <option value="em_andamento">Em Andamento</option>
-                  <option value="concluida">Concluída</option>
-                  <option value="cancelada">Cancelada</option>
-                </select>
-              </FormField>
-              <FormField label="Saída Prevista">
-                <input type="date" value={f.data_saida_prevista} onChange={set("data_saida_prevista")} style={inputStyle} />
-              </FormField>
-              <FormField label="Chegada Prevista">
-                <input type="date" value={f.data_chegada_prevista} onChange={set("data_chegada_prevista")} style={inputStyle} />
-              </FormField>
-              <FormField
-                label="KM Inicial"
-                hint={kmVeiculo != null ? `Odômetro atual: ${kmVeiculo.toLocaleString("pt-BR")} km` : undefined}
-              >
-                <input
-                  type="number"
-                  value={f.km_inicial}
-                  onChange={set("km_inicial")}
-                  placeholder={kmVeiculo != null ? String(kmVeiculo) : ""}
-                  style={inputStyle}
-                />
-              </FormField>
+          {/* STEP 2: FRETES */}
+          {step === 2 && (
+            <div>
+              <h2 style={{ fontSize: "20px", fontWeight: 600, marginBottom: "8px", color: "#1e293b" }}>Quais cargas (fretes) ele vai levar?</h2>
+              <p style={{ color: "#64748b", marginBottom: "24px", fontSize: "14px" }}>Selecione os fretes agendados para compor esta viagem.</p>
+
+              {fretesDisp.length === 0 ? (
+                <EmptyState icon="📭" message='Nenhum frete com status "Agendado" sem viagem atrelada foi encontrado.' />
+              ) : (
+                <div style={{ border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
+                  <DataTable count={fretesDisp.length} label="fretes disponíveis">
+                    <thead>
+                      <tr style={{ background: "#f8fafc" }}>
+                        <Th style={{ width: "32px", textAlign: "center" }}>✓</Th>
+                        <Th>Rota</Th>
+                        <Th>Cliente</Th>
+                        <Th>Coleta (Data)</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {fretesDisp.map(fr => {
+                        const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
+                        const checked = selectedFretes.has(fr.id);
+                        return (
+                          <Tr key={fr.id}
+                            style={{ cursor: "pointer", background: checked ? "#eff6ff" : "#fff" }}
+                            onClick={() => toggleFrete(fr.id)}
+                          >
+                            <Td style={{ textAlign: "center" }}>
+                              <input
+                                type="checkbox"
+                                checked={checked}
+                                onChange={() => toggleFrete(fr.id)}
+                                onClick={e => e.stopPropagation()}
+                                style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: "pointer" }}
+                              />
+                            </Td>
+                            <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit" }}>
+                              {fr.origem?.split("-")[0] ?? "—"} → {fr.destino?.split("-")[0] ?? "—"}
+                            </Td>
+                            <Td>{cliente?.nome_fantasia ?? "—"}</Td>
+                            <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
+                          </Tr>
+                        );
+                      })}
+                    </tbody>
+                  </DataTable>
+                </div>
+              )}
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "32px" }}>
+                <Btn type="button" variant="ghost" onClick={() => setStep(1)}>← Voltar</Btn>
+                <Btn type="button" variant="primary" onClick={handleFretesNext}>
+                  Avançar para Veículo e Resumo →
+                </Btn>
+              </div>
             </div>
-          </FormSection>
+          )}
 
-          {/* Observações */}
-          <FormSection title="Observações">
-            <textarea
-              value={f.observacoes}
-              onChange={set("observacoes")}
-              rows={3}
-              style={{ ...inputStyle, resize: "vertical" }}
-              placeholder="Informações gerais da viagem..."
-            />
-          </FormSection>
-
-          {/* Fretes disponíveis */}
-          <FormSection title={`Fretes a Incluir (${selectedFretes.size} selecionados)`}>
-            {fretesDisp.length === 0 ? (
-              <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
-                Nenhum frete agendado disponível. Os fretes aparecem aqui quando têm status &ldquo;Agendado&rdquo; e ainda não estão em outra viagem.
+          {/* STEP 3: VEICULO E RESUMO */}
+          {step === 3 && (
+            <form onSubmit={handleSubmit}>
+              <h2 style={{ fontSize: "20px", fontWeight: 600, marginBottom: "8px", color: "#1e293b" }}>Veículo e Detalhes da Viagem</h2>
+              <p style={{ color: "#64748b", marginBottom: "24px", fontSize: "14px" }}>
+                Confira o veículo e o roteiro gerado automaticamente.
               </p>
-            ) : (
-              <>
-                <p style={{ fontSize: "12px", color: "#64748b", marginBottom: "8px" }}>
-                  Selecione os fretes que fazem parte desta viagem:
-                </p>
-                <DataTable>
-                  <thead>
-                    <tr>
-                      <Th style={{ width: "32px" }}></Th>
-                      <Th>Rota</Th>
-                      <Th>Cliente</Th>
-                      <Th>Coleta Prevista</Th>
-                      <Th>Valor</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {fretesDisp.map(fr => {
-                      const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
-                      const checked = selectedFretes.has(fr.id);
-                      return (
-                        <Tr key={fr.id}
-                          style={{ cursor: "pointer", background: checked ? "rgba(219,234,254,0.4)" : undefined }}
-                          onClick={() => toggleFrete(fr.id)}
-                        >
-                          <Td>
-                            <input
-                              type="checkbox"
-                              checked={checked}
-                              onChange={() => toggleFrete(fr.id)}
-                              onClick={e => e.stopPropagation()}
-                              style={{ width: "16px", height: "16px", accentColor: "#2563eb", cursor: "pointer" }}
-                            />
-                          </Td>
-                          <Td style={{ fontWeight: 600 }}>
-                            {fr.origem ?? "—"} → {fr.destino ?? "—"}
-                          </Td>
-                          <Td>{cliente?.nome_fantasia ?? "—"}</Td>
-                          <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
-                          <Td style={{ color: "#16a34a", fontWeight: 600 }}>{fmtBRL(fr.valor_frete)}</Td>
-                        </Tr>
-                      );
-                    })}
-                  </tbody>
-                </DataTable>
-              </>
-            )}
-          </FormSection>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-            <Btn href="/viagens" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={saving}>
-              {saving ? "Criando..." : "Criar Viagem"}
-            </Btn>
-          </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+
+                {/* Lado Esquerdo: Veículo e Roteiro */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+
+                  {/* Legenda de cores */}
+                  <div style={{ display: "flex", gap: "12px", flexWrap: "wrap", padding: "10px 14px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    {Object.entries(STATUS_BADGE).map(([key, b]) => (
+                      <span key={key} style={{ fontSize: "11px", color: "#475569", display: "flex", alignItems: "center", gap: "4px" }}>
+                        {b.icon} {b.label}
+                      </span>
+                    ))}
+                  </div>
+
+                  {/* Veículo Seleção */}
+                  <div style={{ background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, margin: "0 0 16px 0", color: "#334155" }}>Veículo da Viagem</h3>
+
+                    {veiculoPadrao ? (
+                      <div>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                          <div>
+                            <div style={{ fontSize: "12px", color: "#64748b", textTransform: "uppercase", fontWeight: 600 }}>Veículo Fixo Atribuído</div>
+                            <div style={{ fontSize: "16px", fontWeight: 600, color: "#1e293b", marginTop: "4px" }}>
+                              {veiculoPadrao.placa} — {veiculoPadrao.marca} {veiculoPadrao.modelo}
+                            </div>
+                            {statusVeiculos[veiculoPadrao.id] && (
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", gap: "4px",
+                                fontSize: "11px", fontWeight: 600, marginTop: "6px",
+                                padding: "2px 8px", borderRadius: "9999px",
+                                background: STATUS_BADGE[statusVeiculos[veiculoPadrao.id].status].bg,
+                                color: STATUS_BADGE[statusVeiculos[veiculoPadrao.id].status].cor,
+                              }}>
+                                {STATUS_BADGE[statusVeiculos[veiculoPadrao.id].status].icon}{" "}
+                                {STATUS_BADGE[statusVeiculos[veiculoPadrao.id].status].label}
+                                {statusVeiculos[veiculoPadrao.id].detalhe && ` — ${statusVeiculos[veiculoPadrao.id].detalhe}`}
+                              </span>
+                            )}
+                          </div>
+                          <button type="button" onClick={() => { setVeiculoPadrao(null); setVeiculoId(""); setVeiculoWarning(null); }} style={{ fontSize: "13px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                            Trocar
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <FormField label="Selecione um Veículo">
+                        <select value={veiculoId} onChange={handleVeiculoChange} style={{ ...selectStyle, fontSize: "14px" }}>
+                          <option value="">Selecione...</option>
+                          {veiculos.map(v => {
+                            const info = statusVeiculos[v.id];
+                            const badge = info ? STATUS_BADGE[info.status] : STATUS_BADGE["disponivel"];
+                            const disabled = info?.status === "em_manutencao";
+                            return (
+                              <option key={v.id} value={v.id} disabled={disabled}>
+                                {badge.icon} {v.placa} — {v.marca} {v.modelo}
+                                {info?.status === "em_manutencao" ? " (EM MANUTENÇÃO)" :
+                                  info?.status === "em_viagem" ? " (EM VIAGEM)" : ""}
+                              </option>
+                            );
+                          })}
+                        </select>
+                      </FormField>
+                    )}
+
+                    {/* Aviso de status do veículo */}
+                    {veiculoWarning && veiculoId && (
+                      <div style={{
+                        marginTop: "16px", padding: "12px",
+                        background: veiculoWarning.tipo === "error" ? "#fef2f2" : "#fffbeb",
+                        borderLeft: `4px solid ${veiculoWarning.tipo === "error" ? "#ef4444" : "#f59e0b"}`,
+                        borderRadius: "0 4px 4px 0",
+                      }}>
+                        <p style={{
+                          color: veiculoWarning.tipo === "error" ? "#7f1d1d" : "#78350f",
+                          margin: 0, fontSize: "13px", fontWeight: 500,
+                        }}>
+                          {veiculoWarning.msg}
+                        </p>
+                        {veiculoWarning.tipo === "error" && (
+                          <p style={{ color: "#991b1b", fontSize: "11px", marginTop: "6px", marginBottom: 0 }}>
+                            A criação da viagem será bloqueada enquanto a manutenção estiver ativa.
+                          </p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Itinerário */}
+                  <div>
+                    <h3 style={{ fontSize: "16px", fontWeight: 600, marginBottom: "16px", color: "#334155" }}>Roteiro (Paradas)</h3>
+                    {itinerario.length === 0 ? (
+                      <p style={{ color: "#94a3b8", fontSize: "14px", fontStyle: "italic" }}>Viagem sem cargas selecionadas.</p>
+                    ) : (
+                      <div style={{ position: "relative", paddingLeft: "16px", borderLeft: "2px solid #e2e8f0" }}>
+                        {itinerario.map((stop, i) => (
+                          <div key={i} style={{ marginBottom: "20px", position: "relative" }}>
+                            <div style={{
+                              position: "absolute", left: "-23px", top: "4px", width: "14px", height: "14px",
+                              borderRadius: "7px", background: stop.tipo === "Coleta" ? "#3b82f6" : "#22c55e",
+                              border: "3px solid #fff"
+                            }}></div>
+                            <div style={{ fontWeight: 600, color: "#1e293b", fontSize: "14px" }}>
+                              {stop.tipo} em {stop.local?.split("-")[0] || "N/A"}
+                            </div>
+                            <div style={{ fontSize: "12px", color: "#64748b", marginTop: "2px" }}>
+                              {stop.cliente ? `Para: ${stop.cliente}` : ""}
+                              {stop.data ? ` • Prev: ${fmtDate(stop.data)}` : ""}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Lado Direito: Formulário Dados Viagem */}
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
+                  <h3 style={{ fontSize: "16px", fontWeight: 600, margin: 0, color: "#334155" }}>Dados de Saída</h3>
+
+                  <FormField label="Status da Viagem">
+                    <select value={f.status} onChange={setFVal("status")} style={selectStyle}>
+                      <option value="agendada">Agendada (Planejamento)</option>
+                      <option value="em_andamento">Em Andamento (Saiu p/ viagem)</option>
+                    </select>
+                  </FormField>
+
+                  <FormField label="Data Prevista de Saída">
+                    <input type="date" value={f.data_saida_prevista} onChange={setFVal("data_saida_prevista")} style={inputStyle} />
+                  </FormField>
+
+                  <FormField label="KM Inicial do Veículo">
+                    <input
+                      type="number"
+                      value={f.km_inicial}
+                      onChange={setFVal("km_inicial")}
+                      placeholder={veiculos.find(v => v.id === veiculoId)?.km_atual != null ? String(veiculos.find(v => v.id === veiculoId)?.km_atual) : "Ex: 125000"}
+                      style={inputStyle}
+                    />
+                  </FormField>
+
+                  <FormField label="Observações">
+                    <textarea
+                      value={f.observacoes}
+                      onChange={setFVal("observacoes")}
+                      rows={4}
+                      style={{ ...inputStyle, resize: "vertical" }}
+                      placeholder="Informações gerais da viagem..."
+                    />
+                  </FormField>
+                </div>
+              </div>
+
+              <div style={{ display: "flex", justifyContent: "space-between", marginTop: "40px", paddingTop: "24px", borderTop: "1px solid #e2e8f0" }}>
+                <Btn type="button" variant="ghost" onClick={() => setStep(2)}>← Voltar</Btn>
+                <Btn
+                  type="submit"
+                  variant="primary"
+                  disabled={saving || !!veiculoEmManutencao}
+                  style={{ padding: "0 32px", fontSize: "16px" }}
+                >
+                  {saving ? "Gerando Viagem..." : "Confirmar e Criar Viagem ✓"}
+                </Btn>
+              </div>
+            </form>
+          )}
+
         </div>
       </div>
-    </form>
+    </div>
   );
 }

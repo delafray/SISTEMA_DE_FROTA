@@ -1,4 +1,17 @@
 @AGENTS.md
+@TESTING.md
+
+# ⚠️ ANTES DE QUALQUER COISA: LEIA `TESTING.md`
+
+Política de testes obrigatória do projeto. Resumo curto:
+- Toda mudança exige teste novo/atualizado (vitest).
+- `npm test` precisa passar antes de declarar tarefa concluída.
+- Reportar resultado da suíte ao usuário no fim de cada ciclo.
+- Áreas sem cobertura estão listadas em `TESTING.md` — priorize.
+
+**Sem testes, a tarefa não está concluída. Sem exceções.**
+
+---
 
 # Como Chamar os Agentes do Antigravity
 

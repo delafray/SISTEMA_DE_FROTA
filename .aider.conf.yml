@@ -1,0 +1,15 @@
+# Aider — Regras obrigatórias
+# ⚠️ LEIA TESTING.md ANTES DE QUALQUER ALTERAÇÃO.
+#
+# Política: toda mudança exige teste novo (vitest). Rode `npm test` antes de finalizar.
+# Sem teste = tarefa não concluída.
+#
+# Veja: TESTING.md, AGENTS.md, CLAUDE.md, log.md
+
+read:
+  - TESTING.md
+  - AGENTS.md
+  - CLAUDE.md
+
+auto-test: true
+test-cmd: npm test

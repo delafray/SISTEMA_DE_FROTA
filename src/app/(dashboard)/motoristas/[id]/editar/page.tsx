@@ -5,7 +5,8 @@ import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
+import { AcertoMensalTab } from "./_components/AcertoMensalTab";
 
 const fmtCpf = (v: string) => v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
 const fmtWpp = (v: string) => v.replace(/^55/, "").replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3");
@@ -18,7 +19,7 @@ export default function EditarMotoristaPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"dados" | "cnh" | "comissao" | "endereco" | "veiculo">("dados");
+  const [tab, setTab] = useState<"dados" | "cnh" | "comissao" | "endereco" | "veiculo" | "acerto">("dados");
   const [veiculos, setVeiculos]         = useState<{ id: string; placa: string; marca: string; modelo: string }[]>([]);
   const [vinculoId, setVinculoId]       = useState<string | null>(null);
   const [vinculoVeiculoId, setVinculoVeiculoId] = useState("");
@@ -32,7 +33,7 @@ export default function EditarMotoristaPage() {
     cnh_numero: "", cnh_categoria: "E", cnh_validade: "", cnh_primeira_habilitacao: "", cnh_ear: false,
     tipo_comissao: "percentual_frete", percentual_frete: "", valor_por_km: "", valor_fixo_por_viagem: "", salario_fixo: "",
     cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "",
-    ativo: true,
+    ativo: true, chave_pix: "", tipo_chave_pix: "cpf",
   });
 
   useEffect(() => {
@@ -87,6 +88,8 @@ export default function EditarMotoristaPage() {
         cidade: data.cidade ?? "",
         uf: data.uf ?? "",
         ativo: data.ativo ?? true,
+        chave_pix: data.chave_pix ?? "",
+        tipo_chave_pix: data.tipo_chave_pix ?? "cpf",
       });
       setLoading(false);
     });
@@ -134,6 +137,8 @@ export default function EditarMotoristaPage() {
       complemento: f.complemento || null, bairro: f.bairro || null,
       cidade: f.cidade || null, uf: f.uf || null,
       ativo: f.ativo,
+      chave_pix: f.chave_pix || null,
+      tipo_chave_pix: f.tipo_chave_pix,
     }).eq("id", id);
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
@@ -149,7 +154,7 @@ export default function EditarMotoristaPage() {
     if (!ue?.empresa_id) { setSavingVinculo(false); return; }
     if (vinculoId) {
       await supabase.from("motorista_veiculo").update({
-        veiculo_id: vinculoVeiculoId || null,
+        veiculo_id: vinculoVeiculoId || undefined,
         ativo: vinculoAtivo,
       }).eq("id", vinculoId);
     } else if (vinculoVeiculoId) {
@@ -166,14 +171,6 @@ export default function EditarMotoristaPage() {
     setTimeout(() => setVinculoMsg(""), 2500);
   };
 
-  const tabs = [
-    { id: "dados",    label: "Dados Pessoais" },
-    { id: "cnh",      label: "CNH" },
-    { id: "comissao", label: "Comissão" },
-    { id: "endereco", label: "Endereço" },
-    { id: "veiculo",  label: "Veículo Padrão" },
-  ] as const;
-
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
       Carregando...
@@ -186,7 +183,7 @@ export default function EditarMotoristaPage() {
         title={`Editar Motorista — ${f.nome || "..."}`}
         actions={
           <>
-            <Btn href="/motoristas" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/motoristas" variant="ghost">← Voltar</Btn>
             <Btn href="/motoristas" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Atualizar"}
@@ -195,25 +192,24 @@ export default function EditarMotoristaPage() {
         }
       />
 
+      <div style={{ padding: "0 16px", background: "#fff" }}>
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as typeof tab)}
+          tabs={[
+            { id: "dados",    label: "Dados Pessoais" },
+            { id: "cnh",      label: "CNH" },
+            { id: "comissao", label: "Comissão" },
+            { id: "endereco", label: "Endereço" },
+            { id: "veiculo",  label: "Veículo Padrão" },
+            { id: "acerto",   label: "Acerto Mensal" },
+          ]}
+        />
+      </div>
+
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ width: "100%" }}>
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
-
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
-            {tabs.map(t => (
-              <button key={t.id} type="button" onClick={() => setTab(t.id)}
-                style={{
-                  padding: "10px 20px", fontSize: "13px", fontWeight: 600,
-                  textTransform: "uppercase", letterSpacing: "0.05em",
-                  borderBottom: `2px solid ${tab === t.id ? "#2563eb" : "transparent"}`,
-                  color: tab === t.id ? "#2563eb" : "#64748b",
-                  background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
-                  cursor: "pointer", transition: "all 150ms", marginBottom: "-1px",
-                }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
@@ -258,6 +254,19 @@ export default function EditarMotoristaPage() {
                       <option value="false">Inativo</option>
                     </select>
                   </FormField>
+                  <FormField label="Tipo Chave PIX">
+                    <select value={f.tipo_chave_pix} onChange={set("tipo_chave_pix")} style={selectStyle}>
+                      <option value="cpf">CPF/CNPJ</option>
+                      <option value="telefone">Telefone</option>
+                      <option value="email">E-mail</option>
+                      <option value="aleatoria">Aleatória</option>
+                    </select>
+                  </FormField>
+                  <div style={{ gridColumn: "span 3" }}>
+                    <FormField label="Chave PIX">
+                      <input value={f.chave_pix} onChange={set("chave_pix")} style={inputStyle} />
+                    </FormField>
+                  </div>
                 </div>
               </FormSection>
             </div>
@@ -326,6 +335,26 @@ export default function EditarMotoristaPage() {
                     <FormField label="Salário Mensal (R$)">
                       <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
                     </FormField>
+                  )}
+                  {f.tipo_comissao === "salario_mais_percentual" && (
+                    <>
+                      <FormField label="Salário Fixo (R$) *">
+                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
+                      </FormField>
+                      <FormField label="% sobre o Frete *">
+                        <input value={f.percentual_frete} onChange={set("percentual_frete")} type="number" step="0.1" max="100" style={inputStyle} />
+                      </FormField>
+                    </>
+                  )}
+                  {f.tipo_comissao === "salario_mais_km" && (
+                    <>
+                      <FormField label="Salário Fixo (R$) *">
+                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
+                      </FormField>
+                      <FormField label="R$ por KM *">
+                        <input value={f.valor_por_km} onChange={set("valor_por_km")} type="number" step="0.01" style={inputStyle} />
+                      </FormField>
+                    </>
                   )}
                 </div>
               </FormSection>
@@ -401,7 +430,11 @@ export default function EditarMotoristaPage() {
               </FormSection>
             </div>
 
-            <div style={{ display: tab !== "veiculo" ? "flex" : "none", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+            {tab === "acerto" && (
+              <AcertoMensalTab motoristaId={id} />
+            )}
+
+            <div style={{ display: tab !== "veiculo" && tab !== "acerto" ? "flex" : "none", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/motoristas" variant="outline">Cancelar</Btn>
               <Btn type="submit" disabled={saving}>
                 {saving ? "Salvando..." : "Atualizar Motorista"}

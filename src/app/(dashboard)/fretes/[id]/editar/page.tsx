@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
 
 type Veiculo   = { id: string; placa: string; modelo: string; marca: string; km_atual: number | null };
 type Motorista = {
@@ -14,6 +14,8 @@ type Motorista = {
 };
 type Cliente   = { id: string; nome_fantasia: string };
 
+type TabId = "operacional" | "cronograma" | "financeiro";
+
 export default function EditarFretePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -21,6 +23,7 @@ export default function EditarFretePage() {
   const [saving, setSaving]   = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState("");
+  const [tab, setTab]         = useState<TabId>("operacional");
 
   const [veiculos,   setVeiculos]   = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -169,7 +172,7 @@ export default function EditarFretePage() {
         title="Editar Frete / Viagem"
         actions={
           <>
-            <Btn href="/fretes" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/fretes" variant="ghost">← Voltar</Btn>
             <Btn href="/fretes" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Atualizar"}
@@ -178,15 +181,26 @@ export default function EditarFretePage() {
         }
       />
 
+      <div style={{ padding: "0 16px", background: "#fff" }}>
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as TabId)}
+          tabs={[
+            { id: "operacional", label: "Operacional" },
+            { id: "cronograma", label: "Cronograma & Carga" },
+            { id: "financeiro", label: "Financeiro" },
+          ]}
+        />
+      </div>
+
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <div style={{ width: "100%" }}>
-          {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
+        {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
-          <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-
-            <FormSection title="Status">
+        {tab === "operacional" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Status do Frete">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-                <FormField label="Status do Frete">
+                <FormField label="Status">
                   <select value={f.status} onChange={set("status")} style={selectStyle}>
                     <option value="agendado">Agendado</option>
                     <option value="em_andamento">Em Andamento</option>
@@ -197,7 +211,7 @@ export default function EditarFretePage() {
               </div>
             </FormSection>
 
-            <FormSection title="Veículo e Motorista *">
+            <FormSection title="Veículo, Motorista e Cliente">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={set("veiculo_id")} style={selectStyle}>
@@ -231,22 +245,32 @@ export default function EditarFretePage() {
               </div>
             </FormSection>
 
-            <FormSection title="Rota e Datas">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-                <div style={{ gridColumn: "span 2" }}>
-                  <FormField label="Origem *">
-                    <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                  </FormField>
-                </div>
-                <div style={{ gridColumn: "span 2" }}>
-                  <FormField label="Destino *">
-                    <input value={f.destino} onChange={(e) => setF(p => ({ ...p, destino: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
-                  </FormField>
-                </div>
+            <FormSection title="Rota">
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+                <FormField label="Origem *">
+                  <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                </FormField>
+                <FormField label="Destino *">
+                  <input value={f.destino} onChange={(e) => setF(p => ({ ...p, destino: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} />
+                </FormField>
+              </div>
+            </FormSection>
+
+            <FormSection title="Observações Gerais">
+              <textarea value={f.observacoes} onChange={set("observacoes")} rows={3}
+                style={{ ...inputStyle, resize: "vertical", height: "auto" }} />
+            </FormSection>
+          </div>
+        )}
+
+        {tab === "cronograma" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Quilometragem">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *">
                   <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} />
                 </FormField>
-                <FormField label="KM Final">
+                <FormField label="KM Final" hint="Preencher ao concluir o frete">
                   <input value={f.km_final} onChange={set("km_final")} type="number" step="0.1" style={inputStyle} placeholder="Preencher ao concluir" />
                   {f.km_final && f.km_inicial && parseFloat(f.km_final) > parseFloat(f.km_inicial) && (
                     <p style={{ fontSize: "11px", color: "#2563eb", marginTop: "4px" }}>
@@ -254,6 +278,11 @@ export default function EditarFretePage() {
                     </p>
                   )}
                 </FormField>
+              </div>
+            </FormSection>
+
+            <FormSection title="Datas previstas">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Data Coleta Prevista">
                   <input value={f.data_coleta_prevista} onChange={set("data_coleta_prevista")} type="date" style={inputStyle} />
                 </FormField>
@@ -264,7 +293,7 @@ export default function EditarFretePage() {
             </FormSection>
 
             <FormSection title="Carga">
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Tipo de Carga">
                   <input value={f.tipo_carga} onChange={set("tipo_carga")} style={{ ...inputStyle, textTransform: "uppercase" }} />
                 </FormField>
@@ -273,8 +302,12 @@ export default function EditarFretePage() {
                 </FormField>
               </div>
             </FormSection>
+          </div>
+        )}
 
-            <FormSection title="Financeiro">
+        {tab === "financeiro" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
+            <FormSection title="Valor e Pagamento">
               <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Frete (R$)">
                   <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
@@ -305,7 +338,12 @@ export default function EditarFretePage() {
                     <input value={f.data_pagamento} onChange={set("data_pagamento")} type="date" style={inputStyle} />
                   </FormField>
                 )}
-                <FormField label="Comissão Motorista (R$)">
+              </div>
+            </FormSection>
+
+            <FormSection title="Comissão do Motorista">
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
+                <FormField label="Comissão Motorista (R$)" hint={f.status === "concluido" ? "Auto-calculado pelo tipo de comissão do motorista" : "Disponível após concluir o frete"}>
                   <input
                     value={f.comissao_motorista_valor}
                     onChange={set("comissao_motorista_valor")}
@@ -324,27 +362,21 @@ export default function EditarFretePage() {
                     </p>
                   )}
                 </FormField>
-                <div style={{ gridColumn: "span 4" }}>
-                  <FormField label="Observações Financeiras">
-                    <textarea value={f.observacoes_financeiras} onChange={set("observacoes_financeiras")} rows={2}
-                      style={{ ...inputStyle, resize: "vertical", height: "auto" }} />
-                  </FormField>
-                </div>
               </div>
             </FormSection>
 
-            <FormSection title="Observações Gerais">
-              <textarea value={f.observacoes} onChange={set("observacoes")} rows={3}
+            <FormSection title="Observações Financeiras">
+              <textarea value={f.observacoes_financeiras} onChange={set("observacoes_financeiras")} rows={3}
                 style={{ ...inputStyle, resize: "vertical", height: "auto" }} />
             </FormSection>
-
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-              <Btn href="/fretes" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={saving}>
-                {saving ? "Salvando..." : "Atualizar Frete"}
-              </Btn>
-            </div>
           </div>
+        )}
+
+        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+          <Btn href="/fretes" variant="outline">Cancelar</Btn>
+          <Btn type="submit" disabled={saving}>
+            {saving ? "Salvando..." : "Atualizar Frete"}
+          </Btn>
         </div>
       </div>
     </form>

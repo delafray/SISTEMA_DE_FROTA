@@ -33,6 +33,16 @@ type FreteViagem = {
   clientes: { nome_fantasia: string } | null;
 };
 
+type ResultadoFinanceiro = {
+  receita: number;
+  custo_combustivel: number;
+  custo_despesas: number;
+  custo_comissao: number;
+  custo_total: number;
+  lucro_bruto: number;
+  margem_pct: number | null;
+};
+
 const STATUS_LABEL: Record<string, string> = {
   agendada: "Agendada", em_andamento: "Em Andamento", concluida: "Concluída", cancelada: "Cancelada",
 };
@@ -64,6 +74,7 @@ export default function ViagemDetalhePage() {
   const router = useRouter();
   const [viagem, setViagem]   = useState<Viagem | null>(null);
   const [fretes, setFretes]   = useState<FreteViagem[]>([]);
+  const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
 
@@ -81,7 +92,31 @@ export default function ViagemDetalhePage() {
           .order("data_coleta_prevista", { ascending: true }),
       ]);
       setViagem(viagemRes.data);
-      setFretes(fretesRes.data ?? []);
+      const fretesList = fretesRes.data ?? [];
+      setFretes(fretesList);
+
+      // Carrega resultado financeiro consolidado da view fretes_com_resultado
+      if (fretesList.length > 0) {
+        const freteIds = fretesList.map(f => f.id);
+        const { data: resultados } = await supabase
+          .from("fretes_com_resultado")
+          .select("receita,custo_combustivel,custo_despesas,custo_comissao,custo_total,lucro_bruto,margem_pct")
+          .in("id", freteIds);
+        if (resultados && resultados.length > 0) {
+          const soma: ResultadoFinanceiro = {
+            receita:          resultados.reduce((s, r) => s + (r.receita ?? 0), 0),
+            custo_combustivel: resultados.reduce((s, r) => s + (r.custo_combustivel ?? 0), 0),
+            custo_despesas:   resultados.reduce((s, r) => s + (r.custo_despesas ?? 0), 0),
+            custo_comissao:   resultados.reduce((s, r) => s + (r.custo_comissao ?? 0), 0),
+            custo_total:      resultados.reduce((s, r) => s + (r.custo_total ?? 0), 0),
+            lucro_bruto:      resultados.reduce((s, r) => s + (r.lucro_bruto ?? 0), 0),
+            margem_pct:       null,
+          };
+          soma.margem_pct = soma.receita > 0 ? (soma.lucro_bruto / soma.receita) * 100 : null;
+          setResultado(soma);
+        }
+      }
+
       setLoading(false);
     };
     load();
@@ -184,9 +219,56 @@ export default function ViagemDetalhePage() {
             )}
           </FormSection>
 
-          <FormSection title="Resumo Financeiro">
+          <FormSection title="💰 Resultado Financeiro">
             <Row label="Fretes nesta viagem" value={<Badge variant="info">{fretes.length}</Badge>} />
-            <Row label="Receita Total"        value={<strong style={{ color: "#16a34a" }}>{fmtBRL(totalFretes)}</strong>} />
+            <Row label="Faturamento Bruto" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(totalFretes)}</strong>} />
+
+            {resultado && resultado.custo_total > 0 && (
+              <>
+                <div style={{ height: "1px", background: "#f1f5f9", margin: "6px 0" }} />
+                {resultado.custo_combustivel > 0 && (
+                  <Row label="(-) Combustível" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_combustivel)}</span>} />
+                )}
+                {resultado.custo_despesas > 0 && (
+                  <Row label="(-) Despesas (pedágio, alim.)" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_despesas)}</span>} />
+                )}
+                {resultado.custo_comissao > 0 && (
+                  <Row label="(-) Comissão Motorista" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_comissao)}</span>} />
+                )}
+                <div style={{ height: "1px", background: "#e2e8f0", margin: "6px 0" }} />
+                <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 4px" }}>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>💵 Lucro Líquido</span>
+                  <div style={{ textAlign: "right" }}>
+                    <strong style={{
+                      fontSize: "15px",
+                      color: resultado.lucro_bruto >= 0 ? "#16a34a" : "#dc2626"
+                    }}>
+                      {fmtBRL(resultado.lucro_bruto)}
+                    </strong>
+                    {resultado.margem_pct != null && (
+                      <div style={{
+                        fontSize: "11px", fontWeight: 700,
+                        color: resultado.margem_pct >= 15 ? "#16a34a" : resultado.margem_pct >= 0 ? "#d97706" : "#dc2626"
+                      }}>
+                        {resultado.margem_pct.toFixed(1)}% de margem
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </>
+            )}
+
+            {resultado && resultado.custo_total === 0 && fretes.some(f => f.status === "concluido") && (
+              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
+                📌 Nenhuma despesa registrada. O motorista pode lançar combustível e pedágios via WhatsApp.
+              </p>
+            )}
+
+            {!resultado && fretes.length > 0 && (
+              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
+                O resultado financeiro detalhado aparece após as despesas serem registradas.
+              </p>
+            )}
           </FormSection>
 
           {viagem.observacoes && (

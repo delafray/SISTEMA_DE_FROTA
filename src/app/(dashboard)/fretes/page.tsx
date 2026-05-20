@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 
 type Frete = {
   id: string; status: string; origem: string; destino: string;
   valor_frete: number | null; km_inicial: number | null; km_total: number | null;
   data_coleta_prevista: string | null; tipo_carga: string | null;
+  pago: boolean | null; data_pagamento: string | null;
   veiculos: { placa: string; modelo: string } | null;
   motoristas: { nome: string } | null;
 };
@@ -42,7 +43,7 @@ export default function FretesPage() {
 
       const data = await loadAll<Frete>((from, to) =>
         supabase.from("fretes")
-          .select("id,status,origem,destino,valor_frete,km_inicial,km_total,data_coleta_prevista,tipo_carga,veiculos(placa,modelo),motoristas(nome)")
+          .select("id,status,origem,destino,valor_frete,km_inicial,km_total,data_coleta_prevista,tipo_carga,pago,data_pagamento,veiculos(placa,modelo),motoristas(nome)")
           .eq("empresa_id", ue.empresa_id).order("created_at", { ascending: false }).range(from, to)
       );
       setTodos(data);
@@ -51,6 +52,24 @@ export default function FretesPage() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const handleMarcarPago = async (id: string) => {
+    try {
+      const supabase = createClient();
+      const today = new Date().toLocaleDateString("en-CA"); // YYYY-MM-DD
+      const { error } = await supabase
+        .from("fretes")
+        .update({ pago: true, data_pagamento: today })
+        .eq("id", id);
+      if (error) {
+        alert("Erro ao salvar pagamento: " + error.message);
+      } else {
+        setTodos(prev => prev.map(f => f.id === id ? { ...f, pago: true } : f));
+      }
+    } catch (err: any) {
+      alert("Erro inesperado: " + err.message);
+    }
+  };
 
   const haystack = useMemo(() => {
     const m = new Map<string, string>();
@@ -65,41 +84,130 @@ export default function FretesPage() {
     return m;
   }, [todos]);
 
+  const [mostrarPagos, setMostrarPagos] = useState(false);
+  const [filtroPeriodo, setFiltroPeriodo] = useState("mes_atual");
+  const [dataInicio, setDataInicio] = useState("");
+  const [dataFim, setDataFim] = useState("");
+
   const filtrados = useMemo(() => {
     const termo = normalizar(buscaDeferred);
     const palavras = termo.split(/\s+/).filter(Boolean);
+
+    const now = new Date();
+    const currentYearStr = String(now.getFullYear());
+    const currentMonthStr = String(now.getMonth() + 1).padStart(2, "0");
+    const currentYm = `${currentYearStr}-${currentMonthStr}`;
+
     return todos.filter(f => {
       if (filtroStatus && f.status !== filtroStatus) return false;
+
+      // Se mostrarPagos for falso (padrão), removemos concluídos que JÁ estão pagos
+      if (!mostrarPagos) {
+        if (f.status === "concluido" && f.pago === true) return false;
+      } else {
+        // Se mostrarPagos for verdadeiro, exibimos APENAS concluídos pagos
+        if (!(f.status === "concluido" && f.pago === true)) return false;
+
+        // E aplicamos o filtro de período de pagamento
+        const dateToCompare = f.data_pagamento || f.data_coleta_prevista;
+        if (filtroPeriodo === "mes_atual") {
+          if (!dateToCompare || !dateToCompare.startsWith(currentYm)) return false;
+        } else if (filtroPeriodo === "ano_atual") {
+          if (!dateToCompare || !dateToCompare.startsWith(currentYearStr)) return false;
+        } else if (filtroPeriodo === "personalizado") {
+          if (!dateToCompare) return false;
+          if (dataInicio && dateToCompare < dataInicio) return false;
+          if (dataFim && dateToCompare > dataFim) return false;
+        }
+      }
+
       if (palavras.length === 0) return true;
       const h = haystack.get(f.id) ?? "";
       return palavras.every(p => h.includes(p));
     });
-  }, [todos, haystack, buscaDeferred, filtroStatus]);
+  }, [todos, haystack, buscaDeferred, filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim]);
 
-  const totais = useMemo(() => ({
-    agendado:     todos.filter(f => f.status === "agendado").length,
-    em_andamento: todos.filter(f => f.status === "em_andamento").length,
-    concluido:    todos.filter(f => f.status === "concluido").length,
-    receita:      todos.filter(f => f.status === "concluido").reduce((s, f) => s + (f.valor_frete ?? 0), 0),
-  }), [todos]);
+  const totais = useMemo(() => {
+    const concluidos = todos.filter(f => f.status === "concluido");
+    return {
+      agendado:          todos.filter(f => f.status === "agendado").length,
+      em_andamento:      todos.filter(f => f.status === "em_andamento").length,
+      concluido:         concluidos.length,
+      concluidoPago:      concluidos.filter(f => f.pago === true).length,
+      concluidoPendente:  concluidos.filter(f => f.pago !== true).length,
+      receita:           concluidos.reduce((s, f) => s + (f.valor_frete ?? 0), 0),
+      receitaPaga:       concluidos.filter(f => f.pago === true).reduce((s, f) => s + (f.valor_frete ?? 0), 0),
+      receitaPendente:   concluidos.filter(f => f.pago !== true).reduce((s, f) => s + (f.valor_frete ?? 0), 0),
+    };
+  }, [todos]);
+
+  const receitaExibida = useMemo(() => {
+    return filtrados.reduce((s, f) => s + (f.valor_frete ?? 0), 0);
+  }, [filtrados]);
 
   const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "status", "asc");
 
   const toolbar = (
-    <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
+    <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1, flexWrap: "wrap" }}>
       <SearchInput
         placeholder="Buscar por rota, veículo, motorista, carga..."
         value={busca}
         onChange={e => setBusca(e.target.value)}
       />
       <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
-        style={{ ...selectStyle, width: "160px" }}>
+        style={{ ...selectStyle, width: "160px" }}
+        disabled={mostrarPagos}
+      >
         <option value="">Todos os status</option>
         <option value="agendado">Agendado</option>
         <option value="em_andamento">Em Andamento</option>
         <option value="concluido">Concluído</option>
         <option value="cancelado">Cancelado</option>
       </select>
+      <Btn
+        variant={mostrarPagos ? "primary" : "outline"}
+        onClick={() => {
+          setMostrarPagos(!mostrarPagos);
+          if (!mostrarPagos) setFiltroStatus(""); // Limpa filtro de status ao ver pagos
+        }}
+      >
+        {mostrarPagos ? "↩ Ver Ativos / Pendentes" : "💰 Ver Concluídos Pagos"}
+      </Btn>
+
+      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+        <span style={{ fontSize: "12px", color: mostrarPagos ? "#475569" : "#cbd5e1", fontWeight: 500 }}>
+          Período Pago:
+        </span>
+        <select
+          value={filtroPeriodo}
+          onChange={e => setFiltroPeriodo(e.target.value)}
+          style={{ ...selectStyle, width: "140px", borderColor: mostrarPagos ? undefined : "#e2e8f0", color: mostrarPagos ? undefined : "#94a3b8" }}
+          disabled={!mostrarPagos}
+        >
+          <option value="mes_atual">Mês Atual</option>
+          <option value="ano_atual">Ano Atual</option>
+          <option value="personalizado">Personalizado</option>
+          <option value="todos">Todos</option>
+        </select>
+        {mostrarPagos && filtroPeriodo === "personalizado" && (
+          <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+            <input
+              type="date"
+              value={dataInicio}
+              onChange={e => setDataInicio(e.target.value)}
+              style={{ ...inputStyle, width: "125px", padding: "4px 8px", fontSize: "12px" }}
+            />
+            <span style={{ fontSize: "11px", color: "#64748b" }}>até</span>
+            <input
+              type="date"
+              value={dataFim}
+              onChange={e => setDataFim(e.target.value)}
+              style={{ ...inputStyle, width: "125px", padding: "4px 8px", fontSize: "12px" }}
+            />
+          </div>
+        )}
+      </div>
+
       <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "auto", whiteSpace: "nowrap" }}>
         {filtrados.length} de {todos.length} fretes
       </span>
@@ -116,11 +224,17 @@ export default function FretesPage() {
         <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <KpiCard label="Agendados"      value={loading ? "..." : totais.agendado}     color="warning" />
           <KpiCard label="Em Andamento"   value={loading ? "..." : totais.em_andamento} color="info" />
-          <KpiCard label="Concluídos"     value={loading ? "..." : totais.concluido}    color="success" />
           <KpiCard
-            label="Receita Concluída"
-            value={loading ? "..." : `R$ ${totais.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            label="Concluídos"
+            value={loading ? "..." : totais.concluido}
             color="success"
+            sub={loading ? undefined : `${totais.concluidoPendente} pendentes / ${totais.concluidoPago} pagos`}
+          />
+          <KpiCard
+            label={mostrarPagos ? "Receita Paga (Período)" : "Receita Pendente"}
+            value={loading ? "..." : `R$ ${receitaExibida.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            color="success"
+            sub={loading ? undefined : `Total Geral: R$ ${totais.receita.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           />
         </div>
 
@@ -154,7 +268,7 @@ export default function FretesPage() {
                 const veiculo   = Array.isArray(frete.veiculos) ? frete.veiculos[0] : frete.veiculos;
                 const motorista = Array.isArray(frete.motoristas) ? frete.motoristas[0] : frete.motoristas;
                 return (
-                  <Tr key={frete.id}>
+                  <Tr key={frete.id} onClick={() => router.push(`/fretes/${frete.id}/editar`)}>
                     <Td>
                       <Badge variant={STATUS_VAR[frete.status] ?? "default"}>
                         {STATUS_LABEL[frete.status] ?? frete.status}
@@ -175,15 +289,72 @@ export default function FretesPage() {
                         : "—"}
                     </Td>
                     <Td style={{ textAlign: "right" }}>
-                      {frete.valor_frete
-                        ? frete.valor_frete.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
-                        : "—"}
+                      <div style={{ fontWeight: 700 }}>
+                        {frete.valor_frete
+                          ? frete.valor_frete.toLocaleString("pt-BR", { minimumFractionDigits: 2 })
+                          : "—"}
+                      </div>
+                      <div style={{ marginTop: "2px" }}>
+                        {frete.pago ? (
+                          <Badge variant="success">Pago</Badge>
+                        ) : frete.status === "concluido" ? (
+                          <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: "2px" }}>
+                            <Badge variant="danger">Pendente</Badge>
+                            <button
+                              onClick={async (e) => {
+                                e.stopPropagation();
+                                if (confirm("Confirmar recebimento deste frete?")) {
+                                  await handleMarcarPago(frete.id);
+                                }
+                              }}
+                              style={{
+                                background: "none",
+                                border: "none",
+                                color: "#16a34a",
+                                fontSize: "10px",
+                                cursor: "pointer",
+                                padding: "2px 4px",
+                                borderRadius: "4px",
+                                textDecoration: "underline",
+                                fontWeight: 600,
+                                marginTop: "2px",
+                              }}
+                            >
+                              Confirmar Recebimento
+                            </button>
+                          </div>
+                        ) : (
+                          <span style={{ fontSize: "10px", color: "#94a3b8" }}>A faturar</span>
+                        )}
+                      </div>
                     </Td>
                     <Td style={{ textAlign: "right" }}>{frete.km_total?.toLocaleString("pt-BR") ?? "—"}</Td>
                     <Td style={{ textAlign: "right" }}>
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", alignItems: "center" }}>
                         <a href={`/fretes/${frete.id}`} style={{ color: "#64748b", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Ver</a>
                         <a href={`/fretes/${frete.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                        {!frete.pago && frete.status === "concluido" && (
+                          <button
+                            onClick={async (e) => {
+                              e.stopPropagation();
+                              if (confirm("Confirmar recebimento deste frete?")) {
+                                await handleMarcarPago(frete.id);
+                              }
+                            }}
+                            style={{
+                              background: "none",
+                              border: "none",
+                              color: "#16a34a",
+                              fontWeight: 600,
+                              cursor: "pointer",
+                              padding: 0,
+                              fontSize: "inherit",
+                              fontFamily: "inherit",
+                            }}
+                          >
+                            Receber
+                          </button>
+                        )}
                         <DeleteBtn id={frete.id} table="fretes" label="frete" />
                       </div>
                     </Td>

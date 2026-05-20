@@ -309,21 +309,50 @@ export const Td: React.FC<React.TdHTMLAttributes<HTMLTableCellElement>> = ({ chi
   </td>
 );
 
-export const Tr: React.FC<React.HTMLAttributes<HTMLTableRowElement> & { muted?: boolean }> = ({ children, muted, style: userStyle, ...props }) => (
-  <tr
-    style={{
-      borderBottom: "1px solid #f1f5f9",
-      transition: "background 150ms",
-      opacity: muted ? 0.5 : 1,
-      ...userStyle,
-    }}
-    onMouseEnter={e => { e.currentTarget.style.background = "rgba(239,246,255,0.5)"; }}
-    onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
-    {...props}
-  >
-    {children}
-  </tr>
-);
+export const Tr: React.FC<
+  React.HTMLAttributes<HTMLTableRowElement> & { 
+    muted?: boolean;
+    clickable?: boolean;
+  }
+> = ({ children, muted, clickable, style: userStyle, onClick, ...props }) => {
+  const isClickable = clickable || !!onClick;
+
+  const handleClick = (e: React.MouseEvent<HTMLTableRowElement>) => {
+    if (!onClick) return;
+
+    // Se o clique foi em um elemento interativo, não dispara o clique da linha
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, select, option, [role="button"]')) {
+      return;
+    }
+
+    onClick(e);
+  };
+
+  return (
+    <tr
+      style={{
+        borderBottom: "1px solid #f1f5f9",
+        transition: "background 150ms",
+        opacity: muted ? 0.5 : 1,
+        cursor: isClickable ? "pointer" : "default",
+        ...userStyle,
+      }}
+      onClick={isClickable ? handleClick : undefined}
+      onMouseEnter={e => {
+        if (isClickable) {
+          e.currentTarget.style.background = "rgba(239,246,255,0.7)";
+        } else {
+          e.currentTarget.style.background = "rgba(239,246,255,0.3)";
+        }
+      }}
+      onMouseLeave={e => { e.currentTarget.style.background = "transparent"; }}
+      {...props}
+    >
+      {children}
+    </tr>
+  );
+};
 
 // ─── EMPTY STATE ───────────────────────────────────────────────────────────────
 export const EmptyState: React.FC<{

@@ -1,12 +1,11 @@
 "use client";
 
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
 
 export default function NovoMotoristaPage() {
   const router = useRouter();
@@ -77,20 +76,13 @@ export default function NovoMotoristaPage() {
     router.push("/motoristas"); router.refresh();
   };
 
-  const tabs = [
-    { id: "dados", label: "Dados Pessoais" },
-    { id: "cnh", label: "CNH" },
-    { id: "comissao", label: "Comissão" },
-    { id: "endereco", label: "Endereço" },
-  ] as const;
-
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader 
-        title="Cadastrar Motorista" 
+      <PageHeader
+        title="Cadastrar Motorista"
         actions={
           <>
-            <Btn href="/motoristas" variant="ghost">← Voltar para Lista</Btn>
+            <Btn href="/motoristas" variant="ghost">← Voltar</Btn>
             <Btn href="/motoristas" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
@@ -99,32 +91,22 @@ export default function NovoMotoristaPage() {
         }
       />
 
+      <div style={{ padding: "0 16px", background: "#fff" }}>
+        <Tabs
+          active={tab}
+          onChange={(id) => setTab(id as typeof tab)}
+          tabs={[
+            { id: "dados",    label: "Dados Pessoais" },
+            { id: "cnh",      label: "CNH" },
+            { id: "comissao", label: "Comissão" },
+            { id: "endereco", label: "Endereço" },
+          ]}
+        />
+      </div>
+
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ width: "100%" }}>
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
-
-          {/* Abas */}
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
-            {tabs.map(t => (
-              <button key={t.id} type="button" onClick={() => setTab(t.id)}
-                style={{
-                  padding: "10px 20px",
-                  fontSize: "13px",
-                  fontWeight: 600,
-                  textTransform: "uppercase",
-                  letterSpacing: "0.05em",
-                  borderBottom: `2px solid ${tab === t.id ? "#2563eb" : "transparent"}`,
-                  color: tab === t.id ? "#2563eb" : "#64748b",
-                  background: "transparent",
-                  borderTop: "none", borderLeft: "none", borderRight: "none",
-                  cursor: "pointer",
-                  transition: "all 150ms",
-                  marginBottom: "-1px"
-                }}>
-                {t.label}
-              </button>
-            ))}
-          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             
@@ -229,6 +211,26 @@ export default function NovoMotoristaPage() {
                     <FormField label="Salário Mensal (R$)">
                       <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
                     </FormField>
+                  )}
+                  {f.tipo_comissao === "salario_mais_percentual" && (
+                    <>
+                      <FormField label="Salário Fixo (R$) *">
+                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
+                      </FormField>
+                      <FormField label="% sobre o Frete *">
+                        <input value={f.percentual_frete} onChange={set("percentual_frete")} type="number" step="0.1" max="100" style={inputStyle} placeholder="10" />
+                      </FormField>
+                    </>
+                  )}
+                  {f.tipo_comissao === "salario_mais_km" && (
+                    <>
+                      <FormField label="Salário Fixo (R$) *">
+                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
+                      </FormField>
+                      <FormField label="R$ por KM *">
+                        <input value={f.valor_por_km} onChange={set("valor_por_km")} type="number" step="0.01" style={inputStyle} placeholder="0.50" />
+                      </FormField>
+                    </>
                   )}
                 </div>
               </FormSection>

@@ -101,6 +101,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
 
           <SectionLabel>Financeiro</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <NavItem href="/financeiro"    label="Fluxo de Caixa" icon={MoneyIcon} onNavigate={onNavigate} />
             <NavItem href="/adiantamentos" label="Adiantamentos" icon={MoneyIcon} onNavigate={onNavigate} />
             <NavItem href="/relatorios"    label="Relatórios"    icon={ChartIcon} onNavigate={onNavigate} />
           </div>
