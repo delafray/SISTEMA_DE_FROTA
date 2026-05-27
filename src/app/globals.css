@@ -35,7 +35,7 @@ a, button { transition-property: color, background-color, border-color, opacity;
 
 @media (max-width: 767px) {
   .hide-mobile  { display: none !important; }
-  .mobile-only  { display: initial !important; }
+  .mobile-only  { display: flex !important; }
   .mobile-flex  { display: flex !important; }
   .mobile-block { display: block !important; }
 }
