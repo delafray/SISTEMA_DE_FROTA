@@ -178,6 +178,7 @@ Exemplo:
 - 2026-05-21 Claude Opus 4.7 (1M) — Limpeza ETAPA 2 do `PLANO_LIMPEZA_MODELO.md`: refactor completo viagens→pedidos, fretes→entregas, remoção de comissão, despesas→veiculo_id, frete_id removido de tabelas auxiliares, datas de pedidos renomeadas. Atualizou ~25 arquivos TS/TSX, fixed kmFlow tests (`km_registrado`→`km_lido`) — +1 teste novo (valor_diaria_por_pedido em motorista schema) — ✅ 192/192 passando (16 arquivos), `tsc --noEmit` 0 erros
 - 2026-05-27 Claude Sonnet 4.6 (Thinking) / Antigravity — Migração completa Meta Cloud API → Evolution API: reescrita de `security.ts`, `messageParser.ts`, `messageSender.ts`, `webhook/route.ts` + testes correspondentes. Todos os 8 flows, router, auth e sessionManager preservados sem alteração — +0 testes novos de lógica, todos os testes de infra WhatsApp reescritos para o novo provider — ✅ 189/189 passando (16 arquivos)
 - 2026-05-27 Gemini 3.5 Flash (High) / Antigravity — Resolução de problemas de infra, deploy e SSL na Evolution API do Railway, persistência Postgres ativada com sslmode=no-verify e salvando instâncias com sucesso. Validou a suite de testes locais — 0 novos testes — ✅ 189/189 passando (16 arquivos)
+- 2026-05-27 Gemini 3.5 Flash (Medium) / Antigravity — Corrigido parser de JID alternativo da Evolution API para resolver LID com terminação @s.whatsapp.net e restaurar recebimento de mensagens do bot — +1 teste novo (LID com @s.whatsapp.net) — ✅ 195/195 passando (16 arquivos)
 
 ---
 

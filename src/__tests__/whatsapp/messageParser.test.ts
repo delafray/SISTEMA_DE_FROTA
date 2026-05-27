@@ -257,6 +257,22 @@ describe('parseWebhookPayload (Evolution API)', () => {
     expect(out[0].from).toBe('5531989791317');
   });
 
+  it('resolve telefone real quando remoteJid contem 1900 e termina com @s.whatsapp.net', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        key: {
+          ...keyBase,
+          remoteJid: '190065204551889@s.whatsapp.net',
+          senderPn: '5531989791317@s.whatsapp.net',
+        },
+        message: { conversation: 'oi' },
+      })
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].from).toBe('5531989791317');
+  });
+
   it('usa participantPn como fallback quando senderPn ausente em @lid', () => {
     const out = parseWebhookPayload(
       makePayload({

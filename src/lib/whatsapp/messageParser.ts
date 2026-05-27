@@ -121,13 +121,18 @@ function parseEvolutionMessage(data: EvolutionMessageData): ParsedMessage | null
   if (data.key.remoteJid.endsWith('@g.us')) return null;
 
   // Resolver o telefone real. WhatsApp/Baileys novo envia remoteJid no formato
-  // @lid (Linked ID, ex: 190065204551889@lid) que NÃO é o telefone real. Nesse
-  // caso, usar os campos fallback (senderPn, participantPn, remoteJidAlt) que
-  // Evolution v2.3 inclui com o telefone E.164 correto.
+  // @lid (Linked ID, ex: 190065204551889@lid) ou com JID alternativo tipo "190065204551889@s.whatsapp.net"
+  // que NÃO é o telefone real. Nesse caso, se houver um campo fallback com o telefone E.164 correto
+  // (senderPn, participantPn, remoteJidAlt), usamos ele. Caso contrário, descartamos a mensagem (retornando null).
   const jid = data.key.remoteJid;
-  const fonteTelefone = jid.endsWith('@lid')
-    ? (data.key.senderPn ?? data.key.participantPn ?? data.key.remoteJidAlt)
-    : jid;
+  const alternativo = data.key.senderPn ?? data.key.participantPn ?? data.key.remoteJidAlt;
+  const isLid = jid.endsWith('@lid') || jid.includes('1900');
+  
+  if (isLid && !alternativo) {
+    return null;
+  }
+  
+  const fonteTelefone = isLid ? alternativo : jid;
 
   if (!fonteTelefone) return null;
   const from = fonteTelefone.replace(/@.+$/, '');
