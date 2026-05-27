@@ -29,6 +29,11 @@ export type EvolutionMessageData = {
     remoteJid: string;
     id: string;
     fromMe?: boolean;
+    // Campos do Baileys novo / Evolution v2.3 para resolver telefone quando
+    // remoteJid vem como @lid (Linked ID) em vez de @s.whatsapp.net.
+    senderPn?: string;
+    participantPn?: string;
+    remoteJidAlt?: string;
   };
   pushName?: string;
   messageType?: string;
@@ -112,11 +117,20 @@ export function parseWebhookPayload(payload: EvolutionWebhookPayload): ParsedMes
 function parseEvolutionMessage(data: EvolutionMessageData): ParsedMessage | null {
   if (!data.key?.remoteJid || !data.key?.id) return null;
 
-  // Extrai só os dígitos do número (remove @s.whatsapp.net, @g.us, etc.)
-  const from = data.key.remoteJid.replace(/@.+$/, '');
-
   // Ignorar grupos
   if (data.key.remoteJid.endsWith('@g.us')) return null;
+
+  // Resolver o telefone real. WhatsApp/Baileys novo envia remoteJid no formato
+  // @lid (Linked ID, ex: 190065204551889@lid) que NÃO é o telefone real. Nesse
+  // caso, usar os campos fallback (senderPn, participantPn, remoteJidAlt) que
+  // Evolution v2.3 inclui com o telefone E.164 correto.
+  const jid = data.key.remoteJid;
+  const fonteTelefone = jid.endsWith('@lid')
+    ? (data.key.senderPn ?? data.key.participantPn ?? data.key.remoteJidAlt)
+    : jid;
+
+  if (!fonteTelefone) return null;
+  const from = fonteTelefone.replace(/@.+$/, '');
 
   const ts = data.messageTimestamp
     ? new Date(Number(data.messageTimestamp) * 1000)

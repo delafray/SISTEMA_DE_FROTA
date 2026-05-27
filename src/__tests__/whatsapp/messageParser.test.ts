@@ -240,4 +240,46 @@ describe('parseWebhookPayload (Evolution API)', () => {
     expect(out[0].from).toBe('5531989791317');
     expect(out[0].from).not.toContain('@');
   });
+
+  it('resolve telefone real quando remoteJid é @lid (WhatsApp Linked ID)', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        key: {
+          ...keyBase,
+          remoteJid: '190065204551889@lid',
+          senderPn: '5531989791317@s.whatsapp.net',
+        },
+        message: { conversation: 'oi do lid' },
+      })
+    );
+    expect(out).toHaveLength(1);
+    expect(out[0].from).toBe('5531989791317');
+  });
+
+  it('usa participantPn como fallback quando senderPn ausente em @lid', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        key: {
+          ...keyBase,
+          remoteJid: '190065204551889@lid',
+          participantPn: '5531989791317@s.whatsapp.net',
+        },
+        message: { conversation: 'oi' },
+      })
+    );
+    expect(out[0].from).toBe('5531989791317');
+  });
+
+  it('descarta mensagem @lid quando nenhum fallback de telefone está presente', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        key: { ...keyBase, remoteJid: '190065204551889@lid' },
+        message: { conversation: 'oi' },
+      })
+    );
+    expect(out).toHaveLength(0);
+  });
 });

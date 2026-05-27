@@ -43,6 +43,15 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ status: 'ok', skipped: true });
     }
 
+    // Log diagnóstico: dump dos campos key.* para entender o formato do JID
+    // (descobrir @lid, senderPn etc enviados pela Evolution v2.3 + Baileys novo)
+    const dataItems = Array.isArray(body.data) ? body.data : [body.data];
+    for (const item of dataItems) {
+      if (item?.key && item.key.fromMe !== true) {
+        log.info('key_fields', { key: item.key });
+      }
+    }
+
     const messages = parseWebhookPayload(body);
     log.info('payload_parsed', { messages_count: messages.length });
 
