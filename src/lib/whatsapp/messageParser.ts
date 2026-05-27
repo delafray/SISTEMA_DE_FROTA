@@ -127,7 +127,7 @@ function parseEvolutionMessage(data: EvolutionMessageData): ParsedMessage | null
     fromName: data.pushName ?? 'Desconhecido',
     messageId: data.key.id,
     timestamp: ts,
-    phoneNumberId: process.env.EVOLUTION_INSTANCE_NAME ?? 'frota-bot',
+    phoneNumberId: process.env.EVOLUTION_INSTANCE_NAME ?? 'frota-bot-novo',
   };
 
   const msg = data.message;
