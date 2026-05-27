@@ -131,23 +131,50 @@ export async function identificarRemetente(whatsappNumber: string): Promise<User
 }
 
 /**
- * Gera variações com e sem o "9" do nono dígito brasileiro.
- * A Meta envia `553189791317` (sem 9) mas o cadastro pode ter `5531989791317`.
+ * Gera todas as variações plausíveis de um número BR de celular para casar com
+ * o cadastro. WhatsApp/Baileys entrega `553189791317` (12 dígitos, com 55, sem 9)
+ * mas o cadastro pode estar em qualquer um destes 4 formatos:
+ *   - `5531989791317`  (13d: com 55, com 9)
+ *   - `553189791317`   (12d: com 55, sem 9)
+ *   - `31989791317`    (11d: sem 55, com 9)
+ *   - `3189791317`     (10d: sem 55, sem 9)
  */
 export function gerarVariacoesBrasileiras(numero: string): string[] {
   const variacoes = new Set<string>([numero]);
 
-  // Aplica só pra números BR de celular: 55 + DDD + 8 ou 9 dígitos
+  // Caso 1: entrada com 55 (12 ou 13 dígitos)
   if (numero.startsWith('55') && (numero.length === 12 || numero.length === 13)) {
     const ddd = numero.slice(2, 4);
     const resto = numero.slice(4);
 
-    if (resto.length === 9 && resto.startsWith('9')) {
-      // Cadastrado com 9: tenta também sem o 9
-      variacoes.add(`55${ddd}${resto.slice(1)}`);
-    } else if (resto.length === 8) {
-      // Cadastrado sem 9: tenta também com o 9
-      variacoes.add(`55${ddd}9${resto}`);
+    const semNove = resto.length === 9 && resto.startsWith('9') ? resto.slice(1) : resto.length === 8 ? resto : null;
+    const comNove = resto.length === 8 ? `9${resto}` : resto.length === 9 && resto.startsWith('9') ? resto : null;
+
+    if (comNove) {
+      variacoes.add(`55${ddd}${comNove}`);   // com 55, com 9
+      variacoes.add(`${ddd}${comNove}`);     // sem 55, com 9
+    }
+    if (semNove) {
+      variacoes.add(`55${ddd}${semNove}`);   // com 55, sem 9
+      variacoes.add(`${ddd}${semNove}`);     // sem 55, sem 9
+    }
+  }
+
+  // Caso 2: entrada sem 55 (10 ou 11 dígitos: DDD + 8 ou 9)
+  else if (numero.length === 10 || numero.length === 11) {
+    const ddd = numero.slice(0, 2);
+    const resto = numero.slice(2);
+
+    const semNove = resto.length === 9 && resto.startsWith('9') ? resto.slice(1) : resto.length === 8 ? resto : null;
+    const comNove = resto.length === 8 ? `9${resto}` : resto.length === 9 && resto.startsWith('9') ? resto : null;
+
+    if (comNove) {
+      variacoes.add(`${ddd}${comNove}`);
+      variacoes.add(`55${ddd}${comNove}`);
+    }
+    if (semNove) {
+      variacoes.add(`${ddd}${semNove}`);
+      variacoes.add(`55${ddd}${semNove}`);
     }
   }
 
