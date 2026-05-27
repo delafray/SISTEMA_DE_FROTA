@@ -127,22 +127,28 @@ export async function getOrCreateSession(params: {
     };
   }
 
-  // 2. Criar nova sessão (sessoes_whatsapp NÃO tem coluna usuario_id)
+  // 2. Criar (ou reaproveitar) sessão. UPSERT em vez de INSERT porque a coluna
+  // whatsapp tem UNIQUE constraint: se a sessão expirou (> 24h) o SELECT acima
+  // devolve null mas a linha continua existindo — INSERT puro quebra com 23505.
+  // O upsert reseta estado='novo' e contexto={} ao reentrar após expiração.
   const { data: newSession, error } = await supabase
     .from('sessoes_whatsapp')
-    .insert({
-      whatsapp,
-      motorista_id: motorista_id ?? null,
-      empresa_id,
-      estado: 'novo',
-      contexto: {},
-      ultimo_contato: new Date().toISOString(),
-    })
+    .upsert(
+      {
+        whatsapp,
+        motorista_id: motorista_id ?? null,
+        empresa_id,
+        estado: 'novo',
+        contexto: {},
+        ultimo_contato: new Date().toISOString(),
+      },
+      { onConflict: 'whatsapp' }
+    )
     .select()
     .single();
 
   if (error || !newSession) {
-    log.error('insert_failed', {
+    log.error('upsert_failed', {
       code: error?.code,
       message: error?.message,
       details: error?.details,

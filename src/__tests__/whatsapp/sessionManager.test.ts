@@ -42,6 +42,7 @@ function makeBuilder(opts: {
   const calls = {
     select: vi.fn(),
     insert: vi.fn(),
+    upsert: vi.fn(),
     update: vi.fn(),
     delete: vi.fn(),
     eq: vi.fn(),
@@ -62,6 +63,10 @@ function makeBuilder(opts: {
   });
   builder.insert = vi.fn((...args: unknown[]) => {
     calls.insert(...args);
+    return builder;
+  });
+  builder.upsert = vi.fn((...args: unknown[]) => {
+    calls.upsert(...args);
     return builder;
   });
   builder.update = vi.fn((...args: unknown[]) => {
@@ -172,16 +177,18 @@ describe('sessionManager.getOrCreateSession', () => {
     expect(updatePayload).toHaveProperty('ultimo_contato');
     expect(updateB.calls.eq).toHaveBeenCalledWith('id', 'sess-existing');
 
-    // NÃO chamou insert
+    // NÃO chamou upsert (nem o insert legado)
+    expect(selectB.calls.upsert).not.toHaveBeenCalled();
+    expect(updateB.calls.upsert).not.toHaveBeenCalled();
     expect(selectB.calls.insert).not.toHaveBeenCalled();
     expect(updateB.calls.insert).not.toHaveBeenCalled();
   });
 
-  it('nova sessão → insere SEM usuario_id e retorna usuario_id do parâmetro', async () => {
+  it('nova sessão → upsert SEM usuario_id e retorna usuario_id do parâmetro', async () => {
     // 1ª chamada: select — não encontra
     const selectB = makeBuilder({ maybeSingle: { data: null, error: null } });
 
-    // 2ª chamada: insert — retorna nova sessão (sem usuario_id, conforme schema)
+    // 2ª chamada: upsert — retorna nova sessão (sem usuario_id, conforme schema)
     const insertedSession = {
       id: 'sess-new',
       whatsapp: '5531999',
@@ -191,11 +198,11 @@ describe('sessionManager.getOrCreateSession', () => {
       contexto: {},
       ultimo_contato: new Date().toISOString(),
     };
-    const insertB = makeBuilder({ single: { data: insertedSession, error: null } });
+    const upsertB = makeBuilder({ single: { data: insertedSession, error: null } });
 
     supabaseFromMock
       .mockReturnValueOnce(selectB.builder)
-      .mockReturnValueOnce(insertB.builder);
+      .mockReturnValueOnce(upsertB.builder);
 
     const result = await getOrCreateSession({
       whatsapp: '5531999',
@@ -204,15 +211,18 @@ describe('sessionManager.getOrCreateSession', () => {
       empresa_id: 'emp-1',
     });
 
-    // insert foi chamado COM motorista_id/empresa_id/estado/contexto, SEM usuario_id
-    expect(insertB.calls.insert).toHaveBeenCalledTimes(1);
-    const insertPayload = insertB.calls.insert.mock.calls[0][0] as Record<string, unknown>;
-    expect(insertPayload.motorista_id).toBe('mot-1');
-    expect(insertPayload.empresa_id).toBe('emp-1');
-    expect(insertPayload.estado).toBe('novo');
-    expect(insertPayload.contexto).toEqual({});
-    expect(insertPayload.whatsapp).toBe('5531999');
-    expect(insertPayload).not.toHaveProperty('usuario_id');
+    // upsert foi chamado COM motorista_id/empresa_id/estado/contexto, SEM usuario_id
+    expect(upsertB.calls.upsert).toHaveBeenCalledTimes(1);
+    const upsertCall = upsertB.calls.upsert.mock.calls[0] as [Record<string, unknown>, { onConflict: string }];
+    const upsertPayload = upsertCall[0];
+    const upsertOptions = upsertCall[1];
+    expect(upsertPayload.motorista_id).toBe('mot-1');
+    expect(upsertPayload.empresa_id).toBe('emp-1');
+    expect(upsertPayload.estado).toBe('novo');
+    expect(upsertPayload.contexto).toEqual({});
+    expect(upsertPayload.whatsapp).toBe('5531999');
+    expect(upsertPayload).not.toHaveProperty('usuario_id');
+    expect(upsertOptions).toEqual({ onConflict: 'whatsapp' });
 
     // O retorno carrega usuario_id vindo do parâmetro
     expect(result.id).toBe('sess-new');
@@ -220,9 +230,9 @@ describe('sessionManager.getOrCreateSession', () => {
     expect(result.motorista_id).toBe('mot-1');
   });
 
-  it('insert falha → retorna sessão temporária (id começa com "temp-") e loga insert_failed', async () => {
+  it('upsert falha → retorna sessão temporária (id começa com "temp-") e loga upsert_failed', async () => {
     const selectB = makeBuilder({ maybeSingle: { data: null, error: null } });
-    const insertB = makeBuilder({
+    const upsertB = makeBuilder({
       single: {
         data: null,
         error: { code: 'PGRST204', message: 'Could not find column', details: '...' },
@@ -231,7 +241,7 @@ describe('sessionManager.getOrCreateSession', () => {
 
     supabaseFromMock
       .mockReturnValueOnce(selectB.builder)
-      .mockReturnValueOnce(insertB.builder);
+      .mockReturnValueOnce(upsertB.builder);
 
     const consoleErrorSpy = vi.spyOn(console, 'error');
 
@@ -250,10 +260,10 @@ describe('sessionManager.getOrCreateSession', () => {
 
     // logger.error → console.error em ambiente não-prod
     const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
-    expect(errorCalls.some((line) => line.includes('insert_failed'))).toBe(true);
+    expect(errorCalls.some((line) => line.includes('upsert_failed'))).toBe(true);
   });
 
-  it('sem motorista (gestor) → insert com motorista_id: null', async () => {
+  it('sem motorista (gestor) → upsert com motorista_id: null', async () => {
     const selectB = makeBuilder({ maybeSingle: { data: null, error: null } });
     const insertedSession = {
       id: 'sess-gestor',
@@ -264,11 +274,11 @@ describe('sessionManager.getOrCreateSession', () => {
       contexto: {},
       ultimo_contato: new Date().toISOString(),
     };
-    const insertB = makeBuilder({ single: { data: insertedSession, error: null } });
+    const upsertB = makeBuilder({ single: { data: insertedSession, error: null } });
 
     supabaseFromMock
       .mockReturnValueOnce(selectB.builder)
-      .mockReturnValueOnce(insertB.builder);
+      .mockReturnValueOnce(upsertB.builder);
 
     const result = await getOrCreateSession({
       whatsapp: '5531999',
@@ -277,13 +287,48 @@ describe('sessionManager.getOrCreateSession', () => {
       empresa_id: 'emp-1',
     });
 
-    expect(insertB.calls.insert).toHaveBeenCalledTimes(1);
-    const insertPayload = insertB.calls.insert.mock.calls[0][0] as Record<string, unknown>;
-    expect(insertPayload.motorista_id).toBeNull();
-    expect(insertPayload).not.toHaveProperty('usuario_id');
+    expect(upsertB.calls.upsert).toHaveBeenCalledTimes(1);
+    const upsertPayload = upsertB.calls.upsert.mock.calls[0][0] as Record<string, unknown>;
+    expect(upsertPayload.motorista_id).toBeNull();
+    expect(upsertPayload).not.toHaveProperty('usuario_id');
 
     expect(result.motorista_id).toBeNull();
     expect(result.usuario_id).toBe('gestor-id');
+  });
+
+  it('sessão expirada (linha já existe mas > 24h) → upsert reaproveita reseta para novo', async () => {
+    // 1ª: select com filtro de 24h retorna null (sessão antiga não conta como ativa)
+    const selectB = makeBuilder({ maybeSingle: { data: null, error: null } });
+
+    // 2ª: upsert resolve o conflito UNIQUE em whatsapp, devolvendo a linha
+    //     reescrita com estado='novo' e contexto={} (comportamento esperado do bug fix).
+    const resetSession = {
+      id: 'sess-reused',
+      whatsapp: '553189791317',
+      motorista_id: 'mot-1',
+      empresa_id: 'emp-1',
+      estado: 'novo',
+      contexto: {},
+      ultimo_contato: new Date().toISOString(),
+    };
+    const upsertB = makeBuilder({ single: { data: resetSession, error: null } });
+
+    supabaseFromMock
+      .mockReturnValueOnce(selectB.builder)
+      .mockReturnValueOnce(upsertB.builder);
+
+    const result = await getOrCreateSession({
+      whatsapp: '553189791317',
+      motorista_id: 'mot-1',
+      usuario_id: 'usr-1',
+      empresa_id: 'emp-1',
+    });
+
+    // Confirma que o onConflict foi setado — esse é o pulo do gato do fix.
+    const upsertOptions = upsertB.calls.upsert.mock.calls[0][1] as { onConflict: string };
+    expect(upsertOptions).toEqual({ onConflict: 'whatsapp' });
+    expect(result.id).toBe('sess-reused');
+    expect(result.estado).toBe('novo');
   });
 });
 
