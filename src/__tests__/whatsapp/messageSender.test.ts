@@ -16,7 +16,7 @@ function mockFetchOk() {
     ok: true,
     status: 200,
     text: async () => '',
-    json: async () => ({ messages: [{ id: 'wamid.mock-response' }] }),
+    json: async () => ({ key: { id: 'evo-msg-id' } }),
   });
 }
 
@@ -44,10 +44,11 @@ function mockFetchAbort() {
   });
 }
 
-describe('messageSender', () => {
+describe('messageSender (Evolution API)', () => {
   beforeEach(() => {
-    process.env.META_WHATSAPP_TOKEN = 'fake-token';
-    process.env.META_PHONE_NUMBER_ID = 'fake-pnid';
+    process.env.EVOLUTION_API_URL = 'https://frota-evolution.up.railway.app';
+    process.env.EVOLUTION_API_KEY = 'fake-api-key';
+    process.env.EVOLUTION_INSTANCE_NAME = 'frota-bot';
     vi.spyOn(console, 'error').mockImplementation(() => {});
   });
 
@@ -56,30 +57,30 @@ describe('messageSender', () => {
     vi.restoreAllMocks();
   });
 
-  it('enviarTexto faz POST com payload correto', async () => {
+  // ── enviarTexto ──
+
+  it('enviarTexto faz POST para /message/sendText/{instance}', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
 
-    const ok = await enviarTexto('5531123', 'olá');
+    const ok = await enviarTexto('5531989791317', 'olá motorista');
     expect(ok).toBe(true);
     expect(fetchMock).toHaveBeenCalledOnce();
 
     const [url, init] = fetchMock.mock.calls[0];
-    expect(url).toBe('https://graph.facebook.com/v21.0/fake-pnid/messages');
+    expect(url).toBe('https://frota-evolution.up.railway.app/message/sendText/frota-bot');
     expect(init.method).toBe('POST');
-    expect(init.headers.Authorization).toBe('Bearer fake-token');
+    expect(init.headers.apikey).toBe('fake-api-key');
 
     const body = JSON.parse(init.body);
     expect(body).toMatchObject({
-      messaging_product: 'whatsapp',
-      to: '5531123',
-      type: 'text',
-      text: { body: 'olá' },
+      number: '5531989791317',
+      text: 'olá motorista',
     });
   });
 
   it('retorna false em resposta não-ok', async () => {
-    vi.stubGlobal('fetch', mockFetchFail(401, 'invalid token'));
+    vi.stubGlobal('fetch', mockFetchFail(401, 'Unauthorized'));
     expect(await enviarTexto('5531', 'oi')).toBe(false);
   });
 
@@ -88,48 +89,69 @@ describe('messageSender', () => {
     expect(await enviarTexto('5531', 'oi')).toBe(false);
   });
 
-  it('retorna false em AbortError (timeout)', async () => {
-    vi.stubGlobal('fetch', mockFetchAbort());
-    const ok = await marcarComoLida('wamid.abc');
-    expect(ok).toBe(false);
+  it('lança erro quando variáveis de ambiente faltam', async () => {
+    delete process.env.EVOLUTION_API_URL;
+    vi.stubGlobal('fetch', mockFetchOk());
+    await expect(enviarTexto('5531', 'oi')).rejects.toThrow(/EVOLUTION_API_URL/);
   });
 
-  it('getConfig lança erro quando env vars faltam', async () => {
-    delete process.env.META_WHATSAPP_TOKEN;
-    vi.stubGlobal('fetch', mockFetchOk());
-    await expect(enviarTexto('5531', 'oi')).rejects.toThrow(/META_WHATSAPP_TOKEN/);
+  // ── enviarBotoes ──
+
+  it('enviarBotoes faz POST para /message/sendButtons/{instance}', async () => {
+    const fetchMock = mockFetchOk();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await enviarBotoes(
+      '5531',
+      'Confirma?',
+      [
+        { id: 'sim', titulo: 'Sim' },
+        { id: 'nao', titulo: 'Não' },
+      ],
+      'Abastecimento'
+    );
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/message/sendButtons/frota-bot');
+
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      number: '5531',
+      title: 'Abastecimento',
+      description: 'Confirma?',
+      buttons: [
+        { text: 'Sim', id: 'sim' },
+        { text: 'Não', id: 'nao' },
+      ],
+    });
   });
 
   it('enviarBotoes limita a 3 botões e trunca títulos', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
 
-    await enviarBotoes(
-      '5531',
-      'escolha',
-      [
-        { id: '1', titulo: 'Um' },
-        { id: '2', titulo: 'Dois' },
-        { id: '3', titulo: 'TresQuatroCincoSeisSeteOitoNoveDez' },
-        { id: '4', titulo: 'Quatro' },
-      ],
-      'header'
-    );
+    await enviarBotoes('5531', 'escolha', [
+      { id: '1', titulo: 'Um' },
+      { id: '2', titulo: 'Dois' },
+      { id: '3', titulo: 'TresQuatroCincoSeisSeteOitoNoveDez' },
+      { id: '4', titulo: 'Quatro' }, // deve ser ignorado
+    ]);
 
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.interactive.action.buttons).toHaveLength(3);
-    expect(body.interactive.action.buttons[2].reply.title.length).toBeLessThanOrEqual(20);
-    expect(body.interactive.header).toEqual({ type: 'text', text: 'header' });
+    expect(body.buttons).toHaveLength(3);
+    expect(body.buttons[2].text.length).toBeLessThanOrEqual(20);
   });
 
-  it('enviarLista monta seções com truncamento correto', async () => {
+  // ── enviarLista ──
+
+  it('enviarLista faz POST para /message/sendList/{instance}', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
 
     await enviarLista(
       '5531',
       'corpo',
-      'Selecionar',
+      'Ver opções',
       [
         {
           titulo: 'Seção A',
@@ -143,73 +165,86 @@ describe('messageSender', () => {
       'rodapé'
     );
 
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.interactive.type).toBe('list');
-    expect(body.interactive.action.sections).toHaveLength(1);
-    expect(body.interactive.action.sections[0].rows[0].id).toBe('a1');
-    expect(body.interactive.footer).toEqual({ text: 'rodapé' });
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/message/sendList/frota-bot');
+
+    const body = JSON.parse(init.body);
+    expect(body).toMatchObject({
+      number: '5531',
+      description: 'corpo',
+      buttonText: 'Ver opções',
+      footerText: 'rodapé',
+    });
+    expect(body.sections).toHaveLength(1);
+    expect(body.sections[0].rows[0].rowId).toBe('a1');
+    expect(body.sections[0].rows[1].rowId).toBe('a2');
   });
 
-  it('enviarImagem manda type=image', async () => {
+  // ── enviarImagem ──
+
+  it('enviarImagem faz POST com mediatype=image', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
-    await enviarImagem('5531', 'https://x/y.jpg', 'legenda');
+    await enviarImagem('5531', 'https://r2.dev/x.jpg', 'legenda');
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({
-      type: 'image',
-      image: { link: 'https://x/y.jpg', caption: 'legenda' },
+      number: '5531',
+      mediatype: 'image',
+      media: 'https://r2.dev/x.jpg',
+      caption: 'legenda',
     });
   });
 
-  it('enviarDocumento manda type=document com filename', async () => {
+  // ── enviarDocumento ──
+
+  it('enviarDocumento faz POST com mediatype=document e fileName', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
-    await enviarDocumento('5531', 'https://x/n.pdf', 'nota.pdf');
+    await enviarDocumento('5531', 'https://r2.dev/doc.pdf', 'nota.pdf');
     const body = JSON.parse(fetchMock.mock.calls[0][1].body);
     expect(body).toMatchObject({
-      type: 'document',
-      document: { link: 'https://x/n.pdf', filename: 'nota.pdf' },
+      number: '5531',
+      mediatype: 'document',
+      media: 'https://r2.dev/doc.pdf',
+      fileName: 'nota.pdf',
     });
   });
 
-  it('marcarComoLida envia status=read com timeout curto', async () => {
+  // ── marcarComoLida ──
+
+  it('marcarComoLida chama /chat/markMessageAsRead/{instance}', async () => {
     const fetchMock = mockFetchOk();
     vi.stubGlobal('fetch', fetchMock);
-    const ok = await marcarComoLida('wamid.xyz');
+    const ok = await marcarComoLida('evo-msg-id');
     expect(ok).toBe(true);
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body).toMatchObject({ status: 'read', message_id: 'wamid.xyz' });
-    expect(fetchMock.mock.calls[0][1].signal).toBeDefined();
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toContain('/chat/markMessageAsRead/frota-bot');
+    const body = JSON.parse(init.body);
+    expect(body.readMessages[0].id).toBe('evo-msg-id');
   });
 
-  it('normaliza destinatário BR sem 9 para formato com 9 ao enviar', async () => {
-    const fetchMock = mockFetchOk();
-    vi.stubGlobal('fetch', fetchMock);
-    await enviarTexto('553189791317', 'oi');
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.to).toBe('5531989791317');
+  it('marcarComoLida retorna false em AbortError (timeout)', async () => {
+    vi.stubGlobal('fetch', mockFetchAbort());
+    const ok = await marcarComoLida('evo-msg-id');
+    expect(ok).toBe(false);
   });
 
-  it('mantém destinatário BR que já tem o 9', async () => {
-    const fetchMock = mockFetchOk();
-    vi.stubGlobal('fetch', fetchMock);
-    await enviarTexto('5531989791317', 'oi');
-    const body = JSON.parse(fetchMock.mock.calls[0][1].body);
-    expect(body.to).toBe('5531989791317');
+  it('marcarComoLida retorna false silenciosamente em caso de falha', async () => {
+    vi.stubGlobal('fetch', mockFetchFail(500));
+    const ok = await marcarComoLida('evo-msg-id');
+    expect(ok).toBe(false);
   });
 });
 
+// ── formatarDestinatarioMeta ──
+
 describe('formatarDestinatarioMeta', () => {
-  it('adiciona o 9 em celular BR de 12 dígitos', () => {
-    expect(formatarDestinatarioMeta('553189791317')).toBe('5531989791317');
+  it('remove todos os caracteres não numéricos', () => {
+    expect(formatarDestinatarioMeta('+55 (31) 9 8979-1317')).toBe('5531989791317');
   });
 
-  it('mantém celular BR de 13 dígitos', () => {
+  it('mantém número que já está limpo', () => {
     expect(formatarDestinatarioMeta('5531989791317')).toBe('5531989791317');
-  });
-
-  it('limpa caracteres não numéricos', () => {
-    expect(formatarDestinatarioMeta('+55 (31) 8979-1317')).toBe('5531989791317');
   });
 
   it('mantém número internacional não-BR', () => {

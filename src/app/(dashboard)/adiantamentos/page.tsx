@@ -18,7 +18,6 @@ type Adiantamento = {
   data_pagamento: string | null;
   created_at: string | null;
   motorista_id: string;
-  frete_id: string | null;
   motoristas: { nome: string } | null;
 };
 
@@ -57,7 +56,7 @@ export default function AdiantamentosPage() {
 
       const data = await loadAll<Adiantamento>((from, to) =>
         supabase.from("adiantamentos")
-          .select("id,valor,tipo,status,justificativa,data_pagamento,created_at,motorista_id,frete_id,motoristas(nome)")
+          .select("id,valor,tipo,status,justificativa,data_pagamento,created_at,motorista_id,motoristas(nome)")
           .eq("empresa_id", ue.empresa_id)
           .order("created_at", { ascending: false })
           .range(from, to)

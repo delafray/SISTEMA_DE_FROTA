@@ -39,7 +39,7 @@ export async function processarGestorFlow(
   if (msg.tipo === 'foto' || msg.tipo === 'documento') {
     await enviarTexto(
       msg.from,
-      '📄 Recebi seu arquivo. A extração automática de pedidos via foto/PDF está em desenvolvimento. Por enquanto, cadastre o frete pelo dashboard.'
+      '📄 Recebi seu arquivo. A extração automática de pedidos via foto/PDF está em desenvolvimento. Por enquanto, cadastre o pedido pelo dashboard.'
     );
     return;
   }
@@ -69,13 +69,15 @@ export async function processarGestorFlow(
       await responderLucroMensal(msg.from, identity);
       return;
     case 'consulta_fretes_ativos':
-      await responderFretesAtivos(msg.from, identity);
+    case 'consulta_pedidos_ativos':
+      await responderPedidosAtivos(msg.from, identity);
       return;
     case 'consulta_motorista':
       await responderMotorista(msg.from, identity, parametros?.motorista_nome ?? null);
       return;
     case 'consulta_fretes_mes':
-      await responderFretesMes(msg.from, identity);
+    case 'consulta_pedidos_mes':
+      await responderPedidosMes(msg.from, identity);
       return;
     case 'consulta_pendencias':
       await responderPendencias(msg.from, identity);
@@ -89,7 +91,7 @@ export async function processarGestorFlow(
     case 'cadastrar_pedido':
       await enviarTexto(
         msg.from,
-        '📦 Pra cadastrar um novo frete, mande uma foto ou PDF do pedido — vou extrair automaticamente (em breve). Ou cadastre direto em /fretes/novo no dashboard.'
+        '📦 Pra cadastrar um novo pedido, mande uma foto ou PDF — vou extrair automaticamente (em breve). Ou cadastre direto em /pedidos/novo no dashboard.'
       );
       return;
     default:
@@ -107,7 +109,7 @@ async function enviarMenuGestor(para: string, identity: IdentityGestor): Promise
       `• "qual o lucro do mês?"\n` +
       `• "quem está em rota?"\n` +
       `• "status do João"\n` +
-      `• "quantos fretes esse mês?"\n` +
+      `• "quantos pedidos esse mês?"\n` +
       `• "tem pendência pra aprovar?"\n` +
       `• "como está a frota?"\n` +
       `• "lucro do caminhão ABC1D23"\n\n` +
@@ -121,23 +123,35 @@ async function responderLucroMensal(para: string, identity: IdentityGestor): Pro
   const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-  const { data, error } = await supabase
-    .from('fretes_com_resultado')
-    .select('receita, custo_total, lucro_bruto, margem_pct, status')
+  // Receita: pedidos concluídos no mês
+  const { data: pedidos, error: errPed } = await supabase
+    .from('pedidos_com_resultado')
+    .select('receita, status')
     .eq('empresa_id', identity.empresa_id)
-    .gte('data_inicio', inicioMes)
-    .lte('data_inicio', fimMes);
+    .gte('data_inicio_real', inicioMes)
+    .lte('data_inicio_real', fimMes);
 
-  if (error) {
-    log.error('lucro_mensal_query_failed', { code: error.code, message: error.message });
+  if (errPed) {
+    log.error('lucro_mensal_query_failed', { code: errPed.code, message: errPed.message });
     await enviarTexto(para, '❌ Não consegui consultar agora. Tenta de novo daqui a pouco.');
     return;
   }
 
-  const concluidos = (data ?? []).filter((f) => f.status === 'concluido');
-  const receita = concluidos.reduce((s, f) => s + (f.receita ?? 0), 0);
-  const custo = concluidos.reduce((s, f) => s + (f.custo_total ?? 0), 0);
-  const lucro = concluidos.reduce((s, f) => s + (f.lucro_bruto ?? 0), 0);
+  // Custo: agregado por veículo (despesas + combustível) no mês
+  const { data: custosVeiculo } = await supabase
+    .from('veiculos_resultado_periodo')
+    .select('custo_combustivel, custo_despesas, mes_referencia')
+    .eq('empresa_id', identity.empresa_id)
+    .gte('mes_referencia', inicioMes)
+    .lte('mes_referencia', fimMes);
+
+  const concluidos = (pedidos ?? []).filter((p) => p.status === 'concluido');
+  const receita = concluidos.reduce((s, p) => s + (p.receita ?? 0), 0);
+  const custo = (custosVeiculo ?? []).reduce(
+    (s, v) => s + (v.custo_combustivel ?? 0) + (v.custo_despesas ?? 0),
+    0
+  );
+  const lucro = receita - custo;
   const margem = receita > 0 ? (lucro / receita) * 100 : 0;
   const mesNome = now.toLocaleDateString('pt-BR', { month: 'long' });
 
@@ -148,38 +162,45 @@ async function responderLucroMensal(para: string, identity: IdentityGestor): Pro
       `📤 Custo: ${fmtBRL(custo)}\n` +
       `${lucro >= 0 ? '✅' : '🚨'} Lucro: *${fmtBRL(lucro)}*\n` +
       `📈 Margem: *${fmtPct(margem)}*\n` +
-      `🚛 Fretes concluídos: ${concluidos.length}`
+      `📦 Pedidos concluídos: ${concluidos.length}`
   );
 }
 
-async function responderFretesAtivos(para: string, identity: IdentityGestor): Promise<void> {
+async function responderPedidosAtivos(para: string, identity: IdentityGestor): Promise<void> {
   const supabase = getSupabase();
   const { data, error } = await supabase
-    .from('fretes')
-    .select('origem, destino, valor_frete, motoristas(nome), veiculos(placa)')
+    .from('pedidos')
+    .select('id, valor_pedido, motoristas(nome), veiculos(placa), entregas(origem, destino)')
     .eq('empresa_id', identity.empresa_id)
     .eq('status', 'em_andamento')
     .order('updated_at', { ascending: false });
 
   if (error) {
-    log.error('fretes_ativos_query_failed', { code: error.code, message: error.message });
+    log.error('pedidos_ativos_query_failed', { code: error.code, message: error.message });
     await enviarTexto(para, '❌ Não consegui consultar agora.');
     return;
   }
 
   if (!data || data.length === 0) {
-    await enviarTexto(para, '🚛 Nenhum frete em andamento agora.');
+    await enviarTexto(para, '🚛 Nenhum pedido em andamento agora.');
     return;
   }
 
-  let msg = `🛣️ *${data.length} frete${data.length > 1 ? 's' : ''} em rota:*\n`;
-  for (const f of data.slice(0, 10)) {
-    const mot = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
-    const v = Array.isArray(f.veiculos) ? f.veiculos[0] : f.veiculos;
-    msg += `\n• ${f.origem ?? '?'} → ${f.destino ?? '?'}\n`;
+  let msg = `🛣️ *${data.length} pedido${data.length > 1 ? 's' : ''} em rota:*\n`;
+  for (const p of data.slice(0, 10)) {
+    const mot = Array.isArray(p.motoristas) ? p.motoristas[0] : p.motoristas;
+    const v = Array.isArray(p.veiculos) ? p.veiculos[0] : p.veiculos;
+    const entregas = Array.isArray(p.entregas) ? p.entregas : p.entregas ? [p.entregas] : [];
+    const primeira = entregas[0];
+    const ultima = entregas[entregas.length - 1];
+    const origem = primeira?.origem ?? '?';
+    const destino = ultima?.destino ?? primeira?.destino ?? '?';
+    msg += `\n• ${origem} → ${destino}`;
+    if (entregas.length > 1) msg += ` (${entregas.length} entregas)`;
+    msg += '\n';
     if (mot) msg += `  👤 ${mot.nome}`;
     if (v) msg += ` · 🚚 ${v.placa}`;
-    if (f.valor_frete) msg += ` · ${fmtBRL(f.valor_frete)}`;
+    if (p.valor_pedido) msg += ` · ${fmtBRL(p.valor_pedido)}`;
     msg += '\n';
   }
   if (data.length > 10) msg += `\n_... e mais ${data.length - 10}_`;
@@ -217,9 +238,9 @@ async function responderMotorista(
   }
 
   const m = motoristas[0];
-  const { data: fretesAtivos } = await supabase
-    .from('fretes')
-    .select('origem, destino')
+  const { data: pedidoAtivo } = await supabase
+    .from('pedidos')
+    .select('id, entregas(origem, destino)')
     .eq('motorista_id', m.id)
     .eq('status', 'em_andamento')
     .maybeSingle();
@@ -233,43 +254,50 @@ async function responderMotorista(
   let resp = `👤 *${m.nome}*\n\n`;
   resp += `${m.ativo ? '✅ Ativo' : '⏸️ Inativo'}\n`;
   resp += `${cnhVencida ? '🚨' : '📄'} CNH: ${cnhValidade}${cnhVencida ? ' (VENCIDA)' : ''}\n`;
-  if (fretesAtivos) {
-    resp += `\n🛣️ Em rota: ${fretesAtivos.origem ?? '?'} → ${fretesAtivos.destino ?? '?'}`;
+  if (pedidoAtivo) {
+    const entregas = Array.isArray(pedidoAtivo.entregas)
+      ? pedidoAtivo.entregas
+      : pedidoAtivo.entregas
+      ? [pedidoAtivo.entregas]
+      : [];
+    const primeira = entregas[0];
+    const ultima = entregas[entregas.length - 1];
+    resp += `\n🛣️ Em rota: ${primeira?.origem ?? '?'} → ${ultima?.destino ?? primeira?.destino ?? '?'}`;
   } else {
-    resp += '\n🅿️ Sem frete em andamento';
+    resp += '\n🅿️ Sem pedido em andamento';
   }
 
   await enviarTexto(para, resp);
 }
 
-async function responderFretesMes(para: string, identity: IdentityGestor): Promise<void> {
+async function responderPedidosMes(para: string, identity: IdentityGestor): Promise<void> {
   const supabase = getSupabase();
   const now = new Date();
   const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
   const { data, error } = await supabase
-    .from('fretes')
+    .from('pedidos')
     .select('status')
     .eq('empresa_id', identity.empresa_id)
-    .gte('data_coleta_prevista', inicioMes)
-    .lte('data_coleta_prevista', fimMes);
+    .gte('data_inicio_prevista', inicioMes)
+    .lte('data_inicio_prevista', fimMes);
 
   if (error) {
-    log.error('fretes_mes_query_failed', { code: error.code, message: error.message });
+    log.error('pedidos_mes_query_failed', { code: error.code, message: error.message });
     await enviarTexto(para, '❌ Não consegui consultar agora.');
     return;
   }
 
   const total = data?.length ?? 0;
-  const porStatus = (data ?? []).reduce<Record<string, number>>((acc, f) => {
-    const k = f.status ?? 'sem_status';
+  const porStatus = (data ?? []).reduce<Record<string, number>>((acc, p) => {
+    const k = p.status ?? 'sem_status';
     acc[k] = (acc[k] ?? 0) + 1;
     return acc;
   }, {});
 
   const mesNome = now.toLocaleDateString('pt-BR', { month: 'long' });
-  let resp = `📅 *Fretes de ${mesNome}* — total ${total}\n`;
+  let resp = `📅 *Pedidos de ${mesNome}* — total ${total}\n`;
   if (porStatus.concluido) resp += `\n✅ Concluídos: ${porStatus.concluido}`;
   if (porStatus.em_andamento) resp += `\n🛣️ Em andamento: ${porStatus.em_andamento}`;
   if (porStatus.agendado) resp += `\n📌 Agendados: ${porStatus.agendado}`;
@@ -391,14 +419,15 @@ async function responderLucroVeiculo(
   const inicioMes = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().slice(0, 10);
   const fimMes = new Date(now.getFullYear(), now.getMonth() + 1, 0).toISOString().slice(0, 10);
 
-  const { data: fretes, error } = await supabase
-    .from('fretes_com_resultado')
-    .select('receita, custo_total, lucro_bruto, km_total')
+  // Pedidos do veículo no mês (receita + km)
+  const { data: pedidos, error } = await supabase
+    .from('pedidos_com_resultado')
+    .select('receita, km_total')
     .eq('empresa_id', identity.empresa_id)
     .eq('veiculo_id', veiculo.id)
     .eq('status', 'concluido')
-    .gte('data_inicio', inicioMes)
-    .lte('data_inicio', fimMes);
+    .gte('data_inicio_real', inicioMes)
+    .lte('data_inicio_real', fimMes);
 
   if (error) {
     log.error('lucro_veiculo_query_failed', { code: error.code, message: error.message });
@@ -406,17 +435,29 @@ async function responderLucroVeiculo(
     return;
   }
 
-  const receita = (fretes ?? []).reduce((s, f) => s + (f.receita ?? 0), 0);
-  const custo = (fretes ?? []).reduce((s, f) => s + (f.custo_total ?? 0), 0);
-  const lucro = (fretes ?? []).reduce((s, f) => s + (f.lucro_bruto ?? 0), 0);
-  const km = (fretes ?? []).reduce((s, f) => s + (f.km_total ?? 0), 0);
+  // Custos do veículo no mês (despesas + combustível)
+  const { data: custos } = await supabase
+    .from('veiculos_resultado_periodo')
+    .select('custo_combustivel, custo_despesas')
+    .eq('empresa_id', identity.empresa_id)
+    .eq('veiculo_id', veiculo.id)
+    .gte('mes_referencia', inicioMes)
+    .lte('mes_referencia', fimMes);
+
+  const receita = (pedidos ?? []).reduce((s, p) => s + (p.receita ?? 0), 0);
+  const km = (pedidos ?? []).reduce((s, p) => s + (p.km_total ?? 0), 0);
+  const custo = (custos ?? []).reduce(
+    (s, c) => s + (c.custo_combustivel ?? 0) + (c.custo_despesas ?? 0),
+    0
+  );
+  const lucro = receita - custo;
   const margem = receita > 0 ? (lucro / receita) * 100 : 0;
   const mesNome = now.toLocaleDateString('pt-BR', { month: 'long' });
 
   await enviarTexto(
     para,
     `🚚 *${veiculo.placa}* — ${mesNome}\n\n` +
-      `🚛 Fretes: ${fretes?.length ?? 0}\n` +
+      `📦 Pedidos: ${pedidos?.length ?? 0}\n` +
       `📏 KM rodados: ${km.toLocaleString('pt-BR')}\n` +
       `💰 Receita: ${fmtBRL(receita)}\n` +
       `📤 Custo: ${fmtBRL(custo)}\n` +

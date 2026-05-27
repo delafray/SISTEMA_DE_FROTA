@@ -12,31 +12,38 @@ import {
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
-type Viagem = {
+type Pedido = {
   id: string;
   status: string;
-  data_saida_prevista: string | null;
-  data_chegada_prevista: string | null;
+  valor_pedido: number | null;
+  data_inicio_prevista: string | null;
+  data_fim_prevista: string | null;
   km_inicial: number | null;
   km_final: number | null;
   motoristas: { nome: string } | null;
   veiculos: { placa: string; modelo: string; marca: string } | null;
-  fretes: { id: string }[];
+  entregas: { id: string }[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  agendada: "Agendada", em_andamento: "Em Andamento", concluida: "Concluída", cancelada: "Cancelada",
+  agendada: "Agendado", agendado: "Agendado",
+  em_andamento: "Em Andamento",
+  concluida: "Concluído", concluido: "Concluído",
+  cancelada: "Cancelado", cancelado: "Cancelado",
 };
 const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
-  agendada: "warning", em_andamento: "info", concluida: "success", cancelada: "danger",
+  agendada: "warning", agendado: "warning",
+  em_andamento: "info",
+  concluida: "success", concluido: "success",
+  cancelada: "danger", cancelado: "danger",
 };
 
 const fmtDate = (d: string | null) =>
   d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
-export default function ViagensPage() {
+export default function PedidosListPage() {
   const router = useRouter();
-  const [todas, setTodas]     = useState<Viagem[]>([]);
+  const [todas, setTodas]     = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca]     = useState("");
   const [filtro, setFiltro]   = useState("");
@@ -51,11 +58,11 @@ export default function ViagensPage() {
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
-      const data = await loadAll<Viagem>((from, to) =>
-        supabase.from("viagens")
-          .select("id,status,data_saida_prevista,data_chegada_prevista,km_inicial,km_final,motoristas(nome),veiculos(placa,modelo,marca),fretes(id)")
+      const data = await loadAll<Pedido>((from, to) =>
+        supabase.from("pedidos")
+          .select("id,status,valor_pedido,data_inicio_prevista,data_fim_prevista,km_inicial,km_final,motoristas(nome),veiculos(placa,modelo,marca),entregas(id)")
           .eq("empresa_id", ue.empresa_id)
-          .order("data_saida_prevista", { ascending: false })
+          .order("data_inicio_prevista", { ascending: false })
           .range(from, to)
       );
       setTodas(data);
@@ -82,37 +89,28 @@ export default function ViagensPage() {
 
   const kpis = useMemo(() => ({
     total:       todas.length,
-    agendadas:   todas.filter(v => v.status === "agendada").length,
+    agendadas:   todas.filter(v => v.status === "agendada" || v.status === "agendado").length,
     andamento:   todas.filter(v => v.status === "em_andamento").length,
-    concluidas:  todas.filter(v => v.status === "concluida").length,
+    concluidas:  todas.filter(v => v.status === "concluida" || v.status === "concluido").length,
   }), [todas]);
-
-  const handleDelete = async (id: string) => {
-    const supabase = createClient();
-    // Desvincular fretes antes de deletar
-    await supabase.from("fretes").update({ viagem_id: null }).eq("viagem_id", id);
-    await supabase.from("viagens").delete().eq("id", id);
-    setTodas(p => p.filter(v => v.id !== id));
-  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title="Viagens"
+        title="Pedidos"
         count={filtradas.length}
-        actions={<Btn href="/viagens/novo">+ Nova Viagem</Btn>}
+        actions={<Btn href="/pedidos/novo">+ Novo Pedido</Btn>}
       />
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
           <KpiCard label="Total"       value={kpis.total}      />
-          <KpiCard label="Agendadas"   value={kpis.agendadas}  color="warning" />
+          <KpiCard label="Agendados"   value={kpis.agendadas}  color="warning" />
           <KpiCard label="Em Andamento" value={kpis.andamento} color="info" />
-          <KpiCard label="Concluídas"  value={kpis.concluidas} color="success" />
+          <KpiCard label="Concluídos"  value={kpis.concluidas} color="success" />
         </div>
 
-        {/* Desktop: tabela */}
         <div className="m-hide">
         <DataTable
           toolbar={
@@ -124,10 +122,10 @@ export default function ViagensPage() {
               />
               <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "160px" }}>
                 <option value="">Todos os status</option>
-                <option value="agendada">Agendada</option>
+                <option value="agendado">Agendado</option>
                 <option value="em_andamento">Em Andamento</option>
-                <option value="concluida">Concluída</option>
-                <option value="cancelada">Cancelada</option>
+                <option value="concluido">Concluído</option>
+                <option value="cancelado">Cancelado</option>
               </select>
             </>
           }
@@ -137,39 +135,41 @@ export default function ViagensPage() {
               <Th>Status</Th>
               <Th>Motorista</Th>
               <Th>Veículo</Th>
-              <Th>Saída Prevista</Th>
-              <Th>Chegada Prevista</Th>
-              <Th>Fretes</Th>
+              <Th>Início Previsto</Th>
+              <Th>Fim Previsto</Th>
+              <Th>Entregas</Th>
+              <Th>Valor (R$)</Th>
               <Th>KM</Th>
               <Th></Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><Td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
+              <tr><Td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={8}><EmptyState message="Nenhuma viagem encontrada" action={<Btn href="/viagens/novo">Criar primeira viagem</Btn>} /></td></tr>
+              <tr><td colSpan={9}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
             ) : filtradas.map(v => {
               const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
               const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
-              const fretes    = Array.isArray(v.fretes)     ? v.fretes        : [];
+              const entregas  = Array.isArray(v.entregas)   ? v.entregas      : [];
               const kmRodado  = v.km_final != null && v.km_inicial != null ? v.km_final - v.km_inicial : null;
               return (
                 <Tr key={v.id}>
                   <Td><Badge variant={STATUS_VAR[v.status] ?? "default"}>{STATUS_LABEL[v.status] ?? v.status}</Badge></Td>
                   <Td style={{ fontWeight: 600 }}>{motorista?.nome ?? "—"}</Td>
                   <Td>{veiculo ? `${veiculo.placa} · ${veiculo.marca} ${veiculo.modelo}` : "—"}</Td>
-                  <Td>{fmtDate(v.data_saida_prevista)}</Td>
-                  <Td>{fmtDate(v.data_chegada_prevista)}</Td>
+                  <Td>{fmtDate(v.data_inicio_prevista)}</Td>
+                  <Td>{fmtDate(v.data_fim_prevista)}</Td>
                   <Td style={{ textAlign: "center" }}>
-                    <Badge variant={fretes.length > 0 ? "info" : "default"}>{fretes.length}</Badge>
+                    <Badge variant={entregas.length > 0 ? "info" : "default"}>{entregas.length}</Badge>
                   </Td>
+                  <Td style={{ textAlign: "right" }}>{v.valor_pedido ? v.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—"}</Td>
                   <Td>{kmRodado != null ? `${kmRodado.toLocaleString("pt-BR")} km` : "—"}</Td>
                   <Td>
                     <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                      <Btn href={`/viagens/${v.id}`}      variant="ghost" size="xs">Ver</Btn>
-                      <Btn href={`/viagens/${v.id}/editar`} variant="outline" size="xs">Editar</Btn>
-                      <DeleteBtn id={v.id} table="viagens" label="viagem" />
+                      <Btn href={`/pedidos/${v.id}`}      variant="ghost" size="xs">Ver</Btn>
+                      <Btn href={`/pedidos/${v.id}/editar`} variant="outline" size="xs">Editar</Btn>
+                      <DeleteBtn id={v.id} table="pedidos" label="pedido" />
                     </div>
                   </Td>
                 </Tr>
@@ -179,33 +179,34 @@ export default function ViagensPage() {
         </DataTable>
         </div>
 
-        {/* Mobile: cards */}
-        <MobileList count={filtradas.length} label="viagens">
+        <MobileList count={filtradas.length} label="pedidos">
           {loading ? null : filtradas.map(v => {
             const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
             const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
-            const fretes    = Array.isArray(v.fretes)     ? v.fretes        : [];
-            const statusColor = v.status === "concluida" ? "#16a34a" : v.status === "em_andamento" ? "#2563eb" : v.status === "cancelada" ? "#ef4444" : "#eab308";
+            const entregas  = Array.isArray(v.entregas)   ? v.entregas      : [];
+            const concluido = v.status === "concluida" || v.status === "concluido";
+            const cancelado = v.status === "cancelada" || v.status === "cancelado";
+            const statusColor = concluido ? "#16a34a" : v.status === "em_andamento" ? "#2563eb" : cancelado ? "#ef4444" : "#eab308";
             return (
               <MobileCard
                 key={v.id}
-                href={`/viagens/${v.id}`}
+                href={`/pedidos/${v.id}`}
                 title={motorista?.nome ?? "Sem motorista"}
                 subtitle={veiculo ? `${veiculo.placa} • ${veiculo.marca} ${veiculo.modelo}` : "Sem veículo"}
                 badge={<Badge variant={STATUS_VAR[v.status] ?? "default"}>{STATUS_LABEL[v.status] ?? v.status}</Badge>}
                 highlight={statusColor}
                 details={[
-                  { label: "Saída", value: fmtDate(v.data_saida_prevista) },
-                  { label: "Chegada", value: fmtDate(v.data_chegada_prevista) },
-                  { label: "Fretes", value: String(fretes.length) },
-                  { label: "Status", value: STATUS_LABEL[v.status] ?? v.status },
+                  { label: "Início", value: fmtDate(v.data_inicio_prevista) },
+                  { label: "Fim", value: fmtDate(v.data_fim_prevista) },
+                  { label: "Entregas", value: String(entregas.length) },
+                  { label: "Valor", value: v.valor_pedido ? `R$ ${v.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—" },
                 ]}
               />
             );
           })}
         </MobileList>
 
-        <MobileFAB href="/viagens/novo" label="Nova Viagem" />
+        <MobileFAB href="/pedidos/novo" label="Novo Pedido" />
       </div>
     </div>
   );

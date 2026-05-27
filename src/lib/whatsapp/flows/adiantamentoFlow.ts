@@ -139,22 +139,12 @@ async function salvarAdiantamento(para: string, sessao: Sessao): Promise<void> {
     return;
   }
 
-  // Buscar frete ativo
-  const { data: freteAtivo } = await supabase
-    .from('fretes')
-    .select('id')
-    .eq('veiculo_id', sessao.contexto.veiculo_id ?? '')
-    .eq('status', 'em_andamento')
-    .maybeSingle();
-
   const { error } = await supabase.from('adiantamentos').insert({
-    motorista_id: sessao.motorista_id,
+    motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
-    frete_id: freteAtivo?.id ?? null,
     tipo: dados.tipo as string,
     valor: dados.valor as number,
     status: 'pendente',
-    origem: 'whatsapp',
   });
 
   if (error) {

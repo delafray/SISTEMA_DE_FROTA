@@ -10,7 +10,7 @@ import AvariasTab from "./_components/AvariasTab";
 import LogsTab from "./_components/LogsTab";
 
 type Abast = { id: string; created_at: string | null; km_no_abast: number | null; litros: number; valor_litro: number | null; valor_total: number; posto: string | null; confirmado: boolean | null };
-type FreteHist = { id: string; origem: string; destino: string; status: string; data_coleta_prevista: string | null; km_inicial: number | null; km_final: number | null };
+type PedidoHist = { id: string; status: string; data_inicio_prevista: string | null; km_inicial: number | null; km_final: number | null; valor_pedido: number | null };
 
 const fmtPlaca = (v: string) => v.length >= 4 ? v.slice(0, 3) + "-" + v.slice(3) : v;
 
@@ -25,8 +25,8 @@ export default function EditarVeiculoPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [abastecimentos, setAbastecimentos] = useState<Abast[]>([]);
-  const [freteHist, setFreteHist] = useState<FreteHist[]>([]);
-  const [histTab, setHistTab] = useState<"abast" | "fretes">("abast");
+  const [pedidoHist, setPedidoHist] = useState<PedidoHist[]>([]);
+  const [histTab, setHistTab] = useState<"abast" | "pedidos">("abast");
   const [tab, setTab] = useState<TabId>("dados");
   const [dadosSubTab, setDadosSubTab] = useState<DadosSubTabId>("principal");
   const [empresaId, setEmpresaId] = useState<string>("");
@@ -45,12 +45,12 @@ export default function EditarVeiculoPage() {
       supabase.from("abastecimentos")
         .select("id,created_at,km_no_abast,litros,valor_litro,valor_total,posto,confirmado")
         .eq("veiculo_id", id).order("created_at", { ascending: false }).limit(20),
-      supabase.from("fretes")
-        .select("id,origem,destino,status,data_coleta_prevista,km_inicial,km_final")
+      supabase.from("pedidos")
+        .select("id,status,data_inicio_prevista,km_inicial,km_final,valor_pedido")
         .eq("veiculo_id", id).order("created_at", { ascending: false }).limit(20),
     ]).then(([a, f]) => {
       setAbastecimentos(a.data ?? []);
-      setFreteHist(f.data ?? []);
+      setPedidoHist(f.data ?? []);
     });
 
     supabase.from("veiculos").select("*").eq("id", id).single().then(({ data }) => {
@@ -160,7 +160,7 @@ export default function EditarVeiculoPage() {
             { id: "manutencoes", label: "Manutenções" },
             { id: "avarias", label: "Avarias" },
             { id: "logs", label: "Logs de KM" },
-            { id: "historico", label: "Histórico", badge: abastecimentos.length + freteHist.length },
+            { id: "historico", label: "Histórico", badge: abastecimentos.length + pedidoHist.length },
           ]}
         />
       </div>
@@ -364,13 +364,13 @@ export default function EditarVeiculoPage() {
         {tab === "historico" && (
           <FormSection title="Histórico">
             <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "12px" }}>
-              {([["abast","Abastecimentos"],["fretes","Fretes"]] as const).map(([key, label]) => (
+              {([["abast","Abastecimentos"],["pedidos","Pedidos"]] as const).map(([key, label]) => (
                 <button key={key} type="button" onClick={() => setHistTab(key)} style={{
                   padding: "6px 16px", border: "none", background: "none", cursor: "pointer",
                   fontSize: "12px", fontWeight: histTab === key ? 700 : 500,
                   color: histTab === key ? "#2563eb" : "#64748b",
                   borderBottom: histTab === key ? "2px solid #2563eb" : "2px solid transparent",
-                }}>{label} ({key === "abast" ? abastecimentos.length : freteHist.length})</button>
+                }}>{label} ({key === "abast" ? abastecimentos.length : pedidoHist.length})</button>
               ))}
             </div>
 
@@ -398,22 +398,24 @@ export default function EditarVeiculoPage() {
                   </DataTable>
             )}
 
-            {histTab === "fretes" && (
-              freteHist.length === 0
-                ? <p style={{ fontSize: "12px", color: "#94a3b8" }}>Nenhum frete registrado.</p>
-                : <DataTable count={freteHist.length} label="fretes">
+            {histTab === "pedidos" && (
+              pedidoHist.length === 0
+                ? <p style={{ fontSize: "12px", color: "#94a3b8" }}>Nenhum pedido registrado.</p>
+                : <DataTable count={pedidoHist.length} label="pedidos">
                     <thead><tr>
-                      <Th>Rota</Th><Th>Status</Th><Th>Data</Th>
+                      <Th>ID</Th><Th>Status</Th><Th>Data</Th>
                       <Th style={{ textAlign: "right" }}>KM Ini.</Th><Th style={{ textAlign: "right" }}>KM Fin.</Th>
+                      <Th style={{ textAlign: "right" }}>Valor</Th>
                     </tr></thead>
                     <tbody>
-                      {freteHist.map(fh => (
-                        <Tr key={fh.id}>
-                          <Td style={{ fontWeight: 500 }}>{fh.origem} → {fh.destino}</Td>
-                          <Td><span style={{ fontSize: "11px", fontWeight: 600 }}>{fh.status}</span></Td>
-                          <Td>{fh.data_coleta_prevista ? new Date(fh.data_coleta_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{fh.km_inicial?.toLocaleString("pt-BR") ?? "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{fh.km_final?.toLocaleString("pt-BR") ?? "—"}</Td>
+                      {pedidoHist.map(ph => (
+                        <Tr key={ph.id}>
+                          <Td style={{ fontWeight: 500 }}>#{ph.id.slice(0, 8)}</Td>
+                          <Td><span style={{ fontSize: "11px", fontWeight: 600 }}>{ph.status}</span></Td>
+                          <Td>{ph.data_inicio_prevista ? new Date(ph.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</Td>
+                          <Td style={{ textAlign: "right" }}>{ph.km_inicial?.toLocaleString("pt-BR") ?? "—"}</Td>
+                          <Td style={{ textAlign: "right" }}>{ph.km_final?.toLocaleString("pt-BR") ?? "—"}</Td>
+                          <Td style={{ textAlign: "right" }}>{ph.valor_pedido != null ? `R$ ${ph.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</Td>
                         </Tr>
                       ))}
                     </tbody>

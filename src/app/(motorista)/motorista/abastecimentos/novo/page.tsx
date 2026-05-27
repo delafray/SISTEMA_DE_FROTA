@@ -4,7 +4,6 @@ import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
-type FreteOpcao = { id: string; origem: string | null; destino: string | null };
 type VeiculoInfo = { id: string; placa: string; marca: string; modelo: string };
 
 const inputMobile: React.CSSProperties = {
@@ -22,19 +21,18 @@ const inputMobile: React.CSSProperties = {
 function NovoAbastecimentoForm() {
   const router       = useRouter();
   const searchParams = useSearchParams();
-  const viagemId     = searchParams.get("viagem_id");
+  // aceita tanto pedido_id quanto viagem_id (legado) na URL
+  const pedidoId     = searchParams.get("pedido_id") ?? searchParams.get("viagem_id");
 
   const [motoristaId, setMotoristaId] = useState("");
   const [empresaId,   setEmpresaId]   = useState("");
   const [veiculo,     setVeiculo]     = useState<VeiculoInfo | null>(null);
-  const [fretes,      setFretes]      = useState<FreteOpcao[]>([]);
   const [loading,     setLoading]     = useState(true);
   const [saving,      setSaving]      = useState(false);
   const [err,         setErr]         = useState("");
   const [ok,          setOk]          = useState(false);
 
   const [f, setF] = useState({
-    frete_id:    "",
     km_no_abast: "",
     litros:      "",
     valor_litro: "",
@@ -58,15 +56,14 @@ function NovoAbastecimentoForm() {
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
 
-      if (viagemId) {
-        // busca viagem para pegar veículo e fretes
-        const { data: viagem } = await supabase.from("viagens")
-          .select("veiculo_id,veiculos(id,placa,marca,modelo),fretes(id,origem,destino)")
-          .eq("id", viagemId)
+      if (pedidoId) {
+        // busca pedido para pegar veículo
+        const { data: pedido } = await supabase.from("pedidos")
+          .select("veiculo_id,veiculos(id,placa,marca,modelo)")
+          .eq("id", pedidoId)
           .single();
-        const v = Array.isArray(viagem?.veiculos) ? viagem.veiculos[0] : viagem?.veiculos;
-        if (v) setVeiculo(v);
-        setFretes(Array.isArray(viagem?.fretes) ? viagem.fretes : []);
+        const v = Array.isArray(pedido?.veiculos) ? pedido.veiculos[0] : pedido?.veiculos;
+        if (v) setVeiculo(v as unknown as VeiculoInfo);
       } else if (mId) {
         // fallback: vínculo padrão motorista↔veículo
         const { data: vinculo } = await supabase.from("motorista_veiculo")
@@ -76,7 +73,7 @@ function NovoAbastecimentoForm() {
           .eq("ativo", true)
           .single();
         const v = Array.isArray(vinculo?.veiculos) ? vinculo.veiculos[0] : vinculo?.veiculos;
-        if (v) setVeiculo(v);
+        if (v) setVeiculo(v as unknown as VeiculoInfo);
       }
 
       setLoading(false);
@@ -112,7 +109,6 @@ function NovoAbastecimentoForm() {
       empresa_id:   empresaId,
       veiculo_id:   veiculo.id,
       motorista_id: motoristaId,
-      frete_id:     f.frete_id || null,
       km_no_abast:  f.km_no_abast  ? parseFloat(f.km_no_abast)  : null,
       litros:       parseFloat(f.litros),
       valor_litro:  f.valor_litro  ? parseFloat(f.valor_litro)  : null,
@@ -170,23 +166,6 @@ function NovoAbastecimentoForm() {
         {err && (
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "10px", padding: "12px 14px", color: "#991b1b", fontSize: "14px" }}>
             ⚠ {err}
-          </div>
-        )}
-
-        {/* Frete opcional */}
-        {fretes.length > 0 && (
-          <div>
-            <label style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "6px" }}>
-              Frete (opcional)
-            </label>
-            <select value={f.frete_id} onChange={set("frete_id")} style={inputMobile}>
-              <option value="">— Nenhum —</option>
-              {fretes.map(fr => (
-                <option key={fr.id} value={fr.id}>
-                  {fr.origem ?? "?"} → {fr.destino ?? "?"}
-                </option>
-              ))}
-            </select>
           </div>
         )}
 

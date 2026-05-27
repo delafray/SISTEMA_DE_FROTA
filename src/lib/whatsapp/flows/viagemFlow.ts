@@ -1,17 +1,16 @@
 /**
- * Viagem Flow — Iniciar e Encerrar Viagem.
+ * Pedido Flow — Iniciar e Encerrar Pedido (antigo "viagem").
  *
- * Seção 6.4 do plano:
  * 1. Motorista informa origem → destino
- * 2. Seleciona cliente (lista) ou frete avulso
- * 3. Informa valor do frete (ou pula)
+ * 2. Seleciona cliente (lista) ou pedido avulso
+ * 3. Informa valor do pedido (ou pula)
  * 4. Tira foto do painel para KM inicial
- * 5. Viagem criada no Supabase
+ * 5. Pedido criado no Supabase
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
-import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
+import { updateSession, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { createClient } from '@supabase/supabase-js';
 
 function getSupabase() {
@@ -31,8 +30,8 @@ export async function processarViagemFlow(msg: ParsedMessage, sessao: Sessao): P
       await processarCliente(msg, sessao);
       return;
 
-    case 'aguardando_valor_frete':
-      await processarValorFrete(msg, sessao);
+    case 'aguardando_valor_pedido':
+      await processarValorPedido(msg, sessao);
       return;
   }
 }
@@ -95,7 +94,7 @@ async function processarOrigemDestino(msg: ParsedMessage, sessao: Sessao): Promi
     }));
 
     // Adicionar opção avulso
-    itens.push({ id: 'cliente_avulso', titulo: '➕ Frete avulso' });
+    itens.push({ id: 'cliente_avulso', titulo: '➕ Pedido avulso' });
 
     await enviarLista(
       msg.from,
@@ -104,7 +103,7 @@ async function processarOrigemDestino(msg: ParsedMessage, sessao: Sessao): Promi
       [{ titulo: 'Clientes', itens }]
     );
   } else {
-    // Sem clientes → frete avulso direto
+    // Sem clientes → pedido avulso direto
     await updateSession(sessao.id, {
       contexto: {
         pedido_dados: {
@@ -118,13 +117,13 @@ async function processarOrigemDestino(msg: ParsedMessage, sessao: Sessao): Promi
 
     await enviarBotoes(
       msg.from,
-      `Rota: *${origem}${destino ? ' → ' + destino : ''}*\n\nQual o valor do frete? (R$)`,
+      `Rota: *${origem}${destino ? ' → ' + destino : ''}*\n\nQual o valor do pedido? (R$)`,
       [
-        { id: 'frete_pular', titulo: '⏭️ Pular' },
+        { id: 'pedido_pular', titulo: '⏭️ Pular' },
       ]
     );
 
-    await updateSession(sessao.id, { estado: 'aguardando_valor_frete' });
+    await updateSession(sessao.id, { estado: 'aguardando_valor_pedido' });
     return;
   }
 
@@ -148,7 +147,7 @@ async function processarCliente(msg: ParsedMessage, sessao: Sessao): Promise<voi
   }
 
   await updateSession(sessao.id, {
-    estado: 'aguardando_valor_frete',
+    estado: 'aguardando_valor_pedido',
     contexto: {
       pedido_dados: {
         ...(sessao.contexto.pedido_dados as Record<string, unknown> ?? {}),
@@ -157,27 +156,27 @@ async function processarCliente(msg: ParsedMessage, sessao: Sessao): Promise<voi
     },
   });
 
-  await enviarTexto(msg.from, 'Qual o *valor do frete*? (R$)\nDigite o valor ou clique em Pular:');
+  await enviarTexto(msg.from, 'Qual o *valor do pedido*? (R$)\nDigite o valor ou clique em Pular:');
   await enviarBotoes(msg.from, 'Pode informar agora ou depois:', [
-    { id: 'frete_pular', titulo: '⏭️ Pular' },
+    { id: 'pedido_pular', titulo: '⏭️ Pular' },
   ]);
 }
 
-// ─── ETAPA 3: Valor do Frete ─────────────────────────────────────────
+// ─── ETAPA 3: Valor do Pedido ────────────────────────────────────────
 
-async function processarValorFrete(msg: ParsedMessage, sessao: Sessao): Promise<void> {
-  let valorFrete: number | null = null;
+async function processarValorPedido(msg: ParsedMessage, sessao: Sessao): Promise<void> {
+  let valorPedido: number | null = null;
 
-  if (msg.tipo === 'botao' && msg.botaoId === 'frete_pular') {
-    valorFrete = null;
+  if (msg.tipo === 'botao' && (msg.botaoId === 'pedido_pular' || msg.botaoId === 'frete_pular')) {
+    valorPedido = null;
   } else if (msg.tipo === 'texto' && msg.texto) {
-    valorFrete = parseValor(msg.texto);
-    if (valorFrete === null) {
+    valorPedido = parseValor(msg.texto);
+    if (valorPedido === null) {
       await enviarTexto(msg.from, 'Não entendi o valor. Digite apenas números (ex: 1500 ou 1500,00):');
       return;
     }
   } else {
-    await enviarTexto(msg.from, 'Digite o *valor do frete* ou clique em Pular:');
+    await enviarTexto(msg.from, 'Digite o *valor do pedido* ou clique em Pular:');
     return;
   }
 
@@ -189,14 +188,14 @@ async function processarValorFrete(msg: ParsedMessage, sessao: Sessao): Promise<
     contexto: {
       pedido_dados: {
         ...(sessao.contexto.pedido_dados as Record<string, unknown> ?? {}),
-        valor_frete: valorFrete,
-        criar_frete: true, // Flag para o kmFlow saber que deve criar frete
+        valor_pedido: valorPedido,
+        criar_pedido: true, // Flag para o kmFlow saber que deve criar pedido
       },
     },
   });
 
-  // Quando o KM for registrado pelo kmFlow, o frete será criado
-  // TODO: integrar com kmFlow para criar o frete após confirmação do KM
+  // Quando o KM for registrado pelo kmFlow, o pedido será criado
+  // TODO: integrar com kmFlow para criar o pedido após confirmação do KM
 }
 
 // ─── HELPERS ─────────────────────────────────────────────────────────

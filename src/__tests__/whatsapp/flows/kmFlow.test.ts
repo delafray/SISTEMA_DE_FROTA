@@ -90,7 +90,7 @@ describe("kmFlow — aguardando_foto_km", () => {
     await processarKmFlow(msg, sessao);
 
     expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_registrado: 125430, origem: "whatsapp_manual" })
+      expect.objectContaining({ km_lido: 125430 })
     );
   });
 
@@ -216,7 +216,7 @@ describe("kmFlow — aguardando_confirmacao_km", () => {
     await processarKmFlow(msg, sessao);
 
     expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_registrado: 125430, origem: "whatsapp_ia_confirmado" })
+      expect.objectContaining({ km_lido: 125430 })
     );
   });
 
@@ -246,7 +246,7 @@ describe("kmFlow — aguardando_confirmacao_km", () => {
     await processarKmFlow(msg, sessao);
 
     expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_registrado: 125500, origem: "whatsapp_manual" })
+      expect.objectContaining({ km_lido: 125500 })
     );
   });
 });
@@ -272,7 +272,7 @@ describe("kmFlow — aguardando_km_manual", () => {
     await processarKmFlow(msg, sessao);
 
     expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_registrado: 125430 })
+      expect.objectContaining({ km_lido: 125430 })
     );
   });
 

@@ -94,8 +94,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <SectionLabel>Operação</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <NavItem href="/"               label="Início"         icon={HomeIcon}  onNavigate={onNavigate} />
-            <NavItem href="/viagens"        label="Viagens"        icon={RouteIcon} onNavigate={onNavigate} />
-            <NavItem href="/fretes"         label="Fretes"         icon={FreteIcon} onNavigate={onNavigate} />
+            <NavItem href="/pedidos"        label="Viagens"        icon={RouteIcon} onNavigate={onNavigate} />
+            <NavItem href="/entregas"         label="Fretes"         icon={FreteIcon} onNavigate={onNavigate} />
             <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon}  onNavigate={onNavigate} />
           </div>
 

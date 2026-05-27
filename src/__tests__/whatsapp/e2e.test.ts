@@ -392,9 +392,8 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     const payload = (kmLogsInsert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(payload).toMatchObject({
       veiculo_id: 'v-1',
-      km_registrado: 185000,
+      km_lido: 185000,
       tipo: 'informado',
-      origem: 'whatsapp_ia_confirmado',
     });
     // confirmação ao motorista
     const ultMsg = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1];
@@ -438,9 +437,8 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     const payload = (kmLogsInsert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(payload).toMatchObject({
       veiculo_id: 'v-1',
-      km_registrado: 185000,
+      km_lido: 185000,
       tipo: 'informado',
-      origem: 'whatsapp_manual',
     });
     expect(resetToMenu).toHaveBeenCalledWith('sess-1');
   });

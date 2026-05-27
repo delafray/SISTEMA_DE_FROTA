@@ -33,7 +33,7 @@ export type EstadoSessao =
   | 'aguardando_confirmacao_avaria'
   | 'aguardando_origem_destino'
   | 'aguardando_cliente'
-  | 'aguardando_valor_frete'
+  | 'aguardando_valor_pedido'
   | 'aguardando_foto_abastecimento'
   | 'aguardando_confirmacao_abastecimento'
   | 'aguardando_checklist'
@@ -57,7 +57,7 @@ export type EstadoSessao =
 export type ContextoSessao = {
   veiculo_id?: string;
   veiculo_placa?: string;
-  frete_id?: string;
+  pedido_id?: string;
   motorista_id?: string;
   km_lido?: number;
   km_confianca?: number;

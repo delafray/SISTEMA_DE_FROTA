@@ -464,7 +464,7 @@ describe('extrairPedidoFrete', () => {
       cliente_cnpj: '12345678000199',
       origem: 'São Paulo - SP',
       destino: 'Belo Horizonte - MG',
-      valor_frete: 5000,
+      valor_pedido: 5000,
       peso_carga_kg: 15000,
       tipo_carga: 'carga seca',
       data_coleta: '2025-05-20',

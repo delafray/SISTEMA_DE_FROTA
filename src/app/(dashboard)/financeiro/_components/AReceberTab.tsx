@@ -19,15 +19,14 @@ const hoje = () => {
   return `${year}-${month}-${day}`;
 };
 
-type Frete = {
+type Pedido = {
   id: string;
-  origem: string;
-  destino: string;
-  valor_frete: number | null;
+  valor_pedido: number | null;
   pago: boolean | null;
   data_pagamento: string | null;
-  data_entrega_prevista: string | null;
-  data_coleta_prevista: string | null;
+  data_inicio_prevista: string | null;
+  data_fim_prevista: string | null;
+  forma_pagamento: string | null;
   status: string;
   motoristas: { nome: string } | { nome: string }[] | null;
   veiculos: { placa: string } | { placa: string }[] | null;
@@ -42,7 +41,7 @@ type ModalBaixa = {
 
 export default function AReceberTab({ empresaId }: { empresaId: string }) {
   const supabase = createClient();
-  const [fretes, setFretes] = useState<Frete[]>([]);
+  const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
   const [salvando, setSalvando] = useState(false);
@@ -52,15 +51,15 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
   const carregar = async () => {
     setErro("");
     const { data, error } = await supabase
-      .from("fretes")
-      .select("id,origem,destino,valor_frete,pago,data_pagamento,data_entrega_prevista,data_coleta_prevista,status,motoristas(nome),veiculos(placa)")
+      .from("pedidos")
+      .select("id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,forma_pagamento,status,motoristas(nome),veiculos(placa)")
       .eq("empresa_id", empresaId)
-      .not("valor_frete", "is", null)
-      .gt("valor_frete", 0)
-      .order("data_coleta_prevista", { ascending: false });
+      .not("valor_pedido", "is", null)
+      .gt("valor_pedido", 0)
+      .order("data_inicio_prevista", { ascending: false });
 
     if (error) { setErro(error.message); }
-    else { setFretes((data as Frete[]) ?? []); }
+    else { setPedidos((data as Pedido[]) ?? []); }
     setLoading(false);
   };
 
@@ -68,34 +67,34 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
 
   const hoje_ = hoje();
   const filtrados = useMemo(() => {
-    return fretes.filter(f => {
-      if (filtro === "pendentes") return !f.pago;
+    return pedidos.filter(p => {
+      if (filtro === "pendentes") return !p.pago;
       if (filtro === "atrasados") {
-        const data = f.data_entrega_prevista ?? f.data_coleta_prevista;
-        return !f.pago && data != null && data < hoje_;
+        const data = p.data_fim_prevista ?? p.data_inicio_prevista;
+        return !p.pago && data != null && data < hoje_;
       }
       return true;
     });
-  }, [fretes, filtro, hoje_]);
+  }, [pedidos, filtro, hoje_]);
 
-  const { sortedData, sortKey, sortDirection, handleSort } = useTableSort<Frete>(filtrados, "data_coleta_prevista", "desc");
+  const { sortedData, sortKey, sortDirection, handleSort } = useTableSort<Pedido>(filtrados, "data_inicio_prevista", "desc");
 
   const totalPendente = useMemo(() =>
-    fretes.filter(f => !f.pago).reduce((s, f) => s + (f.valor_frete ?? 0), 0), [fretes]);
+    pedidos.filter(p => !p.pago).reduce((s, p) => s + (p.valor_pedido ?? 0), 0), [pedidos]);
   const totalRecebido = useMemo(() =>
-    fretes.filter(f => f.pago).reduce((s, f) => s + (f.valor_frete ?? 0), 0), [fretes]);
+    pedidos.filter(p => p.pago).reduce((s, p) => s + (p.valor_pedido ?? 0), 0), [pedidos]);
   const qtdAtrasados = useMemo(() =>
-    fretes.filter(f => {
-      const data = f.data_entrega_prevista ?? f.data_coleta_prevista;
-      return !f.pago && data != null && data < hoje_;
-    }).length, [fretes, hoje_]);
+    pedidos.filter(p => {
+      const data = p.data_fim_prevista ?? p.data_inicio_prevista;
+      return !p.pago && data != null && data < hoje_;
+    }).length, [pedidos, hoje_]);
 
-  const abrirBaixa = (frete: Frete) => {
-    const motorista = Array.isArray(frete.motoristas) ? frete.motoristas[0] : frete.motoristas;
+  const abrirBaixa = (pedido: Pedido) => {
+    const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
     setModalBaixa({
-      id: frete.id,
-      descricao: `Frete ${frete.origem} → ${frete.destino}${motorista ? ` (${motorista.nome})` : ""}`,
-      valor: frete.valor_frete ?? 0,
+      id: pedido.id,
+      descricao: `Pedido ${pedido.id.slice(0, 8)}${motorista ? ` (${motorista.nome})` : ""}`,
+      valor: pedido.valor_pedido ?? 0,
       dataPagamento: hoje_,
     });
   };
@@ -103,7 +102,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
   const confirmarBaixa = async () => {
     if (!modalBaixa) return;
     setSalvando(true);
-    const { error } = await supabase.from("fretes").update({
+    const { error } = await supabase.from("pedidos").update({
       pago: true,
       data_pagamento: modalBaixa.dataPagamento,
     }).eq("id", modalBaixa.id);
@@ -114,7 +113,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
 
   const desfazerBaixa = async (id: string) => {
     setSalvando(true);
-    const { error } = await supabase.from("fretes").update({ pago: false, data_pagamento: null }).eq("id", id);
+    const { error } = await supabase.from("pedidos").update({ pago: false, data_pagamento: null }).eq("id", id);
     if (error) setErro(error.message);
     else await carregar();
     setSalvando(false);
@@ -139,7 +138,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
         {qtdAtrasados > 0 && (
           <div style={{ background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", padding: "10px 12px" }}>
             <div style={{ fontSize: "10px", fontWeight: 700, color: "#dc2626", textTransform: "uppercase" }}>⚠ Em Atraso</div>
-            <div style={{ fontSize: "18px", fontWeight: 700, color: "#991b1b" }}>{qtdAtrasados} fretes</div>
+            <div style={{ fontSize: "18px", fontWeight: 700, color: "#991b1b" }}>{qtdAtrasados} pedidos</div>
           </div>
         )}
       </div>
@@ -159,53 +158,57 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
 
       {/* Tabela */}
       {sortedData.length === 0
-        ? <EmptyState icon="💚" message="Nenhum frete encontrado para este filtro." />
+        ? <EmptyState icon="💚" message="Nenhum pedido encontrado para este filtro." />
         : (
           <>
           <div className="m-hide">
-          <DataTable count={sortedData.length} label="fretes">
+          <DataTable count={sortedData.length} label="pedidos">
             <thead>
               <tr>
-                <Th sortKey="data_coleta_prevista" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Data</Th>
-                <Th sortKey="origem" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Frete</Th>
+                <Th sortKey="data_inicio_prevista" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Data</Th>
+                <Th sortKey="forma_pagamento" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Pedido</Th>
                 <Th sortKey="status" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
-                <Th sortKey="valor_frete" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>Valor</Th>
+                <Th sortKey="valor_pedido" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>Valor</Th>
                 <Th>Situação</Th>
                 <Th>Ação</Th>
               </tr>
             </thead>
             <tbody>
-              {sortedData.map(fr => {
-                const motorista = Array.isArray(fr.motoristas) ? fr.motoristas[0] : fr.motoristas;
-                const dataRef = fr.data_entrega_prevista ?? fr.data_coleta_prevista;
-                const atrasado = !fr.pago && dataRef != null && dataRef < hoje_;
+              {sortedData.map(pe => {
+                const motorista = Array.isArray(pe.motoristas) ? pe.motoristas[0] : pe.motoristas;
+                const veiculo = Array.isArray(pe.veiculos) ? pe.veiculos[0] : pe.veiculos;
+                const dataRef = pe.data_fim_prevista ?? pe.data_inicio_prevista;
+                const atrasado = !pe.pago && dataRef != null && dataRef < hoje_;
                 return (
-                  <Tr key={fr.id}>
+                  <Tr key={pe.id}>
                     <Td style={{ color: atrasado ? "#dc2626" : undefined }}>{fmtDate(dataRef)}</Td>
                     <Td>
-                      <div style={{ fontWeight: 600, fontSize: "12px" }}>{fr.origem} → {fr.destino}</div>
-                      {motorista && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{motorista.nome}</div>}
+                      <div style={{ fontWeight: 600, fontSize: "12px" }}>
+                        Pedido #{pe.id.slice(0, 8)}
+                        {pe.forma_pagamento && <span style={{ marginLeft: "8px", fontWeight: 400, color: "#64748b" }}>({pe.forma_pagamento})</span>}
+                      </div>
+                      {motorista && <div style={{ fontSize: "10px", color: "#94a3b8" }}>{motorista.nome}{veiculo ? ` · ${veiculo.placa}` : ""}</div>}
                     </Td>
                     <Td>
-                      <Badge variant={fr.status === "concluido" ? "success" : fr.status === "em_andamento" ? "info" : "default"}>
-                        {fr.status.replace(/_/g, " ")}
+                      <Badge variant={pe.status === "concluido" ? "success" : pe.status === "em_andamento" ? "info" : "default"}>
+                        {pe.status.replace(/_/g, " ")}
                       </Badge>
                     </Td>
-                    <Td style={{ textAlign: "right", fontWeight: 700, color: fr.pago ? "#16a34a" : "#1e293b" }}>
-                      {fmtBRL(fr.valor_frete ?? 0)}
+                    <Td style={{ textAlign: "right", fontWeight: 700, color: pe.pago ? "#16a34a" : "#1e293b" }}>
+                      {fmtBRL(pe.valor_pedido ?? 0)}
                     </Td>
                     <Td>
-                      {fr.pago
-                        ? <Badge variant="success">✓ Recebido {fmtDate(fr.data_pagamento)}</Badge>
+                      {pe.pago
+                        ? <Badge variant="success">✓ Recebido {fmtDate(pe.data_pagamento)}</Badge>
                         : atrasado
                           ? <Badge variant="danger">⚠ Atrasado</Badge>
                           : <Badge variant="warning">Pendente</Badge>
                       }
                     </Td>
                     <Td>
-                      {fr.pago
-                        ? <ActionBtn title="Desfazer baixa" variant="default" onClick={() => desfazerBaixa(fr.id)}>↩</ActionBtn>
-                        : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(fr)}>Baixar</Btn>
+                      {pe.pago
+                        ? <ActionBtn title="Desfazer baixa" variant="default" onClick={() => desfazerBaixa(pe.id)}>↩</ActionBtn>
+                        : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(pe)}>Baixar</Btn>
                       }
                     </Td>
                   </Tr>
@@ -216,30 +219,30 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
           </div>
 
           {/* Mobile: cards */}
-          <MobileList count={sortedData.length} label="fretes">
-            {sortedData.map(fr => {
-              const motorista = Array.isArray(fr.motoristas) ? fr.motoristas[0] : fr.motoristas;
-              const dataRef = fr.data_entrega_prevista ?? fr.data_coleta_prevista;
-              const atrasado = !fr.pago && dataRef != null && dataRef < hoje_;
-              const statusBadge = fr.pago
+          <MobileList count={sortedData.length} label="pedidos">
+            {sortedData.map(pe => {
+              const motorista = Array.isArray(pe.motoristas) ? pe.motoristas[0] : pe.motoristas;
+              const dataRef = pe.data_fim_prevista ?? pe.data_inicio_prevista;
+              const atrasado = !pe.pago && dataRef != null && dataRef < hoje_;
+              const statusBadge = pe.pago
                 ? <Badge variant="success">✓ Recebido</Badge>
                 : atrasado ? <Badge variant="danger">Atrasado</Badge>
                 : <Badge variant="warning">Pendente</Badge>;
               return (
                 <MobileCard
-                  key={fr.id}
-                  title={`${fr.origem} → ${fr.destino}`}
+                  key={pe.id}
+                  title={`Pedido #${pe.id.slice(0, 8)}`}
                   subtitle={motorista?.nome ?? ""}
                   badge={statusBadge}
-                  highlight={atrasado ? "#dc2626" : fr.pago ? "#16a34a" : "#eab308"}
+                  highlight={atrasado ? "#dc2626" : pe.pago ? "#16a34a" : "#eab308"}
                   details={[
                     { label: "Data", value: fmtDate(dataRef) },
-                    { label: "Valor", value: fmtBRL(fr.valor_frete ?? 0) },
+                    { label: "Valor", value: fmtBRL(pe.valor_pedido ?? 0) },
                   ]}
                   actions={
-                    fr.pago
-                      ? <ActionBtn title="Desfazer" variant="default" onClick={() => desfazerBaixa(fr.id)}>↩</ActionBtn>
-                      : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(fr)}>Baixar</Btn>
+                    pe.pago
+                      ? <ActionBtn title="Desfazer" variant="default" onClick={() => desfazerBaixa(pe.id)}>↩</ActionBtn>
+                      : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(pe)}>Baixar</Btn>
                   }
                 />
               );

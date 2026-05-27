@@ -148,25 +148,15 @@ async function salvarAbastecimento(para: string, sessao: Sessao): Promise<void> 
     return;
   }
 
-  // Buscar frete ativo
-  const { data: freteAtivo } = await supabase
-    .from('fretes')
-    .select('id')
-    .eq('veiculo_id', sessao.contexto.veiculo_id)
-    .eq('status', 'em_andamento')
-    .maybeSingle();
-
   const { error } = await supabase.from('abastecimentos').insert({
-    veiculo_id: sessao.contexto.veiculo_id,
-    motorista_id: sessao.motorista_id,
+    veiculo_id: sessao.contexto.veiculo_id ?? '',
+    motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
-    frete_id: freteAtivo?.id ?? null,
-    litros: (dados.litros as number) ?? null,
-    valor_total: (dados.valor_total as number) ?? null,
+    litros: (dados.litros as number) ?? 0,
+    valor_total: (dados.valor_total as number) ?? 0,
     valor_litro: (dados.valor_litro as number) ?? null,
     posto: (dados.posto as string) ?? null,
-    foto_url: (dados.foto_url as string) ?? null,
-    origem: 'whatsapp',
+    foto_cupom_urls: dados.foto_url ? [dados.foto_url as string] : null,
     ia_raw_response: dados.ia_raw ? JSON.stringify(dados.ia_raw) : null,
   });
 

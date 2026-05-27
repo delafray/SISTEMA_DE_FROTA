@@ -8,28 +8,31 @@ import {
   DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
 
-type Viagem = {
+type Pedido = {
   id: string;
   status: string;
-  data_saida_prevista: string | null;
-  data_chegada_prevista: string | null;
-  data_saida_real: string | null;
-  data_chegada_real: string | null;
+  data_inicio_prevista: string | null;
+  data_fim_prevista: string | null;
+  data_inicio_real: string | null;
+  data_fim_real: string | null;
   km_inicial: number | null;
   km_final: number | null;
   observacoes: string | null;
   created_at: string | null;
+  valor_pedido: number | null;
+  pago: boolean | null;
+  forma_pagamento: string | null;
+  data_pagamento: string | null;
   motoristas: { id: string; nome: string } | null;
   veiculos: { id: string; placa: string; marca: string; modelo: string } | null;
 };
 
-type FreteViagem = {
+type EntregaPedido = {
   id: string;
   origem: string | null;
   destino: string | null;
   status: string;
   data_coleta_prevista: string | null;
-  valor_frete: number | null;
   clientes: { nome_fantasia: string } | null;
 };
 
@@ -37,7 +40,6 @@ type ResultadoFinanceiro = {
   receita: number;
   custo_combustivel: number;
   custo_despesas: number;
-  custo_comissao: number;
   custo_total: number;
   lucro_bruto: number;
   margem_pct: number | null;
@@ -49,10 +51,10 @@ const STATUS_LABEL: Record<string, string> = {
 const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   agendada: "warning", em_andamento: "info", concluida: "success", cancelada: "danger",
 };
-const FRETE_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
+const ENTREGA_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
 };
-const FRETE_STATUS_LABEL: Record<string, string> = {
+const ENTREGA_STATUS_LABEL: Record<string, string> = {
   agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
 };
 
@@ -69,11 +71,11 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
   );
 }
 
-export default function ViagemDetalhePage() {
+export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [viagem, setViagem]   = useState<Viagem | null>(null);
-  const [fretes, setFretes]   = useState<FreteViagem[]>([]);
+  const [pedido, setPedido] = useState<Pedido | null>(null);
+  const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
@@ -81,40 +83,55 @@ export default function ViagemDetalhePage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [viagemRes, fretesRes] = await Promise.all([
-        supabase.from("viagens")
-          .select("id,status,data_saida_prevista,data_chegada_prevista,data_saida_real,data_chegada_real,km_inicial,km_final,observacoes,created_at,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
+      const [pedidoRes, entregasRes] = await Promise.all([
+        supabase.from("pedidos")
+          .select("id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
           .eq("id", id)
           .single(),
-        supabase.from("fretes")
-          .select("id,origem,destino,status,data_coleta_prevista,valor_frete,clientes(nome_fantasia)")
-          .eq("viagem_id", id)
+        supabase.from("entregas")
+          .select("id,origem,destino,status,data_coleta_prevista,clientes(nome_fantasia)")
+          .eq("pedido_id", id)
           .order("data_coleta_prevista", { ascending: true }),
       ]);
-      setViagem(viagemRes.data);
-      const fretesList = fretesRes.data ?? [];
-      setFretes(fretesList);
+      const pedidoData = pedidoRes.data as unknown as Pedido | null;
+      setPedido(pedidoData);
+      setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
 
-      // Carrega resultado financeiro consolidado da view fretes_com_resultado
-      if (fretesList.length > 0) {
-        const freteIds = fretesList.map(f => f.id);
-        const { data: resultados } = await supabase
-          .from("fretes_com_resultado")
-          .select("receita,custo_combustivel,custo_despesas,custo_comissao,custo_total,lucro_bruto,margem_pct")
-          .in("id", freteIds);
-        if (resultados && resultados.length > 0) {
-          const soma: ResultadoFinanceiro = {
-            receita:          resultados.reduce((s, r) => s + (r.receita ?? 0), 0),
-            custo_combustivel: resultados.reduce((s, r) => s + (r.custo_combustivel ?? 0), 0),
-            custo_despesas:   resultados.reduce((s, r) => s + (r.custo_despesas ?? 0), 0),
-            custo_comissao:   resultados.reduce((s, r) => s + (r.custo_comissao ?? 0), 0),
-            custo_total:      resultados.reduce((s, r) => s + (r.custo_total ?? 0), 0),
-            lucro_bruto:      resultados.reduce((s, r) => s + (r.lucro_bruto ?? 0), 0),
-            margem_pct:       null,
-          };
-          soma.margem_pct = soma.receita > 0 ? (soma.lucro_bruto / soma.receita) * 100 : null;
-          setResultado(soma);
+      // Carrega resultado financeiro: receita do pedido + custos via veiculos_resultado_periodo
+      if (pedidoData) {
+        const receita = pedidoData.valor_pedido ?? 0;
+        let custo_combustivel = 0;
+        let custo_despesas = 0;
+
+        const veiculoId = (Array.isArray(pedidoData.veiculos) ? pedidoData.veiculos[0] : pedidoData.veiculos)?.id;
+        const mesRef = pedidoData.data_inicio_real ?? pedidoData.data_inicio_prevista ?? pedidoData.created_at;
+        if (veiculoId && mesRef) {
+          const mesInicio = new Date(mesRef);
+          mesInicio.setUTCDate(1);
+          mesInicio.setUTCHours(0, 0, 0, 0);
+          const mesISO = mesInicio.toISOString().slice(0, 10);
+          const { data: vrp } = await supabase
+            .from("veiculos_resultado_periodo")
+            .select("custo_combustivel,custo_despesas")
+            .eq("veiculo_id", veiculoId)
+            .eq("mes_referencia", mesISO)
+            .maybeSingle();
+          if (vrp) {
+            custo_combustivel = vrp.custo_combustivel ?? 0;
+            custo_despesas = vrp.custo_despesas ?? 0;
+          }
         }
+
+        const custo_total = custo_combustivel + custo_despesas;
+        const lucro_bruto = receita - custo_total;
+        setResultado({
+          receita,
+          custo_combustivel,
+          custo_despesas,
+          custo_total,
+          lucro_bruto,
+          margem_pct: receita > 0 ? (lucro_bruto / receita) * 100 : null,
+        });
       }
 
       setLoading(false);
@@ -127,17 +144,17 @@ export default function ViagemDetalhePage() {
     setUpdatingStatus(true);
     const supabase = createClient();
     const extra: Record<string, string> = {};
-    if (novoStatus === "em_andamento") extra.data_saida_real  = new Date().toISOString();
-    if (novoStatus === "concluida")    extra.data_chegada_real = new Date().toISOString();
-    await supabase.from("viagens").update({ status: novoStatus, ...extra }).eq("id", id);
-    setViagem(p => p ? { ...p, status: novoStatus, ...extra } : p);
+    if (novoStatus === "em_andamento") extra.data_inicio_real = new Date().toISOString();
+    if (novoStatus === "concluida")    extra.data_fim_real    = new Date().toISOString();
+    await supabase.from("pedidos").update({ status: novoStatus, ...extra }).eq("id", id);
+    setPedido(p => p ? { ...p, status: novoStatus, ...extra } : p);
     setUpdatingStatus(false);
   };
 
-  const desvincularFrete = async (freteId: string) => {
+  const desvincularEntrega = async (entregaId: string) => {
     const supabase = createClient();
-    await supabase.from("fretes").update({ viagem_id: null }).eq("id", freteId);
-    setFretes(p => p.filter(f => f.id !== freteId));
+    await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
+    setEntregas(p => p.filter(f => f.id !== entregaId));
   };
 
   if (loading) return (
@@ -146,33 +163,32 @@ export default function ViagemDetalhePage() {
     </div>
   );
 
-  if (!viagem) return (
+  if (!pedido) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
-      Viagem não encontrada.
+      Pedido não encontrado.
     </div>
   );
 
-  const motorista = Array.isArray(viagem.motoristas) ? viagem.motoristas[0] : viagem.motoristas;
-  const veiculo   = Array.isArray(viagem.veiculos)   ? viagem.veiculos[0]   : viagem.veiculos;
-  const kmRodado  = viagem.km_final != null && viagem.km_inicial != null ? viagem.km_final - viagem.km_inicial : null;
-  const totalFretes = fretes.reduce((s, f) => s + (f.valor_frete ?? 0), 0);
+  const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
+  const veiculo   = Array.isArray(pedido.veiculos)   ? pedido.veiculos[0]   : pedido.veiculos;
+  const kmRodado  = pedido.km_final != null && pedido.km_inicial != null ? pedido.km_final - pedido.km_inicial : null;
 
   const nextStatus =
-    viagem.status === "agendada"     ? "em_andamento" :
-    viagem.status === "em_andamento" ? "concluida"    : null;
+    pedido.status === "agendada"     ? "em_andamento" :
+    pedido.status === "em_andamento" ? "concluida"    : null;
 
   const nextLabel =
-    viagem.status === "agendada"     ? "Iniciar Viagem" :
-    viagem.status === "em_andamento" ? "Concluir Viagem" : null;
+    pedido.status === "agendada"     ? "Iniciar Pedido" :
+    pedido.status === "em_andamento" ? "Concluir Pedido" : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title={`Viagem — ${motorista?.nome ?? "—"}`}
-        subtitle={`Criada em ${fmtDT(viagem.created_at)}`}
+        title={`Pedido — ${motorista?.nome ?? "—"}`}
+        subtitle={`Criado em ${fmtDT(pedido.created_at)}`}
         actions={
           <>
-            <Btn href="/viagens" variant="ghost">← Voltar</Btn>
+            <Btn href="/pedidos" variant="ghost">← Voltar</Btn>
             {nextStatus && (
               <Btn
                 variant="primary"
@@ -182,17 +198,17 @@ export default function ViagemDetalhePage() {
                 {updatingStatus ? "..." : nextLabel}
               </Btn>
             )}
-            {viagem.status !== "cancelada" && viagem.status !== "concluida" && (
+            {pedido.status !== "cancelada" && pedido.status !== "concluida" && (
               <Btn variant="danger" disabled={updatingStatus} onClick={() => changeStatus("cancelada")}>
                 Cancelar
               </Btn>
             )}
-            <Btn href={`/viagens/${id}/editar`} variant="outline">Editar</Btn>
+            <Btn href={`/pedidos/${id}/editar`} variant="outline">Editar</Btn>
           </>
         }
       >
-        <Badge variant={STATUS_VAR[viagem.status] ?? "default"}>
-          {STATUS_LABEL[viagem.status] ?? viagem.status}
+        <Badge variant={STATUS_VAR[pedido.status] ?? "default"}>
+          {STATUS_LABEL[pedido.status] ?? pedido.status}
         </Badge>
       </PageHeader>
 
@@ -205,39 +221,40 @@ export default function ViagemDetalhePage() {
           </FormSection>
 
           <FormSection title="Datas">
-            <Row label="Saída Prevista"   value={fmtDate(viagem.data_saida_prevista)} />
-            <Row label="Chegada Prevista" value={fmtDate(viagem.data_chegada_prevista)} />
-            <Row label="Saída Real"       value={fmtDT(viagem.data_saida_real)} />
-            <Row label="Chegada Real"     value={fmtDT(viagem.data_chegada_real)} />
+            <Row label="Início Previsto"   value={fmtDate(pedido.data_inicio_prevista)} />
+            <Row label="Fim Previsto" value={fmtDate(pedido.data_fim_prevista)} />
+            <Row label="Início Real"       value={fmtDT(pedido.data_inicio_real)} />
+            <Row label="Fim Real"     value={fmtDT(pedido.data_fim_real)} />
           </FormSection>
 
           <FormSection title="Quilometragem">
-            <Row label="KM Inicial" value={viagem.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
-            <Row label="KM Final"   value={viagem.km_final?.toLocaleString("pt-BR") ?? "—"} />
+            <Row label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
+            <Row label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
             {kmRodado != null && (
               <Row label="KM Rodados" value={<strong style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</strong>} />
             )}
           </FormSection>
 
           <FormSection title="💰 Resultado Financeiro">
-            <Row label="Fretes nesta viagem" value={<Badge variant="info">{fretes.length}</Badge>} />
-            <Row label="Faturamento Bruto" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(totalFretes)}</strong>} />
+            <Row label="Entregas neste pedido" value={<Badge variant="info">{entregas.length}</Badge>} />
+            <Row label="Valor do Pedido" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</strong>} />
+            <Row label="Pagamento" value={pedido.pago
+              ? <span style={{ color: "#16a34a" }}>✓ Pago {pedido.data_pagamento ? `em ${fmtDate(pedido.data_pagamento)}` : ""}</span>
+              : <span style={{ color: "#eab308" }}>Pendente</span>}
+            />
 
             {resultado && resultado.custo_total > 0 && (
               <>
                 <div style={{ height: "1px", background: "#f1f5f9", margin: "6px 0" }} />
                 {resultado.custo_combustivel > 0 && (
-                  <Row label="(-) Combustível" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_combustivel)}</span>} />
+                  <Row label="(-) Combustível (mês)" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_combustivel)}</span>} />
                 )}
                 {resultado.custo_despesas > 0 && (
-                  <Row label="(-) Despesas (pedágio, alim.)" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_despesas)}</span>} />
-                )}
-                {resultado.custo_comissao > 0 && (
-                  <Row label="(-) Comissão Motorista" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_comissao)}</span>} />
+                  <Row label="(-) Despesas do veículo (mês)" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_despesas)}</span>} />
                 )}
                 <div style={{ height: "1px", background: "#e2e8f0", margin: "6px 0" }} />
                 <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 0 4px" }}>
-                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>💵 Lucro Líquido</span>
+                  <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b" }}>💵 Lucro Bruto (aprox.)</span>
                   <div style={{ textAlign: "right" }}>
                     <strong style={{
                       fontSize: "15px",
@@ -255,36 +272,33 @@ export default function ViagemDetalhePage() {
                     )}
                   </div>
                 </div>
+                <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "4px", marginBottom: 0 }}>
+                  Custos consolidados por veículo no mês do pedido.
+                </p>
               </>
             )}
 
-            {resultado && resultado.custo_total === 0 && fretes.some(f => f.status === "concluido") && (
+            {resultado && resultado.custo_total === 0 && (
               <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
-                📌 Nenhuma despesa registrada. O motorista pode lançar combustível e pedágios via WhatsApp.
-              </p>
-            )}
-
-            {!resultado && fretes.length > 0 && (
-              <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
-                O resultado financeiro detalhado aparece após as despesas serem registradas.
+                📌 Nenhuma despesa registrada no mês para este veículo.
               </p>
             )}
           </FormSection>
 
-          {viagem.observacoes && (
+          {pedido.observacoes && (
             <div style={{ gridColumn: "span 2" }}>
               <FormSection title="Observações">
-                <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{viagem.observacoes}</p>
+                <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
               </FormSection>
             </div>
           )}
 
           <div style={{ gridColumn: "span 2" }}>
-            <FormSection title={`Fretes desta Viagem (${fretes.length})`}>
-              {fretes.length === 0 ? (
+            <FormSection title={`Entregas deste Pedido (${entregas.length})`}>
+              {entregas.length === 0 ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhum frete vinculado.</p>
-                  <Btn href={`/viagens/${id}/editar`} variant="outline" size="xs">Adicionar Fretes</Btn>
+                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhuma entrega vinculada.</p>
+                  <Btn href={`/pedidos/${id}/editar`} variant="outline" size="xs">Adicionar Entregas</Btn>
                 </div>
               ) : (
                 <DataTable>
@@ -294,12 +308,11 @@ export default function ViagemDetalhePage() {
                       <Th>Cliente</Th>
                       <Th>Coleta Prevista</Th>
                       <Th>Status</Th>
-                      <Th>Valor</Th>
                       <Th></Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {fretes.map(fr => {
+                    {entregas.map(fr => {
                       const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
                       return (
                         <Tr key={fr.id}>
@@ -307,18 +320,17 @@ export default function ViagemDetalhePage() {
                           <Td>{cliente?.nome_fantasia ?? "—"}</Td>
                           <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
                           <Td>
-                            <Badge variant={FRETE_STATUS_VAR[fr.status] ?? "default"}>
-                              {FRETE_STATUS_LABEL[fr.status] ?? fr.status}
+                            <Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>
+                              {ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}
                             </Badge>
                           </Td>
-                          <Td style={{ color: "#16a34a", fontWeight: 600 }}>{fmtBRL(fr.valor_frete)}</Td>
                           <Td>
                             <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                              <Btn href={`/fretes/${fr.id}`} variant="ghost" size="xs">Ver</Btn>
+                              <Btn href={`/entregas/${fr.id}`} variant="ghost" size="xs">Ver</Btn>
                               <button
-                                onClick={() => desvincularFrete(fr.id)}
+                                onClick={() => desvincularEntrega(fr.id)}
                                 style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
-                                title="Remover da viagem"
+                                title="Remover do pedido"
                               >
                                 Desvincular
                               </button>

@@ -1,262 +1,243 @@
 import { describe, it, expect } from 'vitest';
-import { parseWebhookPayload, type WebhookPayload } from '@/lib/whatsapp/messageParser';
+import { parseWebhookPayload, type EvolutionWebhookPayload } from '@/lib/whatsapp/messageParser';
 
-function makePayload(messages: unknown[], contacts: unknown[] = []): WebhookPayload {
+// ─── Helpers ─────────────────────────────────────────────────────────
+
+function makePayload(data: object | object[]): EvolutionWebhookPayload {
   return {
-    object: 'whatsapp_business_account',
-    entry: [
-      {
-        id: 'entry-1',
-        changes: [
-          {
-            field: 'messages',
-            value: {
-              messaging_product: 'whatsapp',
-              metadata: { display_phone_number: '15556458410', phone_number_id: '107874' },
-              contacts: contacts as never,
-              messages: messages as never,
-            },
-          },
-        ],
-      },
-    ],
+    event: 'messages.upsert',
+    instance: 'frota-bot',
+    data: data as never,
   };
 }
 
-const contatoBase = [{ profile: { name: 'Ronaldo' }, wa_id: '553189791317' }];
-
-const msgBase = {
-  from: '553189791317',
-  id: 'wamid.test',
-  timestamp: '1779170770',
+const keyBase = {
+  remoteJid: '5531989791317@s.whatsapp.net',
+  id: 'evo-msg-id',
+  fromMe: false,
 };
 
-describe('parseWebhookPayload', () => {
-  it('parseia mensagem de texto', () => {
+const msgBase = {
+  key: keyBase,
+  pushName: 'João Motorista',
+  messageTimestamp: 1779170770,
+};
+
+// ─── Testes ───────────────────────────────────────────────────────────
+
+describe('parseWebhookPayload (Evolution API)', () => {
+  it('parseia mensagem de texto simples (conversation)', () => {
     const out = parseWebhookPayload(
-      makePayload([{ ...msgBase, type: 'text', text: { body: 'oi' } }], contatoBase)
+      makePayload({ ...msgBase, messageType: 'conversation', message: { conversation: 'Oi' } })
     );
     expect(out).toHaveLength(1);
     expect(out[0]).toMatchObject({
-      from: '553189791317',
-      fromName: 'Ronaldo',
-      messageId: 'wamid.test',
+      from: '5531989791317',
+      fromName: 'João Motorista',
+      messageId: 'evo-msg-id',
       tipo: 'texto',
-      texto: 'oi',
-      phoneNumberId: '107874',
+      texto: 'Oi',
     });
     expect(out[0].timestamp).toBeInstanceOf(Date);
     expect(out[0].timestamp.getTime()).toBe(1779170770 * 1000);
   });
 
-  it('parseia botão interativo (button_reply)', () => {
+  it('parseia extendedTextMessage', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'interactive',
-            interactive: { type: 'button_reply', button_reply: { id: 'sim', title: 'Sim' } },
-          },
-        ],
-        contatoBase
-      )
+      makePayload({
+        ...msgBase,
+        messageType: 'extendedTextMessage',
+        message: { extendedTextMessage: { text: 'mensagem longa' } },
+      })
     );
-    expect(out[0]).toMatchObject({ tipo: 'botao', botaoId: 'sim', botaoTitulo: 'Sim' });
+    expect(out[0]).toMatchObject({ tipo: 'texto', texto: 'mensagem longa' });
   });
 
-  it('parseia lista interativa (list_reply)', () => {
+  it('parseia imagem com caption e url', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'interactive',
-            interactive: { type: 'list_reply', list_reply: { id: 'frete_1', title: 'Frete A' } },
+      makePayload({
+        ...msgBase,
+        messageType: 'imageMessage',
+        message: {
+          imageMessage: {
+            caption: 'odômetro',
+            url: 'https://mmg.whatsapp.net/img.jpg',
+            mimetype: 'image/jpeg',
           },
-        ],
-        contatoBase
-      )
-    );
-    expect(out[0]).toMatchObject({ tipo: 'lista', listaId: 'frete_1', listaTitulo: 'Frete A' });
-  });
-
-  it('parseia imagem com caption', () => {
-    const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'image',
-            image: { id: 'media-1', mime_type: 'image/jpeg', sha256: 'x', caption: 'odômetro' },
-          },
-        ],
-        contatoBase
-      )
+        },
+      })
     );
     expect(out[0]).toMatchObject({
       tipo: 'foto',
-      mediaId: 'media-1',
+      mediaId: 'https://mmg.whatsapp.net/img.jpg',
       mediaMimeType: 'image/jpeg',
       texto: 'odômetro',
     });
   });
 
-  it('parseia áudio', () => {
+  it('parseia áudio (ptt)', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [{ ...msgBase, type: 'audio', audio: { id: 'a-1', mime_type: 'audio/ogg', sha256: 'x' } }],
-        contatoBase
-      )
+      makePayload({
+        ...msgBase,
+        messageType: 'audioMessage',
+        message: {
+          audioMessage: {
+            url: 'https://mmg.whatsapp.net/aud.ogg',
+            mimetype: 'audio/ogg; codecs=opus',
+            ptt: true,
+          },
+        },
+      })
     );
-    expect(out[0]).toMatchObject({ tipo: 'audio', mediaId: 'a-1', mediaMimeType: 'audio/ogg' });
+    expect(out[0]).toMatchObject({
+      tipo: 'audio',
+      mediaId: 'https://mmg.whatsapp.net/aud.ogg',
+      mediaMimeType: 'audio/ogg; codecs=opus',
+    });
   });
 
   it('parseia documento com filename', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'document',
-            document: { id: 'd-1', mime_type: 'application/pdf', sha256: 'x', filename: 'nota.pdf' },
+      makePayload({
+        ...msgBase,
+        messageType: 'documentMessage',
+        message: {
+          documentMessage: {
+            url: 'https://mmg.whatsapp.net/doc.pdf',
+            mimetype: 'application/pdf',
+            fileName: 'nota.pdf',
           },
-        ],
-        contatoBase
-      )
+        },
+      })
     );
     expect(out[0]).toMatchObject({
       tipo: 'documento',
-      mediaId: 'd-1',
+      mediaId: 'https://mmg.whatsapp.net/doc.pdf',
       mediaFilename: 'nota.pdf',
+    });
+  });
+
+  it('parseia resposta de botão interativo', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        messageType: 'buttonsResponseMessage',
+        message: {
+          buttonsResponseMessage: {
+            selectedButtonId: 'abast_confirmar',
+            selectedDisplayText: '✅ Confirmar',
+          },
+        },
+      })
+    );
+    expect(out[0]).toMatchObject({
+      tipo: 'botao',
+      botaoId: 'abast_confirmar',
+      botaoTitulo: '✅ Confirmar',
+    });
+  });
+
+  it('parseia resposta de lista interativa', () => {
+    const out = parseWebhookPayload(
+      makePayload({
+        ...msgBase,
+        messageType: 'listResponseMessage',
+        message: {
+          listResponseMessage: {
+            singleSelectReply: { selectedRowId: 'veiculo_abc123' },
+            title: 'ABC-1234',
+          },
+        },
+      })
+    );
+    expect(out[0]).toMatchObject({
+      tipo: 'lista',
+      listaId: 'veiculo_abc123',
+      listaTitulo: 'ABC-1234',
     });
   });
 
   it('parseia localização', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'location',
-            location: { latitude: -19.91, longitude: -43.95, name: 'BH' },
+      makePayload({
+        ...msgBase,
+        messageType: 'locationMessage',
+        message: {
+          locationMessage: {
+            degreesLatitude: -19.91,
+            degreesLongitude: -43.95,
+            name: 'Belo Horizonte',
           },
-        ],
-        contatoBase
-      )
+        },
+      })
     );
     expect(out[0]).toMatchObject({
       tipo: 'localizacao',
       latitude: -19.91,
       longitude: -43.95,
-      texto: 'BH',
+      texto: 'Belo Horizonte',
     });
   });
 
-  it('parseia botão de template (type: button)', () => {
+  it('ignora mensagens enviadas pelo bot (fromMe: true)', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [{ ...msgBase, type: 'button', button: { text: 'Confirmar', payload: 'CONFIRM' } }],
-        contatoBase
-      )
+      makePayload({
+        ...msgBase,
+        key: { ...keyBase, fromMe: true },
+        message: { conversation: 'mensagem do bot' },
+      })
     );
-    expect(out[0]).toMatchObject({ tipo: 'botao', botaoId: 'CONFIRM', botaoTitulo: 'Confirmar' });
+    expect(out).toHaveLength(0);
   });
 
-  it('usa "Desconhecido" quando contato não está presente', () => {
+  it('ignora grupos (@g.us)', () => {
     const out = parseWebhookPayload(
-      makePayload([{ ...msgBase, type: 'text', text: { body: 'oi' } }], [])
+      makePayload({
+        ...msgBase,
+        key: { ...keyBase, remoteJid: '120363123456789@g.us' },
+        message: { conversation: 'msg de grupo' },
+      })
     );
-    expect(out[0].fromName).toBe('Desconhecido');
+    expect(out).toHaveLength(0);
   });
 
-  it('ignora payload que não é whatsapp_business_account', () => {
-    const payload = {
-      object: 'page',
-      entry: [],
-    } as unknown as WebhookPayload;
-    expect(parseWebhookPayload(payload)).toEqual([]);
-  });
-
-  it('ignora changes com field diferente de "messages"', () => {
-    const payload: WebhookPayload = {
-      object: 'whatsapp_business_account',
-      entry: [
-        {
-          id: 'e',
-          changes: [
-            {
-              field: 'message_template_status_update',
-              value: {
-                messaging_product: 'whatsapp',
-                metadata: { display_phone_number: '1', phone_number_id: '1' },
-              },
-            },
-          ],
-        },
-      ],
+  it('ignora eventos que não sejam messages.upsert', () => {
+    const payload: EvolutionWebhookPayload = {
+      event: 'connection.update',
+      instance: 'frota-bot',
+      data: { key: keyBase, message: { conversation: 'oi' } } as never,
     };
-    expect(parseWebhookPayload(payload)).toEqual([]);
+    expect(parseWebhookPayload(payload)).toHaveLength(0);
   });
 
-  it('retorna vazio para status updates (apenas statuses, sem messages)', () => {
-    const payload: WebhookPayload = {
-      object: 'whatsapp_business_account',
-      entry: [
-        {
-          id: 'e',
-          changes: [
-            {
-              field: 'messages',
-              value: {
-                messaging_product: 'whatsapp',
-                metadata: { display_phone_number: '1', phone_number_id: '1' },
-                statuses: [
-                  { id: 'm1', status: 'delivered', timestamp: '1', recipient_id: 'r' },
-                ],
-              },
-            },
-          ],
-        },
-      ],
-    };
-    expect(parseWebhookPayload(payload)).toEqual([]);
-  });
-
-  it('processa múltiplas mensagens em um único payload', () => {
+  it('processa array de mensagens no campo data', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          { ...msgBase, id: 'm1', type: 'text', text: { body: 'um' } },
-          { ...msgBase, id: 'm2', type: 'text', text: { body: 'dois' } },
-        ],
-        contatoBase
-      )
+      makePayload([
+        { ...msgBase, key: { ...keyBase, id: 'id-1' }, message: { conversation: 'um' } },
+        { ...msgBase, key: { ...keyBase, id: 'id-2' }, message: { conversation: 'dois' } },
+      ])
     );
     expect(out).toHaveLength(2);
     expect(out.map((m) => m.texto)).toEqual(['um', 'dois']);
   });
 
-  it('mapeia interactive sem type específico para "outro"', () => {
+  it('usa "Desconhecido" quando pushName ausente', () => {
     const out = parseWebhookPayload(
-      makePayload(
-        [
-          {
-            ...msgBase,
-            type: 'interactive',
-            interactive: { type: 'unknown' as never },
-          },
-        ],
-        contatoBase
-      )
+      makePayload({ key: keyBase, message: { conversation: 'oi' } })
     );
+    expect(out[0].fromName).toBe('Desconhecido');
+  });
+
+  it('mapeia mensagem sem campo message para "outro"', () => {
+    const out = parseWebhookPayload(makePayload({ key: keyBase }));
     expect(out[0].tipo).toBe('outro');
   });
 
-  it('mapeia tipo desconhecido para "outro"', () => {
+  it('extrai número sem @s.whatsapp.net', () => {
     const out = parseWebhookPayload(
-      makePayload([{ ...msgBase, type: 'sticker' as never }], contatoBase)
+      makePayload({ ...msgBase, message: { conversation: 'oi' } })
     );
-    expect(out[0].tipo).toBe('outro');
+    expect(out[0].from).toBe('5531989791317');
+    expect(out[0].from).not.toContain('@');
   });
 });

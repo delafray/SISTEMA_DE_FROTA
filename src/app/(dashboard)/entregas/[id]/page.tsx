@@ -18,18 +18,22 @@ type Abastecimento = {
 
 type Detalhe = {
   id: string; status: string;
-  origem: string | null; destino: string | null;
-  valor_frete: number | null; km_inicial: number | null; km_final: number | null;
-  tipo_carga: string | null; peso_carga_kg: number | null;
-  data_coleta_prevista: string | null; data_entrega_prevista: string | null;
+  valor_pedido: number | null; km_inicial: number | null; km_final: number | null;
+  data_inicio_prevista: string | null; data_fim_prevista: string | null;
+  data_inicio_real: string | null; data_fim_real: string | null;
   forma_pagamento: string | null; observacoes: string | null;
   pago: boolean | null; data_pagamento: string | null;
-  comissao_motorista_valor: number | null; observacoes_financeiras: string | null;
+  observacoes_financeiras: string | null;
   created_at: string | null;
-  veiculos: { placa: string; modelo: string; marca: string } | null;
-  motoristas: { nome: string; tipo_comissao: string } | null;
-  clientes: { nome_fantasia: string } | null;
+  veiculo_id: string | null;
+  motorista_id: string | null;
 };
+
+type Veiculo   = { placa: string; modelo: string; marca: string } | null;
+type Motorista = { nome: string } | null;
+type Entrega   = { id: string; origem: string; destino: string; status: string; tipo_carga: string | null;
+  clientes: { nome_fantasia: string } | { nome_fantasia: string }[] | null;
+  nome_cliente_avulso: string | null; };
 
 const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
@@ -56,29 +60,52 @@ function Row({ label, value, highlight }: { label: string; value: React.ReactNod
   );
 }
 
-export default function FreteDetalhePage() {
+export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
-  const [frete, setFrete] = useState<Detalhe | null>(null);
+  const [pedido, setPedido] = useState<Detalhe | null>(null);
+  const [veiculo, setVeiculo] = useState<Veiculo>(null);
+  const [motorista, setMotorista] = useState<Motorista>(null);
+  const [entregas, setEntregas] = useState<Entrega[]>([]);
   const [abastecimentos, setAbastecimentos] = useState<Abastecimento[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [freteRes, abastRes] = await Promise.all([
-        supabase
-          .from("fretes")
-          .select("id,status,origem,destino,valor_frete,km_inicial,km_final,tipo_carga,peso_carga_kg,data_coleta_prevista,data_entrega_prevista,forma_pagamento,observacoes,pago,data_pagamento,comissao_motorista_valor,observacoes_financeiras,created_at,veiculos(placa,modelo,marca),motoristas(nome,tipo_comissao),clientes(nome_fantasia)")
-          .eq("id", id)
-          .single(),
-        supabase
+      const pedidoRes = await supabase
+        .from("pedidos")
+        .select("id,status,valor_pedido,km_inicial,km_final,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,forma_pagamento,observacoes,pago,data_pagamento,observacoes_financeiras,created_at,veiculo_id,motorista_id")
+        .eq("id", id)
+        .single();
+
+      const p = pedidoRes.data as Detalhe | null;
+      setPedido(p);
+
+      if (p?.veiculo_id) {
+        const { data: vData } = await supabase.from("veiculos").select("placa,modelo,marca").eq("id", p.veiculo_id).single();
+        setVeiculo(vData ?? null);
+
+        const { data: abastData } = await supabase
           .from("abastecimentos")
           .select("id,km_no_abast,litros,valor_litro,valor_total,posto,confirmado,created_at")
-          .eq("frete_id", id)
-          .order("created_at", { ascending: true }),
-      ]);
-      setFrete(freteRes.data);
-      setAbastecimentos(abastRes.data ?? []);
+          .eq("veiculo_id", p.veiculo_id)
+          .order("created_at", { ascending: true })
+          .limit(50);
+        setAbastecimentos(abastData ?? []);
+      }
+
+      if (p?.motorista_id) {
+        const { data: mData } = await supabase.from("motoristas").select("nome").eq("id", p.motorista_id).single();
+        setMotorista(mData ?? null);
+      }
+
+      const { data: entData } = await supabase
+        .from("entregas")
+        .select("id,origem,destino,status,tipo_carga,nome_cliente_avulso,clientes(nome_fantasia)")
+        .eq("pedido_id", id)
+        .order("created_at", { ascending: true });
+      setEntregas((entData ?? []) as Entrega[]);
+
       setLoading(false);
     };
     load();
@@ -91,22 +118,20 @@ export default function FreteDetalhePage() {
     </div>
   );
 
-  if (!frete) return (
+  if (!pedido) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
-      Frete não encontrado.
+      Pedido não encontrado.
     </div>
   );
 
-  const veiculo   = Array.isArray(frete.veiculos)   ? frete.veiculos[0]   : frete.veiculos;
-  const motorista = Array.isArray(frete.motoristas) ? frete.motoristas[0] : frete.motoristas;
-  const cliente   = Array.isArray(frete.clientes)   ? frete.clientes[0]   : frete.clientes;
+  const kmRodado = pedido.km_final != null && pedido.km_inicial != null
+    ? pedido.km_final - pedido.km_inicial : null;
 
-  const kmRodado = frete.km_final != null && frete.km_inicial != null
-    ? frete.km_final - frete.km_inicial : null;
-
-  const margem = frete.valor_frete && frete.comissao_motorista_valor != null
-    ? ((frete.valor_frete - frete.comissao_motorista_valor) / frete.valor_frete * 100)
+  const primeiraEntrega = entregas[0];
+  const clienteEntrega = primeiraEntrega
+    ? (Array.isArray(primeiraEntrega.clientes) ? primeiraEntrega.clientes[0] : primeiraEntrega.clientes)
     : null;
+  const clienteLabel = clienteEntrega?.nome_fantasia ?? primeiraEntrega?.nome_cliente_avulso ?? "Sem cliente";
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -124,42 +149,42 @@ export default function FreteDetalhePage() {
 
       <div className="no-print">
         <PageHeader
-          title={`${frete.origem ?? "—"} → ${frete.destino ?? "—"}`}
-          subtitle={`Criado em ${frete.created_at ? new Date(frete.created_at).toLocaleDateString("pt-BR") : "—"}`}
+          title={clienteLabel}
+          subtitle={`Criado em ${pedido.created_at ? new Date(pedido.created_at).toLocaleDateString("pt-BR") : "—"}`}
           actions={
             <>
-              <Btn href="/fretes" variant="ghost">← Voltar</Btn>
+              <Btn href="/entregas" variant="ghost">← Voltar</Btn>
               <Btn variant="outline" onClick={() => window.print()}>🖨️ Imprimir</Btn>
-              <Btn href={`/fretes/${id}/editar`} variant="outline">Editar</Btn>
+              <Btn href={`/entregas/${id}/editar`} variant="outline">Editar</Btn>
             </>
           }
         >
-          <Badge variant={STATUS_VAR[frete.status] ?? "default"}>
-            {STATUS_LABEL[frete.status] ?? frete.status}
+          <Badge variant={STATUS_VAR[pedido.status] ?? "default"}>
+            {STATUS_LABEL[pedido.status] ?? pedido.status}
           </Badge>
         </PageHeader>
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }} className="frete-print">
         <div className="frete-print-header" style={{ display: "none", marginBottom: "16px" }}>
-          <h1 style={{ fontSize: "20px", margin: 0 }}>Ordem de Serviço — Frete</h1>
+          <h1 style={{ fontSize: "20px", margin: 0 }}>Ordem de Serviço — Pedido</h1>
           <div style={{ fontSize: "12px", color: "#475569", marginTop: "4px" }}>
-            {frete.origem ?? "—"} → {frete.destino ?? "—"} ·{" "}
-            {STATUS_LABEL[frete.status] ?? frete.status} ·{" "}
-            Criado em {frete.created_at ? new Date(frete.created_at).toLocaleDateString("pt-BR") : "—"}
+            {clienteLabel} ·{" "}
+            {STATUS_LABEL[pedido.status] ?? pedido.status} ·{" "}
+            Criado em {pedido.created_at ? new Date(pedido.created_at).toLocaleDateString("pt-BR") : "—"}
           </div>
           <hr style={{ marginTop: "10px", marginBottom: "10px", border: "none", borderTop: "1px solid #cbd5e1" }} />
         </div>
 
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
 
-          <FormSection title="Rota e Datas">
-            <Row label="Origem"            value={frete.origem ?? "—"} />
-            <Row label="Destino"           value={frete.destino ?? "—"} />
-            <Row label="Coleta Prevista"   value={fmtDate(frete.data_coleta_prevista)} />
-            <Row label="Entrega Prevista"  value={fmtDate(frete.data_entrega_prevista)} />
-            <Row label="KM Inicial"        value={frete.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
-            <Row label="KM Final"          value={frete.km_final?.toLocaleString("pt-BR") ?? "—"} />
+          <FormSection title="Datas e Quilometragem">
+            <Row label="Início Previsto"   value={fmtDate(pedido.data_inicio_prevista)} />
+            <Row label="Fim Previsto"      value={fmtDate(pedido.data_fim_prevista)} />
+            <Row label="Início Real"       value={fmtDate(pedido.data_inicio_real)} />
+            <Row label="Fim Real"          value={fmtDate(pedido.data_fim_real)} />
+            <Row label="KM Inicial"        value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
+            <Row label="KM Final"          value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
             {kmRodado != null && (
               <Row label="KM Rodados" value={`${kmRodado.toLocaleString("pt-BR")} km`} highlight />
             )}
@@ -168,46 +193,61 @@ export default function FreteDetalhePage() {
           <FormSection title="Veículo, Motorista e Cliente">
             <Row label="Veículo"    value={veiculo ? `${veiculo.placa} — ${veiculo.marca} ${veiculo.modelo}` : "—"} />
             <Row label="Motorista"  value={motorista?.nome ?? "—"} />
-            <Row label="Comissão"   value={motorista?.tipo_comissao?.replace(/_/g, " ") ?? "—"} />
-            <Row label="Cliente"    value={cliente?.nome_fantasia ?? "Sem cliente"} />
-          </FormSection>
-
-          <FormSection title="Carga">
-            <Row label="Tipo de Carga" value={frete.tipo_carga ?? "—"} />
-            <Row label="Peso"          value={frete.peso_carga_kg != null ? `${frete.peso_carga_kg.toLocaleString("pt-BR")} kg` : "—"} />
+            <Row label="Cliente"    value={clienteLabel} />
           </FormSection>
 
           <FormSection title="Financeiro">
-            <Row label="Valor do Frete"    value={fmtBRL(frete.valor_frete)} highlight />
-            <Row label="Comissão Motorista" value={fmtBRL(frete.comissao_motorista_valor)} />
-            {margem != null && (
-              <Row label="Margem Estimada" value={`${margem.toFixed(1)}%`} highlight={margem >= 0} />
-            )}
-            <Row label="Forma de Pagamento" value={PGTO_LABEL[frete.forma_pagamento ?? ""] ?? frete.forma_pagamento ?? "—"} />
+            <Row label="Valor do Pedido"    value={fmtBRL(pedido.valor_pedido)} highlight />
+            <Row label="Forma de Pagamento" value={PGTO_LABEL[pedido.forma_pagamento ?? ""] ?? pedido.forma_pagamento ?? "—"} />
             <Row label="Pagamento"
               value={
-                frete.pago
-                  ? <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ Pago {frete.data_pagamento ? `em ${fmtDate(frete.data_pagamento)}` : ""}</span>
+                pedido.pago
+                  ? <span style={{ color: "#16a34a", fontWeight: 700 }}>✓ Pago {pedido.data_pagamento ? `em ${fmtDate(pedido.data_pagamento)}` : ""}</span>
                   : <span style={{ color: "#eab308", fontWeight: 600 }}>Pendente</span>
               }
             />
-            {frete.observacoes_financeiras && (
-              <Row label="Obs. Financeiras" value={frete.observacoes_financeiras} />
+            {pedido.observacoes_financeiras && (
+              <Row label="Obs. Financeiras" value={pedido.observacoes_financeiras} />
             )}
           </FormSection>
 
-          {frete.observacoes && (
+          {pedido.observacoes && (
+            <FormSection title="Observações Gerais">
+              <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
+            </FormSection>
+          )}
+
+          {entregas.length > 0 && (
             <div style={{ gridColumn: "span 2" }}>
-              <FormSection title="Observações Gerais">
-                <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{frete.observacoes}</p>
+              <FormSection title={`Entregas do Pedido (${entregas.length})`}>
+                <DataTable>
+                  <thead>
+                    <tr>
+                      <Th>Origem</Th>
+                      <Th>Destino</Th>
+                      <Th>Carga</Th>
+                      <Th>Status</Th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {entregas.map(e => (
+                      <Tr key={e.id}>
+                        <Td>{e.origem}</Td>
+                        <Td>{e.destino}</Td>
+                        <Td>{e.tipo_carga ?? "—"}</Td>
+                        <Td>{e.status}</Td>
+                      </Tr>
+                    ))}
+                  </tbody>
+                </DataTable>
               </FormSection>
             </div>
           )}
 
           <div style={{ gridColumn: "span 2" }}>
-            <FormSection title={`Abastecimentos Vinculados (${abastecimentos.length})`}>
+            <FormSection title={`Abastecimentos do Veículo (${abastecimentos.length})`}>
               {abastecimentos.length === 0 ? (
-                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhum abastecimento vinculado a este frete.</p>
+                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhum abastecimento registrado para o veículo.</p>
               ) : (
                 <>
                   <DataTable>

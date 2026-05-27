@@ -8,7 +8,6 @@ const base = {
   cnh_numero: "12345678901",
   cnh_categoria: "E" as const,
   cnh_validade: "2028-12-31",
-  tipo_comissao: "percentual_frete" as const,
 };
 
 describe("motoristaSchema", () => {
@@ -41,12 +40,22 @@ describe("motoristaSchema", () => {
     expect(motoristaSchema.safeParse({ ...base, cnh_categoria: "F" as any }).success).toBe(false);
   });
 
-  it("aceita tipo_comissao valor_fixo_viagem (nome correto do banco)", () => {
-    expect(motoristaSchema.safeParse({ ...base, tipo_comissao: "valor_fixo_viagem" }).success).toBe(true);
+  it("aceita salario_fixo e valor_diaria_por_pedido (modelo SALÁRIO + DIÁRIA)", () => {
+    const result = motoristaSchema.safeParse({
+      ...base,
+      salario_fixo: 2500,
+      valor_diaria_por_pedido: 150,
+    });
+    expect(result.success).toBe(true);
   });
 
-  it("rejeita tipo_comissao inválido", () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    expect(motoristaSchema.safeParse({ ...base, tipo_comissao: "fixo_por_viagem" as any }).success).toBe(false);
+  it("rejeita valor_diaria_por_pedido negativo", () => {
+    expect(
+      motoristaSchema.safeParse({ ...base, valor_diaria_por_pedido: -10 }).success
+    ).toBe(false);
+  });
+
+  it("rejeita salario_fixo negativo", () => {
+    expect(motoristaSchema.safeParse({ ...base, salario_fixo: -1 }).success).toBe(false);
   });
 });

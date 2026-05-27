@@ -9,15 +9,13 @@ import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert
 
 type Veiculo = { id: string; placa: string; modelo: string; marca: string; km_atual: number | null };
 type Motorista = {
-  id: string; nome: string; tipo_comissao: string;
-  percentual_frete: number | null; valor_fixo_por_viagem: number | null;
-  valor_por_km: number | null; salario_fixo: number | null;
+  id: string; nome: string;
+  salario_fixo: number | null; valor_diaria_por_pedido: number | null;
 };
-type Cliente = { id: string; nome_fantasia: string; razao_social: string | null };
 
 type TabId = "operacional" | "cronograma" | "financeiro";
 
-export default function NovoFretePage() {
+export default function NovoPedidoPage() {
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
@@ -26,42 +24,27 @@ export default function NovoFretePage() {
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [clientes, setClientes] = useState<Cliente[]>([]);
 
   const [f, setF] = useState({
-    veiculo_id: "", motorista_id: "", cliente_id: "",
-    nome_cliente_avulso: "",
-    origem: "", destino: "",
-    valor_frete: "", km_inicial: "",
-    tipo_carga: "", peso_carga_kg: "",
-    data_coleta_prevista: "", data_entrega_prevista: "",
+    veiculo_id: "", motorista_id: "",
+    valor_pedido: "", km_inicial: "",
+    data_inicio_prevista: "", data_fim_prevista: "",
     forma_pagamento: "a_vista",
-    observacoes: "", criado_via: "web",
+    observacoes: "",
   });
 
   const [motoristaSel, setMotoristaSel] = useState<Motorista | null>(null);
 
-  const comissaoHint = () => {
+  const motoristaHint = () => {
     if (!motoristaSel) return null;
-    const m = motoristaSel;
-    switch (m.tipo_comissao) {
-      case "percentual_frete":
-      case "salario_mais_percentual":
-        if (!f.valor_frete || !m.percentual_frete) return `${m.percentual_frete ?? "?"}% do frete`;
-        return `R$ ${((parseFloat(f.valor_frete) * m.percentual_frete) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${m.percentual_frete}%)`;
-      case "valor_fixo_viagem":
-        return m.valor_fixo_por_viagem != null
-          ? `R$ ${m.valor_fixo_por_viagem.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} por viagem`
-          : "Valor fixo por viagem";
-      case "valor_por_km":
-      case "salario_mais_km":
-        return m.valor_por_km != null ? `R$ ${m.valor_por_km.toFixed(2)}/km` : "Por km rodado";
-      case "salario_fixo":
-        return m.salario_fixo != null
-          ? `Salário fixo: R$ ${m.salario_fixo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
-          : "Salário fixo";
-      default: return m.tipo_comissao.replace(/_/g, " ");
+    const parts: string[] = [];
+    if (motoristaSel.salario_fixo != null) {
+      parts.push(`Salário R$ ${motoristaSel.salario_fixo.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
     }
+    if (motoristaSel.valor_diaria_por_pedido != null) {
+      parts.push(`Diária R$ ${motoristaSel.valor_diaria_por_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`);
+    }
+    return parts.length > 0 ? parts.join(" · ") : null;
   };
 
   useEffect(() => {
@@ -70,14 +53,12 @@ export default function NovoFretePage() {
       if (!auth.user) return;
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id").eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
-      const [v, m, c] = await Promise.all([
+      const [v, m] = await Promise.all([
         supabase.from("veiculos").select("id,placa,modelo,marca,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motoristas").select("id,nome,tipo_comissao,percentual_frete,valor_fixo_por_viagem,valor_por_km,salario_fixo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
-        supabase.from("clientes").select("id,nome_fantasia,razao_social").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome_fantasia"),
+        supabase.from("motoristas").select("id,nome,salario_fixo,valor_diaria_por_pedido").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
       ]);
       setVeiculos(v.data ?? []);
       setMotoristas(m.data ?? []);
-      setClientes(c.data ?? []);
     };
     load();
   }, []);
@@ -88,8 +69,8 @@ export default function NovoFretePage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.veiculo_id || !f.motorista_id || !f.origem || !f.destino || !f.km_inicial) {
-      setErr("Preencha: Veículo, Motorista, Origem, Destino e KM Inicial"); return;
+    if (!f.veiculo_id || !f.motorista_id || !f.km_inicial) {
+      setErr("Preencha: Veículo, Motorista e KM Inicial"); return;
     }
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
@@ -97,29 +78,21 @@ export default function NovoFretePage() {
     const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id").eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
     if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
 
-    const { error: dbErr } = await supabase.from("fretes").insert({
+    const { error: dbErr } = await supabase.from("pedidos").insert({
       empresa_id: ue.empresa_id,
       veiculo_id: f.veiculo_id,
       motorista_id: f.motorista_id,
-      cliente_id: f.cliente_id || null,
-      nome_cliente_avulso: (!f.cliente_id && f.nome_cliente_avulso) ? f.nome_cliente_avulso : null,
-      origem: f.origem.toUpperCase(),
-      destino: f.destino.toUpperCase(),
-      valor_frete: f.valor_frete ? parseFloat(f.valor_frete) : null,
+      valor_pedido: f.valor_pedido ? parseFloat(f.valor_pedido) : null,
       km_inicial: parseFloat(f.km_inicial),
-      tipo_carga: f.tipo_carga || null,
-      peso_carga_kg: f.peso_carga_kg ? parseFloat(f.peso_carga_kg) : null,
-      data_coleta_prevista: f.data_coleta_prevista || null,
-      data_entrega_prevista: f.data_entrega_prevista || null,
+      data_inicio_prevista: f.data_inicio_prevista || null,
+      data_fim_prevista: f.data_fim_prevista || null,
       forma_pagamento: f.forma_pagamento || null,
       observacoes: f.observacoes || null,
-      criado_via: "web",
-      criado_por_usuario_id: auth.user.id,
       status: "agendado",
     });
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
-    router.push("/fretes"); router.refresh();
+    router.push("/entregas"); router.refresh();
   };
 
   const veiculoSel = veiculos.find(v => v.id === f.veiculo_id);
@@ -128,11 +101,11 @@ export default function NovoFretePage() {
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title="Novo Frete / Viagem"
+        title="Novo Pedido"
         actions={
           <>
-            <Btn href="/fretes" variant="ghost">← Voltar</Btn>
-            <Btn href="/fretes" variant="outline">Cancelar</Btn>
+            <Btn href="/entregas" variant="ghost">← Voltar</Btn>
+            <Btn href="/entregas" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving || sem_recursos}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
@@ -146,7 +119,7 @@ export default function NovoFretePage() {
           onChange={(id) => setTab(id as TabId)}
           tabs={[
             { id: "operacional", label: "Operacional" },
-            { id: "cronograma", label: "Cronograma & Carga" },
+            { id: "cronograma", label: "Cronograma" },
             { id: "financeiro", label: "Financeiro" },
           ]}
         />
@@ -158,7 +131,7 @@ export default function NovoFretePage() {
         {sem_recursos && (
           <div style={{ marginBottom: "16px" }}>
             <Alert variant="warning">
-              ⚠ Cadastre pelo menos 1 veículo e 1 motorista antes de criar um frete.
+              ⚠ Cadastre pelo menos 1 veículo e 1 motorista antes de criar um pedido.
               {veiculos.length === 0 && <Link href="/veiculos/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Veículo</Link>}
               {motoristas.length === 0 && <Link href="/motoristas/novo" style={{ textDecoration: "underline", marginLeft: "4px" }}>Cadastrar Motorista</Link>}
             </Alert>
@@ -167,8 +140,8 @@ export default function NovoFretePage() {
 
         {tab === "operacional" && (
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
-            <FormSection title="Veículo, Motorista e Cliente">
-              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+            <FormSection title="Veículo e Motorista">
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={(e) => {
                     set("veiculo_id")(e);
@@ -192,44 +165,11 @@ export default function NovoFretePage() {
                     <option value="">— Selecione —</option>
                     {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                   </select>
-                  {motoristaSel && (
+                  {motoristaSel && motoristaHint() && (
                     <p style={{ fontSize: "11px", color: "#7c3aed", marginTop: "4px" }}>
-                      Comissão: {comissaoHint()}
+                      {motoristaHint()}
                     </p>
                   )}
-                </FormField>
-
-                <FormField label="Cliente (opcional)">
-                  <select value={f.cliente_id} onChange={set("cliente_id")} style={selectStyle}>
-                    <option value="">— Sem cliente cadastrado —</option>
-                    {clientes.map(c => <option key={c.id} value={c.id}>{c.nome_fantasia}</option>)}
-                  </select>
-                </FormField>
-
-                {!f.cliente_id && (
-                  <FormField label="Identificação do Frete Avulso">
-                    <input
-                      value={f.nome_cliente_avulso}
-                      onChange={set("nome_cliente_avulso")}
-                      style={inputStyle}
-                      placeholder='Ex: "Nego Doido — carga de batata BH→Brasília"'
-                      maxLength={200}
-                    />
-                    <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>
-                      Opcional. Identifica o contratante sem precisar cadastrá-lo no sistema.
-                    </p>
-                  </FormField>
-                )}
-              </div>
-            </FormSection>
-
-            <FormSection title="Rota">
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                <FormField label="Origem *">
-                  <input value={f.origem} onChange={(e) => setF(p => ({ ...p, origem: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SÃO PAULO, SP" />
-                </FormField>
-                <FormField label="Destino *">
-                  <input value={f.destino} onChange={(e) => setF(p => ({ ...p, destino: e.target.value.toUpperCase() }))} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: CAMPINAS, SP" />
                 </FormField>
               </div>
             </FormSection>
@@ -237,7 +177,7 @@ export default function NovoFretePage() {
             <FormSection title="Observações">
               <textarea value={f.observacoes} onChange={set("observacoes")} rows={3}
                 style={{ ...inputStyle, resize: "vertical", height: "auto" }}
-                placeholder="Instruções de entrega, tipo de embalagem, referências..." />
+                placeholder="Detalhes do pedido, referências..." />
             </FormSection>
           </div>
         )}
@@ -257,22 +197,11 @@ export default function NovoFretePage() {
 
             <FormSection title="Datas previstas">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Data Coleta Prevista">
-                  <input value={f.data_coleta_prevista} onChange={set("data_coleta_prevista")} type="date" style={inputStyle} />
+                <FormField label="Início Previsto">
+                  <input value={f.data_inicio_prevista} onChange={set("data_inicio_prevista")} type="date" style={inputStyle} />
                 </FormField>
-                <FormField label="Data Entrega Prevista">
-                  <input value={f.data_entrega_prevista} onChange={set("data_entrega_prevista")} type="date" style={inputStyle} />
-                </FormField>
-              </div>
-            </FormSection>
-
-            <FormSection title="Carga">
-              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Tipo de Carga">
-                  <input value={f.tipo_carga} onChange={set("tipo_carga")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="EX: SOJA, CIMENTO" />
-                </FormField>
-                <FormField label="Peso (kg)">
-                  <input value={f.peso_carga_kg} onChange={set("peso_carga_kg")} type="number" style={inputStyle} />
+                <FormField label="Fim Previsto">
+                  <input value={f.data_fim_prevista} onChange={set("data_fim_prevista")} type="date" style={inputStyle} />
                 </FormField>
               </div>
             </FormSection>
@@ -283,9 +212,9 @@ export default function NovoFretePage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "20px" }}>
             <FormSection title="Valor e Pagamento">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Valor do Frete (R$)">
+                <FormField label="Valor do Pedido (R$)">
                   <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
-                    onAccept={(_, m) => setF(p => ({ ...p, valor_frete: String(m.unmaskedValue) }))}
+                    onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
                     style={inputStyle} placeholder="R$ 0,00" />
                 </FormField>
                 <FormField label="Forma de Pagamento">
@@ -302,24 +231,13 @@ export default function NovoFretePage() {
                 </FormField>
               </div>
             </FormSection>
-
-            {motoristaSel && comissaoHint() && (
-              <FormSection title="Comissão estimada">
-                <div style={{ padding: "12px 16px", background: "#f5f3ff", border: "1px solid #ddd6fe", color: "#5b21b6", fontSize: "14px", fontWeight: 700, borderRadius: "8px" }}>
-                  {comissaoHint()}
-                </div>
-                <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "6px" }}>
-                  O valor final é calculado automaticamente ao concluir o frete.
-                </p>
-              </FormSection>
-            )}
           </div>
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href="/fretes" variant="outline">Cancelar</Btn>
+          <Btn href="/entregas" variant="outline">Cancelar</Btn>
           <Btn type="submit" disabled={saving || sem_recursos}>
-            {saving ? "Salvando..." : "Criar Frete"}
+            {saving ? "Salvando..." : "Criar Pedido"}
           </Btn>
         </div>
       </div>

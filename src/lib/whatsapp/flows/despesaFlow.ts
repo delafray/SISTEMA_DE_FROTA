@@ -182,24 +182,15 @@ async function salvarDespesa(para: string, sessao: Sessao): Promise<void> {
     return;
   }
 
-  // Buscar frete ativo
-  const { data: freteAtivo } = await supabase
-    .from('fretes')
-    .select('id')
-    .eq('veiculo_id', sessao.contexto.veiculo_id ?? '')
-    .eq('status', 'em_andamento')
-    .maybeSingle();
-
-  const { error } = await supabase.from('despesas_frete').insert({
-    frete_id: freteAtivo?.id ?? null,
+  const { error } = await supabase.from('despesas_veiculo').insert({
+    veiculo_id: sessao.contexto.veiculo_id ?? '',
+    motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
     tipo: dados.tipo as string,
     valor: (dados.valor as number) ?? 0,
     local: (dados.local as string) ?? null,
-    descricao: (dados.descricao as string) ?? null,
-    foto_url: (dados.foto_url as string) ?? null,
+    foto_cupom_urls: dados.foto_url ? [dados.foto_url as string] : null,
     confirmado: true,
-    origem: 'whatsapp',
     ia_raw_response: dados.ia_raw ? JSON.stringify(dados.ia_raw) : null,
   });
 

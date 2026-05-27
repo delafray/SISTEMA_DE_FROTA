@@ -106,7 +106,7 @@ async function rotearMotorista(
   }
 
   // Viagem
-  if (['aguardando_origem_destino', 'aguardando_cliente', 'aguardando_valor_frete'].includes(estado)) {
+  if (['aguardando_origem_destino', 'aguardando_cliente', 'aguardando_valor_pedido'].includes(estado)) {
     await processarViagemFlow(msg, sessao);
     return;
   }
@@ -549,12 +549,14 @@ async function smartRouterTexto(
       return;
 
     case 'viagem_iniciar':
+    case 'pedido_iniciar':
       await enviarTexto(msg.from, 'Para onde vai? Digite a *origem* e o *destino*\n(ex: São Paulo → Campinas)');
       await updateSession(sessao.id, { estado: 'aguardando_origem_destino' });
       return;
 
     case 'viagem_encerrar':
-      await enviarTexto(msg.from, 'Pra encerrar viagem, abra o painel web ou peça pro gestor finalizar o frete.');
+    case 'pedido_encerrar':
+      await enviarTexto(msg.from, 'Pra encerrar o pedido, abra o painel web ou peça pro gestor finalizar.');
       await enviarMenuMotorista(msg.from, sessao);
       return;
 

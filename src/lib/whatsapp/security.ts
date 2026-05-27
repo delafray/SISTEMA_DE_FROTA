@@ -1,16 +1,22 @@
-import { createHmac, timingSafeEqual } from 'node:crypto';
+/**
+ * WhatsApp Security — Valida requisições recebidas da Evolution API.
+ *
+ * A Evolution API não usa HMAC como a Meta. A autenticação é feita via
+ * um token secreto que você define na configuração do webhook da Evolution API.
+ * O token é enviado no header `apikey` de cada requisição POST.
+ */
 
 export type SignatureResult =
   | { ok: true; mode: 'verified' | 'skipped-no-secret' }
-  | { ok: false; reason: 'missing-header' | 'malformed-header' | 'mismatch' };
+  | { ok: false; reason: 'missing-header' | 'mismatch' };
 
 /**
- * Valida o header `X-Hub-Signature-256` enviado pela Meta.
- * Quando `META_APP_SECRET` não está configurado, retorna `skipped-no-secret`
+ * Valida o header `apikey` enviado pela Evolution API em cada webhook.
+ * Quando `EVOLUTION_WEBHOOK_SECRET` não está configurado, retorna `skipped-no-secret`
  * para permitir desenvolvimento local sem quebrar o webhook.
  */
-export function verifyMetaSignature(rawBody: string, headerValue: string | null): SignatureResult {
-  const secret = process.env.META_APP_SECRET;
+export function verifyEvolutionSignature(headerValue: string | null): SignatureResult {
+  const secret = process.env.EVOLUTION_WEBHOOK_SECRET;
 
   if (!secret) {
     return { ok: true, mode: 'skipped-no-secret' };
@@ -20,22 +26,7 @@ export function verifyMetaSignature(rawBody: string, headerValue: string | null)
     return { ok: false, reason: 'missing-header' };
   }
 
-  const prefix = 'sha256=';
-  if (!headerValue.startsWith(prefix)) {
-    return { ok: false, reason: 'malformed-header' };
-  }
-
-  const provided = headerValue.slice(prefix.length).trim();
-  const expected = createHmac('sha256', secret).update(rawBody, 'utf8').digest('hex');
-
-  const providedBuf = Buffer.from(provided, 'hex');
-  const expectedBuf = Buffer.from(expected, 'hex');
-
-  if (providedBuf.length !== expectedBuf.length) {
-    return { ok: false, reason: 'mismatch' };
-  }
-
-  if (!timingSafeEqual(providedBuf, expectedBuf)) {
+  if (headerValue !== secret) {
     return { ok: false, reason: 'mismatch' };
   }
 

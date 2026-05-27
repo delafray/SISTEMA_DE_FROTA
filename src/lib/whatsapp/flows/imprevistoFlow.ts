@@ -174,24 +174,12 @@ async function salvarImprevisto(para: string, sessao: Sessao): Promise<void> {
     return;
   }
 
-  // Buscar frete ativo
-  const { data: freteAtivo } = await supabase
-    .from('fretes')
-    .select('id')
-    .eq('veiculo_id', sessao.contexto.veiculo_id ?? '')
-    .eq('status', 'em_andamento')
-    .maybeSingle();
-
   const { error } = await supabase.from('imprevistos').insert({
-    frete_id: freteAtivo?.id ?? null,
-    motorista_id: sessao.motorista_id,
+    motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
-    veiculo_id: sessao.contexto.veiculo_id ?? null,
     tipo: dados.tipo as string,
-    tempo_estimado_min: (dados.tempo_estimado_min as number) ?? null,
-    observacao: (dados.observacao as string) ?? null,
-    foto_url: (dados.foto_url as string) ?? null,
-    origem: 'whatsapp',
+    duracao_estimada_min: (dados.tempo_estimado_min as number) ?? null,
+    descricao: (dados.observacao as string) ?? null,
   });
 
   if (error) {

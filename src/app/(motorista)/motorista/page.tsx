@@ -5,18 +5,18 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 
-type ViagemCard = {
+type PedidoCard = {
   id: string;
   status: string;
-  data_saida_prevista: string | null;
-  data_chegada_prevista: string | null;
+  data_inicio_prevista: string | null;
+  data_fim_prevista: string | null;
   observacoes: string | null;
+  valor_pedido: number | null;
   veiculos: { placa: string; modelo: string; marca: string } | null;
-  fretes: {
+  entregas: {
     id: string;
     origem: string | null;
     destino: string | null;
-    valor_frete: number | null;
     status: string;
     clientes: { nome_fantasia: string } | null;
   }[];
@@ -40,7 +40,7 @@ const STATUS_COLOR: Record<string, { bg: string; color: string; border: string }
   concluida:    { bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
   cancelada:    { bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
 };
-const FRETE_STATUS_LABEL: Record<string, string> = {
+const ENTREGA_STATUS_LABEL: Record<string, string> = {
   agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
 };
 const ADT_STATUS_LABEL: Record<string, string> = {
@@ -53,7 +53,7 @@ const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDate
 export default function MotoristaPage() {
   const router = useRouter();
   const [nome, setNome]             = useState("");
-  const [viagens, setViagens]       = useState<ViagemCard[]>([]);
+  const [pedidos, setPedidos]       = useState<PedidoCard[]>([]);
   const [adiantamentos,   setAdiantamentos]   = useState<Adiantamento[]>([]);
   const [abastecimentos,  setAbastecimentos]  = useState<{ id: string; posto: string | null; litros: number; valor_total: number; km_no_abast: number | null; confirmado: boolean | null; created_at: string | null }[]>([]);
   const [loading, setLoading]       = useState(true);
@@ -81,11 +81,11 @@ export default function MotoristaPage() {
       setMotoristaId(mId);
       if (!mId) { setLoading(false); return; }
 
-      const [viagensRes, adtRes, abastRes] = await Promise.all([
-        supabase.from("viagens")
-          .select("id,status,data_saida_prevista,data_chegada_prevista,observacoes,veiculos(placa,modelo,marca),fretes(id,origem,destino,valor_frete,status,clientes(nome_fantasia))")
+      const [pedidosRes, adtRes, abastRes] = await Promise.all([
+        supabase.from("pedidos")
+          .select("id,status,data_inicio_prevista,data_fim_prevista,observacoes,valor_pedido,veiculos(placa,modelo,marca),entregas(id,origem,destino,status,clientes(nome_fantasia))")
           .eq("motorista_id", mId)
-          .order("data_saida_prevista", { ascending: false })
+          .order("data_inicio_prevista", { ascending: false })
           .limit(30),
         supabase.from("adiantamentos")
           .select("id,tipo,valor,status,created_at,justificativa")
@@ -99,7 +99,7 @@ export default function MotoristaPage() {
           .limit(20),
       ]);
 
-      setViagens(viagensRes.data ?? []);
+      setPedidos((pedidosRes.data ?? []) as unknown as PedidoCard[]);
       setAdiantamentos(adtRes.data ?? []);
       setAbastecimentos(abastRes.data ?? []);
       setLoading(false);
@@ -115,31 +115,30 @@ export default function MotoristaPage() {
     router.push("/login");
   };
 
-  const iniciarViagem = async (viagemId: string) => {
+  const iniciarPedido = async (pedidoId: string) => {
     const supabase = createClient();
-    await supabase.from("viagens").update({
+    await supabase.from("pedidos").update({
       status: "em_andamento",
-      data_saida_real: new Date().toISOString(),
-    }).eq("id", viagemId);
-    setViagens(p => p.map(v => v.id === viagemId ? { ...v, status: "em_andamento" } : v));
+      data_inicio_real: new Date().toISOString(),
+    }).eq("id", pedidoId);
+    setPedidos(p => p.map(v => v.id === pedidoId ? { ...v, status: "em_andamento" } : v));
   };
 
-  const concluirViagem = async (viagemId: string) => {
+  const concluirPedido = async (pedidoId: string) => {
     const supabase = createClient();
-    await supabase.from("viagens").update({
+    await supabase.from("pedidos").update({
       status: "concluida",
-      data_chegada_real: new Date().toISOString(),
-    }).eq("id", viagemId);
-    setViagens(p => p.map(v => v.id === viagemId ? { ...v, status: "concluida" } : v));
+      data_fim_real: new Date().toISOString(),
+    }).eq("id", pedidoId);
+    setPedidos(p => p.map(v => v.id === pedidoId ? { ...v, status: "concluida" } : v));
   };
 
   const semVinculo = !loading && motoristaId === null;
-  const ativas   = viagens.filter(v => v.status === "em_andamento" || v.status === "agendada");
-  const concluidas = viagens.filter(v => v.status === "concluida");
-  const totalComissao = viagens
+  const ativas   = pedidos.filter(v => v.status === "em_andamento" || v.status === "agendada");
+  const concluidas = pedidos.filter(v => v.status === "concluida");
+  const totalReceita = pedidos
     .filter(v => v.status === "concluida")
-    .flatMap(v => v.fretes)
-    .reduce((s, f) => s + (f.valor_frete ?? 0), 0);
+    .reduce((s, p) => s + (p.valor_pedido ?? 0), 0);
 
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "#64748b", flexDirection: "column", gap: "12px" }}>
@@ -173,9 +172,9 @@ export default function MotoristaPage() {
       {/* KPI strip */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "12px 16px", display: "flex" }}>
         {[
-          { label: "Viagens Ativas",  value: ativas.length,    color: "#2563eb" },
-          { label: "Concluídas",      value: concluidas.length, color: "#16a34a" },
-          { label: "Receita Total",   value: fmtBRL(totalComissao), color: "#7c3aed" },
+          { label: "Pedidos Ativos",  value: ativas.length,    color: "#2563eb" },
+          { label: "Concluídos",      value: concluidas.length, color: "#16a34a" },
+          { label: "Receita Total",   value: fmtBRL(totalReceita), color: "#7c3aed" },
         ].map((k, i) => (
           <div key={i} style={{ flex: 1, textAlign: "center", borderRight: i < 2 ? "1px solid #e2e8f0" : "none" }}>
             <div style={{ fontSize: "18px", fontWeight: 700, color: k.color, lineHeight: 1 }}>{k.value}</div>
@@ -186,7 +185,7 @@ export default function MotoristaPage() {
 
       {/* Tabs */}
       <div style={{ display: "flex", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
-        {([["viagens", "Viagens"], ["abastecimentos", "Abastecimentos"], ["adiantamentos", "Adiantamentos"]] as const).map(([key, label]) => (
+        {([["viagens", "Pedidos"], ["abastecimentos", "Abastecimentos"], ["adiantamentos", "Adiantamentos"]] as const).map(([key, label]) => (
           <button key={key} onClick={() => setTab(key)} style={{
             flex: 1, padding: "12px", border: "none", background: "none",
             fontSize: "14px", fontWeight: tab === key ? 700 : 500,
@@ -210,22 +209,21 @@ export default function MotoristaPage() {
       <div style={{ padding: "12px" }}>
 
         {tab === "viagens" && (
-          viagens.length === 0 ? (
+          pedidos.length === 0 ? (
             <div style={{ textAlign: "center", padding: "48px 16px", color: "#94a3b8" }}>
               <div style={{ fontSize: "40px", marginBottom: "12px" }}>🚛</div>
-              <div style={{ fontWeight: 600, fontSize: "15px" }}>Nenhuma viagem atribuída</div>
+              <div style={{ fontWeight: 600, fontSize: "15px" }}>Nenhum pedido atribuído</div>
             </div>
           ) : (
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-              {viagens.map(v => {
+              {pedidos.map(v => {
                 const s = STATUS_COLOR[v.status] ?? { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0" };
                 const veiculo = Array.isArray(v.veiculos) ? v.veiculos[0] : v.veiculos;
-                const fretes  = Array.isArray(v.fretes)  ? v.fretes       : [];
-                const valorTotal = fretes.reduce((s, f) => s + (f.valor_frete ?? 0), 0);
+                const entregas  = Array.isArray(v.entregas)  ? v.entregas       : [];
                 return (
                   <div key={v.id} style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.04)" }}>
 
-                    {/* Cabeçalho da viagem */}
+                    {/* Cabeçalho do pedido */}
                     <div style={{ padding: "12px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div>
                         <span style={{ background: s.bg, color: s.color, border: `1px solid ${s.border}`, borderRadius: "6px", padding: "2px 8px", fontSize: "11px", fontWeight: 700 }}>
@@ -238,19 +236,19 @@ export default function MotoristaPage() {
                         )}
                       </div>
                       <span style={{ fontSize: "12px", color: "#64748b" }}>
-                        {fmtDate(v.data_saida_prevista)}
-                        {v.data_chegada_prevista ? ` → ${fmtDate(v.data_chegada_prevista)}` : ""}
+                        {fmtDate(v.data_inicio_prevista)}
+                        {v.data_fim_prevista ? ` → ${fmtDate(v.data_fim_prevista)}` : ""}
                       </span>
                     </div>
 
-                    {/* Fretes da viagem */}
-                    {fretes.length > 0 && (
+                    {/* Entregas do pedido */}
+                    {entregas.length > 0 && (
                       <div style={{ padding: "10px 14px", borderBottom: "1px solid #f1f5f9" }}>
                         <div style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600, textTransform: "uppercase", marginBottom: "6px" }}>
-                          {fretes.length} {fretes.length === 1 ? "Frete" : "Fretes"}
+                          {entregas.length} {entregas.length === 1 ? "Entrega" : "Entregas"}
                         </div>
                         <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
-                          {fretes.map(f => {
+                          {entregas.map(f => {
                             const cliente = Array.isArray(f.clientes) ? f.clientes[0] : f.clientes;
                             return (
                               <div key={f.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "13px" }}>
@@ -259,7 +257,7 @@ export default function MotoristaPage() {
                                   {cliente && <span style={{ color: "#94a3b8", fontWeight: 400 }}> · {cliente.nome_fantasia}</span>}
                                 </span>
                                 <span style={{ fontSize: "11px", color: "#64748b" }}>
-                                  {FRETE_STATUS_LABEL[f.status] ?? f.status}
+                                  {ENTREGA_STATUS_LABEL[f.status] ?? f.status}
                                 </span>
                               </div>
                             );
@@ -271,12 +269,12 @@ export default function MotoristaPage() {
                     {/* Rodapé: valor + ações */}
                     <div style={{ padding: "10px 14px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                       <div style={{ fontSize: "15px", fontWeight: 700, color: "#166534" }}>
-                        {fmtBRL(valorTotal)}
+                        {fmtBRL(v.valor_pedido)}
                       </div>
                       <div style={{ display: "flex", gap: "8px" }}>
                         {v.status === "agendada" && (
                           <button
-                            onClick={() => iniciarViagem(v.id)}
+                            onClick={() => iniciarPedido(v.id)}
                             style={{ background: "#2563eb", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
                           >
                             Iniciar
@@ -284,13 +282,13 @@ export default function MotoristaPage() {
                         )}
                         {v.status === "em_andamento" && (
                           <button
-                            onClick={() => concluirViagem(v.id)}
+                            onClick={() => concluirPedido(v.id)}
                             style={{ background: "#16a34a", color: "#fff", border: "none", borderRadius: "8px", padding: "7px 14px", fontSize: "13px", fontWeight: 700, cursor: "pointer" }}
                           >
                             Concluir
                           </button>
                         )}
-                        <Link href={`/motorista/viagens/${v.id}`} style={{ background: "#f1f5f9", color: "#475569", borderRadius: "8px", padding: "7px 12px", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
+                        <Link href={`/motorista/pedidos/${v.id}`} style={{ background: "#f1f5f9", color: "#475569", borderRadius: "8px", padding: "7px 12px", fontSize: "13px", fontWeight: 600, textDecoration: "none" }}>
                           Detalhes
                         </Link>
                       </div>

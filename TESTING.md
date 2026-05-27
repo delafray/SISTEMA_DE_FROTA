@@ -140,15 +140,16 @@ Se você não pode rodar `npm test` (ambiente sem Node, por exemplo), **declare 
 | AbastecimentoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/abastecimentoFlow.test.ts` |
 | KmFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/kmFlow.test.ts` |
 | DespesaFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/despesaFlow.test.ts` |
-| ViagemFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/viagemFlow.test.ts` |
+| ViagemFlow (= Pedido) | ❌ FALTA | `src/__tests__/whatsapp/flows/viagemFlow.test.ts` |
 | GestorFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/gestorFlow.test.ts` |
 | AdiantamentoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/adiantamentoFlow.test.ts` |
 | ChecklistFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/checklistFlow.test.ts` |
 | ImprevistoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/imprevistoFlow.test.ts` |
-| Cálculo de comissão | ❌ FALTA | `src/__tests__/lib/comissao.test.ts` |
 | Validação status veículo | ❌ FALTA | `src/__tests__/lib/veiculoStatus.test.ts` |
-| Frete: km_final >= km_inicial | ❌ FALTA | `src/__tests__/lib/freteValidation.test.ts` |
-| View `fretes_com_resultado` | ❌ FALTA | `src/__tests__/db/fretesComResultado.test.ts` |
+| Pedido: km_final >= km_inicial | ❌ FALTA | `src/__tests__/lib/pedidoValidation.test.ts` |
+| Cálculo diária do motorista (qtd_pedidos × valor_diaria_por_pedido) | ❌ FALTA | `src/__tests__/lib/acertoMensal.test.ts` |
+| View `pedidos_com_resultado` | ❌ FALTA | `src/__tests__/db/pedidosComResultado.test.ts` |
+| View `veiculos_resultado_periodo` | ❌ FALTA | `src/__tests__/db/veiculosResultadoPeriodo.test.ts` |
 
 **Ao trabalhar em qualquer linha acima, crie o teste correspondente.**
 
@@ -174,6 +175,9 @@ Exemplo:
 - 2026-05-20 Gemini 3.5 Flash (High) / Antigravity — Corrigiu erros de compilação TS em `kmFlow.test.ts` e validou a suíte inteira — 0 novos testes — ✅ 191/191 passando (16 arquivos)
 - 2026-05-20 Gemini 3.5 Flash (High) / Antigravity — Corrigiu erros de sintaxe JSX/JS em `AcertoMensalTab.tsx` e validou com tsc e vitest — 0 novos testes — ✅ 191/191 passando (16 arquivos)
 - 2026-05-20 Gemini 3.5 Flash (High) / Antigravity — Adicionou ordenação interativa de Fretes por Rota, Data Fim e Saldo Restante usando Th do ds.tsx — 0 novos testes — ✅ 191/191 passando (16 arquivos)
+- 2026-05-21 Claude Opus 4.7 (1M) — Limpeza ETAPA 2 do `PLANO_LIMPEZA_MODELO.md`: refactor completo viagens→pedidos, fretes→entregas, remoção de comissão, despesas→veiculo_id, frete_id removido de tabelas auxiliares, datas de pedidos renomeadas. Atualizou ~25 arquivos TS/TSX, fixed kmFlow tests (`km_registrado`→`km_lido`) — +1 teste novo (valor_diaria_por_pedido em motorista schema) — ✅ 192/192 passando (16 arquivos), `tsc --noEmit` 0 erros
+- 2026-05-27 Claude Sonnet 4.6 (Thinking) / Antigravity — Migração completa Meta Cloud API → Evolution API: reescrita de `security.ts`, `messageParser.ts`, `messageSender.ts`, `webhook/route.ts` + testes correspondentes. Todos os 8 flows, router, auth e sessionManager preservados sem alteração — +0 testes novos de lógica, todos os testes de infra WhatsApp reescritos para o novo provider — ✅ 189/189 passando (16 arquivos)
+- 2026-05-27 Gemini 3.5 Flash (High) / Antigravity — Resolução de problemas de infra, deploy e SSL na Evolution API do Railway, persistência Postgres ativada com sslmode=no-verify e salvando instâncias com sucesso. Validou a suite de testes locais — 0 novos testes — ✅ 189/189 passando (16 arquivos)
 
 ---
 

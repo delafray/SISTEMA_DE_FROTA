@@ -3,8 +3,9 @@
  * num formato unificado pra fluxo de caixa.
  *
  * Fontes:
- *  - fretes (entrada: valor_frete | saída: comissão do motorista)
- *  - abastecimentos (saída)
+ *  - pedidos (entrada: valor_pedido)
+ *  - abastecimentos (saída — custo do veículo)
+ *  - despesas_veiculo (saída — pedágio, alimentação, hospedagem, lavagem, etc)
  *  - manutencoes realizadas (saída) + previstas (saída/provisão)
  *  - adiantamentos (saída)
  *  - despesas_avulsas (saída)
@@ -14,7 +15,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 export type CategoriaEvento =
-  | "frete" | "comissao" | "combustivel" | "manutencao"
+  | "pedido" | "combustivel" | "despesa_veiculo" | "manutencao"
   | "manutencao_provisao" | "adiantamento" | "salario" | "avulsa" | "recorrente";
 
 export type EventoFinanceiro = {
@@ -51,7 +52,6 @@ const addMonths = (iso: string, months: number) => {
 };
 
 const isoSomeDate = (year: number, month0: number, day: number) => {
-  // clamp day to last day of month
   const lastDay = new Date(year, month0 + 1, 0).getDate();
   const d = Math.min(day, lastDay);
   return `${year}-${String(month0 + 1).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
@@ -64,60 +64,41 @@ export async function coletarEventos(
   const { empresaId, inicio, fim, incluirProvisaoManutencao } = opts;
   const eventos: EventoFinanceiro[] = [];
 
-  // ─── FRETES (entrada + comissão) ─────────────────────────────────────────
-  const { data: fretes, error: fretesErr } = await supabase
-    .from("fretes")
-    .select("id,origem,destino,valor_frete,pago,data_pagamento,data_coleta_prevista,data_entrega_prevista,status,comissao_motorista_valor,motoristas(nome)")
+  // ─── PEDIDOS (entrada: valor do pedido) ──────────────────────────────────
+  const { data: pedidos, error: pedidosErr } = await supabase
+    .from("pedidos")
+    .select("id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)")
     .eq("empresa_id", empresaId);
 
-  if (fretesErr) {
-    console.error("Erro ao coletar fretes:", fretesErr);
-    throw new Error(`Erro ao coletar fretes: ${fretesErr.message}`);
+  if (pedidosErr) {
+    console.error("Erro ao coletar pedidos:", pedidosErr);
+    throw new Error(`Erro ao coletar pedidos: ${pedidosErr.message}`);
   }
 
-  for (const fr of fretes ?? []) {
-    const motorista = Array.isArray(fr.motoristas) ? fr.motoristas[0] : fr.motoristas;
-    // Entrada: valor do frete
-    if (fr.valor_frete != null && fr.valor_frete > 0) {
-      const dataEntradaRaw = fr.pago && fr.data_pagamento
-        ? fr.data_pagamento
-        : (fr.data_entrega_prevista ?? fr.data_coleta_prevista);
+  for (const p of pedidos ?? []) {
+    const motorista = Array.isArray(p.motoristas) ? p.motoristas[0] : p.motoristas;
+    if (p.valor_pedido != null && p.valor_pedido > 0) {
+      const dataEntradaRaw = p.pago && p.data_pagamento
+        ? p.data_pagamento
+        : (p.data_fim_prevista ?? p.data_inicio_prevista);
       if (dataEntradaRaw) {
         eventos.push({
-          id: `frete_in:${fr.id}`,
+          id: `pedido_in:${p.id}`,
           data: dataEntradaRaw.slice(0, 10),
-          descricao: `Frete ${fr.origem ?? "?"} → ${fr.destino ?? "?"}`,
-          categoria: "frete",
-          valor: fr.valor_frete,
+          descricao: `Pedido #${p.id.slice(0, 8)}`,
+          categoria: "pedido",
+          valor: p.valor_pedido,
           tipo: "entrada",
-          pago: !!fr.pago,
+          pago: !!p.pago,
           isProvisao: false,
-          origem: { tabela: "fretes", id: fr.id },
-          contexto: motorista?.nome ?? undefined,
-        });
-      }
-    }
-    // Saída: comissão do motorista (só se concluído)
-    if (fr.status === "concluido" && fr.comissao_motorista_valor != null && fr.comissao_motorista_valor > 0) {
-      const dataComRaw = fr.data_pagamento ?? fr.data_entrega_prevista ?? fr.data_coleta_prevista;
-      if (dataComRaw) {
-        eventos.push({
-          id: `frete_com:${fr.id}`,
-          data: dataComRaw.slice(0, 10),
-          descricao: `Comissão ${motorista?.nome ?? "motorista"} — ${fr.origem ?? "?"} → ${fr.destino ?? "?"}`,
-          categoria: "comissao",
-          valor: fr.comissao_motorista_valor,
-          tipo: "saida",
-          pago: !!fr.pago,  // assume pago junto com frete (sem coluna específica)
-          isProvisao: false,
-          origem: { tabela: "fretes", id: fr.id },
+          origem: { tabela: "pedidos", id: p.id },
           contexto: motorista?.nome ?? undefined,
         });
       }
     }
   }
 
-  // ─── ABASTECIMENTOS ──────────────────────────────────────────────────────
+  // ─── ABASTECIMENTOS (custo do veículo) ───────────────────────────────────
   const { data: abasts, error: abastsErr } = await supabase
     .from("abastecimentos")
     .select("id,valor_total,pago,data_pagamento,data_vencimento,created_at,posto,veiculos(placa)")
@@ -145,6 +126,35 @@ export async function coletarEventos(
       pago: !!a.pago,
       isProvisao: false,
       origem: { tabela: "abastecimentos", id: a.id },
+      contexto: placa ?? undefined,
+    });
+  }
+
+  // ─── DESPESAS DO VEÍCULO (pedágio, alimentação, hospedagem, lavagem) ─────
+  const { data: despVeic, error: despVeicErr } = await supabase
+    .from("despesas_veiculo")
+    .select("id,tipo,valor,data_despesa,local,veiculos(placa)")
+    .eq("empresa_id", empresaId);
+
+  if (despVeicErr) {
+    console.error("Erro ao coletar despesas do veículo:", despVeicErr);
+    throw new Error(`Erro ao coletar despesas do veículo: ${despVeicErr.message}`);
+  }
+
+  for (const d of despVeic ?? []) {
+    if (d.valor == null || d.valor <= 0) continue;
+    const placa = (Array.isArray(d.veiculos) ? d.veiculos[0] : d.veiculos)?.placa;
+    if (!d.data_despesa) continue;
+    eventos.push({
+      id: `desp_veic:${d.id}`,
+      data: d.data_despesa.slice(0, 10),
+      descricao: `${d.tipo}${d.local ? ` — ${d.local}` : ""}`,
+      categoria: "despesa_veiculo",
+      valor: d.valor,
+      tipo: "saida",
+      pago: true,
+      isProvisao: false,
+      origem: { tabela: "despesas_veiculo", id: d.id },
       contexto: placa ?? undefined,
     });
   }
@@ -194,7 +204,6 @@ export async function coletarEventos(
       throw new Error(`Erro ao coletar previsões de manutenção: ${proxErr.message}`);
     }
 
-    // Custo estimado vem de tipos_manutencao (faixa média)
     const tipoIds = Array.from(new Set((prox ?? []).map(p => p.tipo_id).filter((x): x is string => !!x)));
     const custoMap = new Map<string, number>();
     if (tipoIds.length > 0) {
@@ -225,13 +234,10 @@ export async function coletarEventos(
       let dataProvisao: string | null;
 
       if (p.status === "vencido") {
-        // Manutenção já vencida (por KM ou por data) → data = hoje para aparecer como atrasada
         dataProvisao = hoje;
       } else if (p.data_proxima) {
-        // Tem data calculada e ainda não vencida → usa ela
         dataProvisao = p.data_proxima.slice(0, 10);
       } else if (p.intervalo_meses && p.intervalo_meses > 0) {
-        // Nunca feita → estima hoje + intervalo
         dataProvisao = addMonths(hoje, p.intervalo_meses);
       } else {
         continue;
@@ -359,27 +365,19 @@ export async function coletarEventos(
     }
   }
 
-  // ─── Filtra por range ou pendentes/atrasados no passado, e ordena por data ─
-  // Regras:
-  //   1. Qualquer evento dentro do range (inclui provisões futuras)
-  //   2. Qualquer evento REAL não pago no passado (contas atrasadas reais)
-  //   3. Qualquer PROVISÃO vencida no passado (manutenção atrasada não feita)
-  //      — só existe no array se incluirProvisaoManutencao=true, então
-  //        desmarcar o checkbox já as remove na origem.
   return eventos
     .filter(e =>
-      (e.data >= inicio && e.data <= fim) ||          // dentro do range
-      (!e.pago && !e.isProvisao && e.data < inicio) || // pendências reais atrasadas
-      (e.isProvisao && e.data < inicio)                // provisões/manutenções atrasadas
+      (e.data >= inicio && e.data <= fim) ||
+      (!e.pago && !e.isProvisao && e.data < inicio) ||
+      (e.isProvisao && e.data < inicio)
     )
     .sort((a, b) => a.data.localeCompare(b.data));
 }
 
-// Helper visual de cor por categoria
 export const CAT_COR: Record<CategoriaEvento, string> = {
-  frete: "#16a34a",
-  comissao: "#7c3aed",
+  pedido: "#16a34a",
   combustivel: "#ea580c",
+  despesa_veiculo: "#f97316",
   manutencao: "#dc2626",
   manutencao_provisao: "#94a3b8",
   adiantamento: "#0891b2",
@@ -389,9 +387,9 @@ export const CAT_COR: Record<CategoriaEvento, string> = {
 };
 
 export const CAT_LABEL: Record<CategoriaEvento, string> = {
-  frete: "Frete",
-  comissao: "Comissão",
+  pedido: "Pedido",
   combustivel: "Combustível",
+  despesa_veiculo: "Despesa Veículo",
   manutencao: "Manutenção",
   manutencao_provisao: "Provisão Manut.",
   adiantamento: "Adiantamento",

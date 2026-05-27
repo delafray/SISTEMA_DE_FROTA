@@ -1,54 +1,50 @@
 /**
- * WhatsApp Message Parser — Parseia o payload da Meta Cloud API.
+ * WhatsApp Message Parser — Parseia o payload da Evolution API.
  * Converte o JSON bruto do webhook em um objeto tipado e fácil de usar.
+ *
+ * O formato da Evolution API é diferente da Meta Cloud API:
+ * {
+ *   event: "messages.upsert",
+ *   instance: "frota-bot",
+ *   data: {
+ *     key: { remoteJid: "5531999887766@s.whatsapp.net", id: "MSG_ID", fromMe: false },
+ *     pushName: "João",
+ *     messageType: "conversation",
+ *     message: { conversation: "Oi" },
+ *     messageTimestamp: 1234567890
+ *   }
+ * }
  */
 
-// ─── TIPOS DE ENTRADA (payload da Meta) ──────────────────────────────
+// ─── TIPOS DE ENTRADA (payload da Evolution API) ──────────────────────
 
-export type WebhookPayload = {
-  object: string;
-  entry: Array<{
-    id: string;
-    changes: Array<{
-      value: {
-        messaging_product: string;
-        metadata: {
-          display_phone_number: string;
-          phone_number_id: string;
-        };
-        contacts?: Array<{
-          profile: { name: string };
-          wa_id: string;
-        }>;
-        messages?: Array<RawMessage>;
-        statuses?: Array<{
-          id: string;
-          status: string;
-          timestamp: string;
-          recipient_id: string;
-        }>;
-      };
-      field: string;
-    }>;
-  }>;
+export type EvolutionWebhookPayload = {
+  event: string;
+  instance: string;
+  data: EvolutionMessageData | EvolutionMessageData[];
 };
 
-type RawMessage = {
-  from: string;
-  id: string;
-  timestamp: string;
-  type: 'text' | 'image' | 'audio' | 'document' | 'interactive' | 'button' | 'location' | 'sticker';
-  text?: { body: string };
-  image?: { id: string; mime_type: string; sha256: string; caption?: string };
-  audio?: { id: string; mime_type: string; sha256: string };
-  document?: { id: string; mime_type: string; sha256: string; filename?: string; caption?: string };
-  interactive?: {
-    type: 'button_reply' | 'list_reply';
-    button_reply?: { id: string; title: string };
-    list_reply?: { id: string; title: string; description?: string };
+export type EvolutionMessageData = {
+  key: {
+    remoteJid: string;
+    id: string;
+    fromMe?: boolean;
   };
-  button?: { text: string; payload: string };
-  location?: { latitude: number; longitude: number; name?: string; address?: string };
+  pushName?: string;
+  messageType?: string;
+  message?: {
+    conversation?: string;
+    extendedTextMessage?: { text: string };
+    imageMessage?: { caption?: string; url?: string; mimetype?: string };
+    audioMessage?: { url?: string; mimetype?: string; ptt?: boolean };
+    documentMessage?: { caption?: string; url?: string; mimetype?: string; fileName?: string };
+    buttonsResponseMessage?: { selectedButtonId?: string; selectedDisplayText?: string };
+    listResponseMessage?: { singleSelectReply?: { selectedRowId?: string }; title?: string };
+    locationMessage?: { degreesLatitude?: number; degreesLongitude?: number; name?: string; address?: string };
+  };
+  messageTimestamp?: number | string;
+  // URL da mídia já resolvida (Evolution API entrega em alguns casos)
+  mediaUrl?: string;
 };
 
 // ─── TIPOS DE SAÍDA (objeto tipado para o sistema) ──────────────────
@@ -58,7 +54,7 @@ export type ParsedMessage = {
   from: string;
   /** Nome do remetente no perfil do WhatsApp */
   fromName: string;
-  /** ID único da mensagem na Meta */
+  /** ID único da mensagem */
   messageId: string;
   /** Timestamp da mensagem */
   timestamp: Date;
@@ -66,7 +62,7 @@ export type ParsedMessage = {
   tipo: 'texto' | 'foto' | 'audio' | 'documento' | 'botao' | 'lista' | 'localizacao' | 'outro';
   /** Conteúdo de texto (body do texto ou caption da foto) */
   texto?: string;
-  /** ID da mídia (para baixar depois via Meta API) */
+  /** ID da mídia — na Evolution API é a URL direta da mídia */
   mediaId?: string;
   /** MIME type da mídia */
   mediaMimeType?: string;
@@ -81,154 +77,185 @@ export type ParsedMessage = {
   /** Localização */
   latitude?: number;
   longitude?: number;
-  /** ID do número de telefone do Business (nosso) */
+  /** Mantido por compatibilidade — não usado no provider Evolution */
   phoneNumberId: string;
 };
 
 // ─── FUNÇÃO PRINCIPAL ────────────────────────────────────────────────
 
 /**
- * Parseia o payload do webhook da Meta e retorna mensagens tipadas.
- * Ignora status updates (delivered, read, etc).
+ * Parseia o payload do webhook da Evolution API e retorna mensagens tipadas.
+ * Ignora mensagens enviadas por nós (fromMe = true) e eventos que não sejam mensagens.
  */
-export function parseWebhookPayload(payload: WebhookPayload): ParsedMessage[] {
-  const messages: ParsedMessage[] = [];
-
-  if (payload.object !== 'whatsapp_business_account') {
-    return messages;
+export function parseWebhookPayload(payload: EvolutionWebhookPayload): ParsedMessage[] {
+  if (payload.event !== 'messages.upsert') {
+    return [];
   }
 
-  for (const entry of payload.entry) {
-    for (const change of entry.changes) {
-      if (change.field !== 'messages') continue;
+  // O campo `data` pode ser um objeto único ou um array
+  const dataItems = Array.isArray(payload.data) ? payload.data : [payload.data];
+  const messages: ParsedMessage[] = [];
 
-      const { value } = change;
-      const phoneNumberId = value.metadata.phone_number_id;
-      const contacts = value.contacts ?? [];
-      const rawMessages = value.messages ?? [];
+  for (const item of dataItems) {
+    // Ignorar mensagens enviadas pelo bot
+    if (item.key?.fromMe === true) continue;
 
-      for (const msg of rawMessages) {
-        const contact = contacts.find((c) => c.wa_id === msg.from);
-        const fromName = contact?.profile?.name ?? 'Desconhecido';
-
-        const parsed = parseRawMessage(msg, fromName, phoneNumberId);
-        if (parsed) {
-          messages.push(parsed);
-        }
-      }
+    const parsed = parseEvolutionMessage(item);
+    if (parsed) {
+      messages.push(parsed);
     }
   }
 
   return messages;
 }
 
-function parseRawMessage(msg: RawMessage, fromName: string, phoneNumberId: string): ParsedMessage | null {
-  const base: Pick<ParsedMessage, 'from' | 'fromName' | 'messageId' | 'timestamp' | 'phoneNumberId'> = {
-    from: msg.from,
-    fromName,
-    messageId: msg.id,
-    timestamp: new Date(parseInt(msg.timestamp) * 1000),
-    phoneNumberId,
+function parseEvolutionMessage(data: EvolutionMessageData): ParsedMessage | null {
+  if (!data.key?.remoteJid || !data.key?.id) return null;
+
+  // Extrai só os dígitos do número (remove @s.whatsapp.net, @g.us, etc.)
+  const from = data.key.remoteJid.replace(/@.+$/, '');
+
+  // Ignorar grupos
+  if (data.key.remoteJid.endsWith('@g.us')) return null;
+
+  const ts = data.messageTimestamp
+    ? new Date(Number(data.messageTimestamp) * 1000)
+    : new Date();
+
+  const base = {
+    from,
+    fromName: data.pushName ?? 'Desconhecido',
+    messageId: data.key.id,
+    timestamp: ts,
+    phoneNumberId: process.env.EVOLUTION_INSTANCE_NAME ?? 'frota-bot',
   };
 
-  switch (msg.type) {
-    case 'text':
-      return { ...base, tipo: 'texto', texto: msg.text?.body ?? '' };
+  const msg = data.message;
+  if (!msg) return { ...base, tipo: 'outro' };
 
-    case 'image':
-      return {
-        ...base,
-        tipo: 'foto',
-        mediaId: msg.image?.id,
-        mediaMimeType: msg.image?.mime_type,
-        texto: msg.image?.caption,
-      };
-
-    case 'audio':
-      return {
-        ...base,
-        tipo: 'audio',
-        mediaId: msg.audio?.id,
-        mediaMimeType: msg.audio?.mime_type,
-      };
-
-    case 'document':
-      return {
-        ...base,
-        tipo: 'documento',
-        mediaId: msg.document?.id,
-        mediaMimeType: msg.document?.mime_type,
-        mediaFilename: msg.document?.filename,
-        texto: msg.document?.caption,
-      };
-
-    case 'interactive':
-      if (msg.interactive?.type === 'button_reply') {
-        return {
-          ...base,
-          tipo: 'botao',
-          botaoId: msg.interactive.button_reply?.id,
-          botaoTitulo: msg.interactive.button_reply?.title,
-        };
-      }
-      if (msg.interactive?.type === 'list_reply') {
-        return {
-          ...base,
-          tipo: 'lista',
-          listaId: msg.interactive.list_reply?.id,
-          listaTitulo: msg.interactive.list_reply?.title,
-        };
-      }
-      return { ...base, tipo: 'outro' };
-
-    case 'button':
-      return {
-        ...base,
-        tipo: 'botao',
-        botaoId: msg.button?.payload,
-        botaoTitulo: msg.button?.text,
-      };
-
-    case 'location':
-      return {
-        ...base,
-        tipo: 'localizacao',
-        latitude: msg.location?.latitude,
-        longitude: msg.location?.longitude,
-        texto: msg.location?.name ?? msg.location?.address,
-      };
-
-    default:
-      return { ...base, tipo: 'outro' };
+  // ── Texto simples ──
+  if (msg.conversation) {
+    return { ...base, tipo: 'texto', texto: msg.conversation };
   }
+
+  if (msg.extendedTextMessage?.text) {
+    return { ...base, tipo: 'texto', texto: msg.extendedTextMessage.text };
+  }
+
+  // ── Imagem ──
+  if (msg.imageMessage) {
+    return {
+      ...base,
+      tipo: 'foto',
+      mediaId: msg.imageMessage.url ?? data.mediaUrl,
+      mediaMimeType: msg.imageMessage.mimetype,
+      texto: msg.imageMessage.caption,
+    };
+  }
+
+  // ── Áudio ──
+  if (msg.audioMessage) {
+    return {
+      ...base,
+      tipo: 'audio',
+      mediaId: msg.audioMessage.url ?? data.mediaUrl,
+      mediaMimeType: msg.audioMessage.mimetype,
+    };
+  }
+
+  // ── Documento ──
+  if (msg.documentMessage) {
+    return {
+      ...base,
+      tipo: 'documento',
+      mediaId: msg.documentMessage.url ?? data.mediaUrl,
+      mediaMimeType: msg.documentMessage.mimetype,
+      mediaFilename: msg.documentMessage.fileName,
+      texto: msg.documentMessage.caption,
+    };
+  }
+
+  // ── Resposta de botão interativo ──
+  if (msg.buttonsResponseMessage) {
+    return {
+      ...base,
+      tipo: 'botao',
+      botaoId: msg.buttonsResponseMessage.selectedButtonId,
+      botaoTitulo: msg.buttonsResponseMessage.selectedDisplayText,
+    };
+  }
+
+  // ── Resposta de lista interativa ──
+  if (msg.listResponseMessage) {
+    return {
+      ...base,
+      tipo: 'lista',
+      listaId: msg.listResponseMessage.singleSelectReply?.selectedRowId,
+      listaTitulo: msg.listResponseMessage.title,
+    };
+  }
+
+  // ── Localização ──
+  if (msg.locationMessage) {
+    return {
+      ...base,
+      tipo: 'localizacao',
+      latitude: msg.locationMessage.degreesLatitude,
+      longitude: msg.locationMessage.degreesLongitude,
+      texto: msg.locationMessage.name ?? msg.locationMessage.address,
+    };
+  }
+
+  return { ...base, tipo: 'outro' };
 }
 
 /**
- * Baixa a URL de uma mídia usando o ID da Meta.
- * Primeiro busca a URL, depois baixa o conteúdo.
+ * Na Evolution API, a URL da mídia já vem no payload do webhook (campo `mediaUrl`
+ * ou dentro de `message.imageMessage.url`). Esta função é mantida por compatibilidade
+ * com os flows que chamam `getMediaUrl(msg.mediaId)`.
+ *
+ * Como o `mediaId` já É a URL direta na Evolution API, simplesmente retornamos ela.
  */
 export async function getMediaUrl(mediaId: string): Promise<string | null> {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  if (!token) {
-    console.error('[messageParser] META_WHATSAPP_TOKEN não configurado');
+  if (!mediaId) return null;
+
+  // Se já é uma URL HTTP(S), retorna diretamente
+  if (mediaId.startsWith('http://') || mediaId.startsWith('https://')) {
+    return mediaId;
+  }
+
+  // Fallback: tentar buscar via Evolution API pelo ID (caso a URL não venha no payload)
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instance = process.env.EVOLUTION_INSTANCE_NAME;
+
+  if (!apiUrl || !apiKey || !instance) {
+    console.error('[messageParser] Variáveis da Evolution API não configuradas');
     return null;
   }
 
   try {
-    // 1. Buscar URL da mídia
-    const res = await fetch(`https://graph.facebook.com/v21.0/${mediaId}`, {
-      headers: { Authorization: `Bearer ${token}` },
+    const res = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${instance}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: apiKey,
+      },
+      body: JSON.stringify({ message: { key: { id: mediaId } } }),
     });
 
     if (!res.ok) {
-      console.error('[messageParser] Falha ao buscar URL da mídia:', res.status);
+      console.error('[messageParser] Falha ao buscar mídia:', res.status, await res.text());
       return null;
     }
 
-    const data = await res.json();
-    return data.url ?? null;
+    const data = await res.json() as { base64?: string; mimetype?: string };
+    if (!data.base64) return null;
+
+    // Retorna como data URL para compatibilidade com o aiService
+    return `data:${data.mimetype ?? 'image/jpeg'};base64,${data.base64}`;
   } catch (err) {
-    console.error('[messageParser] Erro ao buscar URL da mídia:', err);
+    console.error('[messageParser] Erro ao buscar mídia:', err);
     return null;
   }
 }

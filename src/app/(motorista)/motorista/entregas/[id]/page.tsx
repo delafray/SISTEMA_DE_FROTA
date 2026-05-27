@@ -7,14 +7,21 @@ import { createClient } from "@/lib/supabase/client";
 type Detalhe = {
   id: string; status: string;
   origem: string | null; destino: string | null;
-  valor_frete: number | null; km_inicial: number | null; km_final: number | null;
+  km_inicial: number | null; km_final: number | null;
   tipo_carga: string | null; peso_carga_kg: number | null;
   data_coleta_prevista: string | null; data_entrega_prevista: string | null;
-  forma_pagamento: string | null; observacoes: string | null;
-  pago: boolean | null; data_pagamento: string | null;
-  comissao_motorista_valor: number | null; observacoes_financeiras: string | null;
+  observacoes: string | null;
+  pedido_id: string | null;
   veiculos: { placa: string; modelo: string; marca: string } | null;
   clientes: { nome_fantasia: string } | null;
+};
+
+type PedidoPai = {
+  id: string;
+  valor_pedido: number | null;
+  forma_pagamento: string | null;
+  pago: boolean | null;
+  data_pagamento: string | null;
 };
 
 const STATUS_COLOR: Record<string, { bg: string; color: string; border: string }> = {
@@ -43,10 +50,11 @@ function Info({ label, value, big }: { label: string; value: React.ReactNode; bi
   );
 }
 
-export default function MotoristaFreteDetalhePage() {
+export default function MotoristaEntregaDetalhePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const [frete, setFrete] = useState<Detalhe | null>(null);
+  const [entrega, setEntrega] = useState<Detalhe | null>(null);
+  const [pedido, setPedido] = useState<PedidoPai | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -56,11 +64,21 @@ export default function MotoristaFreteDetalhePage() {
       if (!auth.user) { router.push("/login"); return; }
 
       const { data } = await supabase
-        .from("fretes")
-        .select("id,status,origem,destino,valor_frete,km_inicial,km_final,tipo_carga,peso_carga_kg,data_coleta_prevista,data_entrega_prevista,forma_pagamento,observacoes,pago,data_pagamento,comissao_motorista_valor,observacoes_financeiras,veiculos(placa,modelo,marca),clientes(nome_fantasia)")
+        .from("entregas")
+        .select("id,status,origem,destino,km_inicial,km_final,tipo_carga,peso_carga_kg,data_coleta_prevista,data_entrega_prevista,observacoes,pedido_id,veiculos(placa,modelo,marca),clientes(nome_fantasia)")
         .eq("id", id)
         .single();
-      setFrete(data);
+      setEntrega(data as unknown as Detalhe | null);
+
+      if (data?.pedido_id) {
+        const { data: ped } = await supabase
+          .from("pedidos")
+          .select("id,valor_pedido,forma_pagamento,pago,data_pagamento")
+          .eq("id", data.pedido_id)
+          .single();
+        setPedido(ped as unknown as PedidoPai | null);
+      }
+
       setLoading(false);
     };
     load();
@@ -73,16 +91,16 @@ export default function MotoristaFreteDetalhePage() {
     </div>
   );
 
-  if (!frete) return (
+  if (!entrega) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "#64748b" }}>
-      Frete não encontrado.
+      Entrega não encontrada.
     </div>
   );
 
-  const veiculo = Array.isArray(frete.veiculos) ? frete.veiculos[0] : frete.veiculos;
-  const cliente = Array.isArray(frete.clientes) ? frete.clientes[0] : frete.clientes;
-  const kmRodado = frete.km_final != null && frete.km_inicial != null ? frete.km_final - frete.km_inicial : null;
-  const s = STATUS_COLOR[frete.status] ?? { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0" };
+  const veiculo = Array.isArray(entrega.veiculos) ? entrega.veiculos[0] : entrega.veiculos;
+  const cliente = Array.isArray(entrega.clientes) ? entrega.clientes[0] : entrega.clientes;
+  const kmRodado = entrega.km_final != null && entrega.km_inicial != null ? entrega.km_final - entrega.km_inicial : null;
+  const s = STATUS_COLOR[entrega.status] ?? { bg: "#f8fafc", color: "#64748b", border: "#e2e8f0" };
 
   return (
     <div style={{ maxWidth: "480px", margin: "0 auto", fontFamily: "system-ui, sans-serif", paddingBottom: "32px" }}>
@@ -96,61 +114,59 @@ export default function MotoristaFreteDetalhePage() {
           ← Voltar
         </button>
         <div style={{ fontSize: "11px", color: "rgba(147,197,253,0.6)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Detalhes da Viagem
+          Detalhes da Entrega
         </div>
         <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", margin: "4px 0 8px", lineHeight: 1.2 }}>
-          {frete.origem} → {frete.destino}
+          {entrega.origem} → {entrega.destino}
         </h1>
         <span style={{
           background: s.bg, color: s.color, border: `1px solid ${s.border}`,
           borderRadius: "6px", padding: "3px 10px", fontSize: "12px", fontWeight: 700,
         }}>
-          {STATUS_LABEL[frete.status] ?? frete.status}
+          {STATUS_LABEL[entrega.status] ?? entrega.status}
         </span>
       </div>
 
       <div style={{ padding: "16px" }}>
 
-        {/* Financeiro */}
-        <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "14px", marginBottom: "12px" }}>
-          <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Financeiro</div>
-          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "0" }}>
-            <Info label="Valor do Frete" value={<span style={{ color: "#16a34a" }}>{fmtBRL(frete.valor_frete)}</span>} big />
-            <Info label="Sua Comissão"   value={<span style={{ color: "#7c3aed" }}>{fmtBRL(frete.comissao_motorista_valor)}</span>} big />
+        {/* Pedido (Faturamento) */}
+        {pedido && (
+          <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "14px", marginBottom: "12px" }}>
+            <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Pedido (Faturamento)</div>
+            <Info label="Valor do Pedido" value={<span style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</span>} big />
+            <Info label="Pagamento"
+              value={pedido.pago
+                ? <span style={{ color: "#16a34a" }}>✓ Pago {pedido.data_pagamento ? `em ${fmtDate(pedido.data_pagamento)}` : ""}</span>
+                : <span style={{ color: "#eab308" }}>Pendente</span>}
+            />
+            {pedido.forma_pagamento && <Info label="Condição" value={PGTO_LABEL[pedido.forma_pagamento] ?? pedido.forma_pagamento} />}
           </div>
-          <Info label="Pagamento"
-            value={frete.pago
-              ? <span style={{ color: "#16a34a" }}>✓ Pago {frete.data_pagamento ? `em ${fmtDate(frete.data_pagamento)}` : ""}</span>
-              : <span style={{ color: "#eab308" }}>Pendente</span>}
-          />
-          {frete.forma_pagamento && <Info label="Condição" value={PGTO_LABEL[frete.forma_pagamento] ?? frete.forma_pagamento} />}
-          {frete.observacoes_financeiras && <Info label="Obs. Financeiras" value={frete.observacoes_financeiras} />}
-        </div>
+        )}
 
         {/* Rota */}
         <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "14px", marginBottom: "12px" }}>
           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Rota e Datas</div>
-          <Info label="Coleta Prevista"  value={fmtDate(frete.data_coleta_prevista)} />
-          <Info label="Entrega Prevista" value={fmtDate(frete.data_entrega_prevista)} />
-          <Info label="KM Inicial"       value={frete.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
-          <Info label="KM Final"         value={frete.km_final?.toLocaleString("pt-BR") ?? "—"} />
+          <Info label="Coleta Prevista"  value={fmtDate(entrega.data_coleta_prevista)} />
+          <Info label="Entrega Prevista" value={fmtDate(entrega.data_entrega_prevista)} />
+          <Info label="KM Inicial"       value={entrega.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
+          <Info label="KM Final"         value={entrega.km_final?.toLocaleString("pt-BR") ?? "—"} />
           {kmRodado != null && <Info label="KM Rodados" value={<span style={{ color: "#2563eb", fontWeight: 700 }}>{kmRodado.toLocaleString("pt-BR")} km</span>} />}
         </div>
 
         {/* Carga e Veículo */}
         <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "14px", marginBottom: "12px" }}>
           <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Carga e Veículo</div>
-          {frete.tipo_carga   && <Info label="Tipo de Carga" value={frete.tipo_carga} />}
-          {frete.peso_carga_kg && <Info label="Peso" value={`${frete.peso_carga_kg.toLocaleString("pt-BR")} kg`} />}
+          {entrega.tipo_carga   && <Info label="Tipo de Carga" value={entrega.tipo_carga} />}
+          {entrega.peso_carga_kg && <Info label="Peso" value={`${entrega.peso_carga_kg.toLocaleString("pt-BR")} kg`} />}
           {veiculo && <Info label="Veículo" value={`${veiculo.placa} — ${veiculo.marca} ${veiculo.modelo}`} />}
           {cliente && <Info label="Cliente" value={cliente.nome_fantasia} />}
         </div>
 
         {/* Observações */}
-        {frete.observacoes && (
+        {entrega.observacoes && (
           <div style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", padding: "14px" }}>
             <div style={{ fontSize: "11px", fontWeight: 700, color: "#64748b", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>Observações</div>
-            <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{frete.observacoes}</p>
+            <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{entrega.observacoes}</p>
           </div>
         )}
 

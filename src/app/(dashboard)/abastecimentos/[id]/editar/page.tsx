@@ -7,7 +7,6 @@ import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert
 
 type Veiculo   = { id: string; placa: string; modelo: string };
 type Motorista = { id: string; nome: string };
-type Frete     = { id: string; origem: string | null; destino: string | null };
 
 export default function EditarAbastecimentoPage() {
   const { id }  = useParams<{ id: string }>();
@@ -18,10 +17,9 @@ export default function EditarAbastecimentoPage() {
   const [err, setErr]               = useState("");
   const [veiculos, setVeiculos]     = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
-  const [fretes, setFretes]         = useState<Frete[]>([]);
 
   const [f, setF] = useState({
-    veiculo_id: "", motorista_id: "", frete_id: "",
+    veiculo_id: "", motorista_id: "",
     km_no_abast: "", litros: "", valor_litro: "", valor_total: "", posto: "",
     confirmado: false,
   });
@@ -49,22 +47,19 @@ export default function EditarAbastecimentoPage() {
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
-      const [{ data: abast }, { data: v }, { data: m }, { data: fr }] = await Promise.all([
+      const [{ data: abast }, { data: v }, { data: m }] = await Promise.all([
         supabase.from("abastecimentos").select("*").eq("id", id).single(),
         supabase.from("veiculos").select("id,placa,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
         supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
-        supabase.from("fretes").select("id,origem,destino").eq("empresa_id", ue.empresa_id).order("created_at", { ascending: false }).limit(100),
       ]);
 
       setVeiculos(v ?? []);
       setMotoristas(m ?? []);
-      setFretes(fr ?? []);
 
       if (abast) {
         setF({
           veiculo_id:   abast.veiculo_id   ?? "",
           motorista_id: abast.motorista_id ?? "",
-          frete_id:     abast.frete_id     ?? "",
           km_no_abast:  abast.km_no_abast  != null ? String(abast.km_no_abast) : "",
           litros:       abast.litros       != null ? String(abast.litros)      : "",
           valor_litro:  abast.valor_litro  != null ? String(abast.valor_litro) : "",
@@ -90,7 +85,6 @@ export default function EditarAbastecimentoPage() {
     const { error: dbErr } = await supabase.from("abastecimentos").update({
       veiculo_id:   f.veiculo_id,
       motorista_id: f.motorista_id,
-      frete_id:     f.frete_id || null,
       km_no_abast:  f.km_no_abast  ? parseFloat(f.km_no_abast)  : null,
       litros:       parseFloat(f.litros),
       valor_litro:  f.valor_litro  ? parseFloat(f.valor_litro)  : null,
@@ -132,7 +126,7 @@ export default function EditarAbastecimentoPage() {
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
             <FormSection title="Vínculos *">
-              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "16px" }}>
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={set("veiculo_id")} style={selectStyle}>
                     <option value="">— Selecione —</option>
@@ -146,16 +140,6 @@ export default function EditarAbastecimentoPage() {
                     <option value="">— Selecione —</option>
                     {motoristas.map(m => (
                       <option key={m.id} value={m.id}>{m.nome}</option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField label="Frete (opcional)">
-                  <select value={f.frete_id} onChange={set("frete_id")} style={selectStyle}>
-                    <option value="">— Nenhum —</option>
-                    {fretes.map(fr => (
-                      <option key={fr.id} value={fr.id}>
-                        {fr.origem ?? "?"} → {fr.destino ?? "?"}
-                      </option>
                     ))}
                   </select>
                 </FormField>

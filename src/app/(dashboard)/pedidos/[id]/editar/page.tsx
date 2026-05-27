@@ -10,39 +10,37 @@ import {
 
 type Motorista = { id: string; nome: string };
 type Veiculo   = { id: string; placa: string; marca: string; modelo: string };
-type FreteAtual = {
+type EntregaAtual = {
   id: string;
   origem: string | null;
   destino: string | null;
   data_coleta_prevista: string | null;
-  valor_frete: number | null;
   status: string;
   clientes: { nome_fantasia: string } | null;
 };
-type FreteDisp = FreteAtual;
+type EntregaDisp = EntregaAtual;
 
 type TabId = "dados" | "vinculados" | "adicionar";
 
-const FRETE_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
+const ENTREGA_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
 };
-const FRETE_STATUS_LABEL: Record<string, string> = {
+const ENTREGA_STATUS_LABEL: Record<string, string> = {
   agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
 };
 
-const fmtBRL  = (v: number | null) => v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
-export default function EditarViagemPage() {
+export default function EditarPedidoPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
   const [empresaId, setEmpresaId]       = useState("");
   const [motoristas, setMotoristas]     = useState<Motorista[]>([]);
   const [veiculos, setVeiculos]         = useState<Veiculo[]>([]);
-  const [fretesAtuais, setFretesAtuais] = useState<FreteAtual[]>([]);
-  const [fretesDisp, setFretesDisp]     = useState<FreteDisp[]>([]);
-  const [selectedFretes, setSelectedFretes] = useState<Set<string>>(new Set());
+  const [entregasAtuais, setEntregasAtuais] = useState<EntregaAtual[]>([]);
+  const [entregasDisp, setEntregasDisp]     = useState<EntregaDisp[]>([]);
+  const [selectedEntregas, setSelectedEntregas] = useState<Set<string>>(new Set());
   const [vinculoVeiculoId, setVinculoVeiculoId] = useState<string | null>(null);
   const [saving, setSaving]             = useState(false);
   const [loading, setLoading]           = useState(true);
@@ -58,9 +56,10 @@ export default function EditarViagemPage() {
 
   const [f, setF] = useState({
     motorista_id: "", veiculo_id: "", status: "agendada",
-    data_saida_prevista: "", data_chegada_prevista: "",
-    data_saida_real: "", data_chegada_real: "",
+    data_inicio_prevista: "", data_fim_prevista: "",
+    data_inicio_real: "", data_fim_real: "",
     km_inicial: "", km_final: "", observacoes: "",
+    valor_pedido: "",
   });
 
   useEffect(() => {
@@ -73,42 +72,43 @@ export default function EditarViagemPage() {
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
 
-      const [viagemRes, motRes, veicRes, fretesAtRes, fretesDispRes] = await Promise.all([
-        supabase.from("viagens").select("*").eq("id", id).single(),
+      const [pedidoRes, motRes, veicRes, entAtRes, entDispRes] = await Promise.all([
+        supabase.from("pedidos").select("*").eq("id", id).single(),
         supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
         supabase.from("veiculos").select("id,placa,marca,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("fretes")
-          .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
-          .eq("viagem_id", id)
+        supabase.from("entregas")
+          .select("id,origem,destino,data_coleta_prevista,status,clientes(nome_fantasia)")
+          .eq("pedido_id", id)
           .order("data_coleta_prevista", { ascending: true }),
-        supabase.from("fretes")
-          .select("id,origem,destino,data_coleta_prevista,valor_frete,status,clientes(nome_fantasia)")
+        supabase.from("entregas")
+          .select("id,origem,destino,data_coleta_prevista,status,clientes(nome_fantasia)")
           .eq("empresa_id", ue.empresa_id)
-          .is("viagem_id", null)
+          .is("pedido_id", null)
           .in("status", ["agendado"])
           .order("data_coleta_prevista", { ascending: true }),
       ]);
 
-      const v = viagemRes.data;
+      const v = pedidoRes.data;
       if (v) {
         setF({
           motorista_id: v.motorista_id ?? "",
           veiculo_id:   v.veiculo_id   ?? "",
           status:       v.status       ?? "agendada",
-          data_saida_prevista:   v.data_saida_prevista   ?? "",
-          data_chegada_prevista: v.data_chegada_prevista ?? "",
-          data_saida_real:   v.data_saida_real   ? v.data_saida_real.slice(0, 16)   : "",
-          data_chegada_real: v.data_chegada_real ? v.data_chegada_real.slice(0, 16) : "",
+          data_inicio_prevista: v.data_inicio_prevista ?? "",
+          data_fim_prevista:    v.data_fim_prevista    ?? "",
+          data_inicio_real: v.data_inicio_real ? v.data_inicio_real.slice(0, 16) : "",
+          data_fim_real:    v.data_fim_real    ? v.data_fim_real.slice(0, 16)    : "",
           km_inicial: v.km_inicial != null ? String(v.km_inicial) : "",
           km_final:   v.km_final   != null ? String(v.km_final)   : "",
           observacoes: v.observacoes ?? "",
+          valor_pedido: v.valor_pedido != null ? String(v.valor_pedido) : "",
         });
       }
 
       setMotoristas(motRes.data ?? []);
       setVeiculos(veicRes.data ?? []);
-      setFretesAtuais(fretesAtRes.data ?? []);
-      setFretesDisp(fretesDispRes.data ?? []);
+      setEntregasAtuais((entAtRes.data ?? []) as unknown as EntregaAtual[]);
+      setEntregasDisp((entDispRes.data ?? []) as unknown as EntregaDisp[]);
       setLoading(false);
     };
     load();
@@ -131,20 +131,20 @@ export default function EditarViagemPage() {
       });
   }, [f.motorista_id, empresaId]);
 
-  const toggleFrete = (freteId: string) => {
-    setSelectedFretes(prev => {
+  const toggleEntrega = (entregaId: string) => {
+    setSelectedEntregas(prev => {
       const next = new Set(prev);
-      if (next.has(freteId)) next.delete(freteId); else next.add(freteId);
+      if (next.has(entregaId)) next.delete(entregaId); else next.add(entregaId);
       return next;
     });
   };
 
-  const desvincularFrete = async (freteId: string) => {
+  const desvincularEntrega = async (entregaId: string) => {
     const supabase = createClient();
-    await supabase.from("fretes").update({ viagem_id: null }).eq("id", freteId);
-    const frete = fretesAtuais.find(fr => fr.id === freteId);
-    setFretesAtuais(p => p.filter(fr => fr.id !== freteId));
-    if (frete) setFretesDisp(p => [...p, frete]);
+    await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
+    const entrega = entregasAtuais.find(fr => fr.id === entregaId);
+    setEntregasAtuais(p => p.filter(fr => fr.id !== entregaId));
+    if (entrega) setEntregasDisp(p => [...p, entrega]);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -155,30 +155,31 @@ export default function EditarViagemPage() {
     setSaving(true);
 
     const supabase = createClient();
-    const { error } = await supabase.from("viagens").update({
-      motorista_id:          f.motorista_id,
-      veiculo_id:            f.veiculo_id,
-      status:                f.status,
-      data_saida_prevista:   f.data_saida_prevista   || null,
-      data_chegada_prevista: f.data_chegada_prevista || null,
-      data_saida_real:       f.data_saida_real   ? new Date(f.data_saida_real).toISOString()   : null,
-      data_chegada_real:     f.data_chegada_real ? new Date(f.data_chegada_real).toISOString() : null,
+    const { error } = await supabase.from("pedidos").update({
+      motorista_id:         f.motorista_id,
+      veiculo_id:           f.veiculo_id,
+      status:               f.status,
+      data_inicio_prevista: f.data_inicio_prevista || null,
+      data_fim_prevista:    f.data_fim_prevista    || null,
+      data_inicio_real: f.data_inicio_real ? new Date(f.data_inicio_real).toISOString() : null,
+      data_fim_real:    f.data_fim_real    ? new Date(f.data_fim_real).toISOString()    : null,
       km_inicial:  f.km_inicial  ? parseFloat(f.km_inicial)  : null,
       km_final:    f.km_final    ? parseFloat(f.km_final)    : null,
       observacoes: f.observacoes || null,
+      valor_pedido: f.valor_pedido ? parseFloat(f.valor_pedido) : null,
       updated_at:  new Date().toISOString(),
     }).eq("id", id);
 
     if (error) { setErr(error.message); setSaving(false); return; }
 
-    // Vincular novos fretes selecionados
-    if (selectedFretes.size > 0) {
-      await supabase.from("fretes")
-        .update({ viagem_id: id, motorista_id: f.motorista_id, veiculo_id: f.veiculo_id })
-        .in("id", Array.from(selectedFretes));
+    // Vincular novas entregas selecionadas
+    if (selectedEntregas.size > 0) {
+      await supabase.from("entregas")
+        .update({ pedido_id: id, motorista_id: f.motorista_id, veiculo_id: f.veiculo_id })
+        .in("id", Array.from(selectedEntregas));
     }
 
-    router.push(`/viagens/${id}`);
+    router.push(`/pedidos/${id}`);
     router.refresh();
   };
 
@@ -189,15 +190,15 @@ export default function EditarViagemPage() {
     const supabase = createClient();
     const kmNum = parseFloat(kmTroca);
 
-    // 1. Encerra o registro atual em viagem_motoristas
-    await supabase.from("viagem_motoristas")
+    // 1. Encerra o registro atual em pedido_motoristas
+    await supabase.from("pedido_motoristas")
       .update({ ativo: false, km_saida: kmNum, data_saida: new Date().toISOString(), motivo_troca: motivoTroca || null })
-      .eq("viagem_id", id)
+      .eq("pedido_id", id)
       .eq("ativo", true);
 
     // 2. Cria novo registro para o novo motorista
-    await supabase.from("viagem_motoristas").insert({
-      viagem_id:    id,
+    await supabase.from("pedido_motoristas").insert({
+      pedido_id:    id,
       motorista_id: novoMotId,
       empresa_id:   empresaId,
       km_entrada:   kmNum,
@@ -205,8 +206,8 @@ export default function EditarViagemPage() {
       ativo:        true,
     });
 
-    // 3. Atualiza viagens.motorista_id
-    await supabase.from("viagens").update({
+    // 3. Atualiza pedidos.motorista_id
+    await supabase.from("pedidos").update({
       motorista_id: novoMotId,
       updated_at:   new Date().toISOString(),
     }).eq("id", id);
@@ -231,11 +232,11 @@ export default function EditarViagemPage() {
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title="Editar Viagem"
+        title="Editar Pedido"
         actions={
           <>
-            <Btn href={`/viagens/${id}`} variant="ghost">← Voltar</Btn>
-            <Btn href={`/viagens/${id}`} variant="outline">Cancelar</Btn>
+            <Btn href={`/pedidos/${id}`} variant="ghost">← Voltar</Btn>
+            <Btn href={`/pedidos/${id}`} variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Atualizar"}
             </Btn>
@@ -248,9 +249,9 @@ export default function EditarViagemPage() {
           active={tab}
           onChange={(id) => setTab(id as TabId)}
           tabs={[
-            { id: "dados", label: "Dados da Viagem" },
-            { id: "vinculados", label: "Fretes Vinculados", badge: fretesAtuais.length },
-            { id: "adicionar", label: "Adicionar Fretes", badge: selectedFretes.size > 0 ? `+${selectedFretes.size}` : fretesDisp.length },
+            { id: "dados", label: "Dados do Pedido" },
+            { id: "vinculados", label: "Entregas Vinculadas", badge: entregasAtuais.length },
+            { id: "adicionar", label: "Adicionar Entregas", badge: selectedEntregas.size > 0 ? `+${selectedEntregas.size}` : entregasDisp.length },
           ]}
         />
       </div>
@@ -295,8 +296,8 @@ export default function EditarViagemPage() {
               </div>
             </FormSection>
 
-            <FormSection title="Status">
-              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+            <FormSection title="Status e Valor">
+              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Status">
                   <select value={f.status} onChange={set("status")} style={selectStyle}>
                     <option value="agendada">Agendada</option>
@@ -305,27 +306,30 @@ export default function EditarViagemPage() {
                     <option value="cancelada">Cancelada</option>
                   </select>
                 </FormField>
+                <FormField label="Valor do Pedido (R$)">
+                  <input type="number" step="0.01" value={f.valor_pedido} onChange={set("valor_pedido")} style={inputStyle} placeholder="0.00" />
+                </FormField>
               </div>
             </FormSection>
 
             <FormSection title="Datas previstas">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Saída Prevista">
-                  <input type="date" value={f.data_saida_prevista} onChange={set("data_saida_prevista")} style={inputStyle} />
+                <FormField label="Início Previsto">
+                  <input type="date" value={f.data_inicio_prevista} onChange={set("data_inicio_prevista")} style={inputStyle} />
                 </FormField>
-                <FormField label="Chegada Prevista">
-                  <input type="date" value={f.data_chegada_prevista} onChange={set("data_chegada_prevista")} style={inputStyle} />
+                <FormField label="Fim Previsto">
+                  <input type="date" value={f.data_fim_prevista} onChange={set("data_fim_prevista")} style={inputStyle} />
                 </FormField>
               </div>
             </FormSection>
 
             <FormSection title="Datas reais">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Saída Real">
-                  <input type="datetime-local" value={f.data_saida_real} onChange={set("data_saida_real")} style={inputStyle} />
+                <FormField label="Início Real">
+                  <input type="datetime-local" value={f.data_inicio_real} onChange={set("data_inicio_real")} style={inputStyle} />
                 </FormField>
-                <FormField label="Chegada Real">
-                  <input type="datetime-local" value={f.data_chegada_real} onChange={set("data_chegada_real")} style={inputStyle} />
+                <FormField label="Fim Real">
+                  <input type="datetime-local" value={f.data_fim_real} onChange={set("data_fim_real")} style={inputStyle} />
                 </FormField>
               </div>
             </FormSection>
@@ -349,34 +353,32 @@ export default function EditarViagemPage() {
         )}
 
         {tab === "vinculados" && (
-          fretesAtuais.length === 0
-            ? <EmptyState icon="📦" message="Nenhum frete vinculado a esta viagem. Use a aba 'Adicionar Fretes' pra incluir." />
+          entregasAtuais.length === 0
+            ? <EmptyState icon="📦" message="Nenhuma entrega vinculada a este pedido. Use a aba 'Adicionar Entregas' pra incluir." />
             : (
-              <DataTable count={fretesAtuais.length} label="fretes">
+              <DataTable count={entregasAtuais.length} label="entregas">
                 <thead>
                   <tr>
                     <Th>Rota</Th>
                     <Th>Cliente</Th>
                     <Th>Coleta</Th>
                     <Th>Status</Th>
-                    <Th style={{ textAlign: "right" }}>Valor</Th>
                     <Th></Th>
                   </tr>
                 </thead>
                 <tbody>
-                  {fretesAtuais.map(fr => {
+                  {entregasAtuais.map(fr => {
                     const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
                     return (
                       <Tr key={fr.id}>
                         <Td style={{ fontWeight: 600 }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
                         <Td>{cliente?.nome_fantasia ?? "—"}</Td>
                         <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
-                        <Td><Badge variant={FRETE_STATUS_VAR[fr.status] ?? "default"}>{FRETE_STATUS_LABEL[fr.status] ?? fr.status}</Badge></Td>
-                        <Td style={{ color: "#16a34a", fontWeight: 600, textAlign: "right" }}>{fmtBRL(fr.valor_frete)}</Td>
+                        <Td><Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>{ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}</Badge></Td>
                         <Td>
                           <button
                             type="button"
-                            onClick={() => desvincularFrete(fr.id)}
+                            onClick={() => desvincularEntrega(fr.id)}
                             style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
                           >
                             Desvincular
@@ -391,37 +393,36 @@ export default function EditarViagemPage() {
         )}
 
         {tab === "adicionar" && (
-          fretesDisp.length === 0
-            ? <EmptyState icon="📭" message="Nenhum frete agendado disponível pra vincular." />
+          entregasDisp.length === 0
+            ? <EmptyState icon="📭" message="Nenhuma entrega agendada disponível pra vincular." />
             : (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  Selecione os fretes que serão incluídos nesta viagem e clique em <strong>Atualizar</strong> no topo pra confirmar.
+                  Selecione as entregas que serão incluídas neste pedido e clique em <strong>Atualizar</strong> no topo pra confirmar.
                 </div>
-                <DataTable count={fretesDisp.length} label="fretes disponíveis">
+                <DataTable count={entregasDisp.length} label="entregas disponíveis">
                   <thead>
                     <tr>
                       <Th style={{ width: "32px" }}></Th>
                       <Th>Rota</Th>
                       <Th>Cliente</Th>
                       <Th>Coleta Prevista</Th>
-                      <Th style={{ textAlign: "right" }}>Valor</Th>
                     </tr>
                   </thead>
                   <tbody>
-                    {fretesDisp.map(fr => {
+                    {entregasDisp.map(fr => {
                       const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
-                      const checked = selectedFretes.has(fr.id);
+                      const checked = selectedEntregas.has(fr.id);
                       return (
                         <Tr key={fr.id}
                           style={{ cursor: "pointer", background: checked ? "rgba(219,234,254,0.4)" : undefined }}
-                          onClick={() => toggleFrete(fr.id)}
+                          onClick={() => toggleEntrega(fr.id)}
                         >
                           <Td>
                             <input
                               type="checkbox"
                               checked={checked}
-                              onChange={() => toggleFrete(fr.id)}
+                              onChange={() => toggleEntrega(fr.id)}
                               onClick={e => e.stopPropagation()}
                               style={{ width: "16px", height: "16px", accentColor: "#2563eb", cursor: "pointer" }}
                             />
@@ -429,7 +430,6 @@ export default function EditarViagemPage() {
                           <Td style={{ fontWeight: 600 }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
                           <Td>{cliente?.nome_fantasia ?? "—"}</Td>
                           <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
-                          <Td style={{ color: "#16a34a", fontWeight: 600, textAlign: "right" }}>{fmtBRL(fr.valor_frete)}</Td>
                         </Tr>
                       );
                     })}
@@ -440,8 +440,8 @@ export default function EditarViagemPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href={`/viagens/${id}`} variant="outline">Cancelar</Btn>
-          <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Atualizar Viagem"}</Btn>
+          <Btn href={`/pedidos/${id}`} variant="outline">Cancelar</Btn>
+          <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Atualizar Pedido"}</Btn>
         </div>
       </div>
 
@@ -460,7 +460,7 @@ export default function EditarViagemPage() {
               🔄 Trocar Motorista em Rota
             </h3>
             <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "24px" }}>
-              O histórico da troca será registrado para garantir o rateio correto de comissões no acerto mensal.
+              O histórico da troca será registrado para garantir o rateio correto de diárias no acerto mensal.
             </p>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -492,7 +492,7 @@ export default function EditarViagemPage() {
                   style={{ ...inputStyle, width: "100%", boxSizing: "border-box" }}
                 />
                 <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>
-                  Usado para calcular quanto cada motorista rodou e sua comissão.
+                  Usado para calcular quanto cada motorista rodou.
                 </p>
               </div>
 

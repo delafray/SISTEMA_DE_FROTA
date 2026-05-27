@@ -19,7 +19,7 @@ export default function EditarMotoristaPage() {
   const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
-  const [tab, setTab] = useState<"dados" | "cnh" | "comissao" | "endereco" | "veiculo" | "acerto">("dados");
+  const [tab, setTab] = useState<"dados" | "cnh" | "remuneracao" | "endereco" | "veiculo" | "acerto">("dados");
   const [veiculos, setVeiculos]         = useState<{ id: string; placa: string; marca: string; modelo: string }[]>([]);
   const [vinculoId, setVinculoId]       = useState<string | null>(null);
   const [vinculoVeiculoId, setVinculoVeiculoId] = useState("");
@@ -31,7 +31,7 @@ export default function EditarMotoristaPage() {
     nome: "", cpf: "", whatsapp: "", rg: "", data_nascimento: "", email: "",
     data_admissao: "", cargo: "",
     cnh_numero: "", cnh_categoria: "E", cnh_validade: "", cnh_primeira_habilitacao: "", cnh_ear: false,
-    tipo_comissao: "percentual_frete", percentual_frete: "", valor_por_km: "", valor_fixo_por_viagem: "", salario_fixo: "",
+    salario_fixo: "", valor_diaria_por_pedido: "",
     cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "",
     ativo: true, chave_pix: "", tipo_chave_pix: "cpf",
   });
@@ -75,11 +75,8 @@ export default function EditarMotoristaPage() {
         cnh_validade: data.cnh_validade ?? "",
         cnh_primeira_habilitacao: data.cnh_primeira_habilitacao ?? "",
         cnh_ear: data.cnh_ear ?? false,
-        tipo_comissao: data.tipo_comissao ?? "percentual_frete",
-        percentual_frete: data.percentual_frete != null ? String(data.percentual_frete) : "",
-        valor_por_km: data.valor_por_km != null ? String(data.valor_por_km) : "",
-        valor_fixo_por_viagem: data.valor_fixo_por_viagem != null ? String(data.valor_fixo_por_viagem) : "",
         salario_fixo: data.salario_fixo != null ? String(data.salario_fixo) : "",
+        valor_diaria_por_pedido: data.valor_diaria_por_pedido != null ? String(data.valor_diaria_por_pedido) : "",
         cep: fmtCep(data.cep ?? ""),
         logradouro: data.logradouro ?? "",
         numero: data.numero ?? "",
@@ -127,11 +124,8 @@ export default function EditarMotoristaPage() {
       cnh_validade: f.cnh_validade,
       cnh_primeira_habilitacao: f.cnh_primeira_habilitacao || null,
       cnh_ear: f.cnh_ear,
-      tipo_comissao: f.tipo_comissao,
-      percentual_frete: f.percentual_frete ? parseFloat(f.percentual_frete) : null,
-      valor_por_km: f.valor_por_km ? parseFloat(f.valor_por_km) : null,
-      valor_fixo_por_viagem: f.valor_fixo_por_viagem ? parseFloat(f.valor_fixo_por_viagem) : null,
       salario_fixo: f.salario_fixo ? parseFloat(f.salario_fixo) : null,
+      valor_diaria_por_pedido: f.valor_diaria_por_pedido ? parseFloat(f.valor_diaria_por_pedido) : null,
       cep: f.cep.replace(/\D/g, "") || null,
       logradouro: f.logradouro || null, numero: f.numero || null,
       complemento: f.complemento || null, bairro: f.bairro || null,
@@ -197,12 +191,12 @@ export default function EditarMotoristaPage() {
           active={tab}
           onChange={(id) => setTab(id as typeof tab)}
           tabs={[
-            { id: "dados",    label: "Dados Pessoais" },
-            { id: "cnh",      label: "CNH" },
-            { id: "comissao", label: "Comissão" },
-            { id: "endereco", label: "Endereço" },
-            { id: "veiculo",  label: "Veículo Padrão" },
-            { id: "acerto",   label: "Acerto Mensal" },
+            { id: "dados",       label: "Dados Pessoais" },
+            { id: "cnh",         label: "CNH" },
+            { id: "remuneracao", label: "Remuneração" },
+            { id: "endereco",    label: "Endereço" },
+            { id: "veiculo",     label: "Veículo Padrão" },
+            { id: "acerto",      label: "Acerto Mensal" },
           ]}
         />
       </div>
@@ -301,61 +295,22 @@ export default function EditarMotoristaPage() {
               </FormSection>
             </div>
 
-            <div style={{ display: tab === "comissao" ? "block" : "none" }}>
-              <FormSection title="Tipo de Comissão">
+            <div style={{ display: tab === "remuneracao" ? "block" : "none" }}>
+              <FormSection title="Remuneração">
+                <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
+                  Motorista recebe salário fixo mensal e/ou diária por pedido concluído.
+                </p>
                 <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
-                    <FormField label="Modelo de Comissão">
-                      <select value={f.tipo_comissao} onChange={set("tipo_comissao")} style={selectStyle}>
-                        <option value="percentual_frete">% do Frete</option>
-                        <option value="valor_por_km">Valor por KM</option>
-                        <option value="valor_fixo_viagem">Fixo por Viagem</option>
-                        <option value="salario_fixo">Salário Fixo</option>
-                        <option value="salario_mais_percentual">Salário + % Frete</option>
-                        <option value="salario_mais_km">Salário + KM</option>
-                      </select>
+                    <FormField label="Salário Fixo Mensal (R$)">
+                      <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} placeholder="0,00" />
                     </FormField>
                   </div>
-                  {f.tipo_comissao === "percentual_frete" && (
-                    <FormField label="% sobre o Frete">
-                      <input value={f.percentual_frete} onChange={set("percentual_frete")} type="number" step="0.1" max="100" style={inputStyle} />
+                  <div style={{ gridColumn: "span 2" }}>
+                    <FormField label="Valor da Diária por Pedido (R$)">
+                      <input value={f.valor_diaria_por_pedido} onChange={set("valor_diaria_por_pedido")} type="number" step="0.01" style={inputStyle} placeholder="0,00" />
                     </FormField>
-                  )}
-                  {f.tipo_comissao === "valor_por_km" && (
-                    <FormField label="R$ por KM">
-                      <input value={f.valor_por_km} onChange={set("valor_por_km")} type="number" step="0.01" style={inputStyle} />
-                    </FormField>
-                  )}
-                  {f.tipo_comissao === "valor_fixo_viagem" && (
-                    <FormField label="R$ por Viagem">
-                      <input value={f.valor_fixo_por_viagem} onChange={set("valor_fixo_por_viagem")} type="number" step="0.01" style={inputStyle} />
-                    </FormField>
-                  )}
-                  {f.tipo_comissao === "salario_fixo" && (
-                    <FormField label="Salário Mensal (R$)">
-                      <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
-                    </FormField>
-                  )}
-                  {f.tipo_comissao === "salario_mais_percentual" && (
-                    <>
-                      <FormField label="Salário Fixo (R$) *">
-                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
-                      </FormField>
-                      <FormField label="% sobre o Frete *">
-                        <input value={f.percentual_frete} onChange={set("percentual_frete")} type="number" step="0.1" max="100" style={inputStyle} />
-                      </FormField>
-                    </>
-                  )}
-                  {f.tipo_comissao === "salario_mais_km" && (
-                    <>
-                      <FormField label="Salário Fixo (R$) *">
-                        <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} />
-                      </FormField>
-                      <FormField label="R$ por KM *">
-                        <input value={f.valor_por_km} onChange={set("valor_por_km")} type="number" step="0.01" style={inputStyle} />
-                      </FormField>
-                    </>
-                  )}
+                  </div>
                 </div>
               </FormSection>
             </div>
@@ -400,7 +355,7 @@ export default function EditarMotoristaPage() {
             <div style={{ display: tab === "veiculo" ? "block" : "none" }}>
               <FormSection title="Veículo Padrão">
                 <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
-                  O veículo selecionado aqui é automaticamente pré-preenchido ao criar uma nova viagem para este motorista.
+                  O veículo selecionado aqui é automaticamente pré-preenchido ao criar um novo pedido para este motorista.
                   Marque como inativo quando o veículo estiver em manutenção.
                 </p>
                 <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "16px", alignItems: "flex-end" }}>

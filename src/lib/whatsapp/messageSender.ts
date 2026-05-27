@@ -1,68 +1,52 @@
 /**
- * WhatsApp Message Sender — Envia mensagens via Meta Cloud API.
+ * WhatsApp Message Sender — Envia mensagens via Evolution API.
  * Suporta texto simples, botões interativos, listas e mídia.
  *
- * REGRA CRÍTICA (CUSTO ZERO):
- * Estas funções só devem ser usadas para RESPONDER mensagens dentro
- * da janela de 24h (motorista/gestor iniciou a conversa).
- * NUNCA usar para enviar mensagens proativas (HSM).
+ * A interface pública (nomes e assinaturas das funções) é idêntica
+ * à versão anterior (Meta Cloud API), então todos os flows funcionam
+ * sem nenhuma alteração.
  */
-
-const GRAPH_API_URL = 'https://graph.facebook.com/v21.0';
-
-/**
- * A Meta entrega o `from` sem o 9 do nono dígito brasileiro
- * (ex: 553189791317), mas exige o formato com 9 ao enviar (5531989791317).
- * Aplica apenas para números BR de celular com 12 dígitos.
- */
-export function formatarDestinatarioMeta(numero: string): string {
-  const apenasDigitos = numero.replace(/\D/g, '');
-  if (apenasDigitos.startsWith('55') && apenasDigitos.length === 12) {
-    const ddd = apenasDigitos.slice(2, 4);
-    const resto = apenasDigitos.slice(4);
-    if (resto.length === 8) {
-      return `55${ddd}9${resto}`;
-    }
-  }
-  return apenasDigitos;
-}
 
 function getConfig() {
-  const token = process.env.META_WHATSAPP_TOKEN;
-  const phoneNumberId = process.env.META_PHONE_NUMBER_ID;
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instance = process.env.EVOLUTION_INSTANCE_NAME;
 
-  if (!token || !phoneNumberId) {
-    throw new Error('[messageSender] META_WHATSAPP_TOKEN ou META_PHONE_NUMBER_ID não configurados');
+  if (!apiUrl || !apiKey || !instance) {
+    throw new Error(
+      '[messageSender] EVOLUTION_API_URL, EVOLUTION_API_KEY ou EVOLUTION_INSTANCE_NAME não configurados'
+    );
   }
 
-  return { token, phoneNumberId };
+  return { apiUrl: apiUrl.replace(/\/$/, ''), apiKey, instance };
+}
+
+/**
+ * Normaliza o número para o formato aceito pela Evolution API.
+ * Aceita formatos com ou sem o nono dígito BR.
+ */
+export function formatarDestinatarioMeta(numero: string): string {
+  return numero.replace(/\D/g, '');
 }
 
 async function sendRequest(
-  phoneNumberId: string,
-  token: string,
+  endpoint: string,
   body: Record<string, unknown>,
   timeoutMs = 8000
 ): Promise<boolean> {
-  // Normaliza o destinatário para o formato que a Meta exige no envio (com 9 brasileiro).
-  if (typeof body.to === 'string') {
-    body = { ...body, to: formatarDestinatarioMeta(body.to) };
-  }
+  const { apiUrl, apiKey, instance } = getConfig();
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
   try {
-    const res = await fetch(`${GRAPH_API_URL}/${phoneNumberId}/messages`, {
+    const res = await fetch(`${apiUrl}/${endpoint}/${instance}`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
+        apikey: apiKey,
       },
-      body: JSON.stringify({
-        messaging_product: 'whatsapp',
-        ...body,
-      }),
+      body: JSON.stringify(body),
       signal: controller.signal,
     });
 
@@ -72,20 +56,19 @@ async function sendRequest(
       return false;
     }
 
-    const data = await res.json().catch(() => null);
-    const msgId = data?.messages?.[0]?.id;
+    const data = await res.json().catch(() => null) as Record<string, unknown> | null;
     console.log(JSON.stringify({
       level: 'info',
       scope: 'messageSender',
       event: 'send_ok',
       ts: new Date().toISOString(),
-      to: body.to,
-      wamid: msgId ?? null,
+      to: body.number,
+      key: (data as { key?: unknown } | null)?.key ?? null,
     }));
     return true;
   } catch (err) {
     if ((err as Error).name === 'AbortError') {
-      console.error('[messageSender] Timeout ao chamar Graph API após', timeoutMs, 'ms');
+      console.error('[messageSender] Timeout ao chamar Evolution API após', timeoutMs, 'ms');
     } else {
       console.error('[messageSender] Erro de rede:', err);
     }
@@ -101,12 +84,9 @@ async function sendRequest(
  * Envia uma mensagem de texto simples.
  */
 export async function enviarTexto(para: string, texto: string): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
-
-  return sendRequest(phoneNumberId, token, {
-    to: para,
-    type: 'text',
-    text: { body: texto },
+  return sendRequest('message/sendText', {
+    number: formatarDestinatarioMeta(para),
+    text: texto,
   });
 }
 
@@ -126,27 +106,15 @@ export async function enviarBotoes(
   botoes: Botao[],
   cabecalho?: string
 ): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
-
-  const interactive: Record<string, unknown> = {
-    type: 'button',
-    body: { text: corpo },
-    action: {
-      buttons: botoes.slice(0, 3).map((b) => ({
-        type: 'reply',
-        reply: { id: b.id, title: b.titulo.slice(0, 20) },
-      })),
-    },
-  };
-
-  if (cabecalho) {
-    interactive.header = { type: 'text', text: cabecalho };
-  }
-
-  return sendRequest(phoneNumberId, token, {
-    to: para,
-    type: 'interactive',
-    interactive,
+  return sendRequest('message/sendButtons', {
+    number: formatarDestinatarioMeta(para),
+    title: cabecalho ?? '',
+    description: corpo,
+    footer: '',
+    buttons: botoes.slice(0, 3).map((b) => ({
+      text: b.titulo.slice(0, 20),
+      id: b.id,
+    })),
   });
 }
 
@@ -174,35 +142,20 @@ export async function enviarLista(
   cabecalho?: string,
   rodape?: string
 ): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
-
-  const interactive: Record<string, unknown> = {
-    type: 'list',
-    body: { text: corpo },
-    action: {
-      button: textoBotao.slice(0, 20),
-      sections: secoes.map((s) => ({
-        title: s.titulo.slice(0, 24),
-        rows: s.itens.map((i) => ({
-          id: i.id,
-          title: i.titulo.slice(0, 24),
-          description: i.descricao?.slice(0, 72),
-        })),
+  return sendRequest('message/sendList', {
+    number: formatarDestinatarioMeta(para),
+    title: cabecalho ?? '',
+    description: corpo,
+    footerText: rodape ?? '',
+    buttonText: textoBotao.slice(0, 20),
+    sections: secoes.map((s) => ({
+      title: s.titulo.slice(0, 24),
+      rows: s.itens.map((i) => ({
+        title: i.titulo.slice(0, 24),
+        description: i.descricao?.slice(0, 72) ?? '',
+        rowId: i.id,
       })),
-    },
-  };
-
-  if (cabecalho) {
-    interactive.header = { type: 'text', text: cabecalho };
-  }
-  if (rodape) {
-    interactive.footer = { text: rodape };
-  }
-
-  return sendRequest(phoneNumberId, token, {
-    to: para,
-    type: 'interactive',
-    interactive,
+    })),
   });
 }
 
@@ -212,12 +165,11 @@ export async function enviarLista(
  * Envia uma imagem via URL pública.
  */
 export async function enviarImagem(para: string, imageUrl: string, caption?: string): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
-
-  return sendRequest(phoneNumberId, token, {
-    to: para,
-    type: 'image',
-    image: { link: imageUrl, caption },
+  return sendRequest('message/sendMedia', {
+    number: formatarDestinatarioMeta(para),
+    mediatype: 'image',
+    media: imageUrl,
+    caption: caption ?? '',
   });
 }
 
@@ -230,12 +182,12 @@ export async function enviarDocumento(
   filename: string,
   caption?: string
 ): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
-
-  return sendRequest(phoneNumberId, token, {
-    to: para,
-    type: 'document',
-    document: { link: documentUrl, filename, caption },
+  return sendRequest('message/sendMedia', {
+    number: formatarDestinatarioMeta(para),
+    mediatype: 'document',
+    media: documentUrl,
+    fileName: filename,
+    caption: caption ?? '',
   });
 }
 
@@ -245,12 +197,30 @@ export async function enviarDocumento(
  * Marca uma mensagem como lida (double blue check).
  */
 export async function marcarComoLida(messageId: string): Promise<boolean> {
-  const { token, phoneNumberId } = getConfig();
+  try {
+    const { apiUrl, apiKey, instance } = getConfig();
 
-  return sendRequest(
-    phoneNumberId,
-    token,
-    { status: 'read', message_id: messageId },
-    3000
-  );
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 3000);
+
+    try {
+      const res = await fetch(`${apiUrl}/chat/markMessageAsRead/${instance}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          apikey: apiKey,
+        },
+        body: JSON.stringify({
+          readMessages: [{ id: messageId, fromMe: false, remote: '' }],
+        }),
+        signal: controller.signal,
+      });
+
+      return res.ok;
+    } finally {
+      clearTimeout(timeout);
+    }
+  } catch {
+    return false;
+  }
 }

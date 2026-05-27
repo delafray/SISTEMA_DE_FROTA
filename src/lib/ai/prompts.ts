@@ -123,11 +123,11 @@ Retorne SOMENTE este JSON:
 { "tipo": "<painel|bomba_combustivel|cupom_combustivel|cupom_generico|avaria|documento|documento_pedido_frete|outro>", "confianca": <0-100>, "observacao": "<breve justificativa>" }`,
 };
 
-// ─── EXTRAÇÃO DE PEDIDO DE FRETE (Gestor) ─────────────────────────────
+// ─── EXTRAÇÃO DE PEDIDO (Gestor) ──────────────────────────────────────
 
 export const PROMPT_EXTRAIR_PEDIDO_FRETE = {
   system: `Você é um assistente especializado em leitura de documentos de logística e transporte rodoviário brasileiro.
-Analise o documento (pode ser PDF, print de tela, foto de pedido) e extraia as informações do frete.
+Analise o documento (pode ser PDF, print de tela, foto de pedido) e extraia as informações do pedido.
 
 Regras:
 - Retorne APENAS JSON válido, sem markdown.
@@ -137,14 +137,14 @@ Regras:
 - "peso_carga_kg" em quilogramas (ex: 15000 para 15 toneladas).
 - Limpe o CNPJ removendo pontuação (apenas 14 dígitos).`,
 
-  user: `Extraia as informações deste pedido de frete.
+  user: `Extraia as informações deste pedido.
 Retorne SOMENTE este JSON:
 {
   "cliente_nome": "<nome|null>",
   "cliente_cnpj": "<14 dígitos|null>",
   "origem": "<cidade/local|null>",
   "destino": "<cidade/local|null>",
-  "valor_frete": <número|null>,
+  "valor_pedido": <número|null>,
   "peso_carga_kg": <número|null>,
   "tipo_carga": "<descrição|null>",
   "data_coleta": "<YYYY-MM-DD|null>",
@@ -162,13 +162,13 @@ O GESTOR está mandando uma mensagem de texto. Identifique o que ele quer.
 
 Intents possíveis:
 - consulta_lucro_mensal: quer saber lucro/margem do mês
-- consulta_fretes_ativos: quer saber quem está na estrada
+- consulta_pedidos_ativos: quer saber quem está na estrada (sinônimos: fretes ativos, viagens ativas)
 - consulta_motorista: quer saber status de um motorista específico
-- consulta_fretes_mes: contagem/resumo de fretes do mês
+- consulta_pedidos_mes: contagem/resumo de pedidos do mês (sinônimos: fretes do mês)
 - consulta_pendencias: adiantamentos ou itens pendentes de aprovação
 - consulta_frota_saude: estado geral da frota (manutenções, avarias)
 - consulta_lucro_veiculo: lucro de um veículo específico
-- cadastrar_pedido: quer cadastrar um novo pedido de frete
+- cadastrar_pedido: quer cadastrar um novo pedido (sinônimo: novo frete)
 - fallback: não se encaixa em nenhuma das acima
 
 Regras:
@@ -191,8 +191,8 @@ Intents possíveis:
 - abastecimento: quer registrar abastecimento
 - despesa: quer registrar despesa (pedágio, alimentação, etc)
 - km: quer informar quilometragem
-- viagem_iniciar: quer iniciar/começar viagem
-- viagem_encerrar: quer encerrar/finalizar viagem
+- pedido_iniciar: quer iniciar/começar pedido ou viagem (sinônimo legado: viagem_iniciar)
+- pedido_encerrar: quer encerrar/finalizar pedido ou viagem (sinônimo legado: viagem_encerrar)
 - status: quer ver status do caminhão
 - documentos: quer ver documentos (CRLV, CNH)
 - saudacao: está só cumprimentando (oi, bom dia, etc)

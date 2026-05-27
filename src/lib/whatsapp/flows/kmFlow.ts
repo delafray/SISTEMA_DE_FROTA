@@ -188,24 +188,14 @@ async function salvarKm(
     return;
   }
 
-  // Buscar frete ativo (se houver)
-  const { data: freteAtivo } = await supabase
-    .from('fretes')
-    .select('id')
-    .eq('veiculo_id', veiculoId)
-    .eq('status', 'em_andamento')
-    .maybeSingle();
-
   // Inserir km_log (o trigger propaga para veiculos.km_atual)
   const { error } = await supabase.from('km_logs').insert({
     veiculo_id: veiculoId,
-    motorista_id: sessao.motorista_id,
+    motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
-    frete_id: freteAtivo?.id ?? null,
-    km_registrado: km,
+    km_lido: km,
     tipo: 'informado',
-    origem: `whatsapp_${origem}`,
-    foto_url: sessao.contexto.foto_url ?? null,
+    foto_urls: sessao.contexto.foto_url ? [sessao.contexto.foto_url as string] : null,
     ia_raw_response: sessao.contexto.km_lido
       ? JSON.stringify({ km_lido: sessao.contexto.km_lido, confianca: sessao.contexto.km_confianca })
       : null,

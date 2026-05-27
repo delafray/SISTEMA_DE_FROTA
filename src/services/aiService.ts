@@ -77,7 +77,7 @@ export type PedidoFreteExtraido = {
   cliente_cnpj: string | null;
   origem: string | null;
   destino: string | null;
-  valor_frete: number | null;
+  valor_pedido: number | null;
   peso_carga_kg: number | null;
   tipo_carga: string | null;
   data_coleta: string | null;
