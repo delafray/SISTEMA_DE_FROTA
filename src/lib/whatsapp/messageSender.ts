@@ -104,6 +104,15 @@ export type OpcaoMenu = {
   descricao?: string;
 };
 
+/**
+ * IDs reservados para acoes universais que o messageRouter intercepta antes
+ * de delegar para qualquer flow. NAO use esses IDs como opcoes de negocio.
+ */
+export const RESERVED_MENU_IDS = {
+  VOLTAR: '__voltar__',
+  SAIR: '__sair__',
+} as const;
+
 const NUMEROS_EMOJI = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
 
 /**

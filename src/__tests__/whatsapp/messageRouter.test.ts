@@ -10,6 +10,8 @@ vi.mock('@/lib/whatsapp/auth', () => ({
 vi.mock('@/lib/whatsapp/sessionManager', () => ({
   getOrCreateSession: vi.fn(),
   updateSession: vi.fn().mockResolvedValue(undefined),
+  resetToMenu: vi.fn().mockResolvedValue(undefined),
+  encerrarSessao: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/whatsapp/messageSender', () => ({
@@ -18,6 +20,7 @@ vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarLista: vi.fn().mockResolvedValue(true),
   enviarMenuTexto: vi.fn().mockResolvedValue(true),
   formatarMenuTexto: vi.fn(() => ''),
+  RESERVED_MENU_IDS: { VOLTAR: '__voltar__', SAIR: '__sair__' },
 }));
 
 vi.mock('@/lib/whatsapp/menuHelper', () => ({
@@ -43,7 +46,12 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import { processarMensagem, isSaudacao } from '@/lib/whatsapp/messageRouter';
 import { identificarRemetente } from '@/lib/whatsapp/auth';
-import { getOrCreateSession, updateSession } from '@/lib/whatsapp/sessionManager';
+import {
+  getOrCreateSession,
+  updateSession,
+  resetToMenu,
+  encerrarSessao,
+} from '@/lib/whatsapp/sessionManager';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
@@ -300,5 +308,96 @@ describe('processarMensagem — resposta numerica → lista/botao', () => {
     const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
     const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
     expect(pediuSelecao).toBe(true);
+  });
+});
+
+describe('processarMensagem — opcoes reservadas (Voltar / Sair)', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockMotorista();
+    // Mock supabase para suportar tanto select().eq().eq().order() quanto .eq().single()
+    const eqResult: Record<string, unknown> = {};
+    eqResult.eq = () => eqResult;
+    eqResult.order = () => Promise.resolve({ data: [{ id: 'v-1', placa: 'ABC1D23' }], error: null });
+    eqResult.single = () => Promise.resolve({ data: { id: 'v-1', placa: 'ABC1D23', km_atual: 100 }, error: null });
+    supabaseFromMock.mockReturnValue({
+      select: () => ({
+        eq: () => eqResult,
+        in: () => Promise.resolve({ data: [], error: null }),
+      }),
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('texto que resolve para __sair__ chama encerrarSessao e nao delega ao flow', async () => {
+    mockSessao('aguardando_foto_km', {
+      menu_opcoes: {
+        tipo_original: 'botao',
+        opcoes: [
+          { id: 'km_confirmar', titulo: '✅ Confirmar' },
+          { id: '__voltar__', titulo: '🔙 Voltar' },
+          { id: '__sair__', titulo: '🚪 Sair' },
+        ],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: '3' }));
+
+    expect(encerrarSessao).toHaveBeenCalledWith('sess-1');
+    expect(processarKmFlow).not.toHaveBeenCalled();
+    // Mensagem de despedida foi enviada
+    const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
+    const despediu = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Até logo'));
+    expect(despediu).toBe(true);
+  });
+
+  it('texto que resolve para __voltar__ em sub-flow chama resetToMenu e reenvia menu principal', async () => {
+    mockSessao('aguardando_foto_km', {
+      veiculo_placa: 'ABC1D23',
+      menu_opcoes: {
+        tipo_original: 'botao',
+        opcoes: [
+          { id: 'km_confirmar', titulo: '✅ Confirmar' },
+          { id: '__voltar__', titulo: '🔙 Voltar' },
+          { id: '__sair__', titulo: '🚪 Sair' },
+        ],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: '2' }));
+
+    expect(resetToMenu).toHaveBeenCalledWith('sess-1');
+    expect(processarKmFlow).not.toHaveBeenCalled();
+    // Menu principal foi renviado (via enviarMenuLista do menuHelper)
+    expect(enviarMenuLista).toHaveBeenCalled();
+  });
+
+  it('texto que resolve para __voltar__ no menu principal volta para selecao de caminhao', async () => {
+    mockSessao('aguardando_acao', {
+      veiculo_placa: 'ABC1D23',
+      menu_opcoes: {
+        tipo_original: 'lista',
+        opcoes: [
+          { id: 'acao_km', titulo: 'KM' },
+          { id: '__voltar__', titulo: '🔙 Voltar' },
+          { id: '__sair__', titulo: '🚪 Sair' },
+        ],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: '2' }));
+
+    // Selecao de caminhao foi enviada (enviarMenuLista chamado com sessao_id e parametros adequados)
+    expect(enviarMenuLista).toHaveBeenCalled();
+    // resetToMenu NAO foi chamado (voltar do menu principal nao reseta, vai para selecao)
+    expect(resetToMenu).not.toHaveBeenCalled();
+    // Estado mudou para aguardando_veiculo (via updateSession dentro de enviarSelecaoVeiculo)
+    const updateCalls = (updateSession as ReturnType<typeof vi.fn>).mock.calls;
+    const setouVeiculo = updateCalls.some(
+      ([, upd]) => (upd as { estado?: string })?.estado === 'aguardando_veiculo'
+    );
+    expect(setouVeiculo).toBe(true);
   });
 });

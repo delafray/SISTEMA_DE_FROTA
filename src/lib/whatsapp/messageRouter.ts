@@ -15,8 +15,14 @@ import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
 import { createLogger } from '@/lib/logger';
 import { identificarRemetente, type UserIdentity } from '@/lib/whatsapp/auth';
-import { getOrCreateSession, updateSession, type Sessao } from '@/lib/whatsapp/sessionManager';
-import { enviarTexto, type OpcaoMenu } from '@/lib/whatsapp/messageSender';
+import {
+  getOrCreateSession,
+  updateSession,
+  resetToMenu,
+  encerrarSessao,
+  type Sessao,
+} from '@/lib/whatsapp/sessionManager';
+import { enviarTexto, RESERVED_MENU_IDS, type OpcaoMenu } from '@/lib/whatsapp/messageSender';
 import { enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import {
   classificarMidia,
@@ -69,12 +75,54 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
   // aqui mapeamos de volta para o id original via sessao.contexto.menu_opcoes.
   const msgResolvida = resolverRespostaNumerica(msg, sessao);
 
+  // 2.6. Intercepta opcoes reservadas Voltar/Sair que o menuHelper anexa
+  // por padrao em todo menu. Tratadas universalmente AQUI para nao precisar
+  // duplicar logica em cada flow.
+  const idEscolhido = msgResolvida.listaId ?? msgResolvida.botaoId;
+  if (idEscolhido === RESERVED_MENU_IDS.SAIR) {
+    log.info('opcao_sair_acionada', { session_id: sessao.id });
+    await handleSair(msgResolvida, sessao);
+    return;
+  }
+  if (idEscolhido === RESERVED_MENU_IDS.VOLTAR && identity.tipo === 'motorista') {
+    log.info('opcao_voltar_acionada', { session_id: sessao.id, estado: sessao.estado });
+    await handleVoltar(msgResolvida, sessao, identity);
+    return;
+  }
+
   // 3. Rotear com base no role
   if (identity.tipo === 'motorista') {
     await rotearMotorista(msgResolvida, sessao, identity);
   } else {
     await rotearGestor(msgResolvida, sessao, identity);
   }
+}
+
+// ─── HANDLERS UNIVERSAIS (Voltar / Sair) ────────────────────────────
+
+async function handleSair(msg: ParsedMessage, sessao: Sessao): Promise<void> {
+  await enviarTexto(
+    msg.from,
+    'Até logo! 👋\nMande qualquer mensagem quando quiser começar de novo.'
+  );
+  await encerrarSessao(sessao.id);
+}
+
+async function handleVoltar(
+  msg: ParsedMessage,
+  sessao: Sessao,
+  identity: Extract<UserIdentity, { tipo: 'motorista' }>
+): Promise<void> {
+  // Do menu principal (aguardando_acao) "Voltar" significa trocar caminhao.
+  // De qualquer sub-flow, "Voltar" significa cancelar e ir para o menu principal.
+  if (sessao.estado === 'aguardando_acao') {
+    await enviarSelecaoVeiculo(msg.from, identity.nome, identity.empresa_id, sessao.id);
+    return;
+  }
+  await resetToMenu(sessao.id);
+  // Atualizar contexto local para refletir o reset antes de re-enviar o menu
+  const sessaoMenu: Sessao = { ...sessao, estado: 'aguardando_acao' };
+  await enviarMenuMotorista(msg.from, sessaoMenu);
 }
 
 /**
@@ -242,7 +290,9 @@ async function enviarSelecaoVeiculo(
     sessionId,
     para,
     `Olá, ${nomeMotorista}! 👋\nQual caminhão você vai usar hoje?`,
-    opcoes
+    opcoes,
+    undefined,
+    { incluirVoltar: false, incluirSair: false }
   );
   log.info('lista_veiculos_enviada', { para, count: veiculos.length, enviado });
 

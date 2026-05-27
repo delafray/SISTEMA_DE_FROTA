@@ -263,6 +263,27 @@ export async function resetToMenu(sessionId: string): Promise<void> {
 }
 
 /**
+ * Encerra a sessao do usuario: estado='novo' e contexto totalmente limpo.
+ * Diferente de resetToMenu que preserva o veiculo selecionado. Usado quando
+ * o usuario escolhe "🚪 Sair" no menu numerado — proxima mensagem vai
+ * comecar do zero pela selecao de caminhao.
+ */
+export async function encerrarSessao(sessionId: string): Promise<void> {
+  if (sessionId.startsWith('temp-')) return;
+
+  const supabase = getServiceClient();
+
+  await supabase
+    .from('sessoes_whatsapp')
+    .update({
+      estado: 'novo',
+      contexto: {},
+      ultimo_contato: new Date().toISOString(),
+    })
+    .eq('id', sessionId);
+}
+
+/**
  * Encerra (deleta) sessões expiradas (> 24h).
  * Pode ser chamada por um cron job / Edge Function.
  */

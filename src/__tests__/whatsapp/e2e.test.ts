@@ -24,6 +24,7 @@ vi.mock('@/lib/whatsapp/sessionManager', () => ({
   getOrCreateSession: vi.fn(),
   updateSession: vi.fn().mockResolvedValue(undefined),
   resetToMenu: vi.fn().mockResolvedValue(undefined),
+  encerrarSessao: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/whatsapp/messageSender', () => ({
@@ -32,6 +33,7 @@ vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarLista: vi.fn().mockResolvedValue(true),
   enviarMenuTexto: vi.fn().mockResolvedValue(true),
   formatarMenuTexto: vi.fn(() => ''),
+  RESERVED_MENU_IDS: { VOLTAR: '__voltar__', SAIR: '__sair__' },
 }));
 
 vi.mock('@/lib/whatsapp/menuHelper', () => ({
