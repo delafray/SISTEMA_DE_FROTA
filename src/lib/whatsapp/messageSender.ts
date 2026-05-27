@@ -90,6 +90,51 @@ export async function enviarTexto(para: string, texto: string): Promise<boolean>
   });
 }
 
+// ─── MENU DE TEXTO (substitui listas/botões interativos) ─────────────
+//
+// WhatsApp não-Business + Baileys NÃO renderiza listMessage/buttonsMessage
+// confiavelmente. Esta função formata as opções como texto numerado e envia
+// via sendText. O caller deve passar todas as opcoes para que o roteador
+// possa mapear a resposta numérica do usuário ("1", "2", ...) de volta para
+// o id original ao salvá-las em sessao.contexto.menu_opcoes via updateSession.
+
+export type OpcaoMenu = {
+  id: string;
+  titulo: string;
+  descricao?: string;
+};
+
+const NUMEROS_EMOJI = ['1️⃣', '2️⃣', '3️⃣', '4️⃣', '5️⃣', '6️⃣', '7️⃣', '8️⃣', '9️⃣', '🔟'];
+
+/**
+ * Formata um menu como texto numerado. Não envia — apenas retorna a string.
+ * Exposto para testes e usos avançados; prefira `enviarMenuTexto` no fluxo normal.
+ */
+export function formatarMenuTexto(corpo: string, opcoes: OpcaoMenu[], rodape?: string): string {
+  const linhas = opcoes.map((o, i) => {
+    const num = NUMEROS_EMOJI[i] ?? `*${i + 1}.*`;
+    const desc = o.descricao ? `\n   _${o.descricao}_` : '';
+    return `${num} ${o.titulo}${desc}`;
+  });
+  let texto = `${corpo}\n\n${linhas.join('\n')}`;
+  if (rodape) texto += `\n\n${rodape}`;
+  texto += '\n\n_Responda com o número da opção (ex: 1)_';
+  return texto;
+}
+
+/**
+ * Envia um menu de opções como texto numerado.
+ * NÃO salva as opções na sessão — o caller deve fazer via updateSession.
+ */
+export async function enviarMenuTexto(
+  para: string,
+  corpo: string,
+  opcoes: OpcaoMenu[],
+  rodape?: string
+): Promise<boolean> {
+  return enviarTexto(para, formatarMenuTexto(corpo, opcoes, rodape));
+}
+
 // ─── BOTÕES INTERATIVOS ──────────────────────────────────────────────
 
 export type Botao = {

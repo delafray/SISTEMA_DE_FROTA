@@ -7,6 +7,13 @@ import type { Sessao } from "@/lib/whatsapp/sessionManager";
 vi.mock("@/lib/whatsapp/messageSender", () => ({
   enviarTexto: vi.fn().mockResolvedValue(true),
   enviarBotoes: vi.fn().mockResolvedValue(true),
+  enviarMenuTexto: vi.fn().mockResolvedValue(true),
+  formatarMenuTexto: vi.fn(() => ""),
+}));
+
+vi.mock("@/lib/whatsapp/menuHelper", () => ({
+  enviarMenuBotoes: vi.fn().mockResolvedValue(true),
+  enviarMenuLista: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock("@/lib/whatsapp/sessionManager", () => ({
@@ -44,7 +51,8 @@ vi.mock("@supabase/supabase-js", () => ({
 // ─── IMPORTS após mocks ─────────────────────────────────────────────────
 
 import { processarKmFlow } from "@/lib/whatsapp/flows/kmFlow";
-import { enviarTexto, enviarBotoes } from "@/lib/whatsapp/messageSender";
+import { enviarTexto } from "@/lib/whatsapp/messageSender";
+import { enviarMenuBotoes } from "@/lib/whatsapp/menuHelper";
 import { updateSession } from "@/lib/whatsapp/sessionManager";
 import { lerOdometro } from "@/services/aiService";
 import { getMediaUrl } from "@/lib/whatsapp/messageParser";
@@ -131,7 +139,8 @@ describe("kmFlow — aguardando_foto_km", () => {
 
     await processarKmFlow(msg, sessao);
 
-    expect(enviarBotoes).toHaveBeenCalledWith(
+    expect(enviarMenuBotoes).toHaveBeenCalledWith(
+      sessao.id,
       msg.from,
       expect.stringContaining("125.430"),
       expect.arrayContaining([

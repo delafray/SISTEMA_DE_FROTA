@@ -16,7 +16,8 @@ import { getMediaUrl } from '@/lib/whatsapp/messageParser';
 import { createLogger } from '@/lib/logger';
 import { identificarRemetente, type UserIdentity } from '@/lib/whatsapp/auth';
 import { getOrCreateSession, updateSession, type Sessao } from '@/lib/whatsapp/sessionManager';
-import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto, type OpcaoMenu } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import {
   classificarMidia,
   classificarIntentTexto,
@@ -62,12 +63,46 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     empresa_id: sessao.empresa_id,
   });
 
+  // 2.5. Traduzir resposta numerica de texto em resposta de lista/botao.
+  // Como WhatsApp pessoal nao renderiza listas interativas, os menus sao
+  // enviados como texto numerado. O usuario responde com "1", "2", etc., e
+  // aqui mapeamos de volta para o id original via sessao.contexto.menu_opcoes.
+  const msgResolvida = resolverRespostaNumerica(msg, sessao);
+
   // 3. Rotear com base no role
   if (identity.tipo === 'motorista') {
-    await rotearMotorista(msg, sessao, identity);
+    await rotearMotorista(msgResolvida, sessao, identity);
   } else {
-    await rotearGestor(msg, sessao, identity);
+    await rotearGestor(msgResolvida, sessao, identity);
   }
+}
+
+/**
+ * Se a mensagem for um texto contendo um numero valido (1-N) e a sessao
+ * tiver `menu_opcoes` salvas, transforma a mensagem como se fosse uma resposta
+ * de lista ou botao (conforme `tipo_original`). Caso contrario, retorna a
+ * mensagem inalterada.
+ */
+function resolverRespostaNumerica(msg: ParsedMessage, sessao: Sessao): ParsedMessage {
+  if (msg.tipo !== 'texto' || !msg.texto) return msg;
+  const menu = sessao.contexto.menu_opcoes;
+  if (!menu || !menu.opcoes?.length) return msg;
+
+  const n = parseInt(msg.texto.trim(), 10);
+  if (isNaN(n) || n < 1 || n > menu.opcoes.length) return msg;
+
+  const escolhida = menu.opcoes[n - 1];
+  log.info('resposta_numerica_resolvida', {
+    numero: n,
+    id: escolhida.id,
+    titulo: escolhida.titulo,
+    tipo_original: menu.tipo_original,
+  });
+
+  if (menu.tipo_original === 'lista') {
+    return { ...msg, tipo: 'lista', listaId: escolhida.id, listaTitulo: escolhida.titulo };
+  }
+  return { ...msg, tipo: 'botao', botaoId: escolhida.id, botaoTitulo: escolhida.titulo };
 }
 
 // ─── ROTEAMENTO MOTORISTA ─────────────────────────────────────────────
@@ -197,20 +232,17 @@ async function enviarSelecaoVeiculo(
     return;
   }
 
-  const enviado = await enviarLista(
+  const opcoes: OpcaoMenu[] = veiculos.slice(0, 10).map((v) => ({
+    id: `veiculo_${v.id}`,
+    titulo: v.placa,
+    descricao: `${v.apelido || ''} ${v.marca || ''} ${v.modelo || ''}`.trim() || undefined,
+  }));
+
+  const enviado = await enviarMenuLista(
+    sessionId,
     para,
     `Olá, ${nomeMotorista}! 👋\nQual caminhão você vai usar hoje?`,
-    '🚛 Selecionar',
-    [
-      {
-        titulo: 'Caminhões disponíveis',
-        itens: veiculos.slice(0, 10).map((v) => ({
-          id: `veiculo_${v.id}`,
-          titulo: v.placa,
-          descricao: `${v.apelido || ''} ${v.marca || ''} ${v.modelo || ''}`.trim().slice(0, 72),
-        })),
-      },
-    ]
+    opcoes
   );
   log.info('lista_veiculos_enviada', { para, count: veiculos.length, enviado });
 
@@ -269,28 +301,24 @@ async function processarSelecaoVeiculo(
 async function enviarMenuMotorista(para: string, sessao: Sessao): Promise<void> {
   const placa = sessao.contexto.veiculo_placa ?? '---';
 
-  await enviarLista(
+  const opcoes: OpcaoMenu[] = [
+    { id: 'acao_checklist', titulo: '📋 Checklist do dia' },
+    { id: 'acao_viagem', titulo: '🛣️ Iniciar Viagem' },
+    { id: 'acao_km', titulo: '📸 Informar KM' },
+    { id: 'acao_abastecimento', titulo: '⛽ Abastecimento' },
+    { id: 'acao_avaria', titulo: '⚠️ Relatar Avaria' },
+    { id: 'acao_adiantamento', titulo: '💰 Pedir adiantamento' },
+    { id: 'acao_despesa', titulo: '🧾 Registrar despesa' },
+    { id: 'acao_imprevisto', titulo: '⚠️ Comunicar imprevisto' },
+    { id: 'acao_status', titulo: '🔍 Status do caminhão' },
+    { id: 'acao_documentos', titulo: '📄 Meus documentos' },
+  ];
+
+  await enviarMenuLista(
+    sessao.id,
     para,
     `🚛 Caminhão: *${placa}*\n\nO que você precisa fazer?`,
-    '📋 Ver opções',
-    [
-      {
-        titulo: 'Ações',
-        itens: [
-          { id: 'acao_checklist', titulo: '📋 Checklist do dia' },
-          { id: 'acao_viagem', titulo: '🛣️ Iniciar Viagem' },
-          { id: 'acao_km', titulo: '📸 Informar KM' },
-          { id: 'acao_abastecimento', titulo: '⛽ Abastecimento' },
-          { id: 'acao_avaria', titulo: '⚠️ Relatar Avaria' },
-          { id: 'acao_adiantamento', titulo: '💰 Pedir adiantamento' },
-          { id: 'acao_despesa', titulo: '🧾 Registrar despesa' },
-          { id: 'acao_imprevisto', titulo: '⚠️ Comunicar imprevisto' },
-          { id: 'acao_status', titulo: '🔍 Status do caminhão' },
-          { id: 'acao_documentos', titulo: '📄 Meus documentos' },
-        ],
-      },
-    ],
-    undefined,
+    opcoes,
     'Ou mande uma foto/áudio direto!'
   );
 }

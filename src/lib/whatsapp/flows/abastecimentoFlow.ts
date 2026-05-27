@@ -10,7 +10,8 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { lerCupomAbastecimento } from '@/services/aiService';
 import { createClient } from '@supabase/supabase-js';
@@ -72,7 +73,7 @@ async function processarFotoAbastecimento(msg: ParsedMessage, sessao: Sessao): P
 
   const resumo = `⛽ *Abastecimento identificado:*\n\n🛢️ ${litrosStr}\n💰 ${valorStr}\n📍 ${postoStr}\n\nTá certo?`;
 
-  await enviarBotoes(msg.from, resumo, [
+  await enviarMenuBotoes(sessao.id, msg.from, resumo, [
     { id: 'abast_confirmar', titulo: '✅ Confirmar' },
     { id: 'abast_corrigir', titulo: '✏️ Corrigir' },
   ]);
@@ -130,7 +131,7 @@ async function processarConfirmacaoAbastecimento(msg: ParsedMessage, sessao: Ses
     return;
   }
 
-  await enviarBotoes(msg.from, 'Use os botões:', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Use os botões:', [
     { id: 'abast_confirmar', titulo: '✅ Confirmar' },
     { id: 'abast_corrigir', titulo: '✏️ Corrigir' },
   ]);

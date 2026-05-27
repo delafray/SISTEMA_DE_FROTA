@@ -16,6 +16,13 @@ vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarTexto: vi.fn().mockResolvedValue(true),
   enviarBotoes: vi.fn().mockResolvedValue(true),
   enviarLista: vi.fn().mockResolvedValue(true),
+  enviarMenuTexto: vi.fn().mockResolvedValue(true),
+  formatarMenuTexto: vi.fn(() => ''),
+}));
+
+vi.mock('@/lib/whatsapp/menuHelper', () => ({
+  enviarMenuBotoes: vi.fn().mockResolvedValue(true),
+  enviarMenuLista: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('@/lib/whatsapp/flows/kmFlow', () => ({ processarKmFlow: vi.fn() }));
@@ -37,7 +44,8 @@ vi.mock('@supabase/supabase-js', () => ({
 import { processarMensagem, isSaudacao } from '@/lib/whatsapp/messageRouter';
 import { identificarRemetente } from '@/lib/whatsapp/auth';
 import { getOrCreateSession, updateSession } from '@/lib/whatsapp/sessionManager';
-import { enviarTexto, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
 import { processarAvariaFlow } from '@/lib/whatsapp/flows/avariaFlow';
 
@@ -119,7 +127,7 @@ describe('processarMensagem — identidade', () => {
 
     expect(getOrCreateSession).not.toHaveBeenCalled();
     expect(enviarTexto).not.toHaveBeenCalled();
-    expect(enviarLista).not.toHaveBeenCalled();
+    expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
   it('responde gestor com texto informativo', async () => {
@@ -169,24 +177,26 @@ describe('processarMensagem — roteamento motorista', () => {
   it('sessão nova → envia seleção de veículo', async () => {
     mockSessao('novo');
     await processarMensagem(makeMsg({ texto: 'oi' }));
-    expect(enviarLista).toHaveBeenCalledOnce();
-    const args = (enviarLista as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(args[0]).toBe('5531999');
-    expect(args[1]).toContain('caminhão');
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
+    const args = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0];
+    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?)
+    expect(args[0]).toBe('sess-1');
+    expect(args[1]).toBe('5531999');
+    expect(args[2]).toContain('caminhão');
     expect(updateSession).toHaveBeenCalledWith('sess-1', { estado: 'aguardando_veiculo' });
   });
 
   it('saudação reseta para seleção de veículo mesmo com sessão ativa', async () => {
     mockSessao('aguardando_acao', { veiculo_id: 'v-1' });
     await processarMensagem(makeMsg({ texto: 'oi' }));
-    expect(enviarLista).toHaveBeenCalledOnce();
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
   });
 
   it('estado aguardando_foto_km → delega ao kmFlow', async () => {
     mockSessao('aguardando_foto_km');
     await processarMensagem(makeMsg({ tipo: 'foto', mediaId: 'm-1' }));
     expect(processarKmFlow).toHaveBeenCalledOnce();
-    expect(enviarLista).not.toHaveBeenCalled();
+    expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
   it('estado aguardando_avaria_midia → delega ao avariaFlow', async () => {
@@ -200,5 +210,95 @@ describe('processarMensagem — roteamento motorista', () => {
     await processarMensagem(makeMsg({ texto: 'não sei' }));
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('lista');
+  });
+});
+
+describe('processarMensagem — resposta numerica → lista/botao', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'log').mockImplementation(() => {});
+    mockMotorista();
+    // Mock que aceita tanto .select().eq().eq().order() quanto .select().eq().single()
+    const eqResult: Record<string, unknown> = {};
+    eqResult.eq = () => eqResult;
+    eqResult.order = () => Promise.resolve({ data: [], error: null });
+    eqResult.single = () => Promise.resolve({
+      data: { id: 'v-1', placa: 'ABC1D23', km_atual: 100 },
+      error: null,
+    });
+    supabaseFromMock.mockReturnValue({
+      select: () => ({
+        eq: () => eqResult,
+        in: () => Promise.resolve({ data: [], error: null }),
+      }),
+    });
+  });
+
+  afterEach(() => vi.restoreAllMocks());
+
+  it('texto "1" com menu_opcoes tipo_original:lista → flow recebe msg.tipo=lista com listaId correto', async () => {
+    // Sessao em aguardando_veiculo com menu_opcoes salvas (simulando que o
+    // motorista respondeu "1" depois de receber o menu numerado de caminhoes).
+    mockSessao('aguardando_veiculo', {
+      menu_opcoes: {
+        tipo_original: 'lista',
+        opcoes: [
+          { id: 'veiculo_abc', titulo: 'ABC1D23' },
+          { id: 'veiculo_def', titulo: 'DEF4G56' },
+        ],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: '1' }));
+
+    // Como o estado e aguardando_veiculo, o handler vai dentro de
+    // processarSelecaoVeiculo que checa msg.tipo === 'lista' e msg.listaId.
+    // Se a resolucao numerica funcionou, o handler avanca (chama update da sessao);
+    // se nao, ele dispara enviarTexto "Por favor selecione um caminhao".
+    const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
+    const semSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
+    expect(semSelecao).toBe(false);
+  });
+
+  it('texto "1" sem menu_opcoes → flow recebe msg.tipo=texto inalterado', async () => {
+    mockSessao('aguardando_veiculo'); // contexto vazio
+
+    await processarMensagem(makeMsg({ texto: '1' }));
+
+    // Sem menu_opcoes a conversao nao acontece; handler de selecao recebe texto
+    // "1" e responde com o pedido de selecao.
+    const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
+    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
+    expect(pediuSelecao).toBe(true);
+  });
+
+  it('texto fora do range (ex: "99") com menu_opcoes nao converte', async () => {
+    mockSessao('aguardando_veiculo', {
+      menu_opcoes: {
+        tipo_original: 'lista',
+        opcoes: [{ id: 'veiculo_abc', titulo: 'ABC1D23' }],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: '99' }));
+
+    const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
+    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
+    expect(pediuSelecao).toBe(true);
+  });
+
+  it('texto nao-numerico com menu_opcoes nao converte', async () => {
+    mockSessao('aguardando_veiculo', {
+      menu_opcoes: {
+        tipo_original: 'lista',
+        opcoes: [{ id: 'veiculo_abc', titulo: 'ABC1D23' }],
+      },
+    });
+
+    await processarMensagem(makeMsg({ texto: 'qualquer coisa' }));
+
+    const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
+    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
+    expect(pediuSelecao).toBe(true);
   });
 });

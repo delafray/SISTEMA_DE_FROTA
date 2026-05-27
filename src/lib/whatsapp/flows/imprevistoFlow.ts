@@ -9,7 +9,8 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista, enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { createClient } from '@supabase/supabase-js';
 
@@ -43,11 +44,11 @@ export async function processarImprevistoFlow(
   iniciar?: boolean
 ): Promise<void> {
   if (iniciar) {
-    await enviarLista(
+    await enviarMenuLista(
+      sessao.id,
       msg.from,
       'O que aconteceu?',
-      '⚠️ Selecionar',
-      [{ titulo: 'Tipo', itens: TIPOS_IMPREVISTO.map((t) => ({ id: t.id, titulo: t.titulo })) }]
+      TIPOS_IMPREVISTO.map((t) => ({ id: t.id, titulo: t.titulo }))
     );
     await updateSession(sessao.id, { estado: 'aguardando_imprevisto_tipo' });
     return;
@@ -84,11 +85,11 @@ async function processarTipo(msg: ParsedMessage, sessao: Sessao): Promise<void> 
     },
   });
 
-  await enviarLista(
+  await enviarMenuLista(
+    sessao.id,
     msg.from,
     'Quanto tempo de atraso, mais ou menos?',
-    '⏱️ Selecionar',
-    [{ titulo: 'Tempo', itens: TEMPOS_ATRASO.map((t) => ({ id: t.id, titulo: t.titulo })) }]
+    TEMPOS_ATRASO.map((t) => ({ id: t.id, titulo: t.titulo }))
   );
 }
 
@@ -114,7 +115,8 @@ async function processarTempo(msg: ParsedMessage, sessao: Sessao): Promise<void>
     },
   });
 
-  await enviarBotoes(
+  await enviarMenuBotoes(
+    sessao.id,
     msg.from,
     'Quer mandar uma foto ou áudio explicando?',
     [
@@ -159,7 +161,7 @@ async function processarMidia(msg: ParsedMessage, sessao: Sessao): Promise<void>
     return;
   }
 
-  await enviarBotoes(msg.from, 'Mande foto/áudio ou clique para só registrar:', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Mande foto/áudio ou clique para só registrar:', [
     { id: 'imp_pular', titulo: '⏭️ Só registrar' },
   ]);
 }

@@ -9,7 +9,8 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista, enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { createClient } from '@supabase/supabase-js';
 
@@ -34,11 +35,11 @@ export async function processarAdiantamentoFlow(
   iniciar?: boolean
 ): Promise<void> {
   if (iniciar) {
-    await enviarLista(
+    await enviarMenuLista(
+      sessao.id,
       msg.from,
       'Para que é o adiantamento?',
-      '💰 Selecionar',
-      [{ titulo: 'Tipo', itens: TIPOS_ADIANTAMENTO.map((t) => ({ id: t.id, titulo: t.titulo })) }]
+      TIPOS_ADIANTAMENTO.map((t) => ({ id: t.id, titulo: t.titulo }))
     );
     await updateSession(sessao.id, { estado: 'aguardando_adiantamento_tipo' });
     return;
@@ -94,7 +95,8 @@ async function processarValor(msg: ParsedMessage, sessao: Sessao): Promise<void>
   const tipoLabel = (dados.tipo_label as string) ?? 'Outro';
   const valorStr = `R$ ${valor.toFixed(2).replace('.', ',')}`;
 
-  await enviarBotoes(
+  await enviarMenuBotoes(
+    sessao.id,
     msg.from,
     `Confirmar? *${valorStr}* para *${tipoLabel}*.\nPosso mandar pro gestor?`,
     [
@@ -123,7 +125,7 @@ async function processarConfirmacao(msg: ParsedMessage, sessao: Sessao): Promise
     return;
   }
 
-  await enviarBotoes(msg.from, 'Confirma o pedido?', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Confirma o pedido?', [
     { id: 'adiant_confirmar', titulo: '✅ Confirmar' },
     { id: 'adiant_cancelar', titulo: '❌ Cancelar' },
   ]);

@@ -10,7 +10,8 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { analisarAvaria, type AnaliseAvaria } from '@/services/aiService';
 import { createClient } from '@supabase/supabase-js';
@@ -94,7 +95,7 @@ async function processarMidiaAvaria(msg: ParsedMessage, sessao: Sessao): Promise
 
   const textoResumo = `⚠️ *Avaria registrada:*\n\n${descricao}\n\nUrgência: *${urgencia.toUpperCase()}* ${emojiUrgencia}\nRecomendação: ${recomendacao}\n\nDeseja adicionar mais fotos?`;
 
-  await enviarBotoes(msg.from, textoResumo, [
+  await enviarMenuBotoes(sessao.id, msg.from, textoResumo, [
     { id: 'avaria_confirmar', titulo: '✅ Confirmar' },
     { id: 'avaria_foto', titulo: '📸 Adicionar foto' },
   ]);
@@ -135,7 +136,7 @@ async function processarConfirmacaoAvaria(msg: ParsedMessage, sessao: Sessao): P
     return;
   }
 
-  await enviarBotoes(msg.from, 'Use os botões:', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Use os botões:', [
     { id: 'avaria_confirmar', titulo: '✅ Confirmar' },
     { id: 'avaria_foto', titulo: '📸 Adicionar foto' },
   ]);

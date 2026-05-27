@@ -11,7 +11,8 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { lerOdometro } from '@/services/aiService';
 import { createClient } from '@supabase/supabase-js';
@@ -88,7 +89,8 @@ async function processarFotoKm(msg: ParsedMessage, sessao: Sessao): Promise<void
     // IA confiante → confirmar com botões
     const kmFormatado = new Intl.NumberFormat('pt-BR').format(km);
 
-    await enviarBotoes(
+    await enviarMenuBotoes(
+      sessao.id,
       msg.from,
       `✅ KM lido: *${kmFormatado} km*\nEstá correto?`,
       [
@@ -145,7 +147,8 @@ async function processarConfirmacaoKm(msg: ParsedMessage, sessao: Sessao): Promi
     }
   }
 
-  await enviarBotoes(
+  await enviarMenuBotoes(
+    sessao.id,
     msg.from,
     'Use os botões para confirmar ou corrigir:',
     [

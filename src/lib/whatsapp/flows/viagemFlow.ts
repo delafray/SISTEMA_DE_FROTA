@@ -9,7 +9,8 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista, enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { createClient } from '@supabase/supabase-js';
 
@@ -96,11 +97,11 @@ async function processarOrigemDestino(msg: ParsedMessage, sessao: Sessao): Promi
     // Adicionar opção avulso
     itens.push({ id: 'cliente_avulso', titulo: '➕ Pedido avulso' });
 
-    await enviarLista(
+    await enviarMenuLista(
+      sessao.id,
       msg.from,
       `Rota: *${origem}${destino ? ' → ' + destino : ''}*\n\nPara qual cliente?`,
-      '📋 Selecionar',
-      [{ titulo: 'Clientes', itens }]
+      itens
     );
   } else {
     // Sem clientes → pedido avulso direto
@@ -115,12 +116,11 @@ async function processarOrigemDestino(msg: ParsedMessage, sessao: Sessao): Promi
       },
     });
 
-    await enviarBotoes(
+    await enviarMenuBotoes(
+      sessao.id,
       msg.from,
       `Rota: *${origem}${destino ? ' → ' + destino : ''}*\n\nQual o valor do pedido? (R$)`,
-      [
-        { id: 'pedido_pular', titulo: '⏭️ Pular' },
-      ]
+      [{ id: 'pedido_pular', titulo: '⏭️ Pular' }]
     );
 
     await updateSession(sessao.id, { estado: 'aguardando_valor_pedido' });
@@ -157,7 +157,7 @@ async function processarCliente(msg: ParsedMessage, sessao: Sessao): Promise<voi
   });
 
   await enviarTexto(msg.from, 'Qual o *valor do pedido*? (R$)\nDigite o valor ou clique em Pular:');
-  await enviarBotoes(msg.from, 'Pode informar agora ou depois:', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Pode informar agora ou depois:', [
     { id: 'pedido_pular', titulo: '⏭️ Pular' },
   ]);
 }

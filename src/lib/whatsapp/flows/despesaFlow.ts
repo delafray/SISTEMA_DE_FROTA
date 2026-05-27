@@ -10,7 +10,8 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes, enviarLista } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuLista, enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { lerCupomGenerico } from '@/services/aiService';
 import { createClient } from '@supabase/supabase-js';
@@ -37,11 +38,11 @@ export async function processarDespesaFlow(
   iniciar?: boolean
 ): Promise<void> {
   if (iniciar) {
-    await enviarLista(
+    await enviarMenuLista(
+      sessao.id,
       msg.from,
       'Que tipo de despesa?',
-      '🧾 Selecionar',
-      [{ titulo: 'Tipo', itens: TIPOS_DESPESA.map((t) => ({ id: t.id, titulo: t.titulo })) }]
+      TIPOS_DESPESA.map((t) => ({ id: t.id, titulo: t.titulo }))
     );
     await updateSession(sessao.id, { estado: 'aguardando_despesa_tipo' });
     return;
@@ -124,7 +125,8 @@ async function processarFotoDespesa(msg: ParsedMessage, sessao: Sessao): Promise
   const valorStr = valor ? `R$ ${valor.toFixed(2).replace('.', ',')}` : '---';
   const localStr = local ?? '---';
 
-  await enviarBotoes(
+  await enviarMenuBotoes(
+    sessao.id,
     msg.from,
     `🧾 *Despesa identificada:*\n${descricao ?? ''}\n💰 ${valorStr}\n📍 ${localStr}\n\nTá certo?`,
     [
@@ -166,7 +168,7 @@ async function processarConfirmacaoDespesa(msg: ParsedMessage, sessao: Sessao): 
     }
   }
 
-  await enviarBotoes(msg.from, 'Use os botões:', [
+  await enviarMenuBotoes(sessao.id, msg.from, 'Use os botões:', [
     { id: 'desp_confirmar', titulo: '✅ Confirmar' },
     { id: 'desp_corrigir', titulo: '✏️ Corrigir valor' },
   ]);

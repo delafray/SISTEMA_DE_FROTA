@@ -8,7 +8,8 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
-import { enviarTexto, enviarBotoes } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
 import { createClient } from '@supabase/supabase-js';
 
@@ -56,14 +57,15 @@ async function iniciarChecklist(para: string, sessao: Sessao): Promise<void> {
   });
 
   await enviarTexto(para, `Bom dia! 🌅\nVamos conferir o caminhão *${placa}*?`);
-  await enviarPerguntaChecklist(para, 0);
+  await enviarPerguntaChecklist(sessao.id, para, 0);
 }
 
-async function enviarPerguntaChecklist(para: string, index: number): Promise<void> {
+async function enviarPerguntaChecklist(sessionId: string, para: string, index: number): Promise<void> {
   if (index >= ITENS_CHECKLIST.length) return;
 
   const item = ITENS_CHECKLIST[index];
-  await enviarBotoes(
+  await enviarMenuBotoes(
+    sessionId,
     para,
     `*${index + 1}/${ITENS_CHECKLIST.length}  ${item.label}*\n${item.pergunta}`,
     [
@@ -78,7 +80,7 @@ async function enviarPerguntaChecklist(para: string, index: number): Promise<voi
 async function processarRespostaChecklist(msg: ParsedMessage, sessao: Sessao): Promise<void> {
   if (msg.tipo !== 'botao' || !msg.botaoId) {
     const index = (sessao.contexto.checklist_index as number) ?? 0;
-    await enviarPerguntaChecklist(msg.from, index);
+    await enviarPerguntaChecklist(sessao.id, msg.from, index);
     return;
   }
 
@@ -87,7 +89,7 @@ async function processarRespostaChecklist(msg: ParsedMessage, sessao: Sessao): P
 
   if (!isOk && !isNok) {
     const index = (sessao.contexto.checklist_index as number) ?? 0;
-    await enviarPerguntaChecklist(msg.from, index);
+    await enviarPerguntaChecklist(sessao.id, msg.from, index);
     return;
   }
 
@@ -109,7 +111,7 @@ async function processarRespostaChecklist(msg: ParsedMessage, sessao: Sessao): P
         checklist_respostas: respostas,
       },
     });
-    await enviarPerguntaChecklist(msg.from, nextIndex);
+    await enviarPerguntaChecklist(sessao.id, msg.from, nextIndex);
     return;
   }
 

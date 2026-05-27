@@ -8,6 +8,13 @@ vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarTexto: vi.fn().mockResolvedValue(true),
   enviarBotoes: vi.fn().mockResolvedValue(true),
   enviarLista: vi.fn().mockResolvedValue(true),
+  enviarMenuTexto: vi.fn().mockResolvedValue(true),
+  formatarMenuTexto: vi.fn(() => ''),
+}));
+
+vi.mock('@/lib/whatsapp/menuHelper', () => ({
+  enviarMenuBotoes: vi.fn().mockResolvedValue(true),
+  enviarMenuLista: vi.fn().mockResolvedValue(true),
 }));
 
 vi.mock('@/lib/whatsapp/sessionManager', () => ({
@@ -38,7 +45,8 @@ vi.mock('@supabase/supabase-js', () => ({
 // ─── IMPORTS após mocks ─────────────────────────────────────────────────
 
 import { processarAvariaFlow } from '@/lib/whatsapp/flows/avariaFlow';
-import { enviarTexto, enviarBotoes } from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu } from '@/lib/whatsapp/sessionManager';
 import { analisarAvaria } from '@/services/aiService';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
@@ -104,8 +112,9 @@ describe('avariaFlow — aguardando_avaria_midia', () => {
     expect(analisarAvaria).toHaveBeenCalledWith({ tipo: 'foto', url: 'https://media/url-foto.jpg' });
 
     // botão de confirmação enviado
-    expect(enviarBotoes).toHaveBeenCalledOnce();
-    const [para, texto, botoes] = (enviarBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
+    const [sessionId, para, texto, botoes] = (enviarMenuBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(sessionId).toBe('sess-1');
     expect(para).toBe('5531999');
     expect(texto).toContain('Avaria registrada');
     expect(texto).toContain('Pneu furado');
@@ -154,7 +163,7 @@ describe('avariaFlow — aguardando_avaria_midia', () => {
 
     expect(getMediaUrl).toHaveBeenCalledWith('media-audio-1');
     expect(analisarAvaria).toHaveBeenCalledWith({ tipo: 'audio', url: 'https://media/audio.ogg' });
-    expect(enviarBotoes).toHaveBeenCalledOnce();
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
     expect(updateSession).toHaveBeenCalledWith(
       'sess-1',
       expect.objectContaining({ estado: 'aguardando_confirmacao_avaria' })
@@ -183,7 +192,7 @@ describe('avariaFlow — aguardando_avaria_midia', () => {
 
     expect(getMediaUrl).not.toHaveBeenCalled();
     expect(analisarAvaria).toHaveBeenCalledWith({ tipo: 'texto', texto: 'pneu careca' });
-    expect(enviarBotoes).toHaveBeenCalledOnce();
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
     expect(updateSession).toHaveBeenCalledWith(
       'sess-1',
       expect.objectContaining({
@@ -220,7 +229,7 @@ describe('avariaFlow — aguardando_avaria_midia', () => {
     );
 
     expect(analisarAvaria).toHaveBeenCalledOnce();
-    expect(enviarBotoes).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
     expect(updateSession).not.toHaveBeenCalled();
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('Não consegui analisar');
@@ -341,7 +350,7 @@ describe('avariaFlow — aguardando_confirmacao_avaria', () => {
     );
 
     expect(analisarAvaria).toHaveBeenCalledWith({ tipo: 'foto', url: 'https://media/foto2.jpg' });
-    expect(enviarBotoes).toHaveBeenCalledOnce();
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
   });
 
   it('texto solto na confirmação → reapresenta botões', async () => {
@@ -357,8 +366,8 @@ describe('avariaFlow — aguardando_confirmacao_avaria', () => {
 
     expect(supabaseInsertMock).not.toHaveBeenCalled();
     expect(updateSession).not.toHaveBeenCalled();
-    expect(enviarBotoes).toHaveBeenCalledOnce();
-    const [, texto, botoes] = (enviarBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
+    const [, , texto, botoes] = (enviarMenuBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(texto).toContain('Use os botões');
     expect(botoes).toEqual([
       { id: 'avaria_confirmar', titulo: '✅ Confirmar' },
@@ -375,6 +384,6 @@ describe('avariaFlow — aguardando_confirmacao_avaria', () => {
     expect(analisarAvaria).not.toHaveBeenCalled();
     expect(supabaseInsertMock).not.toHaveBeenCalled();
     expect(enviarTexto).not.toHaveBeenCalled();
-    expect(enviarBotoes).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
   });
 });

@@ -30,6 +30,13 @@ vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarTexto: vi.fn().mockResolvedValue(true),
   enviarBotoes: vi.fn().mockResolvedValue(true),
   enviarLista: vi.fn().mockResolvedValue(true),
+  enviarMenuTexto: vi.fn().mockResolvedValue(true),
+  formatarMenuTexto: vi.fn(() => ''),
+}));
+
+vi.mock('@/lib/whatsapp/menuHelper', () => ({
+  enviarMenuBotoes: vi.fn().mockResolvedValue(true),
+  enviarMenuLista: vi.fn().mockResolvedValue(true),
 }));
 
 // messageParser exporta `getMediaUrl` que kmFlow chama — mockamos só a função,
@@ -65,11 +72,8 @@ vi.mock('@supabase/supabase-js', () => ({
 import { processarMensagem } from '@/lib/whatsapp/messageRouter';
 import { identificarRemetente } from '@/lib/whatsapp/auth';
 import { getOrCreateSession, updateSession, resetToMenu } from '@/lib/whatsapp/sessionManager';
-import {
-  enviarTexto,
-  enviarBotoes,
-  enviarLista,
-} from '@/lib/whatsapp/messageSender';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes, enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import { lerOdometro } from '@/services/aiService';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
@@ -204,13 +208,14 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     await processarMensagem(makeMsg({ texto: 'oi' }));
 
-    expect(enviarLista).toHaveBeenCalledOnce();
-    const [para, corpo, botaoTexto, secoes] = (enviarLista as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
+    const [sessionId, para, corpo, opcoes] = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(sessionId).toBe('sess-1');
     expect(para).toBe('5531999');
     expect(corpo).toContain('João');
     expect(corpo).toContain('caminhão');
-    expect(botaoTexto).toContain('Selecionar');
-    expect(secoes[0].itens[0]).toMatchObject({
+    // Apos o refactor, as opcoes sao um array flat (sem secoes)
+    expect(opcoes[0]).toMatchObject({
       id: 'veiculo_v-1',
       titulo: 'ABC1D23',
     });
@@ -237,9 +242,10 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
         veiculo_placa: 'ABC1D23',
       },
     });
-    // depois o menu de ações é enviado (uma chamada de enviarLista)
-    expect(enviarLista).toHaveBeenCalledOnce();
-    const corpo = (enviarLista as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    // depois o menu de ações é enviado (uma chamada de enviarMenuLista)
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
+    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?) → corpo é o índice 2
+    const corpo = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0][2];
     expect(corpo).toContain('ABC1D23');
   });
 
@@ -288,9 +294,11 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     expect(lerOdometro).toHaveBeenCalledOnce();
     // primeiro enviarTexto = "Analisando..."
     expect(enviarTexto).toHaveBeenCalled();
-    // depois enviarBotoes com confirmação
-    expect(enviarBotoes).toHaveBeenCalledOnce();
-    const [para, corpo, botoes] = (enviarBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    // depois enviarMenuBotoes com confirmação
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
+    // Nova assinatura: (sessionId, para, corpo, opcoes)
+    const [sessionId, para, corpo, botoes] = (enviarMenuBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(sessionId).toBe('sess-1');
     expect(para).toBe('5531999');
     expect(corpo).toContain('185.000');
     expect(botoes.map((b: { id: string }) => b.id)).toEqual([
@@ -320,7 +328,7 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     await processarMensagem(makeMsg({ tipo: 'foto', mediaId: 'm-2' }));
 
     expect(lerOdometro).toHaveBeenCalledOnce();
-    expect(enviarBotoes).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
     const mensagens = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1]);
     // a última mensagem deve pedir digitação manual
     expect(mensagens.some((m: string) => m.toLowerCase().includes('digite'))).toBe(true);
@@ -344,7 +352,7 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     await processarMensagem(makeMsg({ tipo: 'foto', mediaId: 'm-3' }));
 
     expect(lerOdometro).toHaveBeenCalledOnce();
-    expect(enviarBotoes).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
     const mensagens = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls.map((c) => c[1]);
     // fallback explicitamente pede digitação
     expect(mensagens.some((m: string) => m.toLowerCase().includes('digite'))).toBe(true);
@@ -451,8 +459,9 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     await processarMensagem(makeMsg({ texto: 'oi' }));
 
-    expect(enviarLista).toHaveBeenCalledOnce();
-    const corpo = (enviarLista as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
+    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?) → corpo é o índice 2
+    const corpo = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0][2];
     expect(corpo).toContain('caminhão');
     expect(updateSession).toHaveBeenCalledWith('sess-1', {
       estado: 'aguardando_veiculo',
@@ -478,8 +487,9 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     expect(textos.some((t: string) => t.toLowerCase().includes('analisando'))).toBe(true);
     expect(textos.some((t: string) => t.toLowerCase().includes('não consegui'))).toBe(true);
     // Menu re-enviado
-    expect(enviarLista).toHaveBeenCalledOnce();
-    const corpoMenu = (enviarLista as ReturnType<typeof vi.fn>).mock.calls[0][1];
+    expect(enviarMenuLista).toHaveBeenCalledOnce();
+    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?) → corpo é o índice 2
+    const corpoMenu = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0][2];
     expect(corpoMenu).toContain('ABC1D23');
     // Sem mudança de estado
     expect(updateSession).not.toHaveBeenCalled();
@@ -496,8 +506,8 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     expect(getOrCreateSession).not.toHaveBeenCalled();
     expect(enviarTexto).not.toHaveBeenCalled();
-    expect(enviarLista).not.toHaveBeenCalled();
-    expect(enviarBotoes).not.toHaveBeenCalled();
+    expect(enviarMenuLista).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
     expect(updateSession).not.toHaveBeenCalled();
   });
 });

@@ -70,6 +70,12 @@ export type ContextoSessao = {
   checklist_index?: number;
   checklist_respostas?: Record<string, boolean>;
   foto_url?: string;
+  /** Opcoes do menu numerado mais recente, para resolver respostas tipo "1", "2" → id original.
+   *  `tipo_original` indica se o handler original esperava resposta de lista ou de botao. */
+  menu_opcoes?: {
+    tipo_original: 'lista' | 'botao';
+    opcoes: Array<{ id: string; titulo: string }>;
+  };
   [key: string]: unknown;
 };
 

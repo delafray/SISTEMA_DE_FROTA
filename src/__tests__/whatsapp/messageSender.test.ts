@@ -7,6 +7,7 @@ import {
   enviarDocumento,
   marcarComoLida,
   formatarDestinatarioMeta,
+  formatarMenuTexto,
 } from '@/lib/whatsapp/messageSender';
 
 const ORIG_ENV = { ...process.env };
@@ -249,5 +250,38 @@ describe('formatarDestinatarioMeta', () => {
 
   it('mantém número internacional não-BR', () => {
     expect(formatarDestinatarioMeta('14155552671')).toBe('14155552671');
+  });
+});
+
+describe('formatarMenuTexto', () => {
+  it('formata corpo + opcoes numeradas (1️⃣..🔟) + instrucao final', () => {
+    const txt = formatarMenuTexto('Escolha um:', [
+      { id: 'a', titulo: 'Opcao A' },
+      { id: 'b', titulo: 'Opcao B' },
+    ]);
+    expect(txt).toContain('Escolha um:');
+    expect(txt).toContain('1️⃣ Opcao A');
+    expect(txt).toContain('2️⃣ Opcao B');
+    expect(txt).toContain('Responda com o número');
+  });
+
+  it('inclui descricao em italico quando presente', () => {
+    const txt = formatarMenuTexto('Caminhoes:', [
+      { id: 'v1', titulo: 'ABC-1234', descricao: 'Mercedes-Benz Atego' },
+    ]);
+    expect(txt).toContain('1️⃣ ABC-1234');
+    expect(txt).toContain('_Mercedes-Benz Atego_');
+  });
+
+  it('inclui rodape quando passado', () => {
+    const txt = formatarMenuTexto('Confirme:', [{ id: 'y', titulo: 'Sim' }], 'Ou mande foto');
+    expect(txt).toContain('Ou mande foto');
+  });
+
+  it('usa fallback "*N.*" para opcoes alem de 10 (sem emoji)', () => {
+    const opcoes = Array.from({ length: 11 }, (_, i) => ({ id: `o${i}`, titulo: `Opc ${i}` }));
+    const txt = formatarMenuTexto('Lista grande:', opcoes);
+    expect(txt).toContain('🔟 Opc 9');
+    expect(txt).toContain('*11.* Opc 10');
   });
 });
