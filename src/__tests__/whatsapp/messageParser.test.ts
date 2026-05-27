@@ -257,20 +257,24 @@ describe('parseWebhookPayload (Evolution API)', () => {
     expect(out[0].from).toBe('5531989791317');
   });
 
-  it('resolve telefone real quando remoteJid contem 1900 e termina com @s.whatsapp.net', () => {
+  it('NAO trata remoteJid @s.whatsapp.net contendo 1900 como LID (regressao)', () => {
+    // Numero real BR que por acaso contem "1900" no meio. Antes da revisao,
+    // uma heuristica jid.includes('1900') tratava esse JID como LID e tentava
+    // resolver via senderPn — descartando a mensagem se senderPn nao existisse.
+    // O comportamento correto: tratar @s.whatsapp.net SEMPRE como JID real.
     const out = parseWebhookPayload(
       makePayload({
         ...msgBase,
         key: {
           ...keyBase,
-          remoteJid: '190065204551889@s.whatsapp.net',
-          senderPn: '5531989791317@s.whatsapp.net',
+          remoteJid: '5511990001900@s.whatsapp.net',
+          // Sem senderPn de proposito — para verificar que a mensagem NAO eh descartada
         },
-        message: { conversation: 'oi' },
+        message: { conversation: 'oi de numero com 1900' },
       })
     );
     expect(out).toHaveLength(1);
-    expect(out[0].from).toBe('5531989791317');
+    expect(out[0].from).toBe('5511990001900');
   });
 
   it('usa participantPn como fallback quando senderPn ausente em @lid', () => {
