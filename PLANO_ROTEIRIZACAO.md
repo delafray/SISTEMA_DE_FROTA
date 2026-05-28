@@ -1286,8 +1286,8 @@ Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md
 | 1.2 | ✅ Fila offline (Dexie + sync ao Supabase via API route) **(✅ feito 2026-05-27 por Claude Opus 4.7 — 46 testes verdes)** | `src/lib/offline/fila.ts`, `sync.ts`, `onlineDetector.ts` + `src/app/api/notas/sync/route.ts` (endpoint POST que recebe nota e insere via service_role) + dev-dep `fake-indexeddb` (testes Dexie) | tipo `NotaNaFila`, tabela `notas_capturadas` | `fila.test.ts`, `sync.test.ts`, `onlineDetector.test.ts`, `route.test.ts` |
 | 1.3 | ✅ Componente `InputEnderecoNF` + API route + browser client **(✅ feito 2026-05-27 por Claude Opus 4.7 — 24 testes verdes)** | `src/components/mobile/InputEnderecoNF.tsx`, `src/app/api/cep/[cep]/route.ts` (wrapper que expoe `consultarCEP` server-only ao browser), `src/lib/cep/client.ts` (fetch wrapper pro browser). `ResultadoCEP` movido de `viacep.ts` → `types.ts` (importável sem puxar Supabase). Dev-dep `@testing-library/user-event`. | 1.1 (ViaCEP) | `inputEnderecoNF.test.tsx`, `client.test.ts`, `route.test.ts` |
 | 1.4 | ✅ Tela mobile captura-notas **(✅ feito 2026-05-28 por Claude Opus 4.7 — 16 testes verdes)** | `src/app/mobile/captura-notas/page.tsx` — usa `InputEnderecoNF`, `adicionarNota`, `iniciarSyncWorker`, `iniciarOnlineDetector`. Params via URL: `?motorista_id=...&empresa_id=...&total=70`. Mostra contador (sincronizadas/pendentes/erros), lista das 10 ultimas, botao Finalizar Rota (stub ate 1.7+). Auth/sessao do motorista vira na consolidacao futura. | 1.2 (fila) + 1.3 (componente) | `captura-notas.test.tsx` |
-| 1.5 | Cliente Nominatim (geocoding) | `src/lib/routing/geocoding.ts` | env `NOMINATIM_URL` | `geocoding.test.ts` |
-| 1.6 | API `/api/routing/geocodar` (endpoint Next.js) | `src/app/api/routing/geocodar/route.ts` | 1.5 | `geocodar.test.ts` |
+| 1.5 | ✅ Cliente Nominatim (geocoding) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 15 testes verdes)** | `src/lib/routing/geocoding.ts` — `geocodar(endereco)` + `formatarEnderecoParaGeocoding(parts)`. Rate limiter 1100ms entre chamadas. User-Agent obrigatorio. `_resetRateLimit()` pra testes. | env `NOMINATIM_URL` | `geocoding.test.ts` |
+| 1.6 | ✅ API `/api/routing/geocodar` (endpoint Next.js) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 8 testes verdes)** | `src/app/api/routing/geocodar/route.ts` — POST recebe `{ endereco }`, retorna 200/400/503 conforme resultado do geocoder. | 1.5 | `geocodar.test.ts` |
 
 **═══ CHECKPOINT 1: motorista ja captura NFs, dados sao geocodificados e salvos ═══**
 
@@ -1295,21 +1295,21 @@ Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md
 
 | # | Passo | Arquivo principal | Pre-req | Testes |
 |---|---|---|---|---|
-| 1.7 | Cliente OSRM (HTTP wrapper) | `src/lib/routing/osrm.ts` | VM Oracle + container OSRM + `OSRM_URL` no env | `osrm.test.ts` |
-| 1.8 | Cliente VROOM (HTTP wrapper) | `src/lib/routing/vroom.ts` | container VROOM + `VROOM_URL` | `vroom.test.ts` |
-| 1.9 | Helpers de restricoes VROOM (`priority`, `time_windows`, `skills`) | `src/lib/routing/restricoes.ts` | 1.8 | `restricoes.test.ts` |
-| 1.10 | API `/api/routing/otimizar` (endpoint Next.js) | `src/app/api/routing/otimizar/route.ts` | 1.8 + 1.9 | `otimizar.test.ts` |
-| 1.11 | Componente `MapaRota` (Leaflet + traçado da rota) | `src/components/MapaRota.tsx` | paradas geocodificadas existem | (UI test opcional) |
-| 1.12 | Tela "Ajuste de Rota" (drag-and-drop + abas Ordenar/Detalhes) | `src/app/mobile/ajuste-rota/*` | 1.10 (otimizacao) + 1.11 (mapa) | `abaOrdenar.test.tsx`, `abaDetalhes.test.tsx`, `tijolinho.test.tsx` |
-| 1.13 | Deep links Waze/Google Maps | `src/lib/routing/deepLinks.ts` | 1.12 | `deepLinks.test.ts` |
-| 1.14 | Integracao com cadastro de Frete (preencher `km_estimado` automatico) | edicao em pagina de fretes existente | 1.7 | (smoke test) |
+| 1.7 | ✅ Cliente OSRM (HTTP wrapper) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 12 testes verdes)** | `src/lib/routing/osrm.ts` — `calcularRota(pontos[])`, `calcularRotaSimples(o, d)`. Devolve `{distanciaKm, tempoMin, polyline}`. Aceita 2+ waypoints. `config_faltando` quando OSRM_URL vazio. | VM Oracle + container OSRM + `OSRM_URL` no env (produção). Mock no teste. | `osrm.test.ts` |
+| 1.8 | ✅ Cliente VROOM (HTTP wrapper) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 15 testes verdes)** | `src/lib/routing/vroom.ts` — `otimizarRota({ veiculos, jobs, dataBase })`, exports `Veiculo`, `Job`, `janelaParaUnixDoDia`. Suporta janelas de horario, prioridade, skills, capacidade, tempo_descarga. | container VROOM + `VROOM_URL` (produção) | `vroom.test.ts` |
+| 1.9 | ✅ Helpers de restricoes VROOM (`priority`, `time_windows`, `skills`) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 19 testes verdes)** | `src/lib/routing/restricoes.ts` — `indexarJobs`, `notaParaJob`, `montarVeiculo`, `aplicarFixacao`, `aplicarPreferenciaCliente`, `traduzirParadasComMapping`, `montarParadasPersistir`. Constants `PRIORIDADE.NORMAL/ALTA/FIXADA`. | 1.8 | `restricoes.test.ts` |
+| 1.10 | ✅ API `/api/routing/otimizar` (endpoint Next.js) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 9 testes verdes)** | `src/app/api/routing/otimizar/route.ts` — POST recebe `motorista_id`+`empresa_id`+`origem`. Pipeline: busca notas → geocodifica faltantes → VROOM → persiste rota+paradas → marca notas em_rota. | 1.8 + 1.9 | `otimizar/route.test.ts` |
+| 1.11 | ✅ Componente `MapaRota` (Leaflet + traçado da rota) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 6 testes verdes)** | `src/components/MapaRota.tsx` (wrapper SSR-safe), `src/components/MapaRotaInner.tsx` (real Leaflet com dynamic ssr:false), `src/lib/routing/polyline.ts` (decoder Google encoded). Pinos numerados via DivIcon. | paradas geocodificadas existem | `polyline.test.ts`, `mapaRota.test.tsx` |
+| 1.12 | ✅ Tela "Ajuste de Rota" — page com tabs Ordenar/Detalhes, drag-drop (@dnd-kit), lock/unlock, edit janela horario via modal **(✅ feito 2026-05-28 por Claude Opus 4.7 — 37 testes verdes)**. Sub-endpoints: `GET /api/routing/rota/[id]` e `PATCH /api/routing/rota/[id]/paradas`. **Polish adiado** (Fase 1.5): animacao de pinos, modal de impacto km/min, salvar `cliente_preferencias`, vibracao tatil, multiplas janelas horario por parada. | `src/app/mobile/ajuste-rota/page.tsx`, `components/Tijolinho.tsx`, `components/ModalHorario.tsx`, `src/app/api/routing/rota/[id]/route.ts`, `src/app/api/routing/rota/[id]/paradas/route.ts` | 1.10 (otimizacao) + 1.11 (mapa) | `page.test.tsx`, `tijolinho.test.tsx`, `modalHorario.test.tsx`, `route.test.ts`, `paradas.test.ts` |
+| 1.13 | ✅ Deep links Waze/Google Maps **(✅ feito 2026-05-28 por Claude Opus 4.7 — 9 testes verdes)** | `src/lib/routing/deepLinks.ts` — `waze(lat,lng)`, `googleMaps(lat,lng)`, `googleMapsMultiStop(pontos[])` (max 10 waypoints), `dividirParaMultiStop(pontos, chunkSize=10)` (pra 70 NFs vira 7 sub-rotas). | 1.12 | `deepLinks.test.ts` |
+| 1.14 | ✅ Utilitario `estimarRota` (cep+nº → endereco → coord → km/polyline) **(✅ feito 2026-05-28 por Claude Opus 4.7 — 7 testes verdes)**. **Integracao visual com `entregas/novo` adiada** pra consolidacao (anotado em `ACOES_PENDENTES_USUARIO.md` item 6) — exige adicionar colunas `km_estimado`, `origem_coord`, `destino_coord` em `entregas`, fora do escopo isolado. | `src/lib/routing/estimarRota.ts` — pronto pra ser chamado quando consolidar. | 1.7 (OSRM) + 1.5 (Nominatim) + 1.1 (ViaCEP) | `estimarRota.test.ts` |
 
 **═══ CHECKPOINT 2: rota completa, motorista navega via Waze, frete tem km automatico ═══**
 
 | # | Passo | Pre-req |
 |---|---|---|
-| 1.15 | Smoke test E2E manual: capturar 5 NFs → otimizar → ver no mapa → abrir Waze | tudo verde |
-| 1.16 | Rodar `npm test` completo, ver tudo verde, anotar no `TESTING.md` | tudo verde |
+| 1.15 | 🟡 Smoke test E2E manual: capturar 5 NFs → otimizar → ver no mapa → abrir Waze — **AGUARDA USUARIO** (anotado em `ACOES_PENDENTES_USUARIO.md` item 5). | tudo verde |
+| 1.16 | ✅ Rodar `npm test` completo, ver tudo verde, anotar no `TESTING.md` **(✅ feito 2026-05-28 por Claude Opus 4.7 — 452 testes em 40 arquivos)**. | tudo verde |
 
 ### Fase 2 — Otimização (Opcional, ativar quando volume justificar)
 
