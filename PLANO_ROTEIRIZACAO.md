@@ -27,7 +27,96 @@
 > 9. **Ao fim de cada subseção implementada**, rodar `npm test` conforme `TESTING.md` e reportar resultado ao usuário antes de seguir.
 > 10. **Se descobrir durante a execução** que algo no plano está incompleto, errado ou conflitante com a realidade do código, **PARE e pergunte** — não improvise.
 >
+> ---
+>
+> ## 🔁 REGRA DE CONTINUIDADE ENTRE IAs (LEIA SE ESTÁ RETOMANDO ESTE PLANO)
+>
+> Se você é uma IA chegando AGORA pra continuar este plano (não foi você que começou):
+>
+> **A) Marcar item como concluído (obrigatório quando terminar um passo):**
+> - No arquivo, troque `⬜` por `✅` no início da linha do passo.
+> - Adicione `(✅ feito YYYY-MM-DD por <modelo>)` no fim do título do passo.
+> - Exemplo: `1.1 ⬜ Cliente ViaCEP + cache` vira `1.1 ✅ Cliente ViaCEP + cache (✅ feito 2026-05-28 por Claude Opus 4.7)`.
+> - Esse marcador é o sinal pra próxima IA: **item concluído, pode pular pro próximo, NÃO precisa refazer**.
+>
+> **B) Encontrou um item `✅`? IGNORA e vai pro próximo `⬜`.**
+> - Não revisa, não "melhora", não reescreve. Confia no que foi feito. Se quiser melhorar, isso é OUTRA tarefa — só com autorização explícita do usuário.
+>
+> **C) NUNCA pular item `⬜` sem antes concluir.**
+> - Se o passo 1.5 está `⬜` e você acha que 1.7 já pode rodar, **PARE**. A ordem foi pensada com dependências explícitas. Pular gera quebra silenciosa depois.
+>
+> **D) Se você ACHA que algo lá embaixo precisa ser feito antes (mudança de ordem):**
+> - **NÃO faça.** Não execute fora de ordem.
+> - **REESTRUTURE o plano:** edite este arquivo movendo o item pra posição correta, atualize as tabelas de dependências (`Pre-req`), atualize a ordem numérica, adicione uma nota na seção "Revisões Importantes" explicando a mudança e o motivo.
+> - **DEPOIS** peça confirmação do usuário antes de codar.
+> - **Por quê:** se você implementa fora de ordem sem atualizar o plano, a próxima IA lê o plano e acha que algo não foi feito quando foi. Plano sempre tem que refletir a realidade do código.
+>
+> **E) Se descobrir incoerência no plano:**
+> - Não improvise. Pare, documente a incoerência no arquivo (seção "Revisões Importantes"), pergunte ao usuário.
+>
+> **F) Toda alteração no plano deve ser commitada antes de codar.**
+> - Plano e código andam juntos. Plano desatualizado = caos pra próxima IA.
+>
+> **Resumo da regra de continuidade em uma linha:** _itens marcados `✅` estão prontos (ignore), itens `⬜` fazem em ordem (nunca pule), mudança de ordem exige reestruturação do plano antes de codar._
+>
 > **Motivo desta regra:** o usuário relatou que, em planejamentos anteriores, a IA não confirmou pontos importantes do plano e implementou coisas que ele não tinha aprovado. Esta regra existe para impedir que isso aconteça de novo.
+
+---
+
+## 📋 Revisões Importantes — 2026-05-27
+
+Após discussão sobre custo/volume de APIs de consulta NFe e risco operacional, o plano foi dividido em duas fases.
+
+### 1. ✅ Captura de paradas — passa a ser por DIGITAÇÃO MANUAL (CEP + Nº + ViaCEP)
+
+**Por que a mudança:**
+- Volume real estimado: 10 caminhões × 70 NFs × 7 dias = **~4.900 consultas/semana** (~700/dia).
+- **MeuDanfe (tier free)** limita a ~100 consultas/dia → o plano original estoura em 14% de um único dia útil.
+- Certificado A1 da SEFAZ (~R$200/ano) resolveria volume ilimitado, mas adiciona custo + complexidade no MVP.
+- **ViaCEP é grátis, ilimitado, e adiciona apenas ~2-3 segundos por NF** vs QR Code + API.
+- Risco operacional: API caindo trava o motorista no carregamento. Digitação manual sempre funciona.
+
+**Decisão (Fase 1 — MVP):** captura passa a ser por formulário:
+1. Motorista digita o **CEP** (8 dígitos)
+2. **ViaCEP** autocompleta logradouro, bairro, cidade, UF
+3. Motorista digita o **número** da casa
+4. **Confirma visualmente** → salva → próxima NF
+
+Tempo estimado: ~10 segundos por NF, ~12 minutos para 70 NFs. Sem dependência externa além de ViaCEP.
+
+### 2. ✅ QR Code + Consulta SEFAZ — REBAIXADO para Fase 2 (opcional)
+
+Toda a infraestrutura originalmente prevista (LeitorQRCode, validação módulo 11, consulta MeuDanfe/SEFAZ, fila offline com retry exponencial) **continua documentada nas seções 1.6 e 3.7-Fase2**, mas marcada como **FASE 2 — OPCIONAL**.
+
+Vale implementar quando uma destas acontecer:
+- Volume crescer (>1000 NFs/dia, motoristas reclamarem do tempo de digitação)
+- Empresa comprar certificado A1 da SEFAZ
+- Surgir cliente Premium pagando pela automação total
+
+### 3. ✅ Módulo isolado em `src/app/mobile/captura-notas/`
+
+O fluxo de captura é **separado** do bot WhatsApp e do dashboard do gestor:
+- `src/app/mobile/captura-notas/page.tsx` — tela do motorista
+- `src/components/mobile/InputEnderecoNF.tsx` — componente de captura (Fase 1)
+- `src/lib/cep/viacep.ts` — cliente ViaCEP (Fase 1)
+- `src/lib/nfe/` — toda lógica de NFe (Fase 2 — adiada)
+- `src/components/mobile/LeitorQRCode.tsx` — Fase 2 (adiado)
+
+Compartilha apenas o sistema de auth/sessão e o framework mobile iPhone-first já existente.
+
+### 4. ✅ Nova ETAPA 0 — Setup Completo do MVP (estrutura coerente)
+
+Plano reestruturado para garantir que **TUDO de setup acontece de uma vez antes de codar feature**, evitando loops "implementa X → falta tabela Y → para → cria tabela Y → volta a codar":
+
+- **0.1.** Schema Supabase (5 tabelas) — ✅ **APLICADO em 2026-05-27** pelo usuário direto no painel.
+- **0.2.** Dependências npm — um único `npm install` com tudo da Fase 1.
+- **0.3.** Variáveis de ambiente — `.env.local` com todas as URLs (OSRM/VROOM ficam vazias até Oracle subir).
+- **0.4.** Estrutura de pastas — criar todas vazias com `.gitkeep`.
+- **0.5.** Tipos compartilhados em `types.ts` — replicar o schema do banco em TypeScript antes de qualquer lógica.
+
+A **Ordem Recomendada de Execução** foi reescrita com tabela de dependências explícitas: cada passo lista seu pré-requisito e o(s) teste(s) que precisa escrever junto.
+
+**Decisão arquitetural reforçada:** módulo de captura é **totalmente isolado** (sem FKs pras tabelas existentes `motoristas`/`empresas`/`clientes`). Consolidação com sistema principal vira migration posterior, fora do escopo do MVP.
 
 ---
 
@@ -58,17 +147,196 @@ Após avaliação cruzada com outra IA + discussão com o dono, três pontos do 
 
 > **Objetivo:** Integrar cálculo e otimização de rotas no sistema de frota (10 caminhões × ~70 entregas/dia), custo zero, com navegação ao vivo delegada ao Waze/Google Maps via deep link.
 
-**Stack final (revisada 2026-05-21):**
+**Stack final (revisada 2026-05-27):**
 - **OSRM** (motor de cálculo de rota) — auto-hospedado no **Oracle Free Tier**
 - **VROOM** (otimização VRP — ordem das paradas) — auto-hospedado
-- **Leitor de QR Code nativo no app mobile** (captura das notas fiscais pelo motorista — abordagem principal de entrada de paradas)
-- **Foreground Queue (IndexedDB via Dexie)** — fila local iOS-compatível, sem Background Sync API
+- **ViaCEP** (autocompletar endereço a partir do CEP) — captura principal Fase 1
+- **Formulário mobile** (motorista digita CEP + número) — captura principal Fase 1
+- **Foreground Queue (IndexedDB via Dexie)** — fila local iOS-compatível para sincronizar capturas mesmo offline
 - **Leaflet + OpenStreetMap** (mapa visual no sistema)
-- **Nominatim** (busca endereço → coordenadas, fallback se a chave SEFAZ falhar)
-- **Waze / Google Maps deep link** (navegação ao vivo no celular do motorista — funciona em qualquer celular)
+- **Nominatim** (busca endereço completo → coordenadas para VROOM)
+- **Waze / Google Maps deep link** (navegação ao vivo no celular do motorista)
+- **(Fase 2)** Leitor de QR Code + consulta SEFAZ/MeuDanfe — atalho opcional futuro
 
-**Como as paradas entram no sistema:**
-O gestor da empresa **não tem as notas fiscais antes** do caminhão sair — o motorista recebe as notas em papel na hora. Por isso, a captura é feita **pelo próprio motorista escaneando o QR Code de cada NFe** direto na tela mobile do sistema (estilo leitor de supermercado, com bipe a cada leitura). A partir da chave de acesso de 44 dígitos, o sistema consulta o destinatário e monta automaticamente a lista de paradas para o VROOM otimizar.
+**Como as paradas entram no sistema (Fase 1 — MVP):**
+O gestor da empresa **não tem as notas fiscais antes** do caminhão sair — o motorista recebe as notas em papel na hora. A captura é feita **pelo próprio motorista pelo celular**, em um fluxo de 3 passos por NF:
+
+1. **Digita o CEP** (8 dígitos) → ViaCEP autocompleta logradouro, bairro, cidade, UF (~300ms)
+2. **Digita o número** da casa
+3. **Confere e confirma** → salva no banco → próxima NF
+
+Após capturar todas as NFs, o sistema dispara o VROOM com os endereços completos (geocodificados via Nominatim) para otimizar a ordem das paradas.
+
+**Como as paradas entrarão no sistema (Fase 2 — futuro opcional):**
+QR Code como atalho — se ler com sucesso, pula a digitação; se a chave for inválida ou API SEFAZ/MeuDanfe estiver fora, cai no fluxo manual da Fase 1. Detalhes na seção 3.7-Fase2.
+
+---
+
+## ETAPA 0 — Setup Completo do MVP (FAZER TUDO ANTES DE CODAR FEATURE)
+
+> **Principio:** o terreno tem que estar 100% pronto antes de comecar a implementar features. Cada item desta etapa elimina uma dependencia futura.
+
+### 0.1. Schema Supabase — 5 tabelas novas (✅ APLICADO 2026-05-27)
+
+**Status:** SQL ja aplicado pelo usuario direto no painel Supabase em 2026-05-27.
+
+Tabelas criadas (todas com RLS habilitada, sem policies de user — operacoes via API Next.js com `SUPABASE_SERVICE_ROLE_KEY`):
+
+| Tabela | Proposito |
+|---|---|
+| `notas_capturadas` | Cada NF que o motorista digita (CEP, numero, endereco do ViaCEP). |
+| `rotas_otimizadas` | Uma "viagem do dia" — agrupa varias paradas. |
+| `paradas` | Cada parada individual da rota (com ordem, fixada, janela_horario). |
+| `cep_cache` | Cache de consultas ao ViaCEP (evita request duplicado). |
+| `cliente_preferencias` | Preferencias por cliente (ex: "sempre por ultimo"). |
+
+**Decisao arquitetural:** modulo totalmente isolado — **sem FKs** pras tabelas existentes (`motoristas`, `empresas`, `clientes`). Os campos `motorista_id`/`empresa_id`/`cliente_id` sao `uuid` puros, validacao logica no app. A consolidacao com o sistema atual sera feita em migration posterior.
+
+**Snapshot do SQL:** salvo no historico do chat (sessao 2026-05-27). Pode ser regerado consultando o schema das tabelas no Supabase.
+
+### 0.2. Dependencias npm — instalar TUDO de uma vez
+
+```bash
+npm install dexie leaflet react-leaflet @dnd-kit/core @dnd-kit/sortable
+npm install -D @types/leaflet
+```
+
+| Lib | Pra que |
+|---|---|
+| `dexie` | Wrapper IndexedDB pra fila offline (passo 1.2 da Fase 1) |
+| `leaflet` + `react-leaflet` | Mapa visual (passo 1.8) |
+| `@types/leaflet` | Types TypeScript do Leaflet |
+| `@dnd-kit/core` + `/sortable` | Drag-and-drop da tela "Ajuste de Rota" (passo 1.9) |
+
+Nada de Tesseract, html5-qrcode, zxing — esses sao Fase 2 (opcional, futuro).
+
+### 0.3. Variaveis de ambiente — adicionar TODAS no `.env.local`
+
+```env
+# ─── Routing MVP — Fase 1 ───
+NOMINATIM_URL=https://nominatim.openstreetmap.org
+VIACEP_URL=https://viacep.com.br/ws
+
+# ─── Routing MVP — preenchidas DEPOIS de provisionar Oracle (ETAPA 2) ───
+OSRM_URL=
+VROOM_URL=
+```
+
+E em `src/lib/env.ts` (ou onde o projeto valida env vars com Zod):
+
+```ts
+OSRM_URL: z.string().url().optional(),     // optional ate Oracle estar de pe
+VROOM_URL: z.string().url().optional(),
+NOMINATIM_URL: z.string().url(),
+VIACEP_URL: z.string().url(),
+```
+
+Adicionar tambem no `.env.example` pra documentar pros proximos devs.
+
+### 0.4. Estrutura de pastas — criar TODAS vazias com `.gitkeep`
+
+```
+src/lib/cep/                      # FASE 1
+src/lib/offline/                  # FASE 1
+src/lib/routing/                  # FASE 1
+src/app/mobile/captura-notas/     # FASE 1
+src/app/api/routing/              # FASE 1
+
+src/lib/nfe/                      # FASE 2 (placeholder vazio agora)
+```
+
+`src/components/mobile/` ja existe (commit `7123f80`).
+
+### 0.5. Tipos compartilhados — definir TODOS antes de codar logica
+
+Arquivo a criar: `src/lib/routing/types.ts`
+
+```ts
+// Replica em TS do schema do banco (sem decimal — usar number).
+export interface NotaCapturada {
+  id: string;
+  motorista_id: string;
+  empresa_id: string;
+  cep: string;           // 8 digitos sem hifen
+  numero: string;
+  endereco: EnderecoCEP;
+  latitude: number | null;
+  longitude: number | null;
+  observacao: string | null;
+  status: 'capturada' | 'geocodificada' | 'em_rota' | 'concluida' | 'cancelada';
+  capturado_em: string;  // ISO timestamp
+  sincronizado_em: string | null;
+}
+
+export interface RotaOtimizada {
+  id: string;
+  motorista_id: string;
+  empresa_id: string;
+  data: string;          // YYYY-MM-DD
+  distancia_total_km: number | null;
+  tempo_total_min: number | null;
+  status: 'rascunho' | 'otimizada' | 'em_andamento' | 'concluida' | 'cancelada';
+  otimizada_em: string | null;
+  criada_em: string;
+}
+
+export interface Parada {
+  id: string;
+  rota_id: string;
+  nota_id: string | null;
+  ordem: number;
+  endereco: EnderecoCEP;
+  latitude: number;
+  longitude: number;
+  fixada: boolean;
+  janela_horario: [string, string][] | null;
+  tempo_descarga_min: number;
+  observacao: string | null;
+  concluida_em: string | null;
+}
+
+export interface Coordenada {
+  lat: number;
+  lng: number;
+}
+```
+
+Arquivo a criar: `src/lib/cep/types.ts`
+
+```ts
+export interface EnderecoCEP {
+  logradouro: string;
+  bairro: string;
+  cidade: string;
+  uf: string;
+}
+```
+
+Arquivo a criar: `src/lib/offline/types.ts`
+
+```ts
+import type { NotaCapturada } from '@/lib/routing/types';
+
+// Estado local da NF na fila (antes de sincronizar com o banco)
+export interface NotaNaFila extends Omit<NotaCapturada, 'id' | 'sincronizado_em'> {
+  id_local: string;                          // gerado no celular (uuid local)
+  id_servidor?: string;                      // preenchido apos sincronizar
+  status_sync: 'pendente' | 'sincronizada' | 'erro';
+  tentativas: number;
+  ultimo_erro?: string;
+  proxima_tentativa?: string;                // ISO timestamp
+}
+```
+
+### 0.6. Checklist de conclusao da ETAPA 0
+
+Antes de comecar a ETAPA 1 (Cadastros externos) ou ETAPA 3 (Programacao), verificar:
+
+- [ ] 0.1. ✅ Tabelas no Supabase (5 tabelas, RLS on)
+- [ ] 0.2. Deps npm instaladas (`npm list dexie leaflet react-leaflet @dnd-kit/core @dnd-kit/sortable` mostra todas)
+- [ ] 0.3. Env vars no `.env.local` (OSRM_URL/VROOM_URL podem estar vazios — preenchem depois)
+- [ ] 0.4. Pastas criadas (5 novas pastas)
+- [ ] 0.5. 3 arquivos `types.ts` criados com as interfaces (sem logica, so types)
 
 ---
 
@@ -146,18 +414,45 @@ done
   - Google Maps: `https://www.google.com/maps/dir/?api=1&destination=LAT,LNG`
 - Funcionam direto no navegador/celular do motorista.
 
-### 1.5. Consulta de NFe pela chave de acesso (escolher 1)
+### 1.5. ViaCEP — Autocompletar endereço a partir do CEP (FASE 1 — MVP)
+
+- **Onde usar:** `https://viacep.com.br/ws/{CEP}/json/`
+- **Cadastro:** não exige
+- **Custo:** grátis
+- **Limites:** não há rate limit oficial publicado (uso normal nunca foi bloqueado)
+- **Retorna:** logradouro, bairro, localidade (cidade), uf, ddd
+- **Performance:** ~100-300ms por consulta
+- **Disponibilidade:** API pública mantida pelos Correios há mais de 10 anos, alta confiabilidade
+
+**Por que essa é a captura principal da Fase 1:**
+- Custo zero, sem rate limit prático
+- Funciona em 100% dos CEPs brasileiros válidos
+- Combinado com o número da casa (digitado pelo motorista) resulta em endereço completo pronto para Nominatim geocodificar
+- Sem dependência de certificado, sem fila offline complexa (basta cache local pra resiliência)
+
+**Cache local recomendado:**
+- Tabela `cep_cache` no Supabase OU IndexedDB local
+- Mesmo CEP consultado 2x → 2ª vez é instantânea
+- TTL longo (Correios atualizam raramente)
+
+### 1.6. (FASE 2 — OPCIONAL) Consulta de NFe pela chave de acesso
+
+> ⚠️ **Não implementar no MVP.** Esta seção fica documentada para uso futuro quando o volume justificar (ver Revisão 2026-05-27).
 
 Para transformar os 44 dígitos da chave (lidos do QR Code) em endereço completo do destinatário:
 
-- **MeuDanfe** — API grátis com limite diário (https://meudanfe.com.br) — começar por aqui
+- **MeuDanfe** — API grátis com limite diário (~100 consultas/dia) (https://meudanfe.com.br)
 - **NFe.io** — free tier ~100 consultas/mês
 - **Webmania / Tecnospeed / Migrate** — pagas, robustas (R$ 50-200/mês), considerar quando escalar
 - **SEFAZ direto** — exige **certificado digital A1 da empresa** (~R$ 200/ano), 100% grátis depois, ilimitado
 
-**Recomendação:** começar com MeuDanfe (grátis) e, se passar do limite ou precisar mais confiabilidade, comprar certificado A1 da empresa e consultar SEFAZ direto.
+**Estratégia em cascata recomendada (quando ativar Fase 2):**
+1. Tenta SEFAZ direto (se tiver certificado A1) → ilimitado, oficial
+2. Fallback MeuDanfe → 100/dia
+3. Fallback NFe.io → 100/mês
+4. Fallback definitivo: cai no fluxo manual da Fase 1 (motorista digita CEP+número)
 
-### 1.6. (Opcional) Domínio + Cloudflare
+### 1.7. (Opcional) Domínio + Cloudflare
 
 - Só se quiser HTTPS no endpoint do OSRM (ex: `osrm.suaempresa.com`).
 - Cloudflare grátis cobre SSL e proxy.
@@ -379,6 +674,8 @@ NOMINATIM_URL: z.string().url(),
 ### 3.2. Estrutura de arquivos a criar
 
 ```
+# === FASE 1 — MVP ===
+
 src/lib/routing/
 ├── osrm.ts              # Cliente HTTP do OSRM (rota A→B)
 ├── vroom.ts             # Cliente HTTP do VROOM (otimização VRP)
@@ -386,14 +683,18 @@ src/lib/routing/
 ├── deepLinks.ts         # Gera URLs Waze e Google Maps
 └── types.ts             # Tipos compartilhados (Coordenada, Rota, etc.)
 
-src/lib/nfe/
-├── qrCode.ts            # Parser do conteúdo do QR Code da NFe → chave 44 dígitos
-├── consulta.ts          # Consulta chave SEFAZ/MeuDanfe → dados do destinatário
-└── types.ts             # NFeDestinatario, EnderecoDestinatario
+src/lib/cep/                        # FASE 1
+├── viacep.ts            # Cliente ViaCEP (CEP → logradouro/bairro/cidade/uf) com cache local
+└── types.ts             # EnderecoCEP, NotaCapturada
 
-src/components/mobile/
-├── LeitorQRCode.tsx     # Câmera ao vivo + decoder (html5-qrcode ou @zxing/browser)
-├── ListaNotasEscaneadas.tsx  # Lista as paradas conforme vai escaneando, com bipe + vibração
+src/lib/offline/                    # FASE 1 (simplificada — sem chave NFe)
+├── fila.ts              # Dexie schema + CRUD da fila de notas capturadas
+├── sync.ts              # Worker de sincronização (setInterval + retry)
+└── onlineDetector.ts    # Detecta volta da internet e dispara sync imediato
+
+src/components/mobile/              # FASE 1
+├── InputEnderecoNF.tsx  # Form CEP → ViaCEP → número → confirma
+├── ListaNotasCapturadas.tsx  # Lista as paradas conforme vai capturando
 └── BotaoFinalizarRota.tsx    # Dispara VROOM e abre tela de roteirização
 
 src/components/
@@ -404,8 +705,26 @@ src/app/api/routing/
 ├── otimizar/route.ts    # POST: recebe paradas, retorna ordem otimizada (chama VROOM)
 └── geocodar/route.ts    # POST: recebe endereço, retorna lat/lng (chama Nominatim)
 
-src/app/api/nfe/
+src/app/mobile/captura-notas/       # FASE 1 — módulo isolado do motorista
+├── page.tsx                      # Tela principal — usa InputEnderecoNF
+└── components/
+    ├── ProgressoCaptura.tsx      # Barra "24 / 70 NFs"
+    └── ConfirmarFinalizacao.tsx  # Modal antes de disparar VROOM
+
+# === FASE 2 — OPCIONAL (futuro) ===
+
+src/lib/nfe/                        # FASE 2
+├── qrCode.ts            # Parser do conteúdo do QR Code da NFe → chave 44 dígitos
+├── consulta.ts          # Consulta chave SEFAZ/MeuDanfe → dados do destinatário (cascata)
+└── types.ts             # NFeDestinatario, EnderecoDestinatario
+
+src/components/mobile/              # FASE 2 — atalho opcional
+└── LeitorQRCode.tsx     # Câmera ao vivo + decoder (html5-qrcode ou @zxing/browser)
+
+src/app/api/nfe/                    # FASE 2
 └── consultar/route.ts   # POST: recebe chave de 44 dígitos, retorna destinatário+endereço
+
+# === COMUM (Fase 1 + Fase 2) ===
 
 src/app/mobile/ajuste-rota/
 ├── page.tsx                    # Container com Tabs (🎯 Ordenar | ⚙️ Detalhes)
@@ -445,7 +764,105 @@ export const googleMaps = (lat: number, lng: number) =>
   `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 ```
 
-### 3.7. Leitor de QR Code mobile (`src/components/mobile/LeitorQRCode.tsx`)
+### 3.7. Captura por Formulário (`src/components/mobile/InputEnderecoNF.tsx`) — FASE 1 — MVP
+
+**Lib externa nova:** nenhuma. Usa só componentes nativos + fetch.
+
+**Encaixa no framework mobile iPhone-first** já existente (commit `7123f80`).
+
+**Tela e fluxo (3 passos por NF):**
+
+```
+┌──────────────────────────────────┐
+│ NF 24 de 70                       │
+│                                   │
+│ CEP                               │
+│ ┌────────────────────┐            │
+│ │ 30130-_ _ _        │ ⌫          │
+│ └────────────────────┘            │
+│ teclado numérico abre automático  │
+│                                   │
+│ [ → Próximo ]                     │
+└──────────────────────────────────┘
+```
+
+Após o CEP completo (8 dígitos) → ViaCEP é chamado automaticamente → endereço aparece:
+
+```
+┌──────────────────────────────────┐
+│ NF 24 de 70                       │
+│                                   │
+│ ✓ Rua das Flores                 │
+│   Centro — Belo Horizonte/MG      │
+│                                   │
+│ Número                            │
+│ ┌────────────────────┐            │
+│ │ ____               │ ⌫          │
+│ └────────────────────┘            │
+│ teclado numérico, foco automático │
+│                                   │
+│ [ → Confirmar ]                   │
+└──────────────────────────────────┘
+```
+
+Ao tocar Confirmar → tela de validação visual:
+
+```
+┌──────────────────────────────────┐
+│ NF 24 de 70 — Confirmar?         │
+│                                   │
+│ 📍 Rua das Flores, 123           │
+│    Centro, Belo Horizonte/MG      │
+│    CEP 30130-000                  │
+│                                   │
+│ [ ✅ Confirmar e próxima ]        │
+│ [ ✏️ Editar ]                     │
+│ [ ❌ Cancelar esta NF ]           │
+└──────────────────────────────────┘
+```
+
+**Comportamento detalhado:**
+- **Auto-formatar CEP** enquanto digita (00000-000)
+- **Auto-chamar ViaCEP** quando CEP atingir 8 dígitos
+- **Foco automático** no campo Número assim que ViaCEP retornar
+- **Validação:** se ViaCEP retornar `erro: true`, mostrar "CEP não encontrado — digite o endereço manualmente" + form livre (logradouro, bairro, cidade, uf)
+- **Vibração suave** ao confirmar (`navigator.vibrate(50)`)
+- **Botão "Desfazer última"** para corrigir erros
+- **Botão "Finalizar Rota"** no topo com contador ("Finalizar (24/70)")
+- **Funciona offline** (cache de CEPs já consultados + fila local de NFs pendentes — ver seção 3.8)
+
+**Requisitos técnicos:**
+- **HTTPS obrigatório** em produção (Vercel já entrega)
+- **Inputs com `inputMode="numeric"`** para forçar teclado numérico no iOS/Android
+- **`autoFocus` controlado** para pular entre CEP → Número sem o motorista precisar tocar
+- **Modo paisagem** desabilitado (lock em retrato — ergonômico para uma mão só)
+
+**Lib cliente do ViaCEP:** `src/lib/cep/viacep.ts`
+
+```ts
+export async function consultarCEP(cep: string): Promise<EnderecoCEP | null> {
+  const clean = cep.replace(/\D/g, '');
+  if (clean.length !== 8) return null;
+  const res = await fetch(`https://viacep.com.br/ws/${clean}/json/`);
+  const data = await res.json();
+  if (data.erro) return null;
+  return {
+    cep: data.cep,
+    logradouro: data.logradouro,
+    bairro: data.bairro,
+    cidade: data.localidade,
+    uf: data.uf,
+  };
+}
+```
+
+**Cache de CEPs** (recomendado): wrappear `consultarCEP` com IndexedDB local — 2ª consulta do mesmo CEP é instantânea e offline.
+
+---
+
+### 3.7-Fase2. Leitor de QR Code mobile (`src/components/mobile/LeitorQRCode.tsx`) — FASE 2 — OPCIONAL
+
+> ⚠️ **Não implementar no MVP.** Esta seção fica documentada para Fase 2 (ver Revisão 2026-05-27).
 
 **Lib recomendada:** `html5-qrcode` (a mais madura, suporta iOS Safari + Android Chrome). Alternativa: `@zxing/browser`.
 
@@ -476,6 +893,12 @@ export const googleMaps = (lat: number, lng: number) =>
 - Se a leitura falhar 3x, oferecer **input manual dos 44 dígitos** como fallback
 
 ### 3.8. Arquitetura Offline-First — Foreground Queue (iOS-Compatível)
+
+> **Fase 1 (MVP):** fila guarda `{ cep, numero, endereco_completo }` por NF. Cache de CEPs já consultados (ViaCEP) também em IndexedDB. Sync ao banco quando online.
+>
+> **Fase 2 (futuro):** fila guarda `{ chave_nfe }` por NF, sync chama consulta SEFAZ/MeuDanfe. Resto da arquitetura idêntica.
+>
+> A estrutura abaixo é descrita assumindo Fase 2 (mais complexa). Para Fase 1, **simplificar removendo as menções a "chave SEFAZ" e validação módulo 11** — basta gravar CEP+número+endereço diretamente.
 
 **⚠️ DECISÃO IMPORTANTE (revisada):** O plano original usava **Background Sync API**, que **NÃO funciona no iOS Safari** (só Chrome/Android). Como o framework mobile do projeto é iPhone-first (commit `7123f80`), trocamos para **Foreground Queue** — funciona iPhone E Android sem perder nada essencial.
 
@@ -780,12 +1203,14 @@ CREATE TABLE cliente_preferencias (
 **Tela de Fretes (`src/app/fretes/`):**
 - Ao cadastrar um frete com origem + destino, chamar OSRM e preencher `km_estimado` automaticamente.
 
-**Nova tela mobile de Captura de Notas (`src/app/mobile/captura-notas/`):**
+**Nova tela mobile de Captura de Notas (`src/app/mobile/captura-notas/`) — FASE 1 — MVP:**
 - Motorista abre no celular antes de sair com o caminhão
-- Componente `LeitorQRCode` ocupa tela inteira
-- Cada QR escaneado consulta a chave SEFAZ → endereço do destinatário
-- Lista lateral/inferior mostra as notas já capturadas (com endereço resumido)
-- Botão "Finalizar Rota" envia paradas → VROOM → tela de Roteirização
+- Componente `InputEnderecoNF` ocupa tela inteira (form CEP → ViaCEP → número → confirma)
+- Cada NF capturada vai pra fila local (IndexedDB) + sync ao banco quando online
+- Lista inferior mostra notas já capturadas (com endereço resumido)
+- Botão "Finalizar Rota" envia paradas → Nominatim (geocoding) → VROOM → tela de Roteirização
+
+**(FASE 2 — futuro)** A mesma tela pode ganhar um botão "📷 Escanear QR" que, se ler com sucesso, pula a digitação e usa o endereço da consulta SEFAZ. Se falhar (chave inválida, API fora, sem internet), cai automaticamente no fluxo manual da Fase 1.
 
 **Nova tela de Roteirização (`src/app/roteirizacao/`):**
 - Pode ser aberta automaticamente após finalizar a captura, ou manualmente pelo gestor
@@ -803,19 +1228,25 @@ CREATE TABLE cliente_preferencias (
 
 Conforme `TESTING.md`, criar:
 
+**Fase 1 — MVP (obrigatório):**
 - `src/__tests__/lib/routing/osrm.test.ts` — mocks de resposta, sucesso, erro, timeout
 - `src/__tests__/lib/routing/vroom.test.ts` — otimização com 5, 20 e 70 paradas (mock)
 - `src/__tests__/lib/routing/geocoding.test.ts` — endereço válido, inválido, rate limit
 - `src/__tests__/lib/routing/deepLinks.test.ts` — geração correta dos URLs
-- `src/__tests__/lib/nfe/qrCode.test.ts` — parse de URL SEFAZ → 44 dígitos, validação módulo 11, chaves inválidas
-- `src/__tests__/lib/nfe/consulta.test.ts` — consulta MeuDanfe/SEFAZ mock, sucesso, erro, chave inexistente
+- `src/__tests__/lib/cep/viacep.test.ts` — CEP válido, inválido, formato, erro de rede, cache hit
 - `src/__tests__/lib/offline/fila.test.ts` — adicionar, dedup local, status transitions, recuperar pendentes
 - `src/__tests__/lib/offline/sync.test.ts` — retry exponencial, conflito 409, sucesso, offline → online
 - `src/__tests__/lib/routing/restricoes.test.ts` — montagem do payload VROOM com `priority`, `time_windows`, `skills`
+- `src/__tests__/components/mobile/inputEnderecoNF.test.tsx` — formato CEP, auto-call ViaCEP, fluxo confirma, cancelar NF
+- `src/__tests__/app/mobile/captura-notas.test.tsx` — fluxo completo (5 NFs sequenciais, lista atualiza, finalizar dispara VROOM)
 - `src/__tests__/app/mobile/ajuste-rota/abaOrdenar.test.tsx` — drag muda ordem, números renumeram, lock impede arrasto
 - `src/__tests__/app/mobile/ajuste-rota/abaDetalhes.test.tsx` — tap abre modal de horário, salva preferência, libera lock
 - `src/__tests__/app/mobile/ajuste-rota/tijolinho.test.tsx` — renderiza certo nos dois modos, número grande visível
 - `src/__tests__/api/routing/otimizar.test.ts` — endpoint POST com payload válido/inválido
+
+**Fase 2 — quando ativar QR Code (opcional):**
+- `src/__tests__/lib/nfe/qrCode.test.ts` — parse de URL SEFAZ → 44 dígitos, validação módulo 11, chaves inválidas
+- `src/__tests__/lib/nfe/consulta.test.ts` — consulta MeuDanfe/SEFAZ mock, sucesso, erro, chave inexistente, cascata de fallback
 - `src/__tests__/api/nfe/consultar.test.ts` — endpoint POST chave 44 dígitos válida/inválida
 
 Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md`.
@@ -824,18 +1255,69 @@ Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md
 
 ## Ordem Recomendada de Execução
 
-1. ✅ Criar conta Oracle Cloud e provisionar VM (Etapa 1.1 + 2.1–2.3)
-2. ✅ Subir OSRM + VROOM no Docker (Etapa 2.4–2.7)
-3. ✅ Testar via curl que os endpoints respondem (Etapa 2.7)
-4. ✅ Criar clientes HTTP em `src/lib/routing/` (Etapa 3.3–3.6)
-5. ✅ Implementar parser/consulta de NFe (`src/lib/nfe/`) — chave 44 dígitos → endereço destinatário
-6. ✅ Construir leitor de QR Code mobile (`src/components/mobile/LeitorQRCode.tsx`) com bipe + vibração
-7. ✅ Implementar arquitetura offline-first (`src/lib/offline/` — Dexie + Service Worker + Background Sync)
-8. ✅ Criar tela mobile de captura de notas (`src/app/mobile/captura-notas/`)
-9. ✅ Construir tela de roteirização com mapa Leaflet (Etapa 3.9)
-10. ✅ Construir tela "Ajuste de Rota" com drag-and-drop, fixar paradas e janelas de horário (Etapa 3.10)
-11. ✅ Integrar com cadastro de frete e Waze/Google Maps deep links (Etapas 3.11)
-12. ✅ Escrever testes e rodar suíte (Etapa 3.12)
+> **Regra de ouro:** cada passo so comeca quando seu(s) pre-requisito(s) esta(o) verde. **Testes vem JUNTO** com cada passo, nao no final (conforme `TESTING.md`).
+
+### FASE 0 — Setup Completo (TUDO de uma vez antes de codar feature)
+
+| # | Passo | Pre-requisito | Onde |
+|---|---|---|---|
+| 0.1 | ✅ Criar 5 tabelas no Supabase **(✅ feito 2026-05-27 — usuário aplicou SQL via painel)** | — | Supabase Dashboard |
+| 0.2 | Instalar deps npm (dexie, leaflet, react-leaflet, @dnd-kit/core, @dnd-kit/sortable, @types/leaflet) | — | `package.json` |
+| 0.3 | Adicionar env vars (NOMINATIM_URL, VIACEP_URL, OSRM_URL/VROOM_URL vazios) | — | `.env.local` + `src/lib/env.ts` |
+| 0.4 | Criar pastas vazias com `.gitkeep` | — | `src/lib/cep/`, `src/lib/offline/`, `src/lib/routing/`, `src/app/mobile/captura-notas/`, `src/app/api/routing/` |
+| 0.5 | Escrever 3 arquivos `types.ts` (sem logica) | 0.4 | `src/lib/routing/types.ts`, `src/lib/cep/types.ts`, `src/lib/offline/types.ts` |
+| 0.6 | Verificar checklist de conclusao da ETAPA 0 | 0.1-0.5 | — |
+
+**Em paralelo** (nao bloqueia FASE 1 inicial):
+
+| # | Passo | Onde |
+|---|---|---|
+| 0.A | Criar conta Oracle Cloud + iniciar loop de provisionamento da VM (demora 1-3 dias) | Etapa 1.1 + 2.1 |
+
+### FASE 1 — Implementacao (cada passo destrava o proximo)
+
+**Pre-requisito geral:** FASE 0 completa (0.1-0.6 todos ✅).
+
+**Bloco A — Pode rodar SEM Oracle/OSRM pronto:**
+
+| # | Passo | Arquivo principal | Pre-req | Testes |
+|---|---|---|---|---|
+| 1.1 | Cliente ViaCEP + cache local | `src/lib/cep/viacep.ts` | tipo `EnderecoCEP`, tabela `cep_cache` | `viacep.test.ts` |
+| 1.2 | Fila offline (Dexie + sync ao Supabase) | `src/lib/offline/fila.ts`, `sync.ts`, `onlineDetector.ts` | tipo `NotaNaFila`, tabela `notas_capturadas` | `fila.test.ts`, `sync.test.ts` |
+| 1.3 | Componente `InputEnderecoNF` | `src/components/mobile/InputEnderecoNF.tsx` | 1.1 (ViaCEP) | `inputEnderecoNF.test.tsx` |
+| 1.4 | Tela mobile captura-notas | `src/app/mobile/captura-notas/page.tsx` | 1.2 (fila) + 1.3 (componente) | `captura-notas.test.tsx` |
+| 1.5 | Cliente Nominatim (geocoding) | `src/lib/routing/geocoding.ts` | env `NOMINATIM_URL` | `geocoding.test.ts` |
+| 1.6 | API `/api/routing/geocodar` (endpoint Next.js) | `src/app/api/routing/geocodar/route.ts` | 1.5 | `geocodar.test.ts` |
+
+**═══ CHECKPOINT 1: motorista ja captura NFs, dados sao geocodificados e salvos ═══**
+
+**Bloco B — Precisa Oracle/OSRM de pe:**
+
+| # | Passo | Arquivo principal | Pre-req | Testes |
+|---|---|---|---|---|
+| 1.7 | Cliente OSRM (HTTP wrapper) | `src/lib/routing/osrm.ts` | VM Oracle + container OSRM + `OSRM_URL` no env | `osrm.test.ts` |
+| 1.8 | Cliente VROOM (HTTP wrapper) | `src/lib/routing/vroom.ts` | container VROOM + `VROOM_URL` | `vroom.test.ts` |
+| 1.9 | Helpers de restricoes VROOM (`priority`, `time_windows`, `skills`) | `src/lib/routing/restricoes.ts` | 1.8 | `restricoes.test.ts` |
+| 1.10 | API `/api/routing/otimizar` (endpoint Next.js) | `src/app/api/routing/otimizar/route.ts` | 1.8 + 1.9 | `otimizar.test.ts` |
+| 1.11 | Componente `MapaRota` (Leaflet + traçado da rota) | `src/components/MapaRota.tsx` | paradas geocodificadas existem | (UI test opcional) |
+| 1.12 | Tela "Ajuste de Rota" (drag-and-drop + abas Ordenar/Detalhes) | `src/app/mobile/ajuste-rota/*` | 1.10 (otimizacao) + 1.11 (mapa) | `abaOrdenar.test.tsx`, `abaDetalhes.test.tsx`, `tijolinho.test.tsx` |
+| 1.13 | Deep links Waze/Google Maps | `src/lib/routing/deepLinks.ts` | 1.12 | `deepLinks.test.ts` |
+| 1.14 | Integracao com cadastro de Frete (preencher `km_estimado` automatico) | edicao em pagina de fretes existente | 1.7 | (smoke test) |
+
+**═══ CHECKPOINT 2: rota completa, motorista navega via Waze, frete tem km automatico ═══**
+
+| # | Passo | Pre-req |
+|---|---|---|
+| 1.15 | Smoke test E2E manual: capturar 5 NFs → otimizar → ver no mapa → abrir Waze | tudo verde |
+| 1.16 | Rodar `npm test` completo, ver tudo verde, anotar no `TESTING.md` | tudo verde |
+
+### Fase 2 — Otimização (Opcional, ativar quando volume justificar)
+
+13. ⬜ Decidir fonte da consulta NFe: certificado A1 (recomendado) ou MeuDanfe/NFe.io (Etapa 1.6)
+14. ⬜ Implementar parser/consulta de NFe em cascata (`src/lib/nfe/`) — chave 44 dígitos → endereço destinatário
+15. ⬜ Construir leitor de QR Code mobile (`src/components/mobile/LeitorQRCode.tsx`) com bipe + vibração (Etapa 3.7-Fase2)
+16. ⬜ Adicionar botão "📷 Escanear QR" na tela de captura como atalho opcional (fallback para Fase 1 se falhar)
+17. ⬜ Escrever testes Fase 2 e rodar suíte (Etapa 3.12 — bloco Fase 2)
 
 ---
 
