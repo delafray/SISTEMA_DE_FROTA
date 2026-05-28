@@ -332,11 +332,11 @@ export interface NotaNaFila extends Omit<NotaCapturada, 'id' | 'sincronizado_em'
 
 Antes de comecar a ETAPA 1 (Cadastros externos) ou ETAPA 3 (Programacao), verificar:
 
-- [ ] 0.1. ✅ Tabelas no Supabase (5 tabelas, RLS on)
-- [ ] 0.2. Deps npm instaladas (`npm list dexie leaflet react-leaflet @dnd-kit/core @dnd-kit/sortable` mostra todas)
-- [ ] 0.3. Env vars no `.env.local` (OSRM_URL/VROOM_URL podem estar vazios — preenchem depois)
-- [ ] 0.4. Pastas criadas (5 novas pastas)
-- [ ] 0.5. 3 arquivos `types.ts` criados com as interfaces (sem logica, so types)
+- [x] 0.1. ✅ Tabelas no Supabase (5 tabelas, RLS on) — feito 2026-05-27
+- [x] 0.2. ✅ Deps npm instaladas — feito 2026-05-27 (Claude Opus 4.7)
+- [x] 0.3. ✅ Env vars adicionadas ao `.env.example` (usuário copia pro `.env.local`) — feito 2026-05-27 (Claude Opus 4.7)
+- [x] 0.4. ✅ Pastas criadas (5 novas) — feito 2026-05-27 (Claude Opus 4.7)
+- [x] 0.5. ✅ 3 arquivos `types.ts` criados (tsc 0 erros, 206/206 testes verdes) — feito 2026-05-27 (Claude Opus 4.7)
 
 ---
 
@@ -1262,11 +1262,11 @@ Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md
 | # | Passo | Pre-requisito | Onde |
 |---|---|---|---|
 | 0.1 | ✅ Criar 5 tabelas no Supabase **(✅ feito 2026-05-27 — usuário aplicou SQL via painel)** | — | Supabase Dashboard |
-| 0.2 | Instalar deps npm (dexie, leaflet, react-leaflet, @dnd-kit/core, @dnd-kit/sortable, @types/leaflet) | — | `package.json` |
-| 0.3 | Adicionar env vars (NOMINATIM_URL, VIACEP_URL, OSRM_URL/VROOM_URL vazios) | — | `.env.local` + `src/lib/env.ts` |
-| 0.4 | Criar pastas vazias com `.gitkeep` | — | `src/lib/cep/`, `src/lib/offline/`, `src/lib/routing/`, `src/app/mobile/captura-notas/`, `src/app/api/routing/` |
-| 0.5 | Escrever 3 arquivos `types.ts` (sem logica) | 0.4 | `src/lib/routing/types.ts`, `src/lib/cep/types.ts`, `src/lib/offline/types.ts` |
-| 0.6 | Verificar checklist de conclusao da ETAPA 0 | 0.1-0.5 | — |
+| 0.2 | ✅ Instalar deps npm (dexie, leaflet, react-leaflet, @dnd-kit/core, @dnd-kit/sortable, @types/leaflet) **(✅ feito 2026-05-27 por Claude Opus 4.7)** | — | `package.json` |
+| 0.3 | ✅ Adicionar env vars (NOMINATIM_URL, VIACEP_URL, OSRM_URL/VROOM_URL) ao `.env.example` (projeto não usa `src/lib/env.ts`, vars lidas via `process.env.X`) **(✅ feito 2026-05-27 por Claude Opus 4.7)** | — | `.env.example` |
+| 0.4 | ✅ Criar 5 pastas vazias (3 com types.ts no próximo passo, 2 com `.gitkeep`) **(✅ feito 2026-05-27 por Claude Opus 4.7)** | — | `src/lib/cep/`, `src/lib/offline/`, `src/lib/routing/`, `src/app/mobile/captura-notas/`, `src/app/api/routing/` |
+| 0.5 | ✅ Escrever 3 arquivos `types.ts` (sem logica) **(✅ feito 2026-05-27 por Claude Opus 4.7)** — `EnderecoCEP`, `Coordenada`, `NotaCapturada`, `RotaOtimizada`, `Parada`, `JanelaHorario`, `StatusNota`, `StatusRota`, `ResultadoOSRM`, `ResultadoVROOM`, `ResultadoGeocoding`, `NotaNaFila`, `StatusSync` | 0.4 | `src/lib/routing/types.ts`, `src/lib/cep/types.ts`, `src/lib/offline/types.ts` |
+| 0.6 | ✅ Verificar checklist de conclusao da ETAPA 0 **(✅ feito 2026-05-27 por Claude Opus 4.7 — tsc 0 erros, 206/206 testes passando)** | 0.1-0.5 | — |
 
 **Em paralelo** (nao bloqueia FASE 1 inicial):
 
