@@ -15,18 +15,17 @@
 
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
-import type { EnderecoCEP } from './types';
+import type { EnderecoCEP, ResultadoCEP } from './types';
+
+// Re-export pra nao quebrar imports existentes que pegavam de viacep.ts
+export type { ResultadoCEP } from './types';
 
 const log = createLogger('viacep');
 
 const VIACEP_URL_BASE = (process.env.VIACEP_URL ?? 'https://viacep.com.br/ws').replace(/\/$/, '');
 const TIMEOUT_MS = 5000;
 
-// ─── TIPOS ──────────────────────────────────────────────────────────
-
-export type ResultadoCEP =
-  | { ok: true; cep: string; endereco: EnderecoCEP; fonte: 'cache' | 'api' }
-  | { ok: false; motivo: 'cep_invalido' | 'nao_encontrado' | 'erro_rede' | 'timeout' };
+// ─── TIPOS INTERNOS ─────────────────────────────────────────────────
 
 interface ViaCEPResponse {
   cep?: string;
