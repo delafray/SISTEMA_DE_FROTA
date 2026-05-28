@@ -31,14 +31,27 @@ OSRM_URL=
 VROOM_URL=
 ```
 
-### 3. ⬜ Provisionar Oracle Cloud VM + subir OSRM + VROOM
-**Por quê:** o cálculo de rota (OSRM) e otimização (VROOM) precisam da VM Oracle rodando. Sem isso, os passos 1.7+ funcionam em testes (mocks) mas não em produção.
+### 3. ⏳ Provisionar Oracle Cloud VM + subir OSRM + VROOM
+**Status atual:** script `C:\Users\ronal\criar_vm_osrm.ps1` (v3 turbo) está rodando em loop tentando pegar a VM em Ashburn. ~240 tentativas/hora. Cedo ou tarde pega.
 
-**Quanto tempo demora:** 1-3 dias (Oracle "Out of Capacity" em SP é problema real).
+**Quando a VM subir, o setup é AUTOMATICO:**
+1. O script PowerShell vai mostrar banner verde + IP público da VM (e salva em `C:\Users\ronal\vm_ip.txt`)
+2. **Liberar portas 5000 e 3000** no painel Oracle (Networking → VCN → Security List — único passo manual que sobra)
+3. Copiar o setup script pra VM:
+   ```powershell
+   scp -i C:\Users\ronal\.ssh\osrm-key.pem `
+       C:\Users\ronal\Documents\Antigravity\SISTEMA_DE_FROTA\scripts\oracle-vm\setup_osrm.sh `
+       ubuntu@<IP-DA-VM>:~/
+   ```
+4. SSH na VM e rodar:
+   ```bash
+   ssh -i ~/.ssh/osrm-key.pem ubuntu@<IP-DA-VM>
+   chmod +x setup_osrm.sh && ./setup_osrm.sh
+   ```
+5. Esperar **~30-90 minutos** (processamento do mapa do Brasil). Script faz tudo: Docker, mapa, OSRM, VROOM, keep-alive.
+6. Ao final, ele te imprime as URLs `OSRM_URL` e `VROOM_URL` — copia pro `.env.local` (item 2 acima).
 
-**Como fazer:** seguir `ORACLE_CLOUD_SETUP.md` + `PLANO_ROTEIRIZACAO.md` Etapa 2 (1.1 → 2.9). Roda em paralelo enquanto eu codo Fase 1.
-
-**Quando terminar:** preencher `OSRM_URL` e `VROOM_URL` no `.env.local` (item 2).
+**Detalhes técnicos:** veja `scripts/oracle-vm/README.md`.
 
 ## 🟡 Decisões pendentes (não bloqueia, mas você precisará revisar)
 
