@@ -1282,7 +1282,7 @@ Rodar `npm test` ao fim, ver verde, reportar no Log de Execução do `TESTING.md
 
 | # | Passo | Arquivo principal | Pre-req | Testes |
 |---|---|---|---|---|
-| 1.1 | Cliente ViaCEP + cache local | `src/lib/cep/viacep.ts` | tipo `EnderecoCEP`, tabela `cep_cache` | `viacep.test.ts` |
+| 1.1 | ✅ Cliente ViaCEP + cache local **(✅ feito 2026-05-27 por Claude Opus 4.7 — 23 testes verdes)** | `src/lib/cep/viacep.ts` | tipo `EnderecoCEP`, tabela `cep_cache` | `viacep.test.ts` |
 | 1.2 | Fila offline (Dexie + sync ao Supabase) | `src/lib/offline/fila.ts`, `sync.ts`, `onlineDetector.ts` | tipo `NotaNaFila`, tabela `notas_capturadas` | `fila.test.ts`, `sync.test.ts` |
 | 1.3 | Componente `InputEnderecoNF` | `src/components/mobile/InputEnderecoNF.tsx` | 1.1 (ViaCEP) | `inputEnderecoNF.test.tsx` |
 | 1.4 | Tela mobile captura-notas | `src/app/mobile/captura-notas/page.tsx` | 1.2 (fila) + 1.3 (componente) | `captura-notas.test.tsx` |
