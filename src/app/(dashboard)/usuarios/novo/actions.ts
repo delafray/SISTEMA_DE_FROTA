@@ -27,12 +27,13 @@ export async function criarUsuarioAction(
     .single();
 
   const ROLES_ADMIN = ["master", "admin", "gestor"];
-  if (!ue || !ROLES_ADMIN.includes(ue.role)) return { error: "Sem permissão — apenas admin/gestor podem criar usuários" };
+  if (!ue || !ROLES_ADMIN.includes(ue.role))
+    return { error: "Sem permissão — apenas admin/gestor podem criar usuários" };
 
-  const nome = formData.get("nome") as string;
-  const username = formData.get("username") as string;
-  const senha = formData.get("senha") as string;
-  const role = formData.get("role") as "admin" | "gestor" | "motorista";
+  const nome         = formData.get("nome")         as string;
+  const username     = formData.get("username")     as string;
+  const senha        = formData.get("senha")        as string;
+  const role         = formData.get("role")         as "admin" | "gestor" | "motorista";
   const motorista_id = (formData.get("motorista_id") as string) || null;
 
   // Normaliza username → email (igual ao login)
@@ -42,7 +43,9 @@ export async function criarUsuarioAction(
     .replace(/[^a-z0-9]/g, "");
   const email = `${normalized}@frota.sys`;
 
-  // Cria usuário no Auth com service role
+  // ── Tenta criar; se já existir, recupera o registro incompleto ──────────
+  let targetUserId: string;
+
   const { data: newUser, error: authError } = await admin.auth.admin.createUser({
     email,
     password: senha,
@@ -50,26 +53,56 @@ export async function criarUsuarioAction(
     user_metadata: { nome },
   });
 
-  if (authError || !newUser.user) {
-    return { error: authError?.message ?? "Erro ao criar usuário" };
+  if (authError) {
+    // Usuário já existe no Auth (cadastro incompleto anterior) → recupera
+    const isAlreadyExists =
+      authError.message.toLowerCase().includes("already") ||
+      authError.message.toLowerCase().includes("registered") ||
+      (authError as { code?: string }).code === "email_exists";
+
+    if (!isAlreadyExists) return { error: authError.message };
+
+    // Busca o usuário pelo email
+    const { data: listData, error: listError } = await admin.auth.admin.listUsers();
+    if (listError) return { error: `Erro ao buscar usuário: ${listError.message}` };
+
+    const existing = listData.users.find((u) => u.email === email);
+    if (!existing)
+      return { error: "Usuário já existe mas não foi encontrado. Contate o suporte." };
+
+    targetUserId = existing.id;
+
+    // Atualiza senha e nome caso necessário
+    await admin.auth.admin.updateUserById(targetUserId, {
+      password: senha,
+      user_metadata: { nome },
+    });
+  } else {
+    if (!newUser.user) return { error: "Erro inesperado ao criar usuário" };
+    targetUserId = newUser.user.id;
   }
 
-  // Vincula à empresa
+  // ── Vincula à empresa (ignora duplicata) ────────────────────────────────
   const { error: ueError } = await admin.from("usuario_empresas").insert({
-    usuario_id: newUser.user.id,
+    usuario_id: targetUserId,
     empresa_id: ue.empresa_id,
     role,
     is_padrao: true,
   });
 
-  if (ueError) return { error: ueError.message };
+  if (ueError && ueError.code !== "23505") {
+    return { error: ueError.message };
+  }
 
-  // Se motorista, vincula o perfil ao registro de motorista (insert ignora se já existe, depois update)
+  // ── Vincula perfil ao motorista ─────────────────────────────────────────
   if (role === "motorista" && motorista_id) {
-    // Tenta insert primeiro (caso trigger não tenha criado a linha ainda)
-    await admin.from("perfis").insert({ id: newUser.user.id, nome, motorista_id }).select().maybeSingle();
-    // Garante atualização se já existia
-    await admin.from("perfis").update({ motorista_id }).eq("id", newUser.user.id);
+    await admin.from("perfis")
+      .insert({ id: targetUserId, nome, motorista_id })
+      .select()
+      .maybeSingle();
+    await admin.from("perfis")
+      .update({ motorista_id })
+      .eq("id", targetUserId);
   }
 
   redirect("/usuarios");
