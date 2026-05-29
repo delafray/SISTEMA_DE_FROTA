@@ -187,9 +187,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   // 3. Otimizar com VROOM
-  const { mapping, items: notasIndexadas } = indexarJobs(
-    geocodificadas.map((n) => ({ id: n.id, ...n }))
-  );
+  // indexarJobs precisa de items com `id: string`; passamos as proprias notas
+  // (que ja tem id) — sem spread duplicado.
+  const { mapping, items: notasIndexadas } = indexarJobs(geocodificadas);
 
   const jobs = notasIndexadas.map((n) => notaParaJob(n, n._idVroom));
   const veiculo = montarVeiculo({
