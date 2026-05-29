@@ -1,10 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
-// Leaflet CSS via JS import (resolvido pelo Webpack a partir de node_modules).
-// @import dentro de CSS nao resolve node_modules sem postcss-import — por isso
-// fica aqui, no root layout, garantindo que carrega antes do MapaRotaInner.
-import "leaflet/dist/leaflet.css";
+// Leaflet CSS: serve via <link> em /leaflet.css (copiado de node_modules pro
+// /public). O JS import nao garante carregar antes do componente dynamic do
+// mapa em alguns cenarios de build/hidratacao — o <link> no <head> resolve.
 import { PWAInstallPrompt } from "@/components/ui/PWAInstallPrompt";
 
 const inter = Inter({ subsets: ["latin"] });
@@ -43,6 +42,7 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
+        <link rel="stylesheet" href="/leaflet.css" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-title" content="Frota" />
