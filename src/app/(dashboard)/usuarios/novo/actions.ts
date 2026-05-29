@@ -113,3 +113,42 @@ export async function criarUsuarioAction(
 
   redirect("/usuarios");
 }
+
+export async function removerUsuarioAction(usuarioId: string, empresaId: string) {
+  const supabase = await createClient();
+  const admin = createAdminClient();
+
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { error: "Não autenticado" };
+
+  const { data: myUe } = await supabase
+    .from("usuario_empresas").select("role, empresa_id")
+    .eq("usuario_id", user.id).eq("is_padrao", true).single();
+  
+  if (myUe?.role !== "master") return { error: "Sem permissão. Apenas masters podem remover usuários." };
+  if (myUe.empresa_id !== empresaId) return { error: "Empresa inválida." };
+  if (user.id === usuarioId) return { error: "Não é possível remover a si mesmo." };
+
+  // Remove da empresa
+  const { error } = await admin
+    .from("usuario_empresas")
+    .delete()
+    .eq("usuario_id", usuarioId)
+    .eq("empresa_id", empresaId);
+
+  if (error) return { error: error.message };
+
+  // Verifica se o usuário pertence a alguma outra empresa
+  const { data: otherCompanies } = await admin
+    .from("usuario_empresas")
+    .select("empresa_id")
+    .eq("usuario_id", usuarioId);
+
+  if (!otherCompanies || otherCompanies.length === 0) {
+    await admin.auth.admin.deleteUser(usuarioId);
+    // Também limpa perfis
+    await admin.from("perfis").delete().eq("id", usuarioId);
+  }
+
+  return { success: true };
+}

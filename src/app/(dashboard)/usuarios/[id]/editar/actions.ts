@@ -1,5 +1,6 @@
 "use server";
 
+import { createAdminClient } from "@/lib/supabase/admin";
 import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 
@@ -8,6 +9,8 @@ export async function editarUsuarioAction(
   formData: FormData
 ) {
   const supabase = await createClient();
+  const admin = createAdminClient();
+  
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { error: "Não autenticado" };
 
@@ -21,10 +24,10 @@ export async function editarUsuarioAction(
   const role      = formData.get("role") as string;
 
   if (nome?.trim()) {
-    await supabase.from("perfis").update({ nome: nome.trim() }).eq("id", usuarioId);
+    await admin.from("perfis").update({ nome: nome.trim() }).eq("id", usuarioId);
   }
 
-  await supabase.from("usuario_empresas")
+  await admin.from("usuario_empresas")
     .update({ role })
     .eq("usuario_id", usuarioId)
     .eq("empresa_id", myUe.empresa_id);

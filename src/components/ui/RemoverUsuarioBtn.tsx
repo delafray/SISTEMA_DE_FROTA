@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { createClient } from "@/lib/supabase/client";
+import { removerUsuarioAction } from "@/app/(dashboard)/usuarios/novo/actions";
 
 export function RemoverUsuarioBtn({ usuarioId, empresaId }: { usuarioId: string; empresaId: string }) {
   const [loading, setLoading] = useState(false);
@@ -11,13 +11,17 @@ export function RemoverUsuarioBtn({ usuarioId, empresaId }: { usuarioId: string;
   const handleRemover = async () => {
     if (!confirm("Confirma remover este usuário da empresa? O acesso será revogado.")) return;
     setLoading(true);
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("usuario_empresas").delete()
-      .eq("usuario_id", usuarioId).eq("empresa_id", empresaId);
+    
+    const res = await removerUsuarioAction(usuarioId, empresaId);
     setLoading(false);
-    if (error) { alert("Erro ao remover: " + error.message); return; }
+    
+    if (res?.error) {
+      alert("Erro ao remover: " + res.error);
+      return;
+    }
     router.refresh();
+    // Força recarregar a página caso router.refresh() não atualize o client component state local de uma vez
+    window.location.reload();
   };
 
   return (
