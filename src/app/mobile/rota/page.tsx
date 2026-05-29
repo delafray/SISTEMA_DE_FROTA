@@ -391,6 +391,17 @@ function RotaContent(): React.ReactElement {
   );
 
   const handleEncerrarRota = useCallback(async () => {
+    if (rota) {
+      try {
+        await fetch(`/api/routing/rota/${rota.id}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'concluida' }),
+        });
+      } catch (err) {
+        console.error('Falha ao encerrar rota no backend:', err);
+      }
+    }
     setRota(null);
     setParadas([]);
     setNotas([]);
@@ -405,7 +416,7 @@ function RotaContent(): React.ReactElement {
       // Ignora erro — historico vai estar levemente desatualizado mas nao critico
     }
     setFase('inicio');
-  }, [empresaId, motoristaId]);
+  }, [empresaId, motoristaId, rota]);
 
   // ─── Validacao de params ──────────────────────────────────────────
 

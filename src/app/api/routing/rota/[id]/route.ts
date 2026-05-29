@@ -53,3 +53,47 @@ export async function GET(
 
   return NextResponse.json({ rota, paradas: paradas ?? [] }, { status: 200 });
 }
+
+export async function PATCH(
+  request: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
+): Promise<NextResponse> {
+  const { id } = await params;
+  if (!id) return NextResponse.json({ error: 'rota_id_obrigatorio' }, { status: 400 });
+
+  let body: { status?: string };
+  try {
+    body = (await request.json()) as { status?: string };
+  } catch {
+    return NextResponse.json({ error: 'json_invalido' }, { status: 400 });
+  }
+
+  const { status } = body;
+  if (!status) {
+    return NextResponse.json({ error: 'status_obrigatorio' }, { status: 400 });
+  }
+
+  const validStatuses = ['rascunho', 'otimizada', 'em_andamento', 'concluida', 'cancelada'];
+  if (!validStatuses.includes(status)) {
+    return NextResponse.json({ error: 'status_invalido' }, { status: 400 });
+  }
+
+  const supabase = getSupabase();
+  const { data, error } = await supabase
+    .from('rotas_otimizadas')
+    .update({ status })
+    .eq('id', id)
+    .select('id');
+
+  if (error) {
+    log.error('update_rota_status_failed', { id, code: error.code, message: error.message });
+    return NextResponse.json({ error: 'db_update_failed', details: error.message }, { status: 500 });
+  }
+
+  if (!data || data.length === 0) {
+    return NextResponse.json({ error: 'rota_nao_encontrada' }, { status: 404 });
+  }
+
+  return NextResponse.json({ ok: true }, { status: 200 });
+}
+

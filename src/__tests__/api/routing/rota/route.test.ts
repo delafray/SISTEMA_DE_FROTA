@@ -12,7 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
 }));
 
-import { GET } from '@/app/api/routing/rota/[id]/route';
+import { GET, PATCH } from '@/app/api/routing/rota/[id]/route';
 import { NextRequest } from 'next/server';
 
 function makeReq() {
@@ -108,3 +108,76 @@ describe('GET /api/routing/rota/[id]', () => {
     expect((await res.json()).paradas).toEqual([]);
   });
 });
+
+describe('PATCH /api/routing/rota/[id]', () => {
+  function makePatchReq(body: any) {
+    return new NextRequest('http://localhost/api/routing/rota/rota-1', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body),
+    });
+  }
+
+  it('200 e atualiza status no Supabase', async () => {
+    supabaseFromMock.mockImplementation(() => ({
+      update: (fields: any) => {
+        expect(fields.status).toBe('concluida');
+        return {
+          eq: (col: string, val: string) => {
+            expect(col).toBe('id');
+            expect(val).toBe('rota-1');
+            return {
+              select: () => Promise.resolve({ data: [{ id: 'rota-1' }], error: null }),
+            };
+          },
+        };
+      },
+    }));
+
+    const res = await PATCH(makePatchReq({ status: 'concluida' }), makeParams('rota-1'));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
+
+  it('400 se status nao for fornecido', async () => {
+    const res = await PATCH(makePatchReq({}), makeParams('rota-1'));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('status_obrigatorio');
+  });
+
+  it('400 se status for invalido', async () => {
+    const res = await PATCH(makePatchReq({ status: 'invalido' }), makeParams('rota-1'));
+    expect(res.status).toBe(400);
+    expect((await res.json()).error).toBe('status_invalido');
+  });
+
+  it('404 se rota nao for encontrada para atualizar', async () => {
+    supabaseFromMock.mockImplementation(() => ({
+      update: () => ({
+        eq: () => ({
+          select: () => Promise.resolve({ data: [], error: null }),
+        }),
+      }),
+    }));
+
+    const res = await PATCH(makePatchReq({ status: 'concluida' }), makeParams('rota-1'));
+    expect(res.status).toBe(404);
+    expect((await res.json()).error).toBe('rota_nao_encontrada');
+  });
+
+  it('500 em erro de banco', async () => {
+    supabaseFromMock.mockImplementation(() => ({
+      update: () => ({
+        eq: () => ({
+          select: () => Promise.resolve({ data: null, error: { code: 'XX', message: 'db error' } }),
+        }),
+      }),
+    }));
+
+    const res = await PATCH(makePatchReq({ status: 'concluida' }), makeParams('rota-1'));
+    expect(res.status).toBe(500);
+  });
+});
+

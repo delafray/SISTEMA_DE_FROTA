@@ -371,11 +371,12 @@ describe('RotaPage — fase em_rota', () => {
     expect(screen.getByTestId('link-ajustar')).toBeDefined();
   });
 
-  it('clicar Encerrar volta pra fase inicio', async () => {
+  it('clicar Encerrar volta pra fase inicio e conclui a rota no banco', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    vi.stubGlobal('fetch', buildFetchComRota('r1', []));
+    const fetchSpy = buildFetchComRota('r1', []);
+    vi.stubGlobal('fetch', fetchSpy);
 
     const user = userEvent.setup();
     render(<RotaPage />);
@@ -388,6 +389,16 @@ describe('RotaPage — fase em_rota', () => {
     await user.click(screen.getByTestId('btn-encerrar'));
 
     await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
+
+    // Verifica se PATCH /api/routing/rota/r1 foi chamado com { status: 'concluida' }
+    const patchCalls = fetchSpy.mock.calls.filter((c) => {
+      const u = typeof c[0] === 'string' ? c[0] : c[0].url;
+      const init = c[1] as RequestInit | undefined;
+      return u.includes('/api/routing/rota/r1') && init?.method === 'PATCH';
+    });
+    expect(patchCalls.length).toBe(1);
+    const patchBody = JSON.parse((patchCalls[0][1] as RequestInit).body as string);
+    expect(patchBody.status).toBe('concluida');
   });
 
   it('parada concluida chama PATCH e marca visualmente', async () => {
