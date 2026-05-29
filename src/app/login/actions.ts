@@ -17,18 +17,34 @@ export async function login(formData: FormData) {
     .normalize("NFD")
     .replace(/[\u0300-\u036f]/g, "")
 
-  // Se o usuário digitou só "ronaldo", completamos o domínio que usamos no Supabase
   if (!email.includes('@')) {
-    email = `${email}@ronaldoborba.com.br`
-  }
+    // Tenta primeiro com @frota.sys (novo padrão para novos usuários/motoristas)
+    const { error: errorFrota } = await supabase.auth.signInWithPassword({
+      email: `${email}@frota.sys`,
+      password,
+    })
 
-  const { error } = await supabase.auth.signInWithPassword({
-    email,
-    password,
-  })
+    if (errorFrota) {
+      // Se falhar, tenta com o legado @ronaldoborba.com.br para usuários antigos
+      const { error: errorLegado } = await supabase.auth.signInWithPassword({
+        email: `${email}@ronaldoborba.com.br`,
+        password,
+      })
 
-  if (error) {
-    return redirect('/login?error=true')
+      if (errorLegado) {
+        return redirect('/login?error=true')
+      }
+    }
+  } else {
+    // Se o usuário digitou o e-mail completo
+    const { error } = await supabase.auth.signInWithPassword({
+      email,
+      password,
+    })
+
+    if (error) {
+      return redirect('/login?error=true')
+    }
   }
 
   revalidatePath('/', 'layout')
