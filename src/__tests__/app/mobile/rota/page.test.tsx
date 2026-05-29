@@ -460,4 +460,75 @@ describe('RotaPage — fase em_rota', () => {
     );
     expect(patchCalls.length).toBe(0);
   });
+
+  it('refetch automatico ao voltar da tela ajuste-rota (visibilitychange)', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const fetchSpy = vi.fn(async (url: string | Request) => {
+      const u = typeof url === 'string' ? url : url.url;
+      if (u.includes('/api/routing/rotas?')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ rotas: [{ id: 'r1', status: 'otimizada' }] }),
+        } as unknown as Response;
+      }
+      if (u.match(/\/api\/routing\/rota\/r1$/) !== null) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            rota: { id: 'r1', distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
+            paradas: [
+              {
+                id: 'p1',
+                rota_id: 'r1',
+                nota_id: 'n1',
+                ordem: 1,
+                endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+                latitude: -23.5,
+                longitude: -46.6,
+                fixada: false,
+                janela_horario: null,
+                tempo_descarga_min: 5,
+                observacao: null,
+                concluida_em: null,
+              },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    render(<RotaPage />);
+
+    // Espera chegar na fase em_rota
+    await waitFor(() => screen.getByTestId('mapa-rota'));
+
+    // Conta quantas chamadas ao endpoint da rota ja foram feitas (carga inicial)
+    const callsAntes = fetchSpy.mock.calls.filter((c) => {
+      const u = typeof c[0] === 'string' ? c[0] : (c[0] as Request).url;
+      return u.match(/\/api\/routing\/rota\/r1$/) !== null;
+    }).length;
+
+    // Simula o motorista saindo da aba (navega pra ajuste-rota)
+    Object.defineProperty(document, 'visibilityState', { value: 'hidden', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    // Simula o motorista voltando pra aba (volta do ajuste-rota)
+    Object.defineProperty(document, 'visibilityState', { value: 'visible', configurable: true });
+    document.dispatchEvent(new Event('visibilitychange'));
+
+    // Espera o refetch acontecer
+    await waitFor(() => {
+      const callsDepois = fetchSpy.mock.calls.filter((c) => {
+        const u = typeof c[0] === 'string' ? c[0] : (c[0] as Request).url;
+        return u.match(/\/api\/routing\/rota\/r1$/) !== null;
+      }).length;
+      expect(callsDepois).toBeGreaterThan(callsAntes);
+    });
+  });
 });

@@ -147,6 +147,41 @@ function RotaContent(): React.ReactElement {
     })();
   }, [motoristaId, empresaId]);
 
+  // ─── Auto-refresh ao voltar de outra tela (ex: ajuste-rota) ────────
+  // Quando o motorista navega pra /mobile/ajuste-rota e volta (botao voltar
+  // do browser ou troca de aba), a pagina restaura do cache com dados stale.
+  // visibilitychange detecta o retorno e re-busca a rota do banco.
+  useEffect(() => {
+    if (fase !== 'em_rota' || !rota) return;
+    const rotaId = rota.id;
+
+    const handleVisibility = async () => {
+      if (document.visibilityState !== 'visible') return;
+      try {
+        const res = await fetch(`/api/routing/rota/${rotaId}`);
+        if (!res.ok) return;
+        const data = (await res.json()) as RotaResponse;
+        setRota(data.rota);
+        setParadas(data.paradas);
+      } catch {
+        // Offline ou erro — ignora silenciosamente, dados stale melhor que nada
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibility);
+    // pageshow com persisted=true cobre bfcache (Safari/iOS armazena a pagina
+    // inteira e nao dispara visibilitychange ao voltar com swipe)
+    const handlePageShow = (e: PageTransitionEvent) => {
+      if (e.persisted) void handleVisibility();
+    };
+    window.addEventListener('pageshow', handlePageShow);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibility);
+      window.removeEventListener('pageshow', handlePageShow as EventListener);
+    };
+  }, [fase, rota]);
+
   // ─── Workers de sync + online detector na fase captura ────────────
 
   useEffect(() => {
