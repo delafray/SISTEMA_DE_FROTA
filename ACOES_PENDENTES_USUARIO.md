@@ -31,8 +31,37 @@ OSRM_URL=
 VROOM_URL=
 ```
 
-### 3. ⏳ Provisionar Oracle Cloud VM + subir OSRM + VROOM
-**Status atual:** script `C:\Users\ronal\criar_vm_osrm.ps1` (v3 turbo) está rodando em loop tentando pegar a VM em Ashburn. ~240 tentativas/hora. Cedo ou tarde pega.
+### 3. ✅ Provisionar Oracle Cloud VM + subir OSRM + VROOM **(✅ feito 2026-05-29)**
+**Status:** VM em produção (`129.80.27.159`, US-ASHBURN-AD-2, 4 OCPU/24GB/146GB ARM). OSRM + VROOM via systemd, iptables aberto, keep-alive cron 4h. Auditado (HTTP 200, latência <500ms, SP→Campinas 93.2km). Detalhes: `relatorio_status.md` na VM e Etapa 2 do plano.
+
+---
+
+### 3b. ⬜ Adicionar OSRM_URL e VROOM_URL no `.env.local` **(novo passo — 30 segundos)**
+Adicione ao seu `C:\Users\ronal\Documents\Antigravity\SISTEMA_DE_FROTA\.env.local`:
+```env
+OSRM_URL=http://129.80.27.159:5000
+VROOM_URL=http://129.80.27.159:3000
+```
+
+Aí o passo 6 do MVP (`/api/routing/otimizar`) começa a funcionar em produção.
+
+---
+
+### 3c. ⬜ Rotacionar chave SSH `osrm-key.pem` (você expôs no chat — fazer quando puder)
+**Por quê:** a chave privada foi colada num chat — tecnicamente está "comprometida". Pra teste/MVP tudo bem, mas antes de produção real:
+
+```powershell
+# Gerar nova
+ssh-keygen -t rsa -b 4096 -f C:\Users\ronal\.ssh\osrm-key-novo -N '""'
+# Adicionar a nova na VM
+Get-Content C:\Users\ronal\.ssh\osrm-key-novo.pub | ssh -i C:\Users\ronal\.ssh\osrm-key.pem ubuntu@129.80.27.159 "cat >> ~/.ssh/authorized_keys"
+# Testar nova chave funciona:
+ssh -i C:\Users\ronal\.ssh\osrm-key-novo ubuntu@129.80.27.159 "echo OK"
+# Remover a antiga da VM:
+ssh -i C:\Users\ronal\.ssh\osrm-key-novo ubuntu@129.80.27.159 "grep -v '$(cat C:\Users\ronal\.ssh\osrm-key.pub)' ~/.ssh/authorized_keys > ~/.ssh/tmp && mv ~/.ssh/tmp ~/.ssh/authorized_keys"
+# Apagar chave antiga local:
+Remove-Item C:\Users\ronal\.ssh\osrm-key.pem, C:\Users\ronal\.ssh\osrm-key.pub
+```
 
 **Quando a VM subir, o setup é AUTOMATICO:**
 1. O script PowerShell vai mostrar banner verde + IP público da VM (e salva em `C:\Users\ronal\vm_ip.txt`)

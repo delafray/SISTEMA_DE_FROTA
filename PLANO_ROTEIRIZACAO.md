@@ -462,9 +462,9 @@ Para transformar os 44 dígitos da chave (lidos do QR Code) em endereço complet
 
 ## ETAPA 2 — Instalação no Servidor (Oracle VM)
 
-> **🟡 STATUS 2026-05-28:** Script de provisionamento da VM (`C:\Users\ronal\criar_vm_osrm.ps1` v3 turbo) está **rodando em loop** tentando pegar capacidade ARM em Ashburn (`vqJu:US-ASHBURN-AD-1/2/3`). 🟢 **Setup script completo (`scripts/oracle-vm/setup_osrm.sh`) está PRONTO** — automatiza ETAPA 2.3-2.9. Assim que a VM subir, é só `scp` o script + rodar.
+> **✅ STATUS 2026-05-29:** Concluida. VM provisionada (IP `129.80.27.159`, AD `US-ASHBURN-AD-2`, 4 OCPU/24GB/146GB ARM) apos ~1500 tentativas em ~5h. OSRM + VROOM rodando via systemd (alternativa ao docker-compose original — funcional). Auditoria externa: OSRM e VROOM HTTP 200, latencia <500ms, rota SP→Campinas devolve 93.2km/76min, VROOM otimiza 3 paradas em 0 nao-atribuidos. iptables OK, keep-alive cron a cada 4h ativo.
 
-### 2.1. ⏳ Provisionar a VM **(em andamento — script automatizado rodando)**
+### 2.1. ✅ Provisionar a VM **(✅ feito 2026-05-29 via `criar_vm_osrm.ps1` — IP 129.80.27.159)**
 
 1. Console Oracle → **Compute → Instances → Create Instance**
 2. Imagem: **Ubuntu 22.04 ARM**
@@ -472,7 +472,7 @@ Para transformar os 44 dígitos da chave (lidos do QR Code) em endereço complet
 4. Rede: usar VCN default, **anotar IP público**
 5. Chave SSH: gerar e baixar a chave privada (guardar)
 
-### 2.2. ⬜ Liberar portas no firewall Oracle (USUARIO faz no painel Oracle)
+### 2.2. ✅ Liberar portas no firewall Oracle (USUARIO faz no painel Oracle)
 
 Console Oracle → **Networking → VCN → Security List → Add Ingress Rules:**
 
@@ -483,7 +483,7 @@ Console Oracle → **Networking → VCN → Security List → Add Ingress Rules:
 | 3000 | TCP | 0.0.0.0/0 | VROOM API |
 | 443 | TCP | 0.0.0.0/0 | (opcional, HTTPS futuro) |
 
-### 2.3. 🟢 Conectar via SSH e preparar a máquina **(automatizado em `scripts/oracle-vm/setup_osrm.sh`)**
+### 2.3. ✅ Conectar via SSH e preparar a máquina **(✅ feito 2026-05-29 — Docker instalado via systemd direto, NAO docker-compose)**
 
 ```bash
 ssh -i sua-chave.key ubuntu@<IP-DA-VM>
@@ -504,7 +504,7 @@ sudo ufw allow 22,5000,3000/tcp
 sudo ufw enable
 ```
 
-### 2.4. 🟢 Baixar e pré-processar o mapa do Brasil **(automatizado em `setup_osrm.sh`)**
+### 2.4. ✅ Baixar e pré-processar o mapa do Brasil **(✅ feito 2026-05-29 — 15GB processado, extract+partition+customize)**
 
 ```bash
 mkdir -p ~/osrm-data && cd ~/osrm-data
@@ -531,7 +531,7 @@ docker run --rm -t -v "${PWD}:/data" ghcr.io/project-osrm/osrm-backend \
 > - Cada cálculo de rota depois disso leva **~50ms** (instantâneo).
 > - Atualizar o mapa do Brasil (recomendado 1x/mês) refaz esses 30-90 min, mas em background — o servidor antigo continua rodando enquanto isso. Zero downtime.
 
-### 2.5. 🟢 Criar `docker-compose.yml` para OSRM + VROOM **(automatizado em `setup_osrm.sh`)**
+### 2.5. ✅ Criar `docker-compose.yml` para OSRM + VROOM **(⚠️ executor escolheu systemd direto em vez de docker-compose — funcional, mas use `journalctl -u osrm/vroom` em vez de `docker logs`)**
 
 Arquivo: `~/routing/docker-compose.yml`
 
@@ -561,7 +561,7 @@ services:
       - osrm
 ```
 
-### 2.6. 🟢 Subir os containers **(automatizado em `setup_osrm.sh`)**
+### 2.6. ✅ Subir os containers **(✅ feito 2026-05-29 — OSRM active desde 05:09 UTC, VROOM active desde 13:14 UTC)**
 
 ```bash
 cd ~/routing
@@ -571,7 +571,7 @@ docker compose up -d
 docker compose logs -f
 ```
 
-### 2.7. 🟢 Testar do seu computador **(automatizado em `setup_osrm.sh` — chama curl no localhost da VM)**
+### 2.7. ✅ Testar do seu computador **(✅ auditado 2026-05-29: OSRM HTTP 200 — SP→Campinas 93.2km/76min; VROOM HTTP 200 — code=0 otimizando 3 paradas)**
 
 ```bash
 # OSRM (rota São Paulo → Campinas)
@@ -591,13 +591,13 @@ curl -X POST "http://<IP-DA-VM>:3000" \
 
 Se ambos retornarem JSON com rotas, **está pronto.**
 
-### 2.8. 🟢 (Opcional) Auto-restart e monitoramento **(automatizado em `setup_osrm.sh` — restart:unless-stopped no compose)**
+### 2.8. ✅ (Opcional) Auto-restart e monitoramento **(✅ feito 2026-05-29 — via systemd `Restart=always`)**
 
 - O `restart: unless-stopped` já garante que sobe sozinho após reboot.
 - Para monitorar: `docker stats` mostra CPU/RAM em tempo real.
 - Para logs persistentes: configurar `journald` driver ou enviar para Sentry/Grafana.
 
-### 2.9. 🟢 Keep-Alive — Evitar que Oracle recupere a VM (OBRIGATÓRIO) **(automatizado em `setup_osrm.sh` — cron a cada 6h)**
+### 2.9. ✅ Keep-Alive — Evitar que Oracle recupere a VM (OBRIGATÓRIO) **(✅ feito 2026-05-29 — `/opt/keepalive.sh` em cron a cada 4h, log em `/var/log/osrm-keepalive.log`)**
 
 **Política da Oracle Free Tier:** VMs com CPU muito baixa por **7 dias consecutivos** são recuperadas pela Oracle.
 
