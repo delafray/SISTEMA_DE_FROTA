@@ -119,5 +119,45 @@ porque:
 `destino_coord jsonb` em `entregas`. Chamar `estimarRota({origem, destino})` no
 handler de submit da page e preencher esses campos antes do insert.
 
+## 🚫 BLOQUEADOS — exigem decisão sua ou mudança de schema (não posso resolver sozinho)
+
+### 7. ⬜ Telefone do cliente + botão "Ligar" no card de parada
+**Bloqueio:** as tabelas `notas_capturadas` e `paradas` foram criadas SEM
+campo `cliente_id` (decisão "módulo isolado" de 2026-05-27). Sem isso, não
+há como associar uma parada ao registro do cliente na tabela `clientes`
+(que tem telefone).
+
+**Quando resolver:**
+- Na consolidação, adicionar `cliente_id uuid REFERENCES clientes(id)` em
+  `notas_capturadas`
+- Captura inicial precisa identificar o cliente — pode ser por CEP+nome
+  pesquisado, ou seleção manual antes de digitar
+
+### 8. ⬜ "Salvar como padrão deste cliente" no ModalHorario (persiste em `cliente_preferencias`)
+**Bloqueio:** mesma raiz do item 7. Sem `cliente_id` nas paradas, não dá
+pra escrever em `cliente_preferencias` (que tem `cliente_id` como chave).
+
+**Tabela já existe** (criada na migration de 2026-05-27) — só falta o vínculo.
+
+### 9. ⬜ Integração visual com `entregas/novo` (km_estimado auto-preenchido)
+**Bloqueio:** exige adicionar colunas em tabela existente:
+- `entregas.km_estimado numeric`
+- `entregas.origem_coord jsonb`
+- `entregas.destino_coord jsonb`
+
+**Utilitário pronto:** `src/lib/routing/estimarRota.ts` faz o pipeline
+CEP+nº → endereço → coord → OSRM → km. Só falta o caller na página de
+entregas chamar isso no submit e salvar nas novas colunas.
+
+### 10. ⬜ Alertas WhatsApp ao gestor (Edge Function/cron + envio via bot)
+**Bloqueio:** decisão sua sobre quando aquecer o chip e habilitar envio
+proativo (risco de banimento — discutido em 2026-05-27).
+
+**Hoje:** alertas vão pra tabela `alertas` via triggers — gestor vê só no
+dashboard web. Pra disparar WhatsApp real ao gestor, precisa de:
+1. Webhook ou cron que detecta alerta novo
+2. Chamada ao `messageSender.enviarTexto(gestor_whatsapp, mensagem)`
+3. Confiança que o chip está aquecido o suficiente
+
 ## ✅ Concluídas
-_(Nada ainda — atualize aqui quando fizer cada item acima.)_
+_(Atualize aqui quando fizer cada item acima.)_
