@@ -89,7 +89,7 @@ describe('POST /api/notas/sync — sucesso', () => {
     expect(body).toEqual({ id_servidor: 'srv-uuid-1' });
 
     expect(insert).toHaveBeenCalledOnce();
-    const insertedRow = insert.mock.calls[0][0] as Record<string, unknown>;
+    const insertedRow = (insert.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
     expect(insertedRow.motorista_id).toBe('mot-1');
     expect(insertedRow.cep).toBe('01310100');
     expect(insertedRow.status).toBe('capturada');
@@ -101,7 +101,7 @@ describe('POST /api/notas/sync — sucesso', () => {
 
     await POST(makeRequest(payloadValido({ latitude: undefined, longitude: undefined, observacao: undefined })));
 
-    const insertedRow = insert.mock.calls[0][0] as Record<string, unknown>;
+    const insertedRow = (insert.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
     expect(insertedRow.latitude).toBeNull();
     expect(insertedRow.longitude).toBeNull();
     expect(insertedRow.observacao).toBeNull();
@@ -112,7 +112,7 @@ describe('POST /api/notas/sync — sucesso', () => {
 
     await POST(makeRequest(payloadValido({ latitude: -23.5505, longitude: -46.6333 })));
 
-    const insertedRow = insert.mock.calls[0][0] as Record<string, unknown>;
+    const insertedRow = (insert.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
     expect(insertedRow.latitude).toBe(-23.5505);
     expect(insertedRow.longitude).toBe(-46.6333);
   });
