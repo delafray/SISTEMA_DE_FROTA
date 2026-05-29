@@ -718,14 +718,16 @@ function SortableTijolinho({
 
   // Listeners no wrapper inteiro = motorista pode prender o dedo em qualquer
   // ponto do tijolinho. touchAction:'none' impede o browser de rolar a pagina
-  // enquanto o dnd-kit detecta o long-press. Long-press de 200ms (sensor) ja
-  // garante que tap curto = selecionar (passa pro onClick do pai).
+  // enquanto o dnd-kit detecta o long-press. marginInline cria uma faixa
+  // lateral SEM touchAction:none — motorista usa ela pra rolar a pagina
+  // (antes nao tinha lugar nenhum pra apoiar o dedo).
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : parada.concluida_em ? 0.55 : 1,
     touchAction: bloqueado ? 'auto' : 'none',
     cursor: bloqueado ? 'default' : 'grab',
+    marginInline: 16,
   };
 
   return (
@@ -736,21 +738,13 @@ function SortableTijolinho({
       {...(bloqueado ? {} : listeners)}
       data-testid={`sortable-${parada.ordem}`}
     >
+      {/* Sem draggableHandle — tijolinho inteiro e arrastavel via listeners.
+          O icone ☰ era so decorativo e tomava espaco que faltava no celular. */}
       <Tijolinho
         parada={parada}
         modo="ordenar"
         distanciaAnteriorKm={distanciaAnteriorKm}
         destacado={destacado}
-        draggableHandle={
-          // Handle visual (so dica) — listeners ja estao no wrapper inteiro.
-          <span
-            data-testid={`handle-${parada.ordem}`}
-            style={{ padding: 4, fontSize: 14, color: '#94a3b8', pointerEvents: 'none', flexShrink: 0 }}
-            aria-hidden="true"
-          >
-            ☰
-          </span>
-        }
       />
     </div>
   );
