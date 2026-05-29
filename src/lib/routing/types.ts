@@ -64,12 +64,16 @@ export interface RotaOtimizada {
 /** Cada elemento e [inicio, fim] no formato "HH:MM". Multiplas janelas permitidas. */
 export type JanelaHorario = [string, string][];
 
+/** Snapshot completo do endereco salvo numa parada — inclui o numero da casa
+ *  (que vem da nota, nao do ViaCEP). Persistido como jsonb na coluna `endereco`. */
+export type EnderecoParada = EnderecoCEP & { numero?: string };
+
 export interface Parada {
   id: string;
   rota_id: string;
   nota_id: string | null;
   ordem: number;                     // posicao na rota (1, 2, 3, ...)
-  endereco: EnderecoCEP;             // snapshot — nao muda se a nota for editada
+  endereco: EnderecoParada;          // snapshot — nao muda se a nota for editada
   latitude: number;
   longitude: number;
   fixada: boolean;

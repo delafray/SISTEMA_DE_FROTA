@@ -167,7 +167,10 @@ export function montarParadasPersistir(
       rota_id: rotaId,
       nota_id: nota.id,
       ordem: p.ordem,
-      endereco: nota.endereco,
+      // Snapshot completo: copia o numero da casa pra dentro do endereco
+      // jsonb. Sem isso a parada mostraria so "Rua Piata" em vez de
+      // "Rua Piata, 104". Sem migration — coluna ja e jsonb.
+      endereco: { ...nota.endereco, numero: nota.numero },
       latitude: nota.latitude,
       longitude: nota.longitude,
       fixada: false,

@@ -98,7 +98,9 @@ export default function MapaRotaInner({
               }
             >
               <Tooltip>
-                {p.ordem}. {p.endereco.logradouro || '(sem nome)'} — {p.endereco.cidade}/{p.endereco.uf}
+                {p.ordem}. {p.endereco.logradouro || '(sem nome)'}
+                {('numero' in p.endereco && p.endereco.numero) ? `, ${p.endereco.numero}` : ''}
+                {' '}— {p.endereco.cidade}/{p.endereco.uf}
               </Tooltip>
             </Marker>
           );

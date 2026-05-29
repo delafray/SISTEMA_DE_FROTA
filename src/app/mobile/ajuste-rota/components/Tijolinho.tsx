@@ -51,8 +51,9 @@ export function Tijolinho({
 }: TijolinhoProps): React.ReactElement {
   const temJanela = Boolean(parada.janela_horario && parada.janela_horario.length > 0);
   const corBairro = corPorBairro(parada.endereco.bairro);
-  const enderecoCurto = `${parada.endereco.logradouro || '(sem nome)'} — ${parada.endereco.cidade}/${parada.endereco.uf}`;
-  const enderecoCompleto = `${parada.endereco.logradouro || '(sem nome)'}, ${parada.endereco.bairro ? parada.endereco.bairro + ', ' : ''}${parada.endereco.cidade}/${parada.endereco.uf}`;
+  const numeroCasa = parada.endereco.numero ? `, ${parada.endereco.numero}` : '';
+  const enderecoCurto = `${parada.endereco.logradouro || '(sem nome)'}${numeroCasa} — ${parada.endereco.cidade}/${parada.endereco.uf}`;
+  const enderecoCompleto = `${parada.endereco.logradouro || '(sem nome)'}${numeroCasa}, ${parada.endereco.bairro ? parada.endereco.bairro + ', ' : ''}${parada.endereco.cidade}/${parada.endereco.uf}`;
 
   const numeroBox = (
     <div

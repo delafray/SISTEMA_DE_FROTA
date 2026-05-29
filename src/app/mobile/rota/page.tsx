@@ -655,6 +655,7 @@ function FaseEmRota({
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ fontWeight: 700, fontSize: 15 }}>
                 {proximaParada.endereco.logradouro || '(sem rua)'}
+                {proximaParada.endereco.numero ? `, ${proximaParada.endereco.numero}` : ''}
               </div>
               <div style={{ fontSize: 13, color: '#64748b' }}>
                 {proximaParada.endereco.cidade}/{proximaParada.endereco.uf}
@@ -702,7 +703,9 @@ function FaseEmRota({
                 <div style={numeroStyle(concluida, ehProxima)}>{concluida ? '✓' : p.ordem}</div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>
-                    {p.endereco.logradouro || '(sem rua)'} ({p.endereco.cidade}/{p.endereco.uf})
+                    {p.endereco.logradouro || '(sem rua)'}
+                    {p.endereco.numero ? `, ${p.endereco.numero}` : ''}{' '}
+                    ({p.endereco.cidade}/{p.endereco.uf})
                   </div>
                   {p.observacao && (
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>💬 {p.observacao}</div>
@@ -791,6 +794,7 @@ function BottomSheet({
           <div style={{ flex: 1, minWidth: 0 }}>
             <div style={{ fontWeight: 700, fontSize: 15 }}>
               {parada.endereco.logradouro || '(sem rua)'}
+              {parada.endereco.numero ? `, ${parada.endereco.numero}` : ''}
             </div>
             <div style={{ fontSize: 13, color: '#64748b' }}>
               {parada.endereco.cidade}/{parada.endereco.uf}

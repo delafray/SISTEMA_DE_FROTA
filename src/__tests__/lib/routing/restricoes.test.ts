@@ -193,8 +193,8 @@ describe('traduzirParadasComMapping', () => {
 });
 
 describe('montarParadasPersistir', () => {
-  it('monta paradas com snapshot do endereco da nota', () => {
-    const nota = makeNota({ id: 'nota-1' });
+  it('monta paradas com snapshot do endereco da nota + numero da casa', () => {
+    const nota = makeNota({ id: 'nota-1', numero: '104' });
     const notas = new Map([['nota-1', nota]]);
     const paradas = [
       { nota_id_local: 'nota-1', ordem: 1, chegada_estimada: 'x' },
@@ -206,7 +206,8 @@ describe('montarParadasPersistir', () => {
     expect(out[0].rota_id).toBe('rota-uuid');
     expect(out[0].nota_id).toBe('nota-1');
     expect(out[0].ordem).toBe(1);
-    expect(out[0].endereco).toEqual(nota.endereco);
+    // endereco do snapshot deve incluir o numero da casa (do campo nota.numero)
+    expect(out[0].endereco).toEqual({ ...nota.endereco, numero: '104' });
     expect(out[0].latitude).toBe(-23.5);
     expect(out[0].fixada).toBe(false);
   });
