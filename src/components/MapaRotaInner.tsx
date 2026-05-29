@@ -9,7 +9,9 @@
 import { useMemo } from 'react';
 import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
 import { divIcon, type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
-import 'leaflet/dist/leaflet.css';
+// CSS do Leaflet vive em globals.css (carregado no bundle inicial) — importar
+// aqui dentro do componente dinamico (ssr:false) carrega tarde e os tiles
+// nao se posicionam (motorista ve so os pinos sem mapa de fundo).
 import { decodePolyline } from '@/lib/routing/polyline';
 import { corDoStatus, statusDaParada } from '@/lib/routing/utils';
 import type { MapaRotaProps } from './MapaRota';
