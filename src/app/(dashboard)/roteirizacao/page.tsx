@@ -28,6 +28,36 @@ import {
 } from '@/components/ui/ds';
 import { googleMapsMultiStop } from '@/lib/routing/deepLinks';
 
+/**
+ * Monta link wa.me com a rota formatada pra enviar ao motorista.
+ * Gestor clica → WhatsApp abre → escolhe contato → envia.
+ * Limite de URL ~2KB, então truncamos em 20 paradas mostrando aviso.
+ */
+function whatsappComRota(opts: {
+  motoristaNome: string;
+  paradas: Array<{
+    ordem: number;
+    endereco: { logradouro: string; bairro: string; cidade: string; uf: string };
+    latitude: number;
+    longitude: number;
+  }>;
+  totalKm: number;
+  tempoMin: number;
+  ajusteUrl: string;
+}): string {
+  const linhas = opts.paradas.slice(0, 20).map((p) => {
+    const end = `${p.endereco.logradouro || '(sem rua)'}, ${p.endereco.cidade}/${p.endereco.uf}`;
+    return `${p.ordem}. ${end}\n   https://waze.com/ul?ll=${p.latitude},${p.longitude}&navigate=yes`;
+  });
+  if (opts.paradas.length > 20) linhas.push(`...e mais ${opts.paradas.length - 20} paradas`);
+  const corpo =
+    `🚛 *Rota — ${opts.motoristaNome}*\n` +
+    `${opts.paradas.length} paradas · ${opts.totalKm.toFixed(1)} km · ≈${Math.round(opts.tempoMin)} min\n\n` +
+    linhas.join('\n\n') +
+    `\n\n⚙️ Ajustar ordem: ${opts.ajusteUrl}`;
+  return `https://wa.me/?text=${encodeURIComponent(corpo)}`;
+}
+
 interface Motorista {
   id: string;
   nome: string;
@@ -51,6 +81,7 @@ interface OtimizarResponse {
   paradas: Array<{
     nota_id: string;
     ordem: number;
+    endereco: { logradouro: string; bairro: string; cidade: string; uf: string };
     latitude: number;
     longitude: number;
   }>;
@@ -269,7 +300,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
                 </li>
               )}
             </ul>
-            <div style={{ display: 'flex', gap: 8 }}>
+            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
               <a
                 href={`/mobile/ajuste-rota?rota_id=${resultado.rota_id}`}
                 style={{ ...btnLinkStyle, background: '#2563eb' }}
@@ -287,6 +318,24 @@ export default function RoteirizacaoPage(): React.ReactElement {
                 style={{ ...btnLinkStyle, background: '#16a34a' }}
               >
                 🗺️ Abrir no Google Maps
+              </a>
+              <a
+                href={whatsappComRota({
+                  motoristaNome: motoristaNome(motoristaIdSel),
+                  paradas: resultado.paradas,
+                  totalKm: resultado.distancia_total_km,
+                  tempoMin: resultado.tempo_total_min,
+                  ajusteUrl:
+                    typeof window !== 'undefined'
+                      ? `${window.location.origin}/mobile/ajuste-rota?rota_id=${resultado.rota_id}`
+                      : `/mobile/ajuste-rota?rota_id=${resultado.rota_id}`,
+                })}
+                target="_blank"
+                rel="noreferrer"
+                style={{ ...btnLinkStyle, background: '#25D366' }}
+                data-testid="btn-enviar-whatsapp"
+              >
+                💬 Enviar via WhatsApp
               </a>
             </div>
           </div>

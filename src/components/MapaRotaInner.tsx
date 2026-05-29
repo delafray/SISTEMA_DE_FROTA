@@ -30,7 +30,7 @@ function pinoNumeradoIcon(numero: number, cor: string, destaque: boolean, conclu
       transform:rotate(-45deg);
       display:flex;align-items:center;justify-content:center;
       ${ring}
-      transition: box-shadow 200ms, width 150ms, height 150ms;
+      transition: box-shadow 250ms ease, background-color 250ms ease, width 200ms ease, height 200ms ease;
     ">${conteudoCentro}</div>`,
     iconSize: [tamanho, tamanho],
     iconAnchor: [tamanho / 2, tamanho],
@@ -79,9 +79,12 @@ export default function MapaRotaInner({
           const cor = corDoStatus(status);
           const destaque = paradaSelecionada === p.id || status === 'proxima';
           const concluida = status === 'concluida';
+          // Key estavel = so id. Mudancas de status/destaque reaplicam icon
+          // mas mantem o mesmo Marker. A CSS transition no HTML do DivIcon
+          // suaviza mudancas de tamanho/box-shadow.
           return (
             <Marker
-              key={`${p.id}-${status}-${destaque}`}
+              key={p.id}
               position={[p.latitude, p.longitude]}
               icon={pinoNumeradoIcon(p.ordem, cor, destaque, concluida)}
               eventHandlers={

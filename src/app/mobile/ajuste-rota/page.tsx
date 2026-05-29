@@ -44,6 +44,29 @@ function vibrar(pattern: number | number[]) {
   }
 }
 
+// Bipe curto sintetizado via Web Audio API (sem precisar de arquivo .mp3).
+// Cria/destroi o contexto sob demanda — leve. Falha silenciosamente em
+// browsers sem suporte (ou autoplay-blocked).
+function bipeCurto() {
+  try {
+    type WindowAudio = typeof window & { webkitAudioContext?: typeof AudioContext };
+    const w = window as WindowAudio;
+    const AC = window.AudioContext ?? w.webkitAudioContext;
+    if (!AC) return;
+    const ctx = new AC();
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.frequency.value = 660; // E5 (audivel mas nao agressivo)
+    osc.type = 'sine';
+    gain.gain.setValueAtTime(0.1, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+    osc.connect(gain).connect(ctx.destination);
+    osc.start();
+    osc.stop(ctx.currentTime + 0.12);
+    osc.onended = () => ctx.close();
+  } catch { /* sem permissao de audio — ok */ }
+}
+
 type Aba = 'ordenar' | 'detalhes';
 
 interface RotaResponse {
@@ -109,12 +132,13 @@ export default function AjusteRotaPage(): React.ReactElement {
         return moved.map((p, i) => ({ ...p, ordem: i + 1 }));
       });
       vibrar([50, 30, 50]);
+      bipeCurto();
       setDirty(true);
     },
     []
   );
 
-  // Bloquear arrasto de parada fixada antes de comecar
+  // Drag start: vibracao curta (sinal tatil de "ergueu"). Bloqueia se fixada.
   const handleDragStart = useCallback(
     (event: { active: { id: string | number } }) => {
       const p = paradas.find((p) => p.id === event.active.id);
@@ -122,7 +146,9 @@ export default function AjusteRotaPage(): React.ReactElement {
         vibrar([100, 50, 100]);
         setAvisoLock(`Parada ${p.ordem} está 🔒 fixada — vá em Detalhes pra liberar.`);
         setTimeout(() => setAvisoLock(null), 3000);
+        return;
       }
+      vibrar(40); // feedback de "ergueu"
     },
     [paradas]
   );
@@ -203,8 +229,20 @@ export default function AjusteRotaPage(): React.ReactElement {
   // Calculos visuais dinamicos (atualizam ao reordenar)
   const distancias = distanciasEntreParadas(paradas);
   const kmEstimado = estimarKmTotal(paradas);
-  const kmExibido = dirty ? kmEstimado : (rotaInfo?.distancia_total_km ?? kmEstimado);
+  const kmOriginal = rotaInfo?.distancia_total_km ?? kmEstimado;
+  const kmExibido = dirty ? kmEstimado : kmOriginal;
   const minExibido = rotaInfo?.tempo_total_min ?? null;
+
+  // Item 9 — Diff explicito quando reordenado.
+  // Tempo estimado: usa proporcao km_estimado/km_original sobre o tempo
+  // original (~ velocidade media constante). Aproximacao boa pra feedback.
+  const diffKm = dirty ? kmEstimado - kmOriginal : 0;
+  const diffMin =
+    dirty && minExibido !== null && kmOriginal > 0
+      ? Math.round((kmEstimado / kmOriginal - 1) * minExibido)
+      : 0;
+  const diffSinal = (n: number) => (n > 0 ? `+${n}` : `${n}`);
+  const diffCor = (n: number) => (n > 0 ? '#dc2626' : n < 0 ? '#16a34a' : '#64748b');
 
   return (
     <div style={containerStyle}>
@@ -213,8 +251,36 @@ export default function AjusteRotaPage(): React.ReactElement {
         <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
           {paradas.length} paradas · {dirty && '≈ '}{kmExibido.toFixed(1)} km
           {minExibido !== null && !dirty && <> · ≈ {Math.round(minExibido)} min</>}
-          {dirty && <span style={{ color: '#f97316', fontWeight: 600 }}> · alterado</span>}
         </div>
+        {dirty && (
+          <div
+            data-testid="diff-impacto"
+            style={{
+              marginTop: 6,
+              padding: '6px 10px',
+              background: '#fff7ed',
+              border: '1px solid #fed7aa',
+              borderRadius: 6,
+              fontSize: 12,
+              display: 'flex',
+              gap: 12,
+              alignItems: 'center',
+            }}
+          >
+            <span style={{ fontWeight: 700, color: '#9a3412' }}>↻ Mudou:</span>
+            <span style={{ color: diffCor(diffKm), fontWeight: 600 }}>
+              {diffSinal(parseFloat(diffKm.toFixed(1)))} km
+            </span>
+            {diffMin !== 0 && (
+              <span style={{ color: diffCor(diffMin), fontWeight: 600 }}>
+                {diffSinal(diffMin)} min
+              </span>
+            )}
+            <span style={{ color: '#9a3412', marginLeft: 'auto', fontSize: 11 }}>
+              (estimativa em linha reta)
+            </span>
+          </div>
+        )}
       </header>
 
       {avisoLock && (

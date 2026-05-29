@@ -14,6 +14,22 @@ import type { Parada } from '@/lib/routing/types';
 
 export type ModoTijolinho = 'ordenar' | 'detalhes';
 
+/**
+ * Gera uma cor de fundo sutil deterministica a partir do nome do bairro.
+ * Mesmo bairro = mesma cor — ajuda motorista a ver visualmente paradas
+ * agrupadas por regiao (cluster). Hash simples FNV-1a + paleta pastel.
+ */
+function corPorBairro(bairro: string | null | undefined): string | undefined {
+  if (!bairro || !bairro.trim()) return undefined;
+  let h = 2166136261;
+  for (let i = 0; i < bairro.length; i++) {
+    h ^= bairro.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  const hue = Math.abs(h) % 360;
+  return `hsl(${hue}, 50%, 96%)`; // pastel suave
+}
+
 export interface TijolinhoProps {
   parada: Pick<Parada, 'id' | 'ordem' | 'endereco' | 'fixada' | 'janela_horario' | 'observacao'>;
   modo: ModoTijolinho;
@@ -34,6 +50,7 @@ export function Tijolinho({
   destacado,
 }: TijolinhoProps): React.ReactElement {
   const temJanela = Boolean(parada.janela_horario && parada.janela_horario.length > 0);
+  const corBairro = corPorBairro(parada.endereco.bairro);
   const enderecoCurto = `${parada.endereco.logradouro || '(sem nome)'} — ${parada.endereco.cidade}/${parada.endereco.uf}`;
   const enderecoCompleto = `${parada.endereco.logradouro || '(sem nome)'}, ${parada.endereco.bairro ? parada.endereco.bairro + ', ' : ''}${parada.endereco.cidade}/${parada.endereco.uf}`;
 
@@ -67,7 +84,7 @@ export function Tijolinho({
           alignItems: 'center',
           gap: 12,
           padding: 12,
-          background: '#fff',
+          background: corBairro ?? '#fff',
           border: destacado ? '2px solid #f97316' : '1px solid #e2e8f0',
           borderRadius: 8,
           marginBottom: 8,

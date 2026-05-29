@@ -71,6 +71,7 @@ export default function RotaPage(): React.ReactElement {
   const [erro, setErro] = useState<string | null>(null);
   const [progressoOtim, setProgressoOtim] = useState<string>('');
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
+  const [toast, setToast] = useState<string | null>(null);
 
   // Trava em retrato ao montar
   useEffect(() => {
@@ -107,6 +108,12 @@ export default function RotaPage(): React.ReactElement {
         const notasLocais = await listarTodas(motoristaId);
         setNotas(notasLocais);
         if (notasLocais.length > 0) {
+          const pendentes = notasLocais.filter((n) => n.status_sync === 'pendente').length;
+          if (pendentes > 0) {
+            setToast(`⏳ ${pendentes} nota${pendentes > 1 ? 's' : ''} pendente${pendentes > 1 ? 's' : ''} — sincronizando…`);
+            setTimeout(() => setToast(null), 5000);
+            void sincronizarFila();
+          }
           setFase('captura');
           return;
         }
@@ -302,6 +309,33 @@ export default function RotaPage(): React.ReactElement {
   return (
     <div style={containerStyle}>
       <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} />
+
+      {toast && (
+        <div
+          role="status"
+          data-testid="toast"
+          style={{
+            position: 'fixed',
+            top: 16,
+            left: 16,
+            right: 16,
+            maxWidth: 448,
+            margin: '0 auto',
+            padding: 12,
+            background: '#fef3c7',
+            color: '#92400e',
+            border: '1px solid #fcd34d',
+            borderRadius: 8,
+            fontSize: 14,
+            fontWeight: 600,
+            zIndex: 50,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+            animation: 'slideDown 250ms ease',
+          }}
+        >
+          {toast}
+        </div>
+      )}
 
       {erro && (
         <div role="alert" style={erroStyle}>
