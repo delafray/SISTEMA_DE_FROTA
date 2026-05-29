@@ -10,7 +10,7 @@ const initialState = { error: undefined, success: false };
 
 export default function NovoUsuarioPage() {
   const [state, formAction, pending] = useActionState(criarUsuarioAction, initialState);
-  const [role, setRole] = useState<"master" | "motorista">("master");
+  const [role, setRole] = useState<"admin" | "gestor" | "motorista">("admin");
   const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
@@ -87,11 +87,12 @@ export default function NovoUsuarioPage() {
                   <select
                     name="role"
                     value={role}
-                    onChange={(e) => setRole(e.target.value as "master" | "motorista")}
+                    onChange={(e) => setRole(e.target.value as "admin" | "gestor" | "motorista")}
                     style={selectStyle}
                   >
-                    <option value="master">Master (Administrador)</option>
-                    <option value="motorista">Motorista</option>
+                    <option value="admin">Admin (acesso total)</option>
+                    <option value="gestor">Gestor (sem configs do sistema)</option>
+                    <option value="motorista">Motorista (apenas app mobile)</option>
                   </select>
                 </FormField>
 
@@ -111,9 +112,10 @@ export default function NovoUsuarioPage() {
 
             {/* Info */}
             <div style={{ padding: "16px", background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", fontSize: "13px", color: "#475569" }}>
-              <p style={{ marginBottom: "8px" }}>📋 <strong>Como funciona o login:</strong> o usuário entra apenas com o nome de usuário (sem senha no campo email). O sistema adiciona o domínio interno automaticamente.</p>
-              <p style={{ marginBottom: "8px" }}>🔐 Perfil <strong>Master:</strong> acesso total — pode criar/editar usuários, empresas, relatórios e configurações.</p>
-              <p>🚛 Perfil <strong>Motorista:</strong> acesso apenas ao próprio perfil via app/WhatsApp. Vincule ao registro de motorista cadastrado.</p>
+              <p style={{ marginBottom: "8px" }}>📋 <strong>Como funciona o login:</strong> o usuário entra com o nome de usuário. O sistema monta o e-mail internamente.</p>
+              <p style={{ marginBottom: "8px" }}>🔑 Perfil <strong>Admin:</strong> acesso total — usuários, empresas, relatórios, configurações.</p>
+              <p style={{ marginBottom: "8px" }}>📊 Perfil <strong>Gestor:</strong> acesso operacional — pedidos, motoristas, frotas. Sem configurações do sistema.</p>
+              <p>🚛 Perfil <strong>Motorista:</strong> acesso apenas ao app mobile. Vincule ao cadastro de motorista.</p>
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/usuarios" variant="outline">Cancelar</Btn>

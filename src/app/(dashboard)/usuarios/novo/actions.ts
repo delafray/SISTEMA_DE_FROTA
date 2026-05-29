@@ -26,12 +26,13 @@ export async function criarUsuarioAction(
     .eq("is_padrao", true)
     .single();
 
-  if (!ue || ue.role !== "master") return { error: "Sem permissão" };
+  const ROLES_ADMIN = ["master", "admin", "gestor"];
+  if (!ue || !ROLES_ADMIN.includes(ue.role)) return { error: "Sem permissão — apenas admin/gestor podem criar usuários" };
 
   const nome = formData.get("nome") as string;
   const username = formData.get("username") as string;
   const senha = formData.get("senha") as string;
-  const role = formData.get("role") as "master" | "motorista";
+  const role = formData.get("role") as "admin" | "gestor" | "motorista";
   const motorista_id = (formData.get("motorista_id") as string) || null;
 
   // Normaliza username → email (igual ao login)
@@ -63,8 +64,11 @@ export async function criarUsuarioAction(
 
   if (ueError) return { error: ueError.message };
 
-  // Se motorista, vincula o perfil ao registro de motorista
+  // Se motorista, vincula o perfil ao registro de motorista (insert ignora se já existe, depois update)
   if (role === "motorista" && motorista_id) {
+    // Tenta insert primeiro (caso trigger não tenha criado a linha ainda)
+    await admin.from("perfis").insert({ id: newUser.user.id, nome, motorista_id }).select().maybeSingle();
+    // Garante atualização se já existia
     await admin.from("perfis").update({ motorista_id }).eq("id", newUser.user.id);
   }
 
