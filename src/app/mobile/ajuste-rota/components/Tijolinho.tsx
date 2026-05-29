@@ -97,16 +97,14 @@ export function Tijolinho({
         }}
       >
         {numeroBox}
-        {/* min-width:0 + overflow:hidden no container do texto = filho span pode encolher e elipsar */}
-        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
-          {/* Linha 1: endereco — agora sem flex (display block) pra que text-overflow funcione direito. ⏰ vai inline. */}
+        <div style={{ flex: 1, minWidth: 0 }}>
+          {/* Endereco quebra em 2-3 linhas se necessario (motorista prefere ler completo a ver "..." cortado) */}
           <div
             style={{
               fontWeight: 600,
               fontSize: 14,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-              whiteSpace: 'nowrap',
+              lineHeight: 1.3,
+              wordBreak: 'break-word',
             }}
           >
             {enderecoCurto}
