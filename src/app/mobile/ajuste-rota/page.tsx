@@ -21,6 +21,7 @@ import {
   DndContext,
   closestCenter,
   PointerSensor,
+  TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
@@ -89,8 +90,12 @@ function AjusteRotaContent(): React.ReactElement {
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [avisoLock, setAvisoLock] = useState<string | null>(null);
 
+  // Pointer p/ mouse + Touch p/ dedo. Ambos com long-press de 200ms — assim
+  // tap curto continua selecionando a parada no mapa, mas segurar 200ms ativa
+  // o drag (sem conflito com o scroll vertical da pagina).
   const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
+    useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
+    useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
   // Load inicial
@@ -411,25 +416,37 @@ function SortableTijolinho({
     disabled: parada.fixada,
   });
 
-  const style = {
+  // Listeners no wrapper inteiro = motorista pode prender o dedo em qualquer
+  // ponto do tijolinho. touchAction:'none' impede o browser de rolar a pagina
+  // enquanto o dnd-kit detecta o long-press. Long-press de 200ms (sensor) ja
+  // garante que tap curto = selecionar (passa pro onClick do pai).
+  const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
     opacity: isDragging ? 0.5 : 1,
+    touchAction: parada.fixada ? 'auto' : 'none',
+    cursor: parada.fixada ? 'default' : 'grab',
   };
 
   return (
-    <div ref={setNodeRef} style={style} {...attributes}>
+    <div
+      ref={setNodeRef}
+      style={style}
+      {...attributes}
+      {...(parada.fixada ? {} : listeners)}
+      data-testid={`sortable-${parada.ordem}`}
+    >
       <Tijolinho
         parada={parada}
         modo="ordenar"
         distanciaAnteriorKm={distanciaAnteriorKm}
         destacado={destacado}
         draggableHandle={
+          // Handle visual (so dica) — listeners ja estao no wrapper inteiro.
           <span
-            {...listeners}
             data-testid={`handle-${parada.ordem}`}
-            style={{ padding: 8, cursor: 'grab', fontSize: 18, color: '#94a3b8' }}
-            aria-label="arrastar"
+            style={{ padding: 8, fontSize: 18, color: '#94a3b8', pointerEvents: 'none' }}
+            aria-hidden="true"
           >
             ☰
           </span>

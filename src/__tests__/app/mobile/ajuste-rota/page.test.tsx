@@ -27,6 +27,7 @@ vi.mock('@dnd-kit/core', () => ({
   DndContext: ({ children }: { children: React.ReactNode }) => <div>{children}</div>,
   closestCenter: vi.fn(),
   PointerSensor: vi.fn(),
+  TouchSensor: vi.fn(),
   useSensor: vi.fn(),
   useSensors: vi.fn(),
 }));
