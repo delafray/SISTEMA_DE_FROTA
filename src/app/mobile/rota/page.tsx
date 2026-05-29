@@ -411,13 +411,23 @@ function Header({
     em_rota: 'Em rota',
   };
 
+  const buildSha = process.env.NEXT_PUBLIC_BUILD_SHA ?? 'dev';
   return (
     <header style={headerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
         <strong style={{ fontSize: 18 }}>🚛 Rota — {labelFase[fase]}</strong>
-        <span style={{ fontSize: 12 }} aria-label={online ? 'online' : 'offline'}>
-          {online ? '🟢' : '🔴'}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <span
+            data-testid="build-sha"
+            title="versao do build"
+            style={{ fontSize: 10, color: '#94a3b8', fontFamily: 'ui-monospace, monospace' }}
+          >
+            v:{buildSha}
+          </span>
+          <span style={{ fontSize: 12 }} aria-label={online ? 'online' : 'offline'}>
+            {online ? '🟢' : '🔴'}
+          </span>
+        </div>
       </div>
       {fase === 'captura' && (
         <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>

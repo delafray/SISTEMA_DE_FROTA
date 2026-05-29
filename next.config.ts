@@ -1,6 +1,12 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Expoe o SHA do commit do build pra cliente. Usado pra mostrar a versao
+  // na UI (motorista confirma que esta na build atual sem precisar limpar
+  // cache). Em dev/local: 'dev'.
+  env: {
+    NEXT_PUBLIC_BUILD_SHA: process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) ?? 'dev',
+  },
   async headers() {
     return [
       {

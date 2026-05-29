@@ -69,7 +69,9 @@ export function PWAInstallPrompt() {
     localStorage.setItem('pwa-install-dismissed', 'true')
   }
 
-  // Registrar service worker
+  // Service Worker: registra o kill-switch (sw.js auto-unregistra na ativacao).
+  // Apos isso, browsers que ja tinham SW antigo cacheado vao limpar tudo e
+  // recarregar sem SW. Reintroducao futura: usar Workbox + cache hashed only.
   useEffect(() => {
     if ('serviceWorker' in navigator) {
       navigator.serviceWorker

@@ -1,100 +1,45 @@
-// Service Worker para FROTA - Gestão Inteligente
-// Cache offline e atualização automática
+// ─────────────────────────────────────────────────────────────────────
+// SW Kill-Switch — versao 2026-05-29
+//
+// O service worker anterior fazia Network-First mas ainda cacheava HTML
+// e JS, segurando bundle antigo no navegador do motorista mesmo apos
+// deploy novo. Sintoma: mapa nao aparecia, "limpa cache" virava workaround.
+//
+// Este SW substitui o anterior e faz auto-destruicao:
+// 1. Ativa imediatamente (skipWaiting)
+// 2. Limpa todos os caches da origem
+// 3. Auto-unregistra
+// 4. Reload em todas as abas abertas (pra carregarem sem SW)
+//
+// Apos isso, nenhum SW intercepta requests — usuario recebe sempre
+// HTML/JS fresco direto do servidor (com cache-control normal do
+// browser).
+//
+// Quando re-introduzir PWA, usar Workbox + estrategia diferente por
+// tipo de asset (HTML: network-only; JS/CSS hashed: cache-first).
+// ─────────────────────────────────────────────────────────────────────
 
-const CACHE_NAME = 'frota-v1'
-const STATIC_ASSETS = [
-  '/',
-  '/login',
-]
+self.addEventListener('install', () => {
+  self.skipWaiting();
+});
 
-// Instalação: pré-cachear assets estáticos
-self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      return cache.addAll(STATIC_ASSETS)
-    })
-  )
-  self.skipWaiting()
-})
-
-// Ativação: limpar caches antigos
 self.addEventListener('activate', (event) => {
-  event.waitUntil(
-    caches.keys().then((cacheNames) => {
-      return Promise.all(
-        cacheNames
-          .filter((name) => name !== CACHE_NAME)
-          .map((name) => caches.delete(name))
-      )
-    })
-  )
-  self.clients.claim()
-})
+  event.waitUntil((async () => {
+    // 1. Limpa TODOS os caches da origem
+    const cacheNames = await caches.keys();
+    await Promise.all(cacheNames.map((name) => caches.delete(name)));
 
-// Fetch: estratégia Network First com fallback para cache
-self.addEventListener('fetch', (event) => {
-  // Ignorar requisições não-GET e requests de API
-  if (event.request.method !== 'GET') return
-  if (event.request.url.includes('/api/')) return
-  if (event.request.url.includes('supabase')) return
+    // 2. Auto-unregistra
+    await self.registration.unregister();
 
-  event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        // Clonar e armazenar no cache se for uma resposta válida
-        if (response && response.status === 200) {
-          const responseClone = response.clone()
-          caches.open(CACHE_NAME).then((cache) => {
-            cache.put(event.request, responseClone)
-          })
-        }
-        return response
-      })
-      .catch(() => {
-        // Fallback para cache quando offline
-        return caches.match(event.request).then((cachedResponse) => {
-          if (cachedResponse) return cachedResponse
-          // Fallback para página principal se offline
-          return caches.match('/')
-        })
-      })
-  )
-})
-
-// Push Notifications
-self.addEventListener('push', (event) => {
-  if (event.data) {
-    const data = event.data.json()
-    const options = {
-      body: data.body,
-      icon: data.icon || '/icons/icon-192x192.png',
-      badge: '/icons/icon-72x72.png',
-      vibrate: [100, 50, 100],
-      data: {
-        dateOfArrival: Date.now(),
-        url: data.url || '/',
-      },
+    // 3. Forca reload de todas as abas abertas (sem SW agora)
+    const allClients = await self.clients.matchAll({ type: 'window' });
+    for (const client of allClients) {
+      // navigate() carrega a mesma URL sem SW interceptando
+      client.navigate(client.url).catch(() => {/* ok se nao puder */});
     }
-    event.waitUntil(
-      self.registration.showNotification(data.title || 'FROTA', options)
-    )
-  }
-})
+  })());
+});
 
-// Clique em notificação: abrir o app
-self.addEventListener('notificationclick', (event) => {
-  event.notification.close()
-  const url = event.notification.data?.url || '/'
-  event.waitUntil(
-    clients.matchAll({ type: 'window' }).then((clientList) => {
-      for (const client of clientList) {
-        if (client.url === url && 'focus' in client) {
-          return client.focus()
-        }
-      }
-      if (clients.openWindow) {
-        return clients.openWindow(url)
-      }
-    })
-  )
-})
+// Nao intercepta fetch — passa direto pra rede.
+// (Sem listener 'fetch' = browser usa fetch padrao.)
