@@ -193,6 +193,33 @@ export default async function DashboardPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }} className="has-bottom-nav">
 
+        {/* ── Gerar Rota — ação rápida ─────────────────────────── */}
+        <Link
+          href="/roteirizacao"
+          data-testid="btn-gerar-rota"
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "16px",
+            background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+            borderRadius: "14px",
+            padding: "18px 20px",
+            textDecoration: "none",
+            boxShadow: "0 4px 16px rgba(22,163,74,0.3)",
+          }}
+        >
+          <div style={{ fontSize: "40px", lineHeight: 1 }}>🗺️</div>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: "18px", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
+              Gerar Rota
+            </div>
+            <div style={{ fontSize: "13px", color: "rgba(255,255,255,0.75)", marginTop: "3px" }}>
+              Otimize entregas — selecione motorista e inicie
+            </div>
+          </div>
+          <div style={{ fontSize: "24px", color: "rgba(255,255,255,0.65)" }}>›</div>
+        </Link>
+
         {alertas.length > 0 && (
           <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
             {alertas.map((a, i) => (
