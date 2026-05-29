@@ -31,7 +31,7 @@ function corPorBairro(bairro: string | null | undefined): string | undefined {
 }
 
 export interface TijolinhoProps {
-  parada: Pick<Parada, 'id' | 'ordem' | 'endereco' | 'fixada' | 'janela_horario' | 'observacao'>;
+  parada: Pick<Parada, 'id' | 'ordem' | 'endereco' | 'fixada' | 'janela_horario' | 'observacao' | 'concluida_em'>;
   modo: ModoTijolinho;
   onClickDetalhes?: () => void;
   draggableHandle?: React.ReactNode;
@@ -55,6 +55,13 @@ export function Tijolinho({
   const enderecoCurto = `${parada.endereco.logradouro || '(sem nome)'}${numeroCasa} — ${parada.endereco.cidade}/${parada.endereco.uf}`;
   const enderecoCompleto = `${parada.endereco.logradouro || '(sem nome)'}${numeroCasa}, ${parada.endereco.bairro ? parada.endereco.bairro + ', ' : ''}${parada.endereco.cidade}/${parada.endereco.uf}`;
 
+  const concluida = Boolean(parada.concluida_em);
+  const corNumero = concluida
+    ? '#16a34a' // verde — entregue
+    : parada.fixada
+      ? '#dc2626' // vermelho — fixada
+      : '#2563eb'; // azul — pendente normal
+
   const numeroBox = (
     <div
       data-testid={`numero-parada-${parada.ordem}`}
@@ -62,7 +69,7 @@ export function Tijolinho({
         width: 34,
         height: 34,
         flexShrink: 0,
-        background: parada.fixada ? '#dc2626' : '#2563eb',
+        background: corNumero,
         color: '#fff',
         borderRadius: 6,
         display: 'flex',
@@ -72,7 +79,7 @@ export function Tijolinho({
         fontSize: 15,
       }}
     >
-      {parada.ordem}
+      {concluida ? '✓' : parada.ordem}
     </div>
   );
 
@@ -121,13 +128,15 @@ export function Tijolinho({
               flexWrap: 'wrap',
             }}
           >
+            {concluida && <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ Entregue</span>}
             {typeof distanciaAnteriorKm === 'number' && distanciaAnteriorKm > 0 && (
               <span>📏 {distanciaAnteriorKm.toFixed(1)} km</span>
             )}
             {parada.fixada && <span style={{ color: '#dc2626' }}>🔒 Fixada</span>}
           </div>
         </div>
-        {!parada.fixada && draggableHandle}
+        {/* Handle so se o tijolinho e arrastavel (nao fixada nem concluida) */}
+        {!parada.fixada && !concluida && draggableHandle}
       </div>
     );
   }

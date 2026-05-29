@@ -46,6 +46,19 @@ function vibrar(pattern: number | number[]) {
   }
 }
 
+/**
+ * Reordena paradas pondo as ja entregues (concluida_em != null) no topo,
+ * por timestamp de conclusao ASC. Pendentes vem depois na ordem original.
+ * Motorista nao quer ficar olhando pra paradas terminadas no meio da lista.
+ */
+function ordenarConcluidasPrimeiro(paradas: Parada[]): Parada[] {
+  const concluidas = paradas
+    .filter((p) => p.concluida_em)
+    .sort((a, b) => (a.concluida_em ?? '').localeCompare(b.concluida_em ?? ''));
+  const pendentes = paradas.filter((p) => !p.concluida_em).sort((a, b) => a.ordem - b.ordem);
+  return [...concluidas, ...pendentes];
+}
+
 // Bipe curto sintetizado via Web Audio API (sem precisar de arquivo .mp3).
 // Cria/destroi o contexto sob demanda — leve. Falha silenciosamente em
 // browsers sem suporte (ou autoplay-blocked).
@@ -127,7 +140,15 @@ function AjusteRotaContent(): React.ReactElement {
       })
       .then((data) => {
         setRotaInfo(data.rota);
-        setParadas(data.paradas);
+        // Entregues primeiro (por concluida_em ASC), pendentes depois (por ordem).
+        // Motorista nao precisa mais ficar olhando pra paradas que ja terminou
+        // no meio da lista. Renumera consecutivamente — se mudou a ordem original
+        // marca dirty pra ele salvar.
+        const ordenado = ordenarConcluidasPrimeiro(data.paradas);
+        const renumerado = ordenado.map((p, i) => ({ ...p, ordem: i + 1 }));
+        setParadas(renumerado);
+        const ordemMudou = renumerado.some((p, i) => p.id !== data.paradas[i]?.id);
+        setDirty(ordemMudou);
         setErro(null);
       })
       .catch((err: Error) => setErro(err.message))
@@ -143,10 +164,17 @@ function AjusteRotaContent(): React.ReactElement {
         const oldIndex = items.findIndex((p) => p.id === active.id);
         const newIndex = items.findIndex((p) => p.id === over.id);
         if (oldIndex < 0 || newIndex < 0) return items;
-        // Nao move se a parada destino for fixada (mantem posicao)
+        // Nao move se a parada destino for fixada ou concluida (entregues
+        // ja ficam no topo + bloqueadas — nao pode jogar pendente entre elas)
         if (items[newIndex].fixada) {
           vibrar([100, 50, 100]);
           setAvisoLock(`Parada ${items[newIndex].ordem} está 🔒 fixada — vá em Detalhes pra liberar.`);
+          setTimeout(() => setAvisoLock(null), 3000);
+          return items;
+        }
+        if (items[newIndex].concluida_em) {
+          vibrar([100, 50, 100]);
+          setAvisoLock(`Parada ${items[newIndex].ordem} ja foi entregue — nao pode ser reordenada.`);
           setTimeout(() => setAvisoLock(null), 3000);
           return items;
         }
@@ -161,13 +189,20 @@ function AjusteRotaContent(): React.ReactElement {
     []
   );
 
-  // Drag start: vibracao curta (sinal tatil de "ergueu"). Bloqueia se fixada.
+  // Drag start: vibracao curta (sinal tatil de "ergueu"). Bloqueia se fixada
+  // ou concluida (entregues nao podem ser remexidas — ja foi feito).
   const handleDragStart = useCallback(
     (event: { active: { id: string | number } }) => {
       const p = paradas.find((p) => p.id === event.active.id);
       if (p?.fixada) {
         vibrar([100, 50, 100]);
         setAvisoLock(`Parada ${p.ordem} está 🔒 fixada — vá em Detalhes pra liberar.`);
+        setTimeout(() => setAvisoLock(null), 3000);
+        return;
+      }
+      if (p?.concluida_em) {
+        vibrar([100, 50, 100]);
+        setAvisoLock(`Parada ${p.ordem} ja foi entregue — nao pode reordenar.`);
         setTimeout(() => setAvisoLock(null), 3000);
         return;
       }
@@ -307,9 +342,17 @@ function AjusteRotaContent(): React.ReactElement {
       // Trata erro total (500), parcial (207) ou retorno com ok=false
       if (!res.ok || data.ok === false) {
         const erros = Array.isArray(data.erros) ? data.erros : [];
-        const detalhe = erros.length > 0
-          ? erros.map((e: { id: string; message: string }) => `${e.id.slice(0, 8)}: ${e.message}`).join(' | ')
-          : `HTTP ${res.status}`;
+        let detalhe: string;
+        if (erros.length > 0) {
+          detalhe = erros
+            .map((e: { id: string; message: string }) => `${e.id.slice(0, 8)}: ${e.message}`)
+            .join(' | ');
+        } else if (data.error) {
+          // Erros estruturados de pass 1/3 (sem array `erros`) tem `error` + `detail`
+          detalhe = data.detail ? `${data.error} — ${data.detail}` : data.error;
+        } else {
+          detalhe = `HTTP ${res.status}`;
+        }
         throw new Error(`Salvou ${data.sucessos?.length ?? 0}/${payload.paradas.length}. ${detalhe}`);
       }
 
@@ -665,9 +708,12 @@ function SortableTijolinho({
   distanciaAnteriorKm?: number;
   destacado?: boolean;
 }) {
+  // Bloqueado pra reorder: fixada (motorista lockou) OU concluida (ja entregue)
+  const bloqueado = parada.fixada || Boolean(parada.concluida_em);
+
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: parada.id,
-    disabled: parada.fixada,
+    disabled: bloqueado,
   });
 
   // Listeners no wrapper inteiro = motorista pode prender o dedo em qualquer
@@ -677,9 +723,9 @@ function SortableTijolinho({
   const style: React.CSSProperties = {
     transform: CSS.Transform.toString(transform),
     transition,
-    opacity: isDragging ? 0.5 : 1,
-    touchAction: parada.fixada ? 'auto' : 'none',
-    cursor: parada.fixada ? 'default' : 'grab',
+    opacity: isDragging ? 0.5 : parada.concluida_em ? 0.55 : 1,
+    touchAction: bloqueado ? 'auto' : 'none',
+    cursor: bloqueado ? 'default' : 'grab',
   };
 
   return (
@@ -687,7 +733,7 @@ function SortableTijolinho({
       ref={setNodeRef}
       style={style}
       {...attributes}
-      {...(parada.fixada ? {} : listeners)}
+      {...(bloqueado ? {} : listeners)}
       data-testid={`sortable-${parada.ordem}`}
     >
       <Tijolinho
