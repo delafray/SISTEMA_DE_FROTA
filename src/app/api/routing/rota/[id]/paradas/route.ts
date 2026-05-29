@@ -76,13 +76,17 @@ export async function PATCH(
 
   // ─── Estrategia 2-pass robusta pra reordenacao ───────────────────────
   //
-  // O bug anterior: pass 1 movia pra negativos APENAS as paradas do request.
-  // Se o banco tinha paradas que o frontend nao enviou (estado stale apos
-  // adicionar), pass 2 colidia: "duplicate key paradas_rota_ordem_unica".
+  // Historia dos bugs:
+  // - v1 movia pra negativos APENAS as paradas do request → colidia com
+  //   paradas que nao estavam no request (duplicate key).
+  // - v2 movia TODAS pra negativos → batia na CHECK constraint
+  //   `paradas_ordem_positiva` (ordem deve ser > 0).
   //
-  // Fix: pass 1 fetch TODAS as paradas da rota e move TODAS pra negativos.
-  // Depois pass 2 aplica request (positivos). Paradas nao no request ficam
-  // negativas — pass 3 da pra elas ordens positivas apos o max do request.
+  // v3 (agora): usa temp = max(ordens existentes) + i. Valores positivos
+  // ALTOS, garantidamente > qualquer ordem atual da rota, unicos entre si.
+  // Pass 2 aplica positivos baixos (do request) — sem colisao porque tempos
+  // estao na faixa alta. Pass 3 da pros nao-no-request ordens apos max
+  // do request — tambem baixos, sem colisao porque outros ja foram baixados.
 
   const temReordenacao = body.paradas.some((p) => typeof p.ordem === 'number');
 
@@ -99,13 +103,20 @@ export async function PATCH(
   }
   const dbParadas = (dbParadasRaw ?? []) as Array<{ id: string; ordem: number }>;
 
+  // tempBase >= todas as ordens atuais → tempos nao colidem com ordens
+  // existentes em pass 1. Pass 2 vai aplicar valores BAIXOS (request) que
+  // tambem nao colidem com tempos altos.
+  const maxOrdemAtual = dbParadas.reduce((acc, p) => Math.max(acc, p.ordem), 0);
+  const tempBase = maxOrdemAtual + 1;
+
   if (temReordenacao) {
-    // Pass 1: move TODAS pra ordens negativas unicas (-1, -2, ...).
-    // Usa .select('id') pra detectar silenciosamente 0-rows (RLS, id errado).
+    // Pass 1: move TODAS pra tempos altos unicos (tempBase, tempBase+1, ...).
+    // .select('id') detecta silenciosamente 0-rows (RLS, id errado).
     for (let i = 0; i < dbParadas.length; i++) {
+      const tempOrdem = tempBase + i;
       const { data, error } = await supabase
         .from('paradas')
-        .update({ ordem: -(i + 1) })
+        .update({ ordem: tempOrdem })
         .eq('id', dbParadas[i].id)
         .eq('rota_id', rotaId)
         .select('id');
@@ -172,7 +183,8 @@ export async function PATCH(
   }
 
   // Pass 3: paradas que estao no DB mas nao no request com ordem.
-  // Elas estao com ordens temporarias negativas — precisam voltar pra positivos.
+  // Elas estao com ordens temporarias ALTAS (tempBase+i) — precisam voltar
+  // pra valores baixos definitivos.
   // Estrategia: dao ordens sequenciais APOS o max do request (preserva o que
   // o usuario reordenou, e empurra o desconhecido pro final). Mantem ordem
   // relativa entre si (original ordem ASC).
