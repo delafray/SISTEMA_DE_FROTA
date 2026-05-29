@@ -2,9 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 
 // Mock das dependências de Supabase
 const mockAdminFrom = vi.fn();
+const mockAdminAuthUpdateUser = vi.fn().mockResolvedValue({ error: null });
 const mockAdminAuth = {
   admin: {
     deleteUser: vi.fn().mockResolvedValue({ error: null }),
+    updateUserById: mockAdminAuthUpdateUser,
   },
 };
 const mockAdminClient = {
@@ -103,6 +105,43 @@ describe("Usuários Server Actions", () => {
       
       expect(mockAdminFrom).toHaveBeenCalledWith("perfis");
       expect(mockAdminFrom).toHaveBeenCalledWith("usuario_empresas");
+    });
+
+    it("salva e edita dados com sucesso, atualizando a senha se fornecida", async () => {
+      mockUserAuth.getUser.mockResolvedValue({ data: { user: { id: "master-id" } } });
+      
+      const mockSingle = vi.fn().mockResolvedValue({ data: { role: "master", empresa_id: "emp-id" } });
+      mockUserFrom.mockReturnValue({
+        select: () => ({
+          eq: () => ({
+            eq: () => ({
+              single: mockSingle,
+            }),
+          }),
+        }),
+      });
+
+      const mockUpdate = vi.fn().mockReturnValue({ eq: () => ({ eq: () => Promise.resolve({ error: null }) }) });
+      const mockUpdatePerfis = vi.fn().mockReturnValue({ eq: () => Promise.resolve({ error: null }) });
+      
+      mockAdminFrom.mockImplementation((table: string) => {
+        if (table === "perfis") {
+          return { update: mockUpdatePerfis };
+        }
+        return { update: mockUpdate };
+      });
+
+      const formData = new FormData();
+      formData.append("usuario_id", "target-id");
+      formData.append("nome", "Novo Nome");
+      formData.append("role", "motorista");
+      formData.append("senha", "nova-senha-123");
+      formData.append("motorista_id", "mot-uuid");
+
+      await expect(editarUsuarioAction(undefined, formData)).rejects.toThrow("Redirected to /usuarios");
+      
+      expect(mockAdminAuth.admin.updateUserById).toHaveBeenCalledWith("target-id", { password: "nova-senha-123" });
+      expect(mockUpdatePerfis).toHaveBeenCalled();
     });
   });
 

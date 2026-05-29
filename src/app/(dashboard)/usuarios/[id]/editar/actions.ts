@@ -19,12 +19,31 @@ export async function editarUsuarioAction(
     .eq("usuario_id", user.id).eq("is_padrao", true).single();
   if (myUe?.role !== "master") return { error: "Sem permissão. Apenas masters podem editar usuários." };
 
-  const usuarioId = formData.get("usuario_id") as string;
-  const nome      = formData.get("nome") as string;
-  const role      = formData.get("role") as string;
+  const usuarioId    = formData.get("usuario_id") as string;
+  const nome         = formData.get("nome") as string;
+  const role         = formData.get("role") as string;
+  const senha        = formData.get("senha") as string;
+  const motorista_id = (formData.get("motorista_id") as string) || null;
 
+  // 1. Atualiza senha se fornecida
+  if (senha && senha.length >= 6) {
+    const { error: authError } = await admin.auth.admin.updateUserById(usuarioId, {
+      password: senha,
+    });
+    if (authError) return { error: `Erro ao redefinir senha: ${authError.message}` };
+  } else if (senha && senha.length < 6) {
+    return { error: "A nova senha deve ter pelo menos 6 caracteres." };
+  }
+
+  // 2. Atualiza perfil (nome e motorista_id)
   if (nome?.trim()) {
-    await admin.from("perfis").update({ nome: nome.trim() }).eq("id", usuarioId);
+    const targetMotorista = role === "motorista" ? motorista_id : null;
+    await admin.from("perfis")
+      .update({ 
+        nome: nome.trim(),
+        motorista_id: targetMotorista
+      })
+      .eq("id", usuarioId);
   }
 
   await admin.from("usuario_empresas")

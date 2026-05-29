@@ -13,6 +13,9 @@ export default function EditarUsuarioPage() {
   const [nome, setNome]       = useState("");
   const [role, setRole]       = useState("master");
   const [login, setLogin]     = useState("");
+  const [senha, setSenha]     = useState("");
+  const [motoristaId, setMotoristaId] = useState("");
+  const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
     const load = async () => {
@@ -23,9 +26,13 @@ export default function EditarUsuarioPage() {
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
+      // Busca a lista de motoristas ativos
+      const { data: mots } = await supabase.from("motoristas").select("id, nome").eq("ativo", true).order("nome");
+      setMotoristas(mots ?? []);
+
       const { data } = await supabase
         .from("usuario_empresas")
-        .select("role, perfis(nome)")
+        .select("role, perfis(nome, motorista_id)")
         .eq("usuario_id", id)
         .eq("empresa_id", ue.empresa_id)
         .single();
@@ -36,6 +43,7 @@ export default function EditarUsuarioPage() {
         setNome(n);
         setRole(data.role ?? "master");
         setLogin(n.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""));
+        setMotoristaId(perfil?.motorista_id ?? "");
       }
       setLoading(false);
     };
@@ -111,14 +119,42 @@ export default function EditarUsuarioPage() {
                     <option value="motorista">Motorista</option>
                   </select>
                 </FormField>
+
+                <FormField label="Nova Senha (deixe em branco para manter a atual)">
+                  <input
+                    name="senha"
+                    type="password"
+                    value={senha}
+                    onChange={e => setSenha(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Mínimo 6 caracteres"
+                    minLength={6}
+                  />
+                </FormField>
+
+                {role === "motorista" && (
+                  <FormField label="Vincular ao Motorista">
+                    <select
+                      name="motorista_id"
+                      value={motoristaId}
+                      onChange={e => setMotoristaId(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="">— Selecione —</option>
+                      {motoristas.map((m) => (
+                        <option key={m.id} value={m.id}>{m.nome}</option>
+                      ))}
+                    </select>
+                  </FormField>
+                )}
               </div>
             </FormSection>
 
             <div style={{
-              padding: "16px", background: "#fefce8", border: "1px solid #fde68a",
-              borderRadius: "8px", fontSize: "13px", color: "#854d0e",
+              padding: "16px", background: "#f0fdf4", border: "1px solid #bbf7d0",
+              borderRadius: "8px", fontSize: "13px", color: "#166534",
             }}>
-              ⚠ Para redefinir a senha do usuário, use o painel do Supabase ou implemente um fluxo de reset por e-mail.
+              💡 Preencha o campo "Nova Senha" apenas se desejar redefinir a senha do usuário. O login é gerado automaticamente a partir do nome completo.
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
