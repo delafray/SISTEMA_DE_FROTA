@@ -1,6 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
+// Leaflet CSS via JS import (resolvido pelo Webpack a partir de node_modules).
+// @import dentro de CSS nao resolve node_modules sem postcss-import — por isso
+// fica aqui, no root layout, garantindo que carrega antes do MapaRotaInner.
+import "leaflet/dist/leaflet.css";
 import { PWAInstallPrompt } from "@/components/ui/PWAInstallPrompt";
 
 const inter = Inter({ subsets: ["latin"] });
