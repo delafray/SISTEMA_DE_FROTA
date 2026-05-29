@@ -19,6 +19,8 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { consultarCEPBrowser } from '@/lib/cep/client';
 import type { EnderecoCEP } from '@/lib/cep/types';
+import { BotaoMicrofone } from './BotaoMicrofone';
+import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
 
 // ─── TIPOS ──────────────────────────────────────────────────────────
 
@@ -116,6 +118,54 @@ export function InputEnderecoNF({
     };
   }, [cep, etapa]);
 
+  const [buscandoEndereco, setBuscandoEndereco] = useState<boolean>(false);
+
+  const handleTranscricao = useCallback(async (texto: string) => {
+    // 1. Tenta extrair CEP direto
+    const cepExtraido = extrairCepDeTranscricao(texto);
+    if (cepExtraido) {
+      setCep(cepExtraido);
+      return;
+    }
+
+    // 2. Se não extraiu CEP, tenta geocodar o endereço livre
+    if (texto.trim().length < 5) return; // Muito curto
+
+    setBuscandoEndereco(true);
+    setErro(null);
+
+    try {
+      const res = await fetch(`/api/routing/geocodar?q=${encodeURIComponent(texto)}`);
+      const data = await res.json();
+
+      if (res.ok && data.resultado) {
+        // Encontrou endereço. O Nominatim não tem os campos separados perfeitamente,
+        // então vamos colocar o resultado inteiro no logradouro para o usuário revisar.
+        setEndereco({
+          logradouro: data.resultado.endereco_normalizado,
+          bairro: '',
+          cidade: '',
+          uf: ''
+        });
+        
+        // Tenta achar números no texto falado para preencher o campo número
+        const matchNumero = texto.match(/\b\d+\b/);
+        if (matchNumero) {
+          setNumero(matchNumero[0]);
+        }
+        
+        setEtapa('numero');
+        setTimeout(() => numeroRef.current?.focus(), 50);
+      } else {
+        setErro('Não encontrei esse endereço. Tente novamente ou use o CEP.');
+      }
+    } catch (err) {
+      setErro('Erro ao buscar endereço falado.');
+    } finally {
+      setBuscandoEndereco(false);
+    }
+  }, []);
+
   const handleCepChange = useCallback((valor: string) => {
     setCep(normalizar(valor));
     setErro(null);
@@ -180,21 +230,29 @@ export function InputEnderecoNF({
       <div style={containerStyle}>
         {cabecalho}
         <label style={labelStyle} htmlFor="campo-cep">CEP</label>
-        <input
-          id="campo-cep"
-          type="tel"
-          inputMode="numeric"
-          pattern="[0-9]*"
-          autoComplete="postal-code"
-          value={formatarCEP(cep)}
-          onChange={(e) => handleCepChange(e.target.value)}
-          placeholder="00000-000"
-          maxLength={9}
-          autoFocus
-          style={inputStyle}
-          aria-label="CEP"
-        />
-        {loading && <div style={{ marginTop: 8, color: '#64748b' }}>Consultando CEP…</div>}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+          <input
+            id="campo-cep"
+            type="tel"
+            inputMode="numeric"
+            pattern="[0-9]*"
+            autoComplete="postal-code"
+            value={formatarCEP(cep)}
+            onChange={(e) => handleCepChange(e.target.value)}
+            placeholder="00000-000"
+            maxLength={9}
+            autoFocus
+            style={{ ...inputStyle, flex: 1 }}
+            aria-label="CEP"
+          />
+          <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco} />
+        </div>
+        <div style={{ fontSize: 13, color: '#64748b', marginTop: 12, textAlign: 'center' }}>
+          Ou fale: "Rua Augusta 1500 São Paulo"
+        </div>
+        
+        {buscandoEndereco && <div style={{ marginTop: 12, color: '#2563eb', textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}
+        {loading && <div style={{ marginTop: 12, color: '#64748b', textAlign: 'center' }}>Consultando CEP…</div>}
         {erro && <div role="alert" style={erroStyle}>{erro}</div>}
         {onCancelar && (
           <button type="button" onClick={onCancelar} style={botaoSecundarioStyle}>
