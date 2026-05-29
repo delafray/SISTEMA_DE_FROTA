@@ -96,6 +96,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <NavItem href="/"               label="Início"         icon={HomeIcon}  onNavigate={onNavigate} />
             <NavItem href="/pedidos"        label="Viagens"        icon={RouteIcon} onNavigate={onNavigate} />
             <NavItem href="/entregas"         label="Fretes"         icon={FreteIcon} onNavigate={onNavigate} />
+            <NavItem href="/roteirizacao"   label="Roteirização"   icon={RouteIcon} onNavigate={onNavigate} />
             <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon}  onNavigate={onNavigate} />
           </div>
 
