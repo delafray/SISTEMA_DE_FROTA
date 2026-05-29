@@ -13,7 +13,7 @@ type Usuario = {
   role: string;
   is_padrao: boolean | null;
   empresa_id: string;
-  perfis: { nome: string } | { nome: string }[] | null;
+  perfis: { nome: string; login: string | null } | { nome: string; login: string | null }[] | null;
 };
 
 const ROLE_LABEL: Record<string, string> = { master: "Master", admin: "Admin", gestor: "Gestor", motorista: "Motorista" };
@@ -45,7 +45,7 @@ export default function UsuariosPage() {
 
       const { data } = await supabase
         .from("usuario_empresas")
-        .select("role, is_padrao, usuario_id, perfis(nome), empresa_id")
+        .select("role, is_padrao, usuario_id, perfis(nome, login), empresa_id")
         .eq("empresa_id", ue.empresa_id)
         .order("role");
 
@@ -61,14 +61,16 @@ export default function UsuariosPage() {
     return p?.nome ?? "";
   };
 
-  const getLogin = (nome: string) =>
-    nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+  const getLogin = (u: Usuario) => {
+    const p = Array.isArray(u.perfis) ? u.perfis[0] : u.perfis;
+    return p?.login ?? "";
+  };
 
   const haystack = useMemo(() => {
     const m = new Map<string, string>();
     for (const u of todos) {
       const nome = getNome(u);
-      m.set(u.usuario_id, normalizar([nome, getLogin(nome), u.role].join(" ")));
+      m.set(u.usuario_id, normalizar([nome, getLogin(u), u.role].join(" ")));
     }
     return m;
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -145,7 +147,7 @@ export default function UsuariosPage() {
                       {nome || "—"}
                       {isMe && <Badge variant="default"> VOCÊ</Badge>}
                     </Td>
-                    <Td>{getLogin(nome) || "—"}</Td>
+                    <Td>{getLogin(u) || "—"}</Td>
                     <Td>
                       <Badge variant={ROLE_VAR[u.role] ?? "default"}>
                         {ROLE_LABEL[u.role] ?? u.role}
@@ -181,7 +183,7 @@ export default function UsuariosPage() {
                 key={u.usuario_id}
                 href={isMe ? undefined : `/usuarios/${u.usuario_id}/editar`}
                 title={nome || "—"}
-                subtitle={getLogin(nome)}
+                subtitle={getLogin(u)}
                 badge={
                   <Badge variant={ROLE_VAR[u.role] ?? "default"}>
                     {ROLE_LABEL[u.role] ?? u.role}

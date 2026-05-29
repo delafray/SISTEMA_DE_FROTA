@@ -99,6 +99,7 @@ describe("Usuários Server Actions", () => {
       const formData = new FormData();
       formData.append("usuario_id", "target-id");
       formData.append("nome", "Novo Nome");
+      formData.append("login", "novo-login");
       formData.append("role", "gestor");
 
       await expect(editarUsuarioAction(undefined, formData)).rejects.toThrow("Redirected to /usuarios");
@@ -134,6 +135,7 @@ describe("Usuários Server Actions", () => {
       const formData = new FormData();
       formData.append("usuario_id", "target-id");
       formData.append("nome", "Novo Nome");
+      formData.append("login", "novo-login");
       formData.append("role", "motorista");
       formData.append("senha", "nova-senha-123");
       formData.append("motorista_id", "mot-uuid");

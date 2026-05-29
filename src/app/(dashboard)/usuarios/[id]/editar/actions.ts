@@ -21,6 +21,7 @@ export async function editarUsuarioAction(
 
   const usuarioId    = formData.get("usuario_id") as string;
   const nome         = formData.get("nome") as string;
+  const login        = formData.get("login") as string;
   const role         = formData.get("role") as string;
   const senha        = formData.get("senha") as string;
   const motorista_id = (formData.get("motorista_id") as string) || null;
@@ -35,12 +36,17 @@ export async function editarUsuarioAction(
     return { error: "A nova senha deve ter pelo menos 6 caracteres." };
   }
 
-  // 2. Atualiza perfil (nome e motorista_id)
+  // 2. Atualiza perfil (nome, login e motorista_id)
   if (nome?.trim()) {
     const targetMotorista = role === "motorista" ? motorista_id : null;
+    const normalizedLogin = login
+      ? login.toLowerCase().replace(/[^a-z0-9]/g, "")
+      : nome.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, "");
+
     await admin.from("perfis")
       .update({ 
         nome: nome.trim(),
+        login: normalizedLogin,
         motorista_id: targetMotorista
       })
       .eq("id", usuarioId);

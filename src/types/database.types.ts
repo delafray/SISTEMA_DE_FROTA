@@ -1,4 +1,4 @@
-﻿export type Json =
+export type Json =
   | string
   | number
   | boolean
@@ -1853,13 +1853,14 @@ export type Database = {
           },
         ]
       }
-      perfis: {
+       perfis: {
         Row: {
           ativo: boolean | null
           cpf: string | null
           created_at: string | null
           foto_url: string | null
           id: string
+          login: string | null
           motorista_id: string | null
           nome: string
           telefone: string | null
@@ -1872,6 +1873,7 @@ export type Database = {
           created_at?: string | null
           foto_url?: string | null
           id: string
+          login?: string | null
           motorista_id?: string | null
           nome: string
           telefone?: string | null
@@ -1884,6 +1886,7 @@ export type Database = {
           created_at?: string | null
           foto_url?: string | null
           id?: string
+          login?: string | null
           motorista_id?: string | null
           nome?: string
           telefone?: string | null

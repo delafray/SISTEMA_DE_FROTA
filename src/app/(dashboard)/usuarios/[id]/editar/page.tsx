@@ -90,20 +90,20 @@ export default function EditarUsuarioPage() {
                     <input
                       name="nome"
                       value={nome}
-                      onChange={e => {
-                        setNome(e.target.value);
-                        setLogin(e.target.value.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""));
-                      }}
+                      onChange={e => setNome(e.target.value)}
                       style={inputStyle}
                     />
                   </FormField>
                 </div>
 
-                <FormField label="Usuário (Login) — gerado automaticamente">
+                <FormField label="Usuário (Login)">
                   <input
+                    name="login"
                     value={login}
-                    disabled
-                    style={{ ...inputStyle, background: "#f8fafc", color: "#94a3b8", cursor: "not-allowed" }}
+                    onChange={e => setLogin(e.target.value.toLowerCase().replace(/[^a-z0-9]/g, ""))}
+                    style={inputStyle}
+                    placeholder="Ex: borba"
+                    required
                   />
                 </FormField>
 
