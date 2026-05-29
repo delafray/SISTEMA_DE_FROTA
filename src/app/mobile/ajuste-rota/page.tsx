@@ -699,7 +699,7 @@ function SortableTijolinho({
           // Handle visual (so dica) — listeners ja estao no wrapper inteiro.
           <span
             data-testid={`handle-${parada.ordem}`}
-            style={{ padding: 8, fontSize: 18, color: '#94a3b8', pointerEvents: 'none' }}
+            style={{ padding: 4, fontSize: 14, color: '#94a3b8', pointerEvents: 'none', flexShrink: 0 }}
             aria-hidden="true"
           >
             ☰
@@ -776,18 +776,19 @@ const erroStyle: React.CSSProperties = {
 };
 
 const iconBtnStyle: React.CSSProperties = {
-  width: 36,
-  height: 36,
+  width: 32,
+  height: 32,
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
   background: '#f1f5f9',
   border: '1px solid #cbd5e1',
-  borderRadius: 8,
-  fontSize: 18,
+  borderRadius: 6,
+  fontSize: 16,
   cursor: 'pointer',
   padding: 0,
   flexShrink: 0,
+  lineHeight: 1,
 };
 
 const overlayStyle: React.CSSProperties = {

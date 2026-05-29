@@ -74,25 +74,57 @@ export async function PATCH(
   const erros: Array<{ id: string; message: string }> = [];
   const sucessos: string[] = [];
 
-  // Reordenacao via 2-pass pra evitar violar a UNIQUE(rota_id, ordem):
-  // 1. Move tudo pra ordens negativas temporariamente
-  // 2. Aplica as ordens finais
-  // Falhas no pass 1 sao apenas logadas — o erro real e contado no pass 2.
+  // ─── Estrategia 2-pass robusta pra reordenacao ───────────────────────
+  //
+  // O bug anterior: pass 1 movia pra negativos APENAS as paradas do request.
+  // Se o banco tinha paradas que o frontend nao enviou (estado stale apos
+  // adicionar), pass 2 colidia: "duplicate key paradas_rota_ordem_unica".
+  //
+  // Fix: pass 1 fetch TODAS as paradas da rota e move TODAS pra negativos.
+  // Depois pass 2 aplica request (positivos). Paradas nao no request ficam
+  // negativas — pass 3 da pra elas ordens positivas apos o max do request.
 
   const temReordenacao = body.paradas.some((p) => typeof p.ordem === 'number');
 
+  // Fetch todas paradas do rota (precisamos saber QUAIS existem no banco)
+  const { data: dbParadasRaw, error: errFetch } = await supabase
+    .from('paradas')
+    .select('id, ordem')
+    .eq('rota_id', rotaId)
+    .order('ordem');
+
+  if (errFetch) {
+    log.error('fetch_paradas_falhou', { message: errFetch.message });
+    return NextResponse.json({ error: 'db_fetch_failed' }, { status: 500 });
+  }
+  const dbParadas = (dbParadasRaw ?? []) as Array<{ id: string; ordem: number }>;
+
   if (temReordenacao) {
-    for (let i = 0; i < body.paradas.length; i++) {
-      const p = body.paradas[i];
-      if (typeof p.ordem === 'number') {
-        const { error } = await supabase
-          .from('paradas')
-          .update({ ordem: -(i + 1) })
-          .eq('id', p.id)
-          .eq('rota_id', rotaId);
-        if (error) {
-          log.warn('temp_reorder_falhou', { id: p.id, message: error.message });
-        }
+    // Pass 1: move TODAS pra ordens negativas unicas (-1, -2, ...).
+    // Usa .select('id') pra detectar silenciosamente 0-rows (RLS, id errado).
+    for (let i = 0; i < dbParadas.length; i++) {
+      const { data, error } = await supabase
+        .from('paradas')
+        .update({ ordem: -(i + 1) })
+        .eq('id', dbParadas[i].id)
+        .eq('rota_id', rotaId)
+        .select('id');
+      if (error) {
+        log.error('temp_reorder_falhou', { id: dbParadas[i].id, message: error.message });
+        return NextResponse.json(
+          { error: 'pass1_falhou', detail: error.message, parada_id: dbParadas[i].id },
+          { status: 500 }
+        );
+      }
+      if (!data || data.length === 0) {
+        log.error('temp_reorder_0_rows', { id: dbParadas[i].id });
+        return NextResponse.json(
+          {
+            error: 'pass1_silencioso',
+            detail: `Nao consegui mover parada ${dbParadas[i].id} pro temp. RLS?`,
+          },
+          { status: 500 }
+        );
       }
     }
   }
@@ -136,6 +168,36 @@ export async function PATCH(
       });
     } else {
       sucessos.push(p.id);
+    }
+  }
+
+  // Pass 3: paradas que estao no DB mas nao no request com ordem.
+  // Elas estao com ordens temporarias negativas — precisam voltar pra positivos.
+  // Estrategia: dao ordens sequenciais APOS o max do request (preserva o que
+  // o usuario reordenou, e empurra o desconhecido pro final). Mantem ordem
+  // relativa entre si (original ordem ASC).
+  if (temReordenacao && erros.length === 0) {
+    const idsNoRequest = new Set(
+      body.paradas.filter((p) => typeof p.ordem === 'number').map((p) => p.id)
+    );
+    const ordensDoRequest = body.paradas
+      .filter((p) => typeof p.ordem === 'number')
+      .map((p) => p.ordem as number);
+    const maxRequestOrdem = ordensDoRequest.length > 0 ? Math.max(...ordensDoRequest) : 0;
+    const naoNoRequest = dbParadas.filter((p) => !idsNoRequest.has(p.id));
+    let nextOrdem = maxRequestOrdem + 1;
+    for (const p of naoNoRequest) {
+      const { error } = await supabase
+        .from('paradas')
+        .update({ ordem: nextOrdem })
+        .eq('id', p.id)
+        .eq('rota_id', rotaId)
+        .select('id');
+      if (error) {
+        log.error('pass3_restore_falhou', { id: p.id, message: error.message });
+        erros.push({ id: p.id, message: `pass3: ${error.message}` });
+      }
+      nextOrdem++;
     }
   }
 

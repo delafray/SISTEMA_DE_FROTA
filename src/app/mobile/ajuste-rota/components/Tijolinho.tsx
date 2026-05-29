@@ -59,17 +59,17 @@ export function Tijolinho({
     <div
       data-testid={`numero-parada-${parada.ordem}`}
       style={{
-        width: 40,
-        height: 40,
+        width: 34,
+        height: 34,
         flexShrink: 0,
         background: parada.fixada ? '#dc2626' : '#2563eb',
         color: '#fff',
-        borderRadius: 8,
+        borderRadius: 6,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
         fontWeight: 700,
-        fontSize: 18,
+        fontSize: 15,
       }}
     >
       {parada.ordem}

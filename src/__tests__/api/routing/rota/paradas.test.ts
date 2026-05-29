@@ -27,39 +27,54 @@ function makeParams(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
-// Pass 1 (temp) usa .update(...).eq(...).eq(...) sem .select().
-// Pass 2 (final) adiciona .select('id') no fim. Mock retorna [{id}] pra
-// simular row atualizado.
-function makeQuery(passResult: { data: unknown; error: unknown }) {
-  return {
+/**
+ * Setup do mock supabase pra cobrir:
+ * - SELECT (fetch all paradas no inicio do PATCH)
+ * - UPDATE (pass 1 + pass 2 + pass 3) — todos com .select('id') no fim
+ */
+function setupSupabase(opts: {
+  dbParadas?: Array<{ id: string; ordem: number }>;
+  updateResult?: { data: unknown; error: unknown };
+}) {
+  const { dbParadas = [], updateResult = { data: [{ id: 'matched' }], error: null } } = opts;
+
+  const updateMock = vi.fn(() => ({
     eq: vi.fn(() => ({
-      // Pass 1 termina aqui (thenable direto)
-      eq: vi.fn(() => {
-        const promise = Promise.resolve(passResult) as Promise<unknown> & {
-          select?: (cols?: string) => Promise<unknown>;
-        };
-        // Pass 2 chama .select('id') depois — devolve mesmo resultado
-        promise.select = () => Promise.resolve(passResult);
-        return promise;
-      }),
+      eq: vi.fn(() => ({
+        select: vi.fn(() => Promise.resolve(updateResult)),
+      })),
     })),
-  };
+  }));
+
+  const selectMock = vi.fn(() => ({
+    eq: vi.fn(() => ({
+      order: vi.fn(() => Promise.resolve({ data: dbParadas, error: null })),
+    })),
+  }));
+
+  supabaseFromMock.mockReturnValue({
+    update: updateMock,
+    select: selectMock,
+  });
+
+  return { updateMock, selectMock };
 }
 
 function setupUpdateOk() {
-  const updateMock = vi.fn(() =>
-    makeQuery({ data: [{ id: 'matched' }], error: null })
-  );
-  supabaseFromMock.mockReturnValue({ update: updateMock });
-  return updateMock;
+  // Default: 2 paradas no DB pra cobrir cenarios de reorder
+  return setupSupabase({
+    dbParadas: [
+      { id: 'p1', ordem: 1 },
+      { id: 'p2', ordem: 2 },
+    ],
+  }).updateMock;
 }
 
 function setupUpdateError(message = 'boom') {
-  const updateMock = vi.fn(() =>
-    makeQuery({ data: null, error: { code: 'XX', message } })
-  );
-  supabaseFromMock.mockReturnValue({ update: updateMock });
-  return updateMock;
+  return setupSupabase({
+    dbParadas: [{ id: 'p1', ordem: 1 }],
+    updateResult: { data: null, error: { code: 'XX', message } },
+  }).updateMock;
 }
 
 beforeEach(() => {
@@ -167,7 +182,7 @@ describe('PATCH /api/routing/rota/[id]/paradas', () => {
     );
   });
 
-  it('500 quando TODAS as paradas falham', async () => {
+  it('500 quando DB error no pass 1 (reordenacao)', async () => {
     setupUpdateError('db down');
 
     const res = await PATCH(
@@ -177,20 +192,22 @@ describe('PATCH /api/routing/rota/[id]/paradas', () => {
 
     expect(res.status).toBe(500);
     const body = await res.json();
-    expect(body.ok).toBe(false);
+    // Novo formato: aborta no pass 1 com erro estruturado em vez de
+    // passar adiante e contar como "todas falharam"
+    expect(body.error).toBe('pass1_falhou');
+    expect(body.detail).toBe('db down');
   });
 
-  it('500 quando update retorna 0 rows (RLS bloqueando ou id errado)', async () => {
-    // Sucesso aparente (error=null) mas data=[] = nenhuma linha tocada.
-    // Antes esse cenario era silenciosamente tratado como sucesso — agora
-    // vira erro explicito pro motorista nao achar que salvou.
-    const updateMock = vi.fn(() =>
-      makeQuery({ data: [], error: null })
-    );
-    supabaseFromMock.mockReturnValue({ update: updateMock });
+  it('500 quando pass 1 (temp shift) retorna 0 rows (RLS bloqueando)', async () => {
+    // Sem ordem no request — vai direto pra pass 2 sem temp shift.
+    // Pass 2 retorna 0 rows → erro nenhuma_linha_atualizada.
+    setupSupabase({
+      dbParadas: [{ id: 'p1', ordem: 1 }],
+      updateResult: { data: [], error: null },
+    });
 
     const res = await PATCH(
-      makeReq({ paradas: [{ id: 'p1', ordem: 1 }] }),
+      makeReq({ paradas: [{ id: 'p1', observacao: 'teste' }] }),
       makeParams('r1')
     );
 
@@ -198,5 +215,32 @@ describe('PATCH /api/routing/rota/[id]/paradas', () => {
     const body = await res.json();
     expect(body.ok).toBe(false);
     expect(body.erros[0].message).toMatch(/nenhuma_linha_atualizada/);
+  });
+
+  it('500 quando pass 1 (reorder) falha silenciosamente — proteje contra bug do duplicate key', async () => {
+    // Pass 1 com 0 rows agora ABORTA antes de pass 2 — sem isso, pass 2
+    // tentava aplicar positivos em cima das paradas que nao moveram, e
+    // pegava duplicate key (bug que o motorista reportou).
+    setupSupabase({
+      dbParadas: [
+        { id: 'p1', ordem: 1 },
+        { id: 'p2', ordem: 2 },
+      ],
+      updateResult: { data: [], error: null }, // pass 1 ja retorna 0
+    });
+
+    const res = await PATCH(
+      makeReq({
+        paradas: [
+          { id: 'p1', ordem: 2 },
+          { id: 'p2', ordem: 1 },
+        ],
+      }),
+      makeParams('r1')
+    );
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.error).toBe('pass1_silencioso');
   });
 });
