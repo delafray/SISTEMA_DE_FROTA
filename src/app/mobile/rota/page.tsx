@@ -61,7 +61,10 @@ function RotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
-  const totalEsperado = Number(searchParams.get('total')) || 70;
+  // Total opcional via ?total=N. Se nao vier, header mostra so "NF X" (motorista
+  // nao precisa saber/declarar o total — pode ser 5 ou 70).
+  const totalParam = Number(searchParams.get('total'));
+  const totalEsperado: number | undefined = totalParam > 0 ? totalParam : undefined;
 
   const [fase, setFase] = useState<Fase>('carregando');
   const [notas, setNotas] = useState<NotaNaFila[]>([]);
@@ -457,7 +460,7 @@ function FaseCaptura({
   onDesfazerUltima,
 }: {
   notas: NotaNaFila[];
-  totalEsperado: number;
+  totalEsperado?: number;
   onCapturar: (n: NotaCapturadaInput) => Promise<void>;
   onOtimizar: () => void | Promise<void>;
   onDesfazerUltima: () => void | Promise<void>;
@@ -490,10 +493,34 @@ function FaseCaptura({
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 13 }}>
             {notas.slice(0, 10).map((n) => (
               <li key={n.id_local} style={itemListaStyle}>
-                {n.status_sync === 'sincronizada' && '✓ '}
-                {n.status_sync === 'pendente' && '⏳ '}
-                {n.status_sync === 'erro' && '❌ '}
-                {n.endereco.logradouro || '(sem rua)'}, {n.numero}
+                <div>
+                  {n.status_sync === 'sincronizada' && '✓ '}
+                  {n.status_sync === 'pendente' && '⏳ '}
+                  {n.status_sync === 'erro' && '❌ '}
+                  {n.endereco.logradouro || '(sem rua)'}, {n.numero}
+                </div>
+                {n.status_sync === 'erro' && n.ultimo_erro && (
+                  <div
+                    data-testid={`erro-${n.id_local}`}
+                    style={{
+                      marginTop: 4,
+                      padding: '6px 8px',
+                      background: '#fef2f2',
+                      color: '#991b1b',
+                      borderRadius: 4,
+                      fontSize: 11,
+                      fontFamily: 'ui-monospace, monospace',
+                      wordBreak: 'break-word',
+                    }}
+                  >
+                    {n.ultimo_erro}
+                    {n.tentativas > 0 && (
+                      <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                        (tentativa {n.tentativas})
+                      </span>
+                    )}
+                  </div>
+                )}
               </li>
             ))}
             {notas.length > 10 && (

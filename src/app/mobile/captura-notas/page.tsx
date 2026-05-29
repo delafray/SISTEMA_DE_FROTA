@@ -8,7 +8,7 @@
  * em background com o Supabase via /api/notas/sync.
  *
  * Params obrigatorios na URL: ?motorista_id=...&empresa_id=...
- * Param opcional: &total=70 (default 70)
+ * Param opcional: &total=N (se nao vier, header mostra so "NF X" sem total)
  *
  * Por que URL params (e nao auth/sessao): a integracao com o sistema
  * principal de usuarios fica pra "consolidacao" futura (decisao em
@@ -25,7 +25,6 @@ import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
 import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
 import type { NotaNaFila } from '@/lib/offline/types';
 
-const DEFAULT_TOTAL = 70;
 const RELOAD_INTERVAL_MS = 3000;
 const SYNC_INTERVAL_MS = 5000;
 
@@ -33,7 +32,10 @@ function CapturaNotasContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
-  const totalEsperado = Number(searchParams.get('total')) || DEFAULT_TOTAL;
+  // Total opcional via ?total=N. Sem ele, header mostra so "NF X" (motorista
+  // nao sabe o total de antemao — pode ser 5 ou 70).
+  const totalParam = Number(searchParams.get('total'));
+  const totalEsperado: number | undefined = totalParam > 0 ? totalParam : undefined;
 
   const [notas, setNotas] = useState<NotaNaFila[]>([]);
   const [online, setOnline] = useState(true);

@@ -35,7 +35,7 @@ vi.mock('@/lib/offline/onlineDetector', () => ({
 vi.mock('@/components/mobile/InputEnderecoNF', () => ({
   InputEnderecoNF: (props: {
     numeroNF: number;
-    totalNFs: number;
+    totalNFs?: number;
     onConfirmar: (nota: {
       cep: string;
       numero: string;
@@ -44,7 +44,7 @@ vi.mock('@/components/mobile/InputEnderecoNF', () => ({
   }) => (
     <div data-testid="input-endereco-nf">
       <span data-testid="contador-nf">
-        NF {props.numeroNF} de {props.totalNFs}
+        NF {props.numeroNF}{props.totalNFs && props.totalNFs > 0 ? ` de ${props.totalNFs}` : ''}
       </span>
       <button
         type="button"
@@ -140,7 +140,7 @@ describe('CapturaNotasPage — params obrigatorios', () => {
 });
 
 describe('CapturaNotasPage — fluxo inicial', () => {
-  it('renderiza header + InputEnderecoNF + contador 0/70 quando params OK', async () => {
+  it('renderiza header + InputEnderecoNF + contador "NF 1" (sem total) quando params OK', async () => {
     setSearchParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
@@ -149,7 +149,7 @@ describe('CapturaNotasPage — fluxo inicial', () => {
     expect(screen.getByText(/Captura de Notas/i)).toBeDefined();
     expect(screen.getByTestId('input-endereco-nf')).toBeDefined();
     await waitFor(() =>
-      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 1 de 70')
+      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 1')
     );
   });
 
@@ -216,13 +216,13 @@ describe('CapturaNotasPage — captura', () => {
     render(<CapturaNotasPage />);
 
     await waitFor(() =>
-      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 1 de 70')
+      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 1')
     );
 
     await user.click(screen.getByRole('button', { name: /capturar-mock/ }));
 
     await waitFor(() =>
-      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 2 de 70')
+      expect(screen.getByTestId('contador-nf').textContent).toBe('NF 2')
     );
   });
 });

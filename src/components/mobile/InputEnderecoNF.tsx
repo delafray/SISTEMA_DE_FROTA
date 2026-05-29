@@ -31,7 +31,8 @@ export interface NotaCapturadaInput {
 
 export interface InputEnderecoNFProps {
   numeroNF: number;         // contador da UI: "24" em "24 de 70"
-  totalNFs: number;         // total: "70" em "24 de 70"
+  /** Total esperado. Se omitido (motorista nao sabe o total), header mostra so "NF X". */
+  totalNFs?: number;
   onConfirmar: (nota: NotaCapturadaInput) => void | Promise<void>;
   onCancelar?: () => void;
   /** Se fornecido, mostra botão "↶ Desfazer última" no topo. Volta o estado
@@ -151,7 +152,7 @@ export function InputEnderecoNF({
   const cabecalho = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
       <div style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
-        NF {numeroNF} de {totalNFs}
+        NF {numeroNF}{totalNFs && totalNFs > 0 ? ` de ${totalNFs}` : ''}
       </div>
       {onDesfazerUltima && numeroNF > 1 && (
         <button
@@ -181,8 +182,9 @@ export function InputEnderecoNF({
         <label style={labelStyle} htmlFor="campo-cep">CEP</label>
         <input
           id="campo-cep"
-          type="text"
+          type="tel"
           inputMode="numeric"
+          pattern="[0-9]*"
           autoComplete="postal-code"
           value={formatarCEP(cep)}
           onChange={(e) => handleCepChange(e.target.value)}

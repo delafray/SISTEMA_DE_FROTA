@@ -186,6 +186,26 @@ describe('RotaPage — fase captura', () => {
     expect(btn.disabled).toBe(true);
   });
 
+  it('exibe ultimo_erro na lista quando nota tem status_sync=erro', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([
+      nota({
+        id_local: 'fail-1',
+        status_sync: 'erro',
+        tentativas: 3,
+        ultimo_erro: 'HTTP 500: db_insert_failed - relation "notas_capturadas" does not exist',
+      }),
+    ]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    render(<RotaPage />);
+
+    await waitFor(() => expect(screen.getByTestId('erro-fail-1')).toBeDefined());
+    const erroBox = screen.getByTestId('erro-fail-1');
+    expect(erroBox.textContent).toMatch(/HTTP 500/);
+    expect(erroBox.textContent).toMatch(/tentativa 3/);
+  });
+
   it('capturar nota chama adicionarNota', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([nota({ id_local: 'a' })]);

@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('InputEnderecoNF — fluxo CEP', () => {
-  it('renderiza com cabecalho "NF X de Y" e input de CEP', () => {
+  it('renderiza com cabecalho "NF X de Y" quando totalNFs e fornecido', () => {
     render(
       <InputEnderecoNF
         numeroNF={24}
@@ -50,6 +50,30 @@ describe('InputEnderecoNF — fluxo CEP', () => {
 
     expect(screen.getByText(/NF 24 de 70/)).toBeDefined();
     expect(screen.getByLabelText(/CEP/i)).toBeDefined();
+  });
+
+  it('renderiza so "NF X" quando totalNFs e omitido (motorista nao sabe o total)', () => {
+    render(<InputEnderecoNF numeroNF={3} onConfirmar={vi.fn()} />);
+
+    const header = screen.getByText(/^NF 3$/);
+    expect(header).toBeDefined();
+    expect(screen.queryByText(/de \d/)).toBeNull();
+  });
+
+  it('renderiza so "NF X" quando totalNFs=0 (mesmo efeito de omitido)', () => {
+    render(<InputEnderecoNF numeroNF={3} totalNFs={0} onConfirmar={vi.fn()} />);
+
+    expect(screen.getByText(/^NF 3$/)).toBeDefined();
+    expect(screen.queryByText(/de \d/)).toBeNull();
+  });
+
+  it('input de CEP abre teclado numerico no mobile (type=tel + inputMode=numeric + pattern)', () => {
+    render(<InputEnderecoNF numeroNF={1} totalNFs={70} onConfirmar={vi.fn()} />);
+
+    const input = screen.getByLabelText(/CEP/i) as HTMLInputElement;
+    expect(input.type).toBe('tel');
+    expect(input.inputMode).toBe('numeric');
+    expect(input.pattern).toBe('[0-9]*');
   });
 
   it('formata CEP enquanto digita (00000-000)', async () => {
