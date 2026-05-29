@@ -16,8 +16,10 @@ vi.mock('next/navigation', () => ({
 
 vi.mock('@/lib/offline/fila', () => ({
   adicionarNota: vi.fn().mockResolvedValue(undefined),
+  editarNota: vi.fn().mockResolvedValue(undefined),
   listarTodas: vi.fn().mockResolvedValue([]),
   contarPorStatus: vi.fn().mockResolvedValue({ pendente: 0, sincronizada: 0, erro: 0 }),
+  remover: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/offline/sync', () => ({
@@ -60,7 +62,7 @@ vi.mock('@/components/mobile/InputEnderecoNF', () => ({
 }));
 
 import RotaPage from '@/app/mobile/rota/page';
-import { listarTodas, adicionarNota } from '@/lib/offline/fila';
+import { listarTodas, adicionarNota, editarNota } from '@/lib/offline/fila';
 import type { NotaNaFila } from '@/lib/offline/types';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
@@ -518,3 +520,55 @@ describe('RotaPage — fase em_rota', () => {
     });
   });
 });
+
+describe('RotaPage — editar NF capturada', () => {
+  it('botao editar aparece para cada nota na lista', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    const n = nota({ id_local: 'nota-abc', status_sync: 'sincronizada' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([n]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    render(<RotaPage />);
+
+    // Vai direto pra captura porque há notas na fila
+    await waitFor(() => screen.getByTestId('input-endereco'));
+    expect(screen.getByTestId('btn-editar-nota-abc')).toBeDefined();
+  });
+
+  it('clicar no botao editar abre formulario de edicao com dados preenchidos', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    const n = nota({ id_local: 'nota-abc', status_sync: 'sincronizada', endereco: { logradouro: 'Av. Paulista', bairro: 'BV', cidade: 'SP', uf: 'SP' }, numero: '1500' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([n]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-editar-nota-abc'));
+    await user.click(screen.getByTestId('btn-editar-nota-abc'));
+
+    // Mostra banner de edicao com nome do endereco
+    await waitFor(() => expect(screen.getByText(/Editando nota/)).toBeDefined());
+  });
+
+  it('confirmar edicao chama editarNota e volta para lista', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    const n = nota({ id_local: 'nota-abc', status_sync: 'sincronizada' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([n]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-editar-nota-abc'));
+    await user.click(screen.getByTestId('btn-editar-nota-abc'));
+
+    // Clica no botão de capturar do mock (que chama onConfirmar com dados novos)
+    await waitFor(() => screen.getByRole('button', { name: /capturar-mock/ }));
+    await user.click(screen.getByRole('button', { name: /capturar-mock/ }));
+
+    // editarNota foi chamado com o id_local correto
+    await waitFor(() => expect(editarNota).toHaveBeenCalledWith('nota-abc', expect.objectContaining({ numero: '1' })));
+  });
+});
+

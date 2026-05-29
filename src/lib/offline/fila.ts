@@ -132,6 +132,24 @@ export async function remover(id_local: string): Promise<void> {
   await getDB().notas.delete(id_local);
 }
 
+/**
+ * Edita os dados de uma NF j\u00e1 capturada (endere\u00e7o, n\u00famero, observa\u00e7\u00e3o).
+ * Reseta status_sync para 'pendente' para que o worker de sync reenvie ao servidor.
+ * Limpa erros e contadores de tentativas anteriores.
+ */
+export async function editarNota(
+  id_local: string,
+  atualizacao: Partial<Pick<NotaNaFila, 'cep' | 'numero' | 'endereco' | 'observacao'>>
+): Promise<void> {
+  await getDB().notas.update(id_local, {
+    ...atualizacao,
+    status_sync: 'pendente',
+    tentativas: 0,
+    ultimo_erro: undefined,
+    proxima_tentativa: undefined,
+  });
+}
+
 /** Limpa toda a fila. Uso: testes e logout do motorista. */
 export async function limparTudo(): Promise<void> {
   await getDB().notas.clear();

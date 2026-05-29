@@ -22,6 +22,7 @@ import { MapaRota } from '@/components/MapaRota';
 import {
   adicionarNota,
   contarPorStatus,
+  editarNota,
   listarTodas,
   remover,
 } from '@/lib/offline/fila';
@@ -274,6 +275,23 @@ function RotaContent(): React.ReactElement {
     [motoristaId, empresaId]
   );
 
+  const handleEditar = useCallback(
+    async (idLocal: string, input: NotaCapturadaInput) => {
+      await editarNota(idLocal, {
+        cep: input.cep,
+        numero: input.numero,
+        endereco: input.endereco,
+        observacao: input.observacao,
+      });
+      void sincronizarFila();
+      if (motoristaId) {
+        const todas = await listarTodas(motoristaId);
+        setNotas(todas);
+      }
+    },
+    [motoristaId]
+  );
+
   const handleOtimizar = useCallback(async () => {
     setErro(null);
     setProgressoOtim('Aguardando sincronização das notas pendentes...');
@@ -459,6 +477,7 @@ function RotaContent(): React.ReactElement {
           onCapturar={handleCapturar}
           onOtimizar={handleOtimizar}
           onDesfazerUltima={handleDesfazerUltima}
+          onEditar={handleEditar}
         />
       )}
 
@@ -676,13 +695,17 @@ function FaseCaptura({
   onCapturar,
   onOtimizar,
   onDesfazerUltima,
+  onEditar,
 }: {
   notas: NotaNaFila[];
   totalEsperado?: number;
   onCapturar: (n: NotaCapturadaInput) => Promise<void>;
   onOtimizar: () => void | Promise<void>;
   onDesfazerUltima: () => void | Promise<void>;
+  onEditar: (idLocal: string, dados: NotaCapturadaInput) => Promise<void>;
 }) {
+  const [notaEmEdicao, setNotaEmEdicao] = useState<string | null>(null);
+
   const stats = {
     total: notas.length,
     sincronizadas: notas.filter((n) => n.status_sync === 'sincronizada').length,
@@ -692,6 +715,30 @@ function FaseCaptura({
   const pctSync = stats.total === 0 ? 0 : stats.sincronizadas / stats.total;
   const podeFinalizar = stats.total > 0 && pctSync >= PERCENT_SYNC_MIN;
   const numeroNF = stats.total + 1;
+
+  // Quando em modo edição, mostra o formulario preenchido com dados da nota
+  if (notaEmEdicao) {
+    const nota = notas.find((n) => n.id_local === notaEmEdicao);
+    if (nota) {
+      return (
+        <div>
+          <div style={{ padding: '8px 16px', background: '#fef3c7', color: '#92400e', fontSize: 13, fontWeight: 600 }}>
+            ✏️ Editando nota: {nota.endereco.logradouro || '(sem rua)'}, {nota.numero}
+          </div>
+          <InputEnderecoNF
+            numeroNF={notas.findIndex((n) => n.id_local === notaEmEdicao) + 1}
+            totalNFs={notas.length}
+            initialData={{ cep: nota.cep, numero: nota.numero, endereco: nota.endereco }}
+            onConfirmar={async (dados) => {
+              await onEditar(notaEmEdicao, dados);
+              setNotaEmEdicao(null);
+            }}
+            onCancelar={() => setNotaEmEdicao(null)}
+          />
+        </div>
+      );
+    }
+  }
 
   return (
     <div>
@@ -710,35 +757,56 @@ function FaseCaptura({
           </h2>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 13 }}>
             {notas.slice(0, 10).map((n) => (
-              <li key={n.id_local} style={itemListaStyle}>
-                <div>
-                  {n.status_sync === 'sincronizada' && '✓ '}
-                  {n.status_sync === 'pendente' && '⏳ '}
-                  {n.status_sync === 'erro' && '❌ '}
-                  {n.endereco.logradouro || '(sem rua)'}, {n.numero}
-                </div>
-                {n.status_sync === 'erro' && n.ultimo_erro && (
-                  <div
-                    data-testid={`erro-${n.id_local}`}
-                    style={{
-                      marginTop: 4,
-                      padding: '6px 8px',
-                      background: '#fef2f2',
-                      color: '#991b1b',
-                      borderRadius: 4,
-                      fontSize: 11,
-                      fontFamily: 'ui-monospace, monospace',
-                      wordBreak: 'break-word',
-                    }}
-                  >
-                    {n.ultimo_erro}
-                    {n.tentativas > 0 && (
-                      <span style={{ marginLeft: 6, opacity: 0.7 }}>
-                        (tentativa {n.tentativas})
-                      </span>
-                    )}
+              <li key={n.id_local} style={{ ...itemListaStyle, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div>
+                    {n.status_sync === 'sincronizada' && '✓ '}
+                    {n.status_sync === 'pendente' && '⏳ '}
+                    {n.status_sync === 'erro' && '❌ '}
+                    {n.endereco.logradouro || '(sem rua)'}, {n.numero}
                   </div>
-                )}
+                  {n.status_sync === 'erro' && n.ultimo_erro && (
+                    <div
+                      data-testid={`erro-${n.id_local}`}
+                      style={{
+                        marginTop: 4,
+                        padding: '6px 8px',
+                        background: '#fef2f2',
+                        color: '#991b1b',
+                        borderRadius: 4,
+                        fontSize: 11,
+                        fontFamily: 'ui-monospace, monospace',
+                        wordBreak: 'break-word',
+                      }}
+                    >
+                      {n.ultimo_erro}
+                      {n.tentativas > 0 && (
+                        <span style={{ marginLeft: 6, opacity: 0.7 }}>
+                          (tentativa {n.tentativas})
+                        </span>
+                      )}
+                    </div>
+                  )}
+                </div>
+                <button
+                  type="button"
+                  data-testid={`btn-editar-${n.id_local}`}
+                  onClick={() => setNotaEmEdicao(n.id_local)}
+                  title="Editar endereço"
+                  style={{
+                    flexShrink: 0,
+                    padding: '4px 8px',
+                    fontSize: 14,
+                    background: 'transparent',
+                    border: '1px solid #cbd5e1',
+                    borderRadius: 6,
+                    cursor: 'pointer',
+                    color: '#475569',
+                    marginTop: 2,
+                  }}
+                >
+                  ✏️
+                </button>
               </li>
             ))}
             {notas.length > 10 && (

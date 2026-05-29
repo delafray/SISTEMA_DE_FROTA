@@ -34,6 +34,13 @@ export type ResultadoGeocodar =
       motivo: 'endereco_invalido' | 'nao_encontrado' | 'erro_rede' | 'timeout';
     };
 
+export type ResultadoGeocodarMultiplos =
+  | { ok: true; resultados: ResultadoGeocoding[] }
+  | {
+      ok: false;
+      motivo: 'endereco_invalido' | 'nao_encontrado' | 'erro_rede' | 'timeout';
+    };
+
 interface NominatimItem {
   lat: string;
   lon: string;
@@ -71,6 +78,27 @@ export function _resetRateLimit(): void {
   _lastRequestAt = 0;
 }
 
+// ─── HELPERS PÚBLICOS ───────────────────────────────────────────────
+
+/**
+ * Calcula distância em km entre dois pontos (fórmula Haversine simples).
+ * Precisão suficiente para ordenar resultados — não use para navegação.
+ */
+export function calcularDistanciaKm(
+  lat1: number, lng1: number,
+  lat2: number, lng2: number
+): number {
+  const R = 6371; // raio da Terra em km
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+}
+
 // ─── INTERNO ────────────────────────────────────────────────────────
 
 async function respeitarRateLimit(): Promise<void> {
@@ -86,8 +114,8 @@ async function respeitarRateLimit(): Promise<void> {
 // ─── FUNCAO PRINCIPAL ───────────────────────────────────────────────
 
 /**
- * Converte endereco em texto -> { lat, lng, endereco_normalizado }.
- * Sempre devolve resultado tipado — nunca lanca excecao.
+ * Converte endereço em texto -> { lat, lng, endereco_normalizado }.
+ * Sempre devolve resultado tipado — nunca lança exceção.
  */
 export async function geocodar(endereco: string): Promise<ResultadoGeocodar> {
   if (!endereco || endereco.trim().length < 3) {
@@ -152,6 +180,84 @@ export async function geocodar(endereco: string): Promise<ResultadoGeocodar> {
       return { ok: false, motivo: 'timeout' };
     }
     log.error('nominatim_network_error', { endereco, error: error.message });
+    return { ok: false, motivo: 'erro_rede' };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+/**
+ * Busca até `limite` resultados para um endereço.
+ * Se `lat`/`lng` forem fornecidos, ordena os resultados por distância ao ponto.
+ * Sempre devolve resultado tipado — nunca lança exceção.
+ */
+export async function geocodarMultiplos(
+  endereco: string,
+  limite = 5,
+  userLat?: number,
+  userLng?: number,
+): Promise<ResultadoGeocodarMultiplos> {
+  if (!endereco || endereco.trim().length < 3) {
+    return { ok: false, motivo: 'endereco_invalido' };
+  }
+
+  await respeitarRateLimit();
+
+  const url = new URL(`${NOMINATIM_URL_BASE}/search`);
+  url.searchParams.set('q', endereco);
+  url.searchParams.set('format', 'json');
+  url.searchParams.set('limit', String(Math.min(limite, 10)));
+  url.searchParams.set('countrycodes', 'br');
+  url.searchParams.set('addressdetails', '0');
+
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url.toString(), {
+      headers: { 'User-Agent': 'SistemaDeFrota/1.0 (routing-mvp)' },
+      signal: controller.signal,
+    });
+
+    if (!res.ok) {
+      log.warn('nominatim_multiplos_http_error', { status: res.status, endereco });
+      return { ok: false, motivo: 'erro_rede' };
+    }
+
+    const data = (await res.json()) as NominatimItem[];
+
+    if (!Array.isArray(data) || data.length === 0) {
+      log.info('endereco_multiplos_nao_encontrado', { endereco });
+      return { ok: false, motivo: 'nao_encontrado' };
+    }
+
+    // Converte, filtra invalidos
+    const resultados: ResultadoGeocoding[] = data
+      .map((item) => ({
+        lat: parseFloat(item.lat),
+        lng: parseFloat(item.lon),
+        endereco_normalizado: item.display_name,
+      }))
+      .filter((r) => !Number.isNaN(r.lat) && !Number.isNaN(r.lng));
+
+    // Ordena por distancia ao usuario quando disponivel
+    if (userLat !== undefined && userLng !== undefined) {
+      resultados.sort(
+        (a, b) =>
+          calcularDistanciaKm(userLat, userLng, a.lat, a.lng) -
+          calcularDistanciaKm(userLat, userLng, b.lat, b.lng)
+      );
+    }
+
+    log.info('endereco_multiplos_geocodado', { endereco, total: resultados.length });
+    return { ok: true, resultados };
+  } catch (err) {
+    const error = err as Error;
+    if (error.name === 'AbortError') {
+      log.warn('nominatim_multiplos_timeout', { endereco, timeout_ms: TIMEOUT_MS });
+      return { ok: false, motivo: 'timeout' };
+    }
+    log.error('nominatim_multiplos_network_error', { endereco, error: error.message });
     return { ok: false, motivo: 'erro_rede' };
   } finally {
     clearTimeout(timeout);

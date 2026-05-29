@@ -185,6 +185,7 @@ Exemplo:
 - 2026-05-29 Claude Opus 4.6 (Thinking) / Antigravity — Fix reordenação paradas (CHECK constraint), z-index Leaflet sobre modais (isolation stacking context), auto-refresh da rota ao voltar de ajuste-rota (visibilitychange + pageshow) — +1 teste novo — ✅ 518/518 passando (47 arquivos)
 - 2026-05-29 Gemini 3.1 Pro (Low) / Antigravity — Implementação de captura de endereço por voz (Speech-to-Text) usando Web Speech API nativa. Botão microfone adicionado no InputEnderecoNF com extração inteligente de CEP e fallback para geocoding completo do Nominatim — +10 testes novos em 2 arquivos novos — ✅ 528/528 passando (49 arquivos)
 - 2026-05-29 Claude Sonnet 4.6 (Thinking) / Antigravity — Histórico de rotas na tela de Início. Motorista vê as últimas 5 rotas ao abrir "Rota do Dia". Rotas em aberto aparecem em vermelho com aviso. Pode retomar ou criar nova. Refatoração geral dos testes de fase em_rota para seguir o novo fluxo de navegação — +3 novos testes — ✅ 531/531 passando (49 arquivos)
+- 2026-05-29 Gemini 2.5 Pro / Antigravity — Múltiplos resultados de geocoding ao falar endereço: `geocodarMultiplos` + `calcularDistanciaKm` em geocoding.ts, GET em `/api/routing/geocodar`, componente `ListaOpcoesEndereco`, nova etapa `escolha_endereco` em `InputEnderecoNF` com geolocalização GPS para ordenar por proximidade. Edição de NF capturada: `editarNota` em fila.ts, botão ✏️ e modo edição em `FaseCaptura` — +22 testes novos em 3 arquivos novos — ✅ 558/558 passando (52 arquivos)
 
 ---
 

@@ -19,8 +19,11 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { consultarCEPBrowser } from '@/lib/cep/client';
 import type { EnderecoCEP } from '@/lib/cep/types';
+import type { ResultadoGeocoding } from '@/lib/routing/types';
+import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import { BotaoMicrofone } from './BotaoMicrofone';
 import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
+import { ListaOpcoesEndereco } from './ListaOpcoesEndereco';
 
 // ─── TIPOS ──────────────────────────────────────────────────────────
 
@@ -40,9 +43,11 @@ export interface InputEnderecoNFProps {
   /** Se fornecido, mostra botão "↶ Desfazer última" no topo. Volta o estado
    *  do app removendo a ultima NF capturada (logica fica no parent). */
   onDesfazerUltima?: () => void | Promise<void>;
+  /** Dados iniciais para modo de edição. Quando fornecido, campos já começam preenchidos. */
+  initialData?: NotaCapturadaInput;
 }
 
-type Etapa = 'cep' | 'numero' | 'confirmar' | 'endereco_manual';
+type Etapa = 'cep' | 'numero' | 'confirmar' | 'endereco_manual' | 'escolha_endereco';
 
 // ─── HELPERS ────────────────────────────────────────────────────────
 
@@ -71,13 +76,16 @@ export function InputEnderecoNF({
   onConfirmar,
   onCancelar,
   onDesfazerUltima,
+  initialData,
 }: InputEnderecoNFProps): React.ReactElement {
-  const [etapa, setEtapa] = useState<Etapa>('cep');
-  const [cep, setCep] = useState<string>('');           // armazenado normalizado (so digitos)
-  const [endereco, setEndereco] = useState<EnderecoCEP | null>(null);
-  const [numero, setNumero] = useState<string>('');
+  const [etapa, setEtapa] = useState<Etapa>(initialData ? 'confirmar' : 'cep');
+  const [cep, setCep] = useState<string>(initialData?.cep ?? '');           // armazenado normalizado (so digitos)
+  const [endereco, setEndereco] = useState<EnderecoCEP | null>(initialData?.endereco ?? null);
+  const [numero, setNumero] = useState<string>(initialData?.numero ?? '');
   const [loading, setLoading] = useState<boolean>(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Lista de opcoes de geocoding para o motorista escolher
+  const [opcoesFala, setOpcoesFala] = useState<(ResultadoGeocoding & { distanciaKm?: number })[]>([]);
 
   const numeroRef = useRef<HTMLInputElement | null>(null);
 
@@ -135,36 +143,76 @@ export function InputEnderecoNF({
     setErro(null);
 
     try {
-      const res = await fetch(`/api/routing/geocodar?q=${encodeURIComponent(texto)}`);
-      const data = await res.json();
-
-      if (res.ok && data.resultado) {
-        // Encontrou endereço. O Nominatim não tem os campos separados perfeitamente,
-        // então vamos colocar o resultado inteiro no logradouro para o usuário revisar.
-        setEndereco({
-          logradouro: data.resultado.endereco_normalizado,
-          bairro: '',
-          cidade: '',
-          uf: ''
+      // Tenta obter localização do usuário para ordenar por proximidade
+      let userLat: number | undefined;
+      let userLng: number | undefined;
+      try {
+        const pos = await new Promise<GeolocationPosition>((resolve, reject) => {
+          navigator.geolocation?.getCurrentPosition(resolve, reject, {
+            timeout: 3000,
+            maximumAge: 60000,
+          });
         });
-        
-        // Tenta achar números no texto falado para preencher o campo número
-        const matchNumero = texto.match(/\b\d+\b/);
-        if (matchNumero) {
-          setNumero(matchNumero[0]);
+        userLat = pos.coords.latitude;
+        userLng = pos.coords.longitude;
+      } catch {
+        // Sem GPS ou sem permissão — geocoda sem coordenadas
+      }
+
+      // Monta URL com coordenadas se disponíveis
+      const params = new URLSearchParams({ q: texto, limite: '5' });
+      if (userLat !== undefined && userLng !== undefined) {
+        params.set('lat', String(userLat));
+        params.set('lng', String(userLng));
+      }
+
+      const res = await fetch(`/api/routing/geocodar?${params.toString()}`);
+      const data = await res.json() as { resultados?: ResultadoGeocoding[] };
+
+      if (res.ok && data.resultados && data.resultados.length > 0) {
+        // Anota distância pra cada opção
+        const comDistancia = data.resultados.map((r) => ({
+          ...r,
+          distanciaKm:
+            userLat !== undefined && userLng !== undefined
+              ? calcularDistanciaKm(userLat, userLng, r.lat, r.lng)
+              : undefined,
+        }));
+
+        if (comDistancia.length === 1) {
+          // Resultado único: preenche direto sem mostrar lista
+          preencherPorGeocodingResultado(comDistancia[0], texto);
+        } else {
+          // Múltiplos: motorista escolhe
+          setOpcoesFala(comDistancia);
+          setEtapa('escolha_endereco');
         }
-        
-        setEtapa('numero');
-        setTimeout(() => numeroRef.current?.focus(), 50);
       } else {
         setErro('Não encontrei esse endereço. Tente novamente ou use o CEP.');
       }
-    } catch (err) {
+    } catch {
       setErro('Erro ao buscar endereço falado.');
     } finally {
       setBuscandoEndereco(false);
     }
   }, []);
+
+  /** Preenche estado de endereço a partir de um resultado de geocoding. */
+  function preencherPorGeocodingResultado(resultado: ResultadoGeocoding, textoOriginal: string) {
+    setEndereco({
+      logradouro: resultado.endereco_normalizado,
+      bairro: '',
+      cidade: '',
+      uf: '',
+    });
+    // Tenta extrair número do texto falado
+    const matchNumero = textoOriginal.match(/\b\d+\b/);
+    if (matchNumero) {
+      setNumero(matchNumero[0]);
+    }
+    setEtapa('numero');
+    setTimeout(() => numeroRef.current?.focus(), 50);
+  }
 
   const handleCepChange = useCallback((valor: string) => {
     setCep(normalizar(valor));
@@ -259,6 +307,28 @@ export function InputEnderecoNF({
             Cancelar
           </button>
         )}
+      </div>
+    );
+  }
+
+  if (etapa === 'escolha_endereco') {
+    return (
+      <div style={containerStyle}>
+        {cabecalho}
+        <ListaOpcoesEndereco
+          opcoes={opcoesFala}
+          onSelecionar={(opcao) => {
+            preencherPorGeocodingResultado(opcao, '');
+            setOpcoesFala([]);
+          }}
+          onNenhumDesses={() => {
+            setOpcoesFala([]);
+            setCep('');
+            setEndereco(null);
+            setErro(null);
+            setEtapa('cep');
+          }}
+        />
       </div>
     );
   }
