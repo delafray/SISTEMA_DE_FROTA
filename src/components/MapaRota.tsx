@@ -26,6 +26,8 @@ export interface MapaRotaProps {
   altura?: number;
   paradaSelecionada?: string | null;
   onParadaClick?: (id: string) => void;
+  /** Posicao atual do motorista — renderiza pino discreto "you are here". */
+  posicaoAtual?: { lat: number; lng: number } | null;
 }
 
 const MapaRotaInner = dynamic(() => import('./MapaRotaInner'), {

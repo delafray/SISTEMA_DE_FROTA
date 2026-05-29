@@ -36,6 +36,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { MapaRota } from '@/components/MapaRota';
 import { Tijolinho } from './components/Tijolinho';
 import { ModalHorario, type ParadaEditavel } from './components/ModalHorario';
+import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
 import { distanciasEntreParadas, estimarKmTotal } from '@/lib/routing/utils';
 import type { Parada, RotaOtimizada } from '@/lib/routing/types';
 
@@ -89,6 +90,12 @@ function AjusteRotaContent(): React.ReactElement {
   const [dirty, setDirty] = useState(false);
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [avisoLock, setAvisoLock] = useState<string | null>(null);
+  // Fluxo de adicionar nova parada via header:
+  //   fechado → capturando (CEP) → escolhendo (posicao) → adicionando (POST) → fechado
+  const [modoAdicao, setModoAdicao] = useState<'fechado' | 'capturando' | 'escolhendo' | 'adicionando'>('fechado');
+  const [dadosNovaParada, setDadosNovaParada] = useState<NotaCapturadaInput | null>(null);
+  const [erroAdicionar, setErroAdicionar] = useState<string | null>(null);
+  const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
 
   // Pointer p/ mouse + Touch p/ dedo. Ambos com long-press de 200ms — assim
   // tap curto continua selecionando a parada no mapa, mas segurar 200ms ativa
@@ -97,6 +104,17 @@ function AjusteRotaContent(): React.ReactElement {
     useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } }),
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
+
+  // Watch GPS — marcador "voce esta aqui" no mapa. Para ao desmontar.
+  useEffect(() => {
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setPosicaoAtual({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => { /* GPS off — ignora */ },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, []);
 
   // Load inicial
   useEffect(() => {
@@ -179,6 +197,92 @@ function AjusteRotaContent(): React.ReactElement {
     [paradaEditando]
   );
 
+  // ─── Inverter ordem completa ─────────────────────────────────────
+  const handleInverter = useCallback(() => {
+    setParadas((arr) => {
+      const invertido = [...arr].reverse();
+      return invertido.map((p, i) => ({ ...p, ordem: i + 1 }));
+    });
+    vibrar([40, 20, 40]);
+    setDirty(true);
+  }, []);
+
+  // ─── Adicionar parada — fluxo em 3 passos ────────────────────────
+  const handleCapturarNova = useCallback((dados: NotaCapturadaInput) => {
+    setDadosNovaParada(dados);
+    setModoAdicao('escolhendo');
+  }, []);
+
+  const handleConfirmarAdicao = useCallback(
+    async (posicao: 'final' | 'reotimizar') => {
+      if (!dadosNovaParada || !rotaInfo) return;
+      setErroAdicionar(null);
+      setModoAdicao('adicionando');
+
+      try {
+        // Se ha mudancas manuais nao salvas, persiste primeiro pra nao perder
+        // (o backend trabalha em cima do que esta no DB)
+        if (dirty) {
+          const payloadSalvar = {
+            paradas: paradas.map((p) => ({
+              id: p.id,
+              ordem: p.ordem,
+              fixada: p.fixada,
+              janela_horario: p.janela_horario,
+              observacao: p.observacao,
+            })),
+          };
+          const resSalvar = await fetch(`/api/routing/rota/${rotaInfo.id}/paradas`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payloadSalvar),
+          });
+          if (!resSalvar.ok) throw new Error(`pre-save falhou: HTTP ${resSalvar.status}`);
+          setDirty(false);
+        }
+
+        // Adicionar a nova parada
+        const res = await fetch(`/api/routing/rota/${rotaInfo.id}/paradas/adicionar`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            motorista_id: rotaInfo.motorista_id,
+            empresa_id: rotaInfo.empresa_id,
+            cep: dadosNovaParada.cep,
+            numero: dadosNovaParada.numero,
+            endereco: dadosNovaParada.endereco,
+            posicao,
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok) {
+          throw new Error(data.error ?? `HTTP ${res.status}`);
+        }
+
+        // Refetch da rota+paradas pra refletir a nova ordem
+        const rotaRes = await fetch(`/api/routing/rota/${rotaInfo.id}`);
+        const rotaData = (await rotaRes.json()) as RotaResponse;
+        setParadas(rotaData.paradas);
+        setRotaInfo(rotaData.rota);
+
+        vibrar([50, 30, 50]);
+        bipeCurto();
+        setDadosNovaParada(null);
+        setModoAdicao('fechado');
+      } catch (err) {
+        setErroAdicionar(`${(err as Error).message}`);
+        setModoAdicao('escolhendo'); // volta pra tela de escolha
+      }
+    },
+    [dadosNovaParada, rotaInfo, dirty, paradas]
+  );
+
+  const handleCancelarAdicao = useCallback(() => {
+    setDadosNovaParada(null);
+    setErroAdicionar(null);
+    setModoAdicao('fechado');
+  }, []);
+
   const handleSalvar = useCallback(async () => {
     if (!rotaId || !dirty) return;
     setSalvando(true);
@@ -198,7 +302,35 @@ function AjusteRotaContent(): React.ReactElement {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = await res.json().catch(() => ({}));
+
+      // Trata erro total (500), parcial (207) ou retorno com ok=false
+      if (!res.ok || data.ok === false) {
+        const erros = Array.isArray(data.erros) ? data.erros : [];
+        const detalhe = erros.length > 0
+          ? erros.map((e: { id: string; message: string }) => `${e.id.slice(0, 8)}: ${e.message}`).join(' | ')
+          : `HTTP ${res.status}`;
+        throw new Error(`Salvou ${data.sucessos?.length ?? 0}/${payload.paradas.length}. ${detalhe}`);
+      }
+
+      // Verifica que todas as paradas foram realmente atualizadas no DB
+      if (data.atualizadas !== payload.paradas.length) {
+        throw new Error(
+          `Esperava atualizar ${payload.paradas.length} paradas, banco confirmou ${data.atualizadas}. Verifique permissoes (RLS) ou IDs.`
+        );
+      }
+
+      // Refetch da rota apos salvar — garante que o que esta na tela e o
+      // que esta no banco. Antes a UI confiava no estado local; se o PATCH
+      // falhasse silenciosamente, motorista via "Sem mudancas" mas no
+      // proximo load voltava o antigo.
+      const refetch = await fetch(`/api/routing/rota/${rotaId}`);
+      if (refetch.ok) {
+        const rotaData = (await refetch.json()) as RotaResponse;
+        setParadas(rotaData.paradas);
+        setRotaInfo(rotaData.rota);
+      }
+
       setDirty(false);
     } catch (err) {
       setErro((err as Error).message);
@@ -252,7 +384,32 @@ function AjusteRotaContent(): React.ReactElement {
   return (
     <div style={containerStyle}>
       <header style={headerStyle}>
-        <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Ajuste de Rota</h1>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Ajuste de Rota</h1>
+          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
+            <button
+              type="button"
+              onClick={() => setModoAdicao('capturando')}
+              title="adicionar parada"
+              aria-label="adicionar parada"
+              data-testid="btn-adicionar-parada"
+              style={iconBtnStyle}
+            >
+              ➕
+            </button>
+            <button
+              type="button"
+              onClick={handleInverter}
+              title="inverter rota completa"
+              aria-label="inverter rota"
+              data-testid="btn-inverter"
+              disabled={paradas.length < 2}
+              style={{ ...iconBtnStyle, opacity: paradas.length < 2 ? 0.4 : 1 }}
+            >
+              ⇅
+            </button>
+          </div>
+        </div>
         <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
           {paradas.length} paradas · {dirty && '≈ '}{kmExibido.toFixed(1)} km
           {minExibido !== null && !dirty && <> · ≈ {Math.round(minExibido)} min</>}
@@ -268,8 +425,10 @@ function AjusteRotaContent(): React.ReactElement {
               borderRadius: 6,
               fontSize: 12,
               display: 'flex',
-              gap: 12,
+              gap: 10,
               alignItems: 'center',
+              // flexWrap evita overflow horizontal em iPhone SE/Mini (320-375px)
+              flexWrap: 'wrap',
             }}
           >
             <span style={{ fontWeight: 700, color: '#9a3412' }}>↻ Mudou:</span>
@@ -297,8 +456,9 @@ function AjusteRotaContent(): React.ReactElement {
       {/* Mapa interativo (tap pino destaca card) */}
       <MapaRota
         paradas={paradas}
-        altura={280}
+        altura={220}
         paradaSelecionada={paradaSelecionada}
+        posicaoAtual={posicaoAtual}
         onParadaClick={(id) => {
           setParadaSelecionada(id);
           vibrar(30);
@@ -388,6 +548,100 @@ function AjusteRotaContent(): React.ReactElement {
           onFechar={() => setParadaEditando(null)}
         />
       )}
+
+      {/* Overlay 1: captura de CEP+numero (modoAdicao=capturando) */}
+      {modoAdicao === 'capturando' && (
+        <div
+          role="dialog"
+          aria-label="adicionar parada"
+          data-testid="overlay-capturar"
+          style={overlayStyle}
+          onClick={handleCancelarAdicao}
+        >
+          <div style={overlayModalStyle} onClick={(e) => e.stopPropagation()}>
+            <InputEnderecoNF
+              numeroNF={(paradas.length ?? 0) + 1}
+              onConfirmar={handleCapturarNova}
+              onCancelar={handleCancelarAdicao}
+            />
+          </div>
+        </div>
+      )}
+
+      {/* Overlay 2: escolha de posicao (modoAdicao=escolhendo|adicionando) */}
+      {(modoAdicao === 'escolhendo' || modoAdicao === 'adicionando') && dadosNovaParada && (
+        <div
+          role="dialog"
+          aria-label="onde adicionar a parada"
+          data-testid="overlay-escolher"
+          style={overlayStyle}
+          onClick={modoAdicao === 'escolhendo' ? handleCancelarAdicao : undefined}
+        >
+          <div style={overlayModalStyle} onClick={(e) => e.stopPropagation()}>
+            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
+              Onde adicionar?
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              📍 {dadosNovaParada.endereco.logradouro}, {dadosNovaParada.numero}
+            </div>
+
+            <button
+              type="button"
+              onClick={() => handleConfirmarAdicao('reotimizar')}
+              disabled={modoAdicao === 'adicionando'}
+              data-testid="btn-reotimizar"
+              style={{
+                ...overlayBotaoPrincipal,
+                background: '#16a34a',
+                opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
+              }}
+            >
+              🎯 Reotimizar — melhor posição
+              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 2, opacity: 0.85 }}>
+                Mantém ordem atual e encaixa onde gerar menos KM extra
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => handleConfirmarAdicao('final')}
+              disabled={modoAdicao === 'adicionando'}
+              data-testid="btn-final"
+              style={{
+                ...overlayBotaoPrincipal,
+                background: '#2563eb',
+                opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
+              }}
+            >
+              📍 Última entrega
+              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 2, opacity: 0.85 }}>
+                Vai pro final da fila — depois você reorganiza se quiser
+              </div>
+            </button>
+
+            <button
+              type="button"
+              onClick={handleCancelarAdicao}
+              disabled={modoAdicao === 'adicionando'}
+              style={overlayBotaoSecundario}
+            >
+              Cancelar
+            </button>
+
+            {modoAdicao === 'adicionando' && (
+              <div role="status" style={{ marginTop: 12, fontSize: 13, color: '#475569', textAlign: 'center' }}>
+                ⏳ Geocodificando e adicionando…
+              </div>
+            )}
+
+            {erroAdicionar && (
+              <div role="alert" style={{ ...erroStyle, marginTop: 12 }}>
+                {erroAdicionar}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -461,18 +715,24 @@ function SortableTijolinho({
 const containerStyle: React.CSSProperties = {
   maxWidth: 480,
   margin: '0 auto',
-  padding: 16,
+  padding: 12,
+  // Safety net pra qualquer elemento que ultrapasse o limite — em telefones de
+  // 320-375px (iPhone SE/Mini), evita scroll horizontal indesejado.
+  overflowX: 'hidden',
+  // Espacamento pra status bar e botoes do sistema (iPhone com notch)
+  paddingTop: 'max(12px, env(safe-area-inset-top))',
+  paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
 };
 
 const headerStyle: React.CSSProperties = {
-  marginBottom: 12,
+  marginBottom: 10,
 };
 
 const tabsStyle: React.CSSProperties = {
   display: 'flex',
   gap: 4,
-  marginTop: 16,
-  marginBottom: 12,
+  marginTop: 12,
+  marginBottom: 10,
   borderBottom: '1px solid #e2e8f0',
 };
 
@@ -513,4 +773,63 @@ const erroStyle: React.CSSProperties = {
   color: '#991b1b',
   borderRadius: 8,
   fontSize: 14,
+};
+
+const iconBtnStyle: React.CSSProperties = {
+  width: 36,
+  height: 36,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  background: '#f1f5f9',
+  border: '1px solid #cbd5e1',
+  borderRadius: 8,
+  fontSize: 18,
+  cursor: 'pointer',
+  padding: 0,
+  flexShrink: 0,
+};
+
+const overlayStyle: React.CSSProperties = {
+  position: 'fixed',
+  inset: 0,
+  background: 'rgba(0,0,0,0.5)',
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  zIndex: 60,
+  padding: 12,
+};
+
+const overlayModalStyle: React.CSSProperties = {
+  background: '#fff',
+  borderRadius: 12,
+  padding: 16,
+  width: '100%',
+  maxWidth: 420,
+  maxHeight: '92vh',
+  overflowY: 'auto',
+};
+
+const overlayBotaoPrincipal: React.CSSProperties = {
+  width: '100%',
+  padding: '14px 16px',
+  marginBottom: 8,
+  fontSize: 15,
+  fontWeight: 700,
+  color: '#fff',
+  border: 'none',
+  borderRadius: 10,
+  cursor: 'pointer',
+  textAlign: 'left',
+};
+
+const overlayBotaoSecundario: React.CSSProperties = {
+  width: '100%',
+  padding: '10px',
+  background: 'transparent',
+  color: '#64748b',
+  border: 'none',
+  fontSize: 14,
+  cursor: 'pointer',
 };

@@ -75,11 +75,28 @@ function RotaContent(): React.ReactElement {
   const [progressoOtim, setProgressoOtim] = useState<string>('');
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
+  const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
 
   // Trava em retrato ao montar
   useEffect(() => {
     lockOrientacaoRetrato();
   }, []);
+
+  // Watch posicao do motorista durante "em_rota" — atualiza marcador no mapa
+  // conforme ele se desloca. Para o watch ao sair da fase pra economizar
+  // bateria e GPS.
+  useEffect(() => {
+    if (fase !== 'em_rota') return;
+    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    const watchId = navigator.geolocation.watchPosition(
+      (pos) => setPosicaoAtual({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
+      () => { /* GPS off ou negado — ignora silenciosamente */ },
+      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
+    );
+
+    return () => navigator.geolocation.clearWatch(watchId);
+  }, [fase]);
 
   // ─── Carregamento inicial: decide fase baseado no estado ──────────
 
@@ -376,6 +393,7 @@ function RotaContent(): React.ReactElement {
           onSelectParada={setParadaSelecionada}
           onConcluirParada={handleConcluirParada}
           onEncerrar={handleEncerrarRota}
+          posicaoAtual={posicaoAtual}
         />
       )}
     </div>
@@ -573,6 +591,7 @@ function FaseEmRota({
   onSelectParada,
   onConcluirParada,
   onEncerrar,
+  posicaoAtual,
 }: {
   rota: RotaOtimizada;
   paradas: Parada[];
@@ -580,6 +599,7 @@ function FaseEmRota({
   onSelectParada: (id: string | null) => void;
   onConcluirParada: (id: string) => void | Promise<void>;
   onEncerrar: () => void;
+  posicaoAtual: { lat: number; lng: number } | null;
 }) {
   const concluidas = paradas.filter((p) => p.concluida_em).length;
   const total = paradas.length;
@@ -627,6 +647,7 @@ function FaseEmRota({
         paradas={paradas}
         altura={240}
         paradaSelecionada={paradaSelecionada}
+        posicaoAtual={posicaoAtual}
         onParadaClick={(id) => {
           onSelectParada(id === paradaSelecionada ? null : id);
           vibrar(30);

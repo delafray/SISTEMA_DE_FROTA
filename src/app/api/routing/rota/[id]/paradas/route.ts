@@ -94,6 +94,12 @@ export async function PATCH(
   }
 
   // 2: aplica updates finais
+  // IMPORTANTE: usa `.select('id')` apos cada update — sem isso, supabase-js
+  // devolve `data: null, error: null` mesmo quando 0 linhas foram atualizadas
+  // (ex: RLS bloqueia, id nao bate). Antes o motorista via "Salvou!" mas
+  // ao voltar pra tela a ordem velha estava la — UPDATE retornava sucesso
+  // mas nao tocava em nenhuma linha. RETURNING via .select() obriga o
+  // banco a devolver as linhas afetadas, expondo o problema.
   for (const p of body.paradas) {
     const update: Record<string, unknown> = {};
     if (typeof p.ordem === 'number') update.ordem = p.ordem;
@@ -107,14 +113,22 @@ export async function PATCH(
       continue;
     }
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('paradas')
       .update(update)
       .eq('id', p.id)
-      .eq('rota_id', rotaId);
+      .eq('rota_id', rotaId)
+      .select('id'); // RETURNING — vazio se nenhum row foi atualizado
 
     if (error) {
       erros.push({ id: p.id, message: error.message });
+    } else if (!data || data.length === 0) {
+      // Update silenciosamente nao tocou em nenhuma linha — bug invisivel
+      // antes. Pode ser: RLS, id inexistente, rota_id errado, etc.
+      erros.push({
+        id: p.id,
+        message: 'nenhuma_linha_atualizada (RLS? id incorreto? rota_id incorreto?)',
+      });
     } else {
       sucessos.push(p.id);
     }

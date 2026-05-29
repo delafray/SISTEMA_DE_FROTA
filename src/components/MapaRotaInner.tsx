@@ -16,6 +16,39 @@ import { decodePolyline } from '@/lib/routing/polyline';
 import { corDoStatus, statusDaParada } from '@/lib/routing/utils';
 import type { MapaRotaProps } from './MapaRota';
 
+/**
+ * Pino "you are here" — circulo turquesa (#14b8a6) com borda branca e
+ * sombra leve. Estilo Google Maps. Pequeno (20px) pra nao competir com
+ * os pinos numerados. Animacao de pulsacao continua via @keyframes.
+ *
+ * Cor escolhida (#14b8a6 / tailwind teal-500) pra contrastar com a
+ * paleta de status das paradas (azul, laranja, verde, vermelho) sem
+ * conflitar.
+ */
+function pinoPosicaoAtual() {
+  return divIcon({
+    className: 'pino-posicao-atual',
+    html: `
+      <style>
+        @keyframes pulse-aqui {
+          0%, 100% { transform: scale(1); opacity: 1; }
+          50% { transform: scale(1.15); opacity: 0.85; }
+        }
+      </style>
+      <div style="
+        width: 20px; height: 20px;
+        background: #14b8a6;
+        border: 3px solid #fff;
+        border-radius: 50%;
+        box-shadow: 0 0 0 4px rgba(20,184,166,0.25), 0 2px 6px rgba(0,0,0,0.3);
+        animation: pulse-aqui 2s ease-in-out infinite;
+      "></div>
+    `,
+    iconSize: [20, 20],
+    iconAnchor: [10, 10],
+  });
+}
+
 function pinoNumeradoIcon(numero: number, cor: string, destaque: boolean, concluida: boolean) {
   const tamanho = destaque ? 40 : 32;
   const ring = destaque ? `box-shadow:0 0 0 4px rgba(249,115,22,0.35), 0 2px 6px rgba(0,0,0,0.4);` : `box-shadow:0 2px 4px rgba(0,0,0,0.3);`;
@@ -46,6 +79,7 @@ export default function MapaRotaInner({
   altura = 360,
   paradaSelecionada,
   onParadaClick,
+  posicaoAtual,
 }: MapaRotaProps): React.ReactElement {
   const polylineCoords: LatLngExpression[] = useMemo(() => {
     if (!polylineEncoded) return [];
@@ -57,8 +91,13 @@ export default function MapaRotaInner({
     if (polylineCoords.length > 0) {
       coords.push(...(polylineCoords as Array<[number, number]>));
     }
+    // Inclui posicao atual no enquadramento — assim o motorista sempre
+    // ve sua posicao + paradas no mesmo viewport.
+    if (posicaoAtual) {
+      coords.push([posicaoAtual.lat, posicaoAtual.lng]);
+    }
     return coords;
-  }, [paradas, polylineCoords]);
+  }, [paradas, polylineCoords, posicaoAtual]);
 
   return (
     <div
@@ -105,6 +144,16 @@ export default function MapaRotaInner({
             </Marker>
           );
         })}
+        {posicaoAtual && (
+          <Marker
+            position={[posicaoAtual.lat, posicaoAtual.lng]}
+            icon={pinoPosicaoAtual()}
+            keyboard={false}
+            interactive={false}
+          >
+            <Tooltip permanent={false}>Você está aqui</Tooltip>
+          </Marker>
+        )}
       </MapContainer>
     </div>
   );

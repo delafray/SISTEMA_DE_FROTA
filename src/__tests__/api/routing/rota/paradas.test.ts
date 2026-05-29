@@ -27,22 +27,37 @@ function makeParams(id: string) {
   return { params: Promise.resolve({ id }) };
 }
 
-function setupUpdateOk() {
-  const updateMock = vi.fn(() => ({
+// Pass 1 (temp) usa .update(...).eq(...).eq(...) sem .select().
+// Pass 2 (final) adiciona .select('id') no fim. Mock retorna [{id}] pra
+// simular row atualizado.
+function makeQuery(passResult: { data: unknown; error: unknown }) {
+  return {
     eq: vi.fn(() => ({
-      eq: vi.fn(() => Promise.resolve({ data: null, error: null })),
+      // Pass 1 termina aqui (thenable direto)
+      eq: vi.fn(() => {
+        const promise = Promise.resolve(passResult) as Promise<unknown> & {
+          select?: (cols?: string) => Promise<unknown>;
+        };
+        // Pass 2 chama .select('id') depois — devolve mesmo resultado
+        promise.select = () => Promise.resolve(passResult);
+        return promise;
+      }),
     })),
-  }));
+  };
+}
+
+function setupUpdateOk() {
+  const updateMock = vi.fn(() =>
+    makeQuery({ data: [{ id: 'matched' }], error: null })
+  );
   supabaseFromMock.mockReturnValue({ update: updateMock });
   return updateMock;
 }
 
 function setupUpdateError(message = 'boom') {
-  const updateMock = vi.fn(() => ({
-    eq: vi.fn(() => ({
-      eq: vi.fn(() => Promise.resolve({ data: null, error: { code: 'XX', message } })),
-    })),
-  }));
+  const updateMock = vi.fn(() =>
+    makeQuery({ data: null, error: { code: 'XX', message } })
+  );
   supabaseFromMock.mockReturnValue({ update: updateMock });
   return updateMock;
 }
@@ -132,5 +147,25 @@ describe('PATCH /api/routing/rota/[id]/paradas', () => {
     expect(res.status).toBe(500);
     const body = await res.json();
     expect(body.ok).toBe(false);
+  });
+
+  it('500 quando update retorna 0 rows (RLS bloqueando ou id errado)', async () => {
+    // Sucesso aparente (error=null) mas data=[] = nenhuma linha tocada.
+    // Antes esse cenario era silenciosamente tratado como sucesso — agora
+    // vira erro explicito pro motorista nao achar que salvou.
+    const updateMock = vi.fn(() =>
+      makeQuery({ data: [], error: null })
+    );
+    supabaseFromMock.mockReturnValue({ update: updateMock });
+
+    const res = await PATCH(
+      makeReq({ paradas: [{ id: 'p1', ordem: 1 }] }),
+      makeParams('r1')
+    );
+
+    expect(res.status).toBe(500);
+    const body = await res.json();
+    expect(body.ok).toBe(false);
+    expect(body.erros[0].message).toMatch(/nenhuma_linha_atualizada/);
   });
 });

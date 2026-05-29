@@ -95,3 +95,59 @@ export function estimarKmTotal(
 ): number {
   return distanciasEntreParadas(paradas).reduce((a, b) => a + b, 0);
 }
+
+/**
+ * Heuristica "cheapest insertion": dado uma sequencia de paradas e uma
+ * nova coordenada, devolve a posicao (1-based) onde inserir o novo ponto
+ * pra minimizar o aumento de KM total — sem mexer na ordem existente.
+ *
+ * Preserva o trabalho manual do motorista (drag-and-drop) e so encaixa
+ * a nova parada no melhor "buraco". Custo computacional O(N).
+ *
+ * Retorna 1 quando a lista esta vazia (primeira posicao).
+ *
+ * Exemplo: paradas A→B→C e ponto novo X mais perto entre B e C → retorna 3
+ * (insercao apos posicao 2, vira A, B, X, C com ordens 1, 2, 3, 4).
+ */
+export function cheapestInsertion(
+  paradas: Pick<Parada, 'latitude' | 'longitude'>[],
+  novo: Coordenada
+): number {
+  if (paradas.length === 0) return 1;
+
+  let melhorOrdem = 1;
+  let menorCusto = Infinity;
+
+  // Posicao i = 0 .. N. Cada i representa "inserir antes da parada i+1".
+  for (let i = 0; i <= paradas.length; i++) {
+    const prev = i > 0 ? paradas[i - 1] : null;
+    const next = i < paradas.length ? paradas[i] : null;
+
+    let custo: number;
+    if (prev === null && next !== null) {
+      // Insercao no inicio: so adiciona distancia novo -> primeira
+      custo = haversineKm(novo, { lat: next.latitude, lng: next.longitude });
+    } else if (prev !== null && next === null) {
+      // Insercao no fim: so adiciona distancia ultima -> novo
+      custo = haversineKm({ lat: prev.latitude, lng: prev.longitude }, novo);
+    } else if (prev !== null && next !== null) {
+      // Insercao no meio: prev -> novo -> next - (prev -> next)
+      const prevCoord = { lat: prev.latitude, lng: prev.longitude };
+      const nextCoord = { lat: next.latitude, lng: next.longitude };
+      custo =
+        haversineKm(prevCoord, novo) +
+        haversineKm(novo, nextCoord) -
+        haversineKm(prevCoord, nextCoord);
+    } else {
+      // Lista vazia (ja tratado acima, mas TS)
+      custo = 0;
+    }
+
+    if (custo < menorCusto) {
+      menorCusto = custo;
+      melhorOrdem = i + 1; // 1-based
+    }
+  }
+
+  return melhorOrdem;
+}

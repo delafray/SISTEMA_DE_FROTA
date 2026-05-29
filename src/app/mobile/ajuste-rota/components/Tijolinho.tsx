@@ -83,22 +83,46 @@ export function Tijolinho({
         style={{
           display: 'flex',
           alignItems: 'center',
-          gap: 12,
-          padding: 12,
+          gap: 10,
+          padding: 10,
           background: corBairro ?? '#fff',
           border: destacado ? '2px solid #f97316' : '1px solid #e2e8f0',
           borderRadius: 8,
-          marginBottom: 8,
+          marginBottom: 6,
           boxShadow: destacado ? '0 0 0 3px rgba(249,115,22,0.2)' : undefined,
+          // Telefone narrow (320-360px): garante que o tijolinho nao se expande
+          // alem do container pai. `minWidth: 0` no flex e essencial.
+          minWidth: 0,
+          maxWidth: '100%',
         }}
       >
         {numeroBox}
-        <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enderecoCurto}</span>
-            {temJanela && <span aria-label="tem janela de horario" style={{ flexShrink: 0 }}>⏰</span>}
+        {/* min-width:0 + overflow:hidden no container do texto = filho span pode encolher e elipsar */}
+        <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+          {/* Linha 1: endereco — agora sem flex (display block) pra que text-overflow funcione direito. ⏰ vai inline. */}
+          <div
+            style={{
+              fontWeight: 600,
+              fontSize: 14,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            {enderecoCurto}
+            {temJanela && <span aria-label="tem janela de horario" style={{ marginLeft: 6 }}>⏰</span>}
           </div>
-          <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 11, color: '#64748b' }}>
+          {/* Linha 2: badges com flex-wrap evita overflow horizontal */}
+          <div
+            style={{
+              display: 'flex',
+              gap: 8,
+              marginTop: 2,
+              fontSize: 11,
+              color: '#64748b',
+              flexWrap: 'wrap',
+            }}
+          >
             {typeof distanciaAnteriorKm === 'number' && distanciaAnteriorKm > 0 && (
               <span>📏 {distanciaAnteriorKm.toFixed(1)} km</span>
             )}
@@ -119,18 +143,21 @@ export function Tijolinho({
       tabIndex={onClickDetalhes ? 0 : undefined}
       style={{
         display: 'flex',
-        gap: 12,
-        padding: 14,
+        gap: 10,
+        padding: 12,
         background: '#fff',
         border: '1px solid #e2e8f0',
         borderRadius: 8,
-        marginBottom: 8,
+        marginBottom: 6,
         cursor: onClickDetalhes ? 'pointer' : 'default',
+        minWidth: 0,
+        maxWidth: '100%',
       }}
     >
       {numeroBox}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <div style={{ fontWeight: 600, fontSize: 15 }}>📍 {enderecoCompleto}</div>
+      {/* min-width:0 + overflow:hidden permite quebrar/elipsar texto longo em telefones narrow */}
+      <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
+        <div style={{ fontWeight: 600, fontSize: 15, wordBreak: 'break-word' }}>📍 {enderecoCompleto}</div>
         {parada.janela_horario && parada.janela_horario.length > 0 && (
           <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
             ⏰ {parada.janela_horario.map((j) => `${j[0]}–${j[1]}`).join(' / ')}
