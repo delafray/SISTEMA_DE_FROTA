@@ -60,6 +60,7 @@ export default function MotoristaPage() {
   const [tab, setTab]               = useState<"viagens" | "adiantamentos" | "abastecimentos">("viagens");
   const [signingOut, setSigningOut] = useState(false);
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
+  const [empresaId,   setEmpresaIdState] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -79,6 +80,7 @@ export default function MotoristaPage() {
 
       const mId = perfil?.motorista_id ?? null;
       setMotoristaId(mId);
+      setEmpresaIdState(ue.empresa_id);
       if (!mId) { setLoading(false); return; }
 
       const [pedidosRes, adtRes, abastRes] = await Promise.all([
@@ -181,6 +183,60 @@ export default function MotoristaPage() {
             <div style={{ fontSize: "10px", color: "#94a3b8", fontWeight: 600, marginTop: "3px", textTransform: "uppercase" }}>{k.label}</div>
           </div>
         ))}
+      </div>
+
+      {/* ── Rota do dia ─────────────────────────────────────────── */}
+      <div style={{ padding: "12px 12px 0" }}>
+        {motoristaId && empresaId ? (
+          <a
+            href={`/mobile/rota?motorista_id=${motoristaId}&empresa_id=${empresaId}`}
+            data-testid="btn-rota-do-dia"
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+              borderRadius: "14px",
+              padding: "16px 18px",
+              textDecoration: "none",
+              boxShadow: "0 4px 14px rgba(22,163,74,0.35)",
+              transition: "transform 120ms, box-shadow 120ms",
+            }}
+            onMouseEnter={e => { (e.currentTarget as HTMLAnchorElement).style.transform = "translateY(-2px)"; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 6px 20px rgba(22,163,74,0.45)"; }}
+            onMouseLeave={e => { (e.currentTarget as HTMLAnchorElement).style.transform = ""; (e.currentTarget as HTMLAnchorElement).style.boxShadow = "0 4px 14px rgba(22,163,74,0.35)"; }}
+          >
+            <div style={{ fontSize: "36px", lineHeight: 1 }}>🚛</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
+                Rota do dia
+              </div>
+              <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", marginTop: "2px" }}>
+                Ver rota ativa ou criar nova
+              </div>
+            </div>
+            <div style={{ fontSize: "22px", color: "rgba(255,255,255,0.7)" }}>›</div>
+          </a>
+        ) : (
+          <div
+            style={{
+              display: "flex",
+              alignItems: "center",
+              gap: "14px",
+              background: "#f1f5f9",
+              borderRadius: "14px",
+              padding: "16px 18px",
+              opacity: 0.6,
+            }}
+          >
+            <div style={{ fontSize: "36px", lineHeight: 1 }}>🚛</div>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: "#334155" }}>Rota do dia</div>
+              <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+                Conta sem vínculo de motorista — solicite ao gestor
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Tabs */}
