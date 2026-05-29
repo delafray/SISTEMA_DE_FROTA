@@ -136,6 +136,37 @@ describe('PATCH /api/routing/rota/[id]/paradas', () => {
     expect(res.status).toBe(200);
   });
 
+  it('persiste concluida_em (motorista confirmou entrega)', async () => {
+    const updateMock = setupUpdateOk();
+
+    const res = await PATCH(
+      makeReq({
+        paradas: [{ id: 'p1', concluida_em: '2026-05-29T20:00:00Z' }],
+      }),
+      makeParams('r1')
+    );
+
+    expect(res.status).toBe(200);
+    // O .update() recebeu concluida_em entre os campos
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ concluida_em: '2026-05-29T20:00:00Z' })
+    );
+  });
+
+  it('aceita concluida_em=null pra desmarcar entrega (motorista errou)', async () => {
+    const updateMock = setupUpdateOk();
+
+    const res = await PATCH(
+      makeReq({ paradas: [{ id: 'p1', concluida_em: null }] }),
+      makeParams('r1')
+    );
+
+    expect(res.status).toBe(200);
+    expect(updateMock).toHaveBeenCalledWith(
+      expect.objectContaining({ concluida_em: null })
+    );
+  });
+
   it('500 quando TODAS as paradas falham', async () => {
     setupUpdateError('db down');
 

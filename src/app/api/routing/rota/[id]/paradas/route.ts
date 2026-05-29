@@ -32,6 +32,10 @@ interface UpdateParada {
   janela_horario?: [string, string][] | null;
   tempo_descarga_min?: number;
   observacao?: string | null;
+  /** ISO timestamp da conclusao da entrega. `null` = desmarcar (motorista
+   *  errou e quer desfazer). Persiste no banco — se o motorista fechar o
+   *  app, ao reabrir ve exatamente o que ja entregou. */
+  concluida_em?: string | null;
 }
 
 interface PatchRequest {
@@ -107,6 +111,7 @@ export async function PATCH(
     if (p.janela_horario !== undefined) update.janela_horario = p.janela_horario;
     if (typeof p.tempo_descarga_min === 'number') update.tempo_descarga_min = p.tempo_descarga_min;
     if (p.observacao !== undefined) update.observacao = p.observacao;
+    if (p.concluida_em !== undefined) update.concluida_em = p.concluida_em;
 
     if (Object.keys(update).length === 0) {
       sucessos.push(p.id);

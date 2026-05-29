@@ -375,17 +375,89 @@ describe('RotaPage — fase em_rota', () => {
     const user = userEvent.setup();
     render(<RotaPage />);
 
+    // 1. Clique em "Concluí" — agora abre modal de confirmacao em vez de
+    //    marcar direto (motorista pode ter apertado sem querer)
     await waitFor(() => screen.getByTestId('btn-concluir-1'));
     await user.click(screen.getByTestId('btn-concluir-1'));
+
+    // 2. Modal aparece com pergunta "Entrega concluida?"
+    await waitFor(() => screen.getByTestId('modal-confirmar-entrega'));
+
+    // 3. Confirma com "Sim, entreguei"
+    await user.click(screen.getByTestId('btn-confirmar-entrega'));
 
     // Status visual muda
     await waitFor(() => expect(screen.getByText(/Concluída/)).toBeDefined());
 
-    // PATCH foi feito
+    // PATCH foi feito com concluida_em (persiste no banco)
     const patchCalls = fetchSpy.mock.calls.filter((c) => {
       const init = c[1] as RequestInit | undefined;
       return init?.method === 'PATCH';
     });
     expect(patchCalls.length).toBeGreaterThan(0);
+    const patchBody = JSON.parse((patchCalls[0][1] as RequestInit).body as string);
+    expect(patchBody.paradas[0].concluida_em).toBeDefined();
+    expect(typeof patchBody.paradas[0].concluida_em).toBe('string');
+  });
+
+  it('clicar Concluir e depois Cancelar nao marca entregue + nao chama PATCH', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    const fetchSpy = vi.fn(async (url: string | Request) => {
+      const u = typeof url === 'string' ? url : url.url;
+      if (u.includes('/api/routing/rotas?')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({ rotas: [{ id: 'r1', status: 'otimizada' }] }),
+        } as unknown as Response;
+      }
+      if (u.match(/\/api\/routing\/rota\/r1$/) !== null) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            rota: { id: 'r1', distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
+            paradas: [
+              {
+                id: 'p1',
+                rota_id: 'r1',
+                nota_id: 'n1',
+                ordem: 1,
+                endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+                latitude: -23.5,
+                longitude: -46.6,
+                fixada: false,
+                janela_horario: null,
+                tempo_descarga_min: 5,
+                observacao: null,
+                concluida_em: null,
+              },
+            ],
+          }),
+        } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-concluir-1'));
+    await user.click(screen.getByTestId('btn-concluir-1'));
+    await waitFor(() => screen.getByTestId('modal-confirmar-entrega'));
+
+    // Clica "Nao" → modal fecha, nada acontece
+    await user.click(screen.getByTestId('btn-cancelar-entrega'));
+
+    expect(screen.queryByTestId('modal-confirmar-entrega')).toBeNull();
+    expect(screen.queryByText(/Concluída/)).toBeNull();
+
+    const patchCalls = fetchSpy.mock.calls.filter(
+      (c) => (c[1] as RequestInit | undefined)?.method === 'PATCH'
+    );
+    expect(patchCalls.length).toBe(0);
   });
 });

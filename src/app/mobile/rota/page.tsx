@@ -284,20 +284,33 @@ function RotaContent(): React.ReactElement {
   const handleConcluirParada = useCallback(
     async (paradaId: string) => {
       const agora = new Date().toISOString();
-      // Otimismo otimista: atualiza UI antes de pesquisar
+      // Optimistic update — UI marca instantaneamente
       setParadas((arr) => arr.map((p) => (p.id === paradaId ? { ...p, concluida_em: agora } : p)));
 
       if (!rota) return;
       try {
-        await fetch(`/api/routing/rota/${rota.id}/paradas`, {
+        const res = await fetch(`/api/routing/rota/${rota.id}/paradas`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ paradas: [{ id: paradaId }] }),
+          body: JSON.stringify({
+            paradas: [{ id: paradaId, concluida_em: agora }],
+          }),
         });
-        // Nao tem campo concluida_em no PATCH ainda — TODO: adicionar endpoint
-        // Por ora, persistencia local apenas. O motorista ve a marcacao.
-      } catch {
-        // Silencioso — UI ja atualizou
+        const data = await res.json().catch(() => ({}));
+        if (!res.ok || data.ok === false) {
+          // Reverte UI — backend nao salvou. Motorista precisa saber.
+          setParadas((arr) =>
+            arr.map((p) => (p.id === paradaId ? { ...p, concluida_em: null } : p))
+          );
+          setErro(`Nao consegui salvar entrega: ${data.erros?.[0]?.message ?? res.status}`);
+          setTimeout(() => setErro(null), 5000);
+        }
+      } catch (err) {
+        setParadas((arr) =>
+          arr.map((p) => (p.id === paradaId ? { ...p, concluida_em: null } : p))
+        );
+        setErro(`Erro de rede: ${(err as Error).message}`);
+        setTimeout(() => setErro(null), 5000);
       }
     },
     [rota]
@@ -615,6 +628,25 @@ function FaseEmRota({
     [paradaSelecionada, paradas]
   );
 
+  // Confirmacao antes de marcar entregue — motorista pode apertar sem querer
+  // (botao "Entreguei" fica visivel o tempo todo). Modal nao bloqueia muito,
+  // 1 tap pra confirmar, 1 pra cancelar.
+  const [paradaConfirmando, setParadaConfirmando] = useState<string | null>(null);
+  const paradaPraConfirmar = useMemo(
+    () => (paradaConfirmando ? paradas.find((p) => p.id === paradaConfirmando) ?? null : null),
+    [paradaConfirmando, paradas]
+  );
+  const solicitarConcluir = useCallback((id: string) => {
+    vibrar(20);
+    setParadaConfirmando(id);
+  }, []);
+  const confirmarConcluir = useCallback(async () => {
+    if (!paradaConfirmando) return;
+    const id = paradaConfirmando;
+    setParadaConfirmando(null);
+    await onConcluirParada(id);
+  }, [paradaConfirmando, onConcluirParada]);
+
   return (
     <div>
       {/* Progress bar visual */}
@@ -697,7 +729,7 @@ function FaseEmRota({
             </a>
             <button
               type="button"
-              onClick={() => onConcluirParada(proximaParada.id)}
+              onClick={() => solicitarConcluir(proximaParada.id)}
               style={btnNavStyle('#f97316')}
               data-testid={`btn-concluir-proxima`}
             >
@@ -748,7 +780,7 @@ function FaseEmRota({
                   </a>
                   <button
                     type="button"
-                    onClick={() => onConcluirParada(p.id)}
+                    onClick={() => solicitarConcluir(p.id)}
                     style={btnNavStyle('#64748b')}
                     data-testid={`btn-concluir-${p.ordem}`}
                   >
@@ -769,8 +801,85 @@ function FaseEmRota({
         <BottomSheet
           parada={paradaSheet}
           onFechar={() => onSelectParada(null)}
-          onConcluir={() => onConcluirParada(paradaSheet.id)}
+          onConcluir={() => solicitarConcluir(paradaSheet.id)}
         />
+      )}
+
+      {/* Confirmacao "entreguei?" — evita tap sem querer + da feedback claro */}
+      {paradaPraConfirmar && (
+        <div
+          role="dialog"
+          aria-label="confirmar entrega"
+          data-testid="modal-confirmar-entrega"
+          onClick={() => setParadaConfirmando(null)}
+          style={{
+            position: 'fixed',
+            inset: 0,
+            background: 'rgba(0,0,0,0.55)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 70,
+            padding: 16,
+          }}
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            style={{
+              background: '#fff',
+              borderRadius: 14,
+              padding: 18,
+              width: '100%',
+              maxWidth: 360,
+            }}
+          >
+            <div style={{ fontSize: 16, fontWeight: 700, marginBottom: 8, color: '#0f172a' }}>
+              Entrega concluída?
+            </div>
+            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+              📍 {paradaPraConfirmar.endereco.logradouro}
+              {paradaPraConfirmar.endereco.numero ? `, ${paradaPraConfirmar.endereco.numero}` : ''}
+            </div>
+            <div style={{ display: 'flex', gap: 8 }}>
+              <button
+                type="button"
+                onClick={() => setParadaConfirmando(null)}
+                data-testid="btn-cancelar-entrega"
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#f1f5f9',
+                  color: '#475569',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Não
+              </button>
+              <button
+                type="button"
+                onClick={confirmarConcluir}
+                data-testid="btn-confirmar-entrega"
+                style={{
+                  flex: 1,
+                  padding: '12px',
+                  background: '#16a34a',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 8,
+                  fontSize: 14,
+                  fontWeight: 700,
+                  cursor: 'pointer',
+                }}
+              >
+                ✓ Sim, entreguei
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
