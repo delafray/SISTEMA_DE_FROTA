@@ -33,8 +33,25 @@ export async function criarUsuarioAction(
   const nome         = formData.get("nome")         as string;
   const username     = formData.get("username")     as string;
   const senha        = formData.get("senha")        as string;
-  const role         = formData.get("role")         as "admin" | "gestor" | "motorista";
+  const role         = formData.get("role")         as "master" | "gestor" | "motorista";
   const motorista_id = (formData.get("motorista_id") as string) || null;
+
+  // Validações robustas no lado do servidor
+  if (!nome || nome.trim().length < 2) {
+    return { error: "Nome completo é obrigatório e deve ter pelo menos 2 caracteres." };
+  }
+  if (!username || username.trim().length < 3) {
+    return { error: "Nome de usuário é obrigatório e deve ter pelo menos 3 caracteres." };
+  }
+  if (/\s/.test(username)) {
+    return { error: "Nome de usuário não pode conter espaços." };
+  }
+  if (!senha || senha.length < 6) {
+    return { error: "Senha provisória deve conter pelo menos 6 caracteres." };
+  }
+  if (!["master", "gestor", "motorista"].includes(role)) {
+    return { error: "Perfil/Role selecionado é inválido." };
+  }
 
   // Normaliza username → email (igual ao login)
   const normalized = username

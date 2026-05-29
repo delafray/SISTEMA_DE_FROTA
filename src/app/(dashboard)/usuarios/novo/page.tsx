@@ -10,7 +10,7 @@ const initialState = { error: undefined, success: false };
 
 export default function NovoUsuarioPage() {
   const [state, formAction, pending] = useActionState(criarUsuarioAction, initialState);
-  const [role, setRole] = useState<"admin" | "gestor" | "motorista">("admin");
+  const [role, setRole] = useState<"master" | "gestor" | "motorista">("master");
   const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
 
   useEffect(() => {
@@ -87,10 +87,10 @@ export default function NovoUsuarioPage() {
                   <select
                     name="role"
                     value={role}
-                    onChange={(e) => setRole(e.target.value as "admin" | "gestor" | "motorista")}
+                    onChange={(e) => setRole(e.target.value as "master" | "gestor" | "motorista")}
                     style={selectStyle}
                   >
-                    <option value="admin">Admin (acesso total)</option>
+                    <option value="master">Admin (acesso total)</option>
                     <option value="gestor">Gestor (sem configs do sistema)</option>
                     <option value="motorista">Motorista (apenas app mobile)</option>
                   </select>
