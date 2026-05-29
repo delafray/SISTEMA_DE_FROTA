@@ -94,12 +94,18 @@ export async function criarUsuarioAction(
     return { error: ueError.message };
   }
 
-  // ── Vincula perfil ao motorista ─────────────────────────────────────────
+  // ── Garante linha em perfis para TODOS os usuarios (inner join da lista depende disso) ──
+  await admin.from("perfis")
+    .insert({ id: targetUserId, nome })
+    .select()
+    .maybeSingle();
+  // Atualiza nome caso a linha já existisse
+  await admin.from("perfis")
+    .update({ nome })
+    .eq("id", targetUserId);
+
+  // ── Vincula perfil ao motorista (apenas se role = motorista) ────────────
   if (role === "motorista" && motorista_id) {
-    await admin.from("perfis")
-      .insert({ id: targetUserId, nome, motorista_id })
-      .select()
-      .maybeSingle();
     await admin.from("perfis")
       .update({ motorista_id })
       .eq("id", targetUserId);

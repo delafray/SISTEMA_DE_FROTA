@@ -16,9 +16,9 @@ type Usuario = {
   perfis: { nome: string } | { nome: string }[] | null;
 };
 
-const ROLE_LABEL: Record<string, string> = { master: "Master", gestor: "Gestor", motorista: "Motorista" };
+const ROLE_LABEL: Record<string, string> = { master: "Master", admin: "Admin", gestor: "Gestor", motorista: "Motorista" };
 const ROLE_VAR: Record<string, "purple" | "info" | "success" | "default"> = {
-  master: "purple", gestor: "info", motorista: "success",
+  master: "purple", admin: "purple", gestor: "info", motorista: "success",
 };
 
 export default function UsuariosPage() {
