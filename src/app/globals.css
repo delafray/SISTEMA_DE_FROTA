@@ -5,6 +5,17 @@
    SISTEMA DE FROTA — Base CSS  (padrão RBARROS: light + sidebar dark)
    ────────────────────────────────────────────────────────────── */
 
+/* ─── Leaflet z-index containment ───
+   Leaflet usa z-index 200-800 internamente (tiles, markers, popups).
+   Sem isolamento, ele fica ACIMA dos nossos modais (z-index 40-70).
+   `isolation: isolate` cria um stacking context proprio pro mapa —
+   todo z-index interno do Leaflet compete so dentro do container,
+   nao com o resto da pagina. */
+.leaflet-container {
+  z-index: 0;
+  isolation: isolate;
+}
+
 * { margin: 0; padding: 0; box-sizing: border-box; }
 
 body {
