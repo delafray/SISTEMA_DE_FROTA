@@ -285,6 +285,10 @@ export function InputEnderecoNF({
             setTimeout(() => numeroRef.current?.focus(), 50);
           }}
           onVoltar={() => {
+            // Reseta cep + endereco — senao useEffect de cep.length===8
+            // re-dispara ViaCEP imediatamente e cai de novo em endereco_manual (loop).
+            setCep('');
+            setEndereco(null);
             setErro(null);
             setEtapa('cep');
           }}

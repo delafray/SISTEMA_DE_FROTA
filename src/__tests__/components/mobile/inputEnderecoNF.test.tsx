@@ -245,6 +245,29 @@ describe('InputEnderecoNF — fallback manual', () => {
     expect(screen.getByText(/Rua Nova/)).toBeDefined();
   });
 
+  it('"Tentar outro CEP" reseta o campo CEP — sem loop quando ViaCEP retorna nao_encontrado', async () => {
+    cepMock.mockResolvedValue({ ok: false, motivo: 'nao_encontrado' });
+
+    const user = userEvent.setup();
+    render(<InputEnderecoNF numeroNF={1} onConfirmar={vi.fn()} />);
+
+    // Digita CEP que nao existe → vai pra endereco_manual
+    await user.type(screen.getByLabelText(/CEP/i), '99999999');
+    await waitFor(() => screen.getByLabelText(/Cidade/));
+
+    // Clica "Tentar outro CEP"
+    await user.click(screen.getByRole('button', { name: /Tentar outro CEP/ }));
+
+    // Volta pra etapa CEP COM o input vazio (nao com '99999999')
+    await waitFor(() => {
+      const input = screen.getByLabelText(/CEP/i) as HTMLInputElement;
+      expect(input.value).toBe('');
+    });
+
+    // Form manual NAO foi reaberto automaticamente (sem loop)
+    expect(screen.queryByLabelText(/Cidade/)).toBeNull();
+  });
+
   it('UF e auto-uppercase e limitada a 2 letras', async () => {
     cepMock.mockResolvedValue({ ok: false, motivo: 'nao_encontrado' });
 
