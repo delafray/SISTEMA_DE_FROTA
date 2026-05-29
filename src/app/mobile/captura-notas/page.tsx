@@ -17,7 +17,7 @@
  * Referencia: PLANO_ROTEIRIZACAO.md passo 1.4.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
 import { adicionarNota, listarTodas, remover } from '@/lib/offline/fila';
@@ -29,7 +29,7 @@ const DEFAULT_TOTAL = 70;
 const RELOAD_INTERVAL_MS = 3000;
 const SYNC_INTERVAL_MS = 5000;
 
-export default function CapturaNotasPage(): React.ReactElement {
+function CapturaNotasContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
@@ -220,6 +220,14 @@ export default function CapturaNotasPage(): React.ReactElement {
         </div>
       )}
     </div>
+  );
+}
+
+export default function CapturaNotasPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<div style={containerStyle}>Carregando…</div>}>
+      <CapturaNotasContent />
+    </Suspense>
   );
 }
 

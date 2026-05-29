@@ -15,7 +15,7 @@
  * Referencia: PLANO_ROTEIRIZACAO.md secao 3.10 + passo 1.12.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
   DndContext,
@@ -74,7 +74,7 @@ interface RotaResponse {
   paradas: Parada[];
 }
 
-export default function AjusteRotaPage(): React.ReactElement {
+function AjusteRotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const rotaId = searchParams.get('rota_id') ?? '';
 
@@ -384,6 +384,14 @@ export default function AjusteRotaPage(): React.ReactElement {
         />
       )}
     </div>
+  );
+}
+
+export default function AjusteRotaPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<div style={containerStyle}>Carregando rota…</div>}>
+      <AjusteRotaContent />
+    </Suspense>
   );
 }
 

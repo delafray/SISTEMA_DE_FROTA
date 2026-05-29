@@ -15,7 +15,7 @@
  * Referencia: PLANO_ROTEIRIZACAO.md (consolidado dos passos 1.4 + 1.10 + 1.12 + 1.13).
  */
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
 import { MapaRota } from '@/components/MapaRota';
@@ -57,7 +57,7 @@ interface RotaResponse {
   paradas: Parada[];
 }
 
-export default function RotaPage(): React.ReactElement {
+function RotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
@@ -376,6 +376,14 @@ export default function RotaPage(): React.ReactElement {
         />
       )}
     </div>
+  );
+}
+
+export default function RotaPage(): React.ReactElement {
+  return (
+    <Suspense fallback={<div style={containerStyle}>Carregando…</div>}>
+      <RotaContent />
+    </Suspense>
   );
 }
 
