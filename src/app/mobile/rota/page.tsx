@@ -76,6 +76,8 @@ function RotaContent(): React.ReactElement {
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
+  // Historico de rotas para mostrar na tela de inicio
+  const [rotasHistorico, setRotasHistorico] = useState<RotaOtimizada[]>([]);
 
   // Trava em retrato ao montar
   useEffect(() => {
@@ -107,20 +109,24 @@ function RotaContent(): React.ReactElement {
     }
     (async () => {
       try {
-        // 1. Existe rota em andamento? (status='otimizada' ou 'em_andamento')
+        // 1. Busca ultimas rotas (historico para tela de inicio)
         const res = await fetch(
-          `/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=1`
+          `/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`
         );
         const data = await res.json();
-        const rotaRecente = data.rotas?.[0];
+        const todasRotas: RotaOtimizada[] = data.rotas ?? [];
+        setRotasHistorico(todasRotas);
 
-        if (rotaRecente && ['otimizada', 'em_andamento'].includes(rotaRecente.status)) {
-          // Carrega rota completa com paradas
-          const rotaRes = await fetch(`/api/routing/rota/${rotaRecente.id}`);
-          const rotaData = (await rotaRes.json()) as RotaResponse;
-          setRota(rotaData.rota);
-          setParadas(rotaData.paradas);
-          setFase('em_rota');
+        // Verifica se ha rota em andamento automaticamente carregavel
+        const rotaEmAndamento = todasRotas.find((r) =>
+          ['otimizada', 'em_andamento'].includes(r.status)
+        );
+
+        if (rotaEmAndamento) {
+          // Tem rota aberta — mas agora mostramos a tela de inicio com historico
+          // para o motorista decidir se quer continuar ou criar nova.
+          // (Antes carregava automaticamente — agora deixa o motorista escolher.)
+          setFase('inicio');
           return;
         }
 
@@ -138,7 +144,7 @@ function RotaContent(): React.ReactElement {
           return;
         }
 
-        // 3. Nada pendente — fase inicial
+        // 3. Nada pendente — fase inicial com historico
         setFase('inicio');
       } catch (err) {
         setErro(`Falha ao carregar: ${(err as Error).message}`);
@@ -215,6 +221,21 @@ function RotaContent(): React.ReactElement {
   const iniciarCaptura = useCallback(() => {
     setErro(null);
     setFase('captura');
+  }, []);
+
+  // Carrega uma rota existente do historico e vai direto pra fase em_rota
+  const handleCarregarRota = useCallback(async (rotaId: string) => {
+    setErro(null);
+    try {
+      const rotaRes = await fetch(`/api/routing/rota/${rotaId}`);
+      if (!rotaRes.ok) throw new Error(`HTTP ${rotaRes.status}`);
+      const rotaData = (await rotaRes.json()) as RotaResponse;
+      setRota(rotaData.rota);
+      setParadas(rotaData.paradas);
+      setFase('em_rota');
+    } catch (err) {
+      setErro(`Erro ao carregar rota: ${(err as Error).message}`);
+    }
   }, []);
 
   const handleDesfazerUltima = useCallback(async () => {
@@ -351,12 +372,22 @@ function RotaContent(): React.ReactElement {
     [rota]
   );
 
-  const handleEncerrarRota = useCallback(() => {
+  const handleEncerrarRota = useCallback(async () => {
     setRota(null);
     setParadas([]);
     setNotas([]);
+    // Atualiza o historico ao encerrar pra refletir mudancas de status
+    try {
+      const res = await fetch(
+        `/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`
+      );
+      const data = await res.json();
+      setRotasHistorico(data.rotas ?? []);
+    } catch {
+      // Ignora erro — historico vai estar levemente desatualizado mas nao critico
+    }
     setFase('inicio');
-  }, []);
+  }, [empresaId, motoristaId]);
 
   // ─── Validacao de params ──────────────────────────────────────────
 
@@ -413,7 +444,13 @@ function RotaContent(): React.ReactElement {
 
       {fase === 'carregando' && <div style={{ padding: 24, textAlign: 'center' }}>Carregando…</div>}
 
-      {fase === 'inicio' && <FaseInicio onIniciar={iniciarCaptura} />}
+      {fase === 'inicio' && (
+        <FaseInicio
+          onIniciar={iniciarCaptura}
+          onCarregarRota={handleCarregarRota}
+          rotasHistorico={rotasHistorico}
+        />
+      )}
 
       {fase === 'captura' && (
         <FaseCaptura
@@ -511,16 +548,121 @@ function Header({
 
 // ─── FASE INICIO ───────────────────────────────────────────────────
 
-function FaseInicio({ onIniciar }: { onIniciar: () => void }) {
+const STATUS_LABEL: Record<string, string> = {
+  otimizada:   'Em aberto',
+  em_andamento: 'Em andamento',
+  concluida:   'Concluída',
+  cancelada:   'Cancelada',
+};
+
+function FaseInicio({
+  onIniciar,
+  onCarregarRota,
+  rotasHistorico,
+}: {
+  onIniciar: () => void;
+  onCarregarRota: (rotaId: string) => Promise<void>;
+  rotasHistorico: RotaOtimizada[];
+}) {
+  const [carregando, setCarregando] = useState<string | null>(null);
+
+  const aberta = (status: string) => ['otimizada', 'em_andamento'].includes(status);
+
+  async function handleClick(rotaId: string) {
+    setCarregando(rotaId);
+    await onCarregarRota(rotaId);
+    setCarregando(null);
+  }
+
   return (
-    <div style={{ padding: 24, textAlign: 'center' }}>
-      <div style={{ fontSize: 64, marginBottom: 16 }}>🚀</div>
-      <h2 style={{ fontSize: 18, fontWeight: 700, marginBottom: 8 }}>Pronto pra rodar?</h2>
-      <p style={{ fontSize: 14, color: '#64748b', marginBottom: 24 }}>
-        Comece capturando as notas fiscais que vai entregar hoje.
-      </p>
-      <button type="button" onClick={onIniciar} style={botaoPrimarioStyle} data-testid="btn-iniciar">
-        🆕 Começar nova rota
+    <div style={{ padding: 16 }}>
+      <div style={{ textAlign: 'center', marginBottom: 20 }}>
+        <div style={{ fontSize: 48, marginBottom: 8 }}>🚛</div>
+        <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Rota do Dia</h2>
+        <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+          Retome uma rota existente ou comece uma nova.
+        </p>
+      </div>
+
+      {rotasHistorico.length > 0 && (
+        <section aria-label="Histórico de rotas" style={{ marginBottom: 20 }}>
+          <h3 style={{ fontSize: 13, fontWeight: 700, color: '#475569', marginBottom: 8, textTransform: 'uppercase', letterSpacing: '0.5px' }}>
+            Rotas recentes
+          </h3>
+          <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {rotasHistorico.map((r) => {
+              const estaAberta = aberta(r.status);
+              const isLoading = carregando === r.id;
+              const dataFormatada = r.criada_em
+                ? new Date(r.criada_em).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })
+                : '';
+              return (
+                <li key={r.id}>
+                  <button
+                    type="button"
+                    data-testid={`rota-historico-${r.id}`}
+                    onClick={() => handleClick(r.id)}
+                    disabled={isLoading}
+                    style={{
+                      width: '100%',
+                      textAlign: 'left',
+                      padding: '12px 14px',
+                      borderRadius: 10,
+                      border: estaAberta ? '2px solid #fca5a5' : '1px solid #e2e8f0',
+                      background: estaAberta ? '#fff1f2' : '#f8fafc',
+                      cursor: isLoading ? 'wait' : 'pointer',
+                      opacity: isLoading ? 0.6 : 1,
+                      transition: 'all 0.15s',
+                    }}
+                  >
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                        {estaAberta && <span style={{ fontSize: 16 }}>🔴</span>}
+                        {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 16 }}>✅</span>}
+                        {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 16 }}>❌</span>}
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>
+                          {dataFormatada}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 11,
+                            fontWeight: 600,
+                            padding: '2px 8px',
+                            borderRadius: 999,
+                            background: estaAberta ? '#fecaca' : '#e2e8f0',
+                            color: estaAberta ? '#991b1b' : '#475569',
+                          }}
+                        >
+                          {STATUS_LABEL[r.status] ?? r.status}
+                        </span>
+                      </div>
+                      <span style={{ fontSize: 12, color: '#94a3b8' }}>
+                        {(r as unknown as Record<string, unknown>).qtd_paradas as number ?? '?'} paradas
+                      </span>
+                    </div>
+                    {estaAberta && (
+                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#b91c1c' }}>
+                        Rota em aberto — toque para retomar ou inicie uma nova abaixo.
+                      </p>
+                    )}
+                    {isLoading && (
+                      <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>Carregando…</p>
+                    )}
+                  </button>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
+
+      <button
+        type="button"
+        onClick={onIniciar}
+        style={botaoPrimarioStyle}
+        data-testid="btn-iniciar"
+      >
+        🆕 Nova rota
       </button>
     </div>
   );

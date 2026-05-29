@@ -140,10 +140,10 @@ describe('RotaPage — fase inicio', () => {
     render(<RotaPage />);
 
     await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
-    expect(screen.getByText(/Pronto pra rodar/)).toBeDefined();
+    expect(screen.getByText(/Rota do Dia/)).toBeDefined();
   });
 
-  it('clicar "Começar nova rota" vai pra fase captura', async () => {
+  it('clicar "Nova rota" vai pra fase captura', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
     setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
@@ -155,6 +155,90 @@ describe('RotaPage — fase inicio', () => {
     await user.click(screen.getByTestId('btn-iniciar'));
 
     await waitFor(() => expect(screen.getByTestId('input-endereco')).toBeDefined());
+  });
+
+  it('exibe historico de rotas concluidas', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    setupFetch([
+      {
+        match: (u) => u.includes('/api/routing/rotas?'),
+        res: {
+          rotas: [
+            { id: 'r-old', status: 'concluida', criada_em: '2026-05-28T10:00:00Z', qtd_paradas: 8 },
+          ],
+        },
+      },
+    ]);
+
+    render(<RotaPage />);
+
+    await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
+    expect(screen.getByTestId('rota-historico-r-old')).toBeDefined();
+    // Botao deve existir e NAO ter borda vermelha (concluida)
+    const btn = screen.getByTestId('rota-historico-r-old') as HTMLButtonElement;
+    expect(btn.style.background).not.toContain('fff1f2');
+  });
+
+  it('rota em aberto aparece destacada em vermelho', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    setupFetch([
+      {
+        match: (u) => u.includes('/api/routing/rotas?'),
+        res: {
+          rotas: [
+            { id: 'r-open', status: 'otimizada', criada_em: '2026-05-29T08:00:00Z', qtd_paradas: 5 },
+          ],
+        },
+      },
+    ]);
+
+    render(<RotaPage />);
+
+    await waitFor(() => expect(screen.getByTestId('rota-historico-r-open')).toBeDefined());
+    // Verifica que a rota em aberto mostra o aviso ao usuario
+    expect(screen.getByText(/Rota em aberto/)).toBeDefined();
+    // Badge mostra o status correto
+    expect(screen.getByText('Em aberto')).toBeDefined();
+  });
+
+  it('clicar em rota do historico carrega ela na fase em_rota', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    setupFetch([
+      {
+        match: (u) => u.includes('/api/routing/rotas?'),
+        res: {
+          rotas: [
+            { id: 'r-hist', status: 'concluida', criada_em: '2026-05-28T10:00:00Z', qtd_paradas: 3 },
+          ],
+        },
+      },
+      {
+        match: (u) => u.includes('/api/routing/rota/r-hist'),
+        res: {
+          rota: { id: 'r-hist', distancia_total_km: 12, tempo_total_min: 30, status: 'concluida' },
+          paradas: [
+            {
+              id: 'p1', rota_id: 'r-hist', nota_id: 'n1', ordem: 1,
+              endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+              latitude: -23.5, longitude: -46.6,
+              fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: '2026-05-28T12:00:00Z',
+            },
+          ],
+        },
+      },
+    ]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('rota-historico-r-hist'));
+    await user.click(screen.getByTestId('rota-historico-r-hist'));
+
+    // Deve entrar na fase em_rota
+    await waitFor(() => expect(screen.getByTestId('mapa-rota')).toBeDefined());
   });
 });
 
@@ -224,81 +308,64 @@ describe('RotaPage — fase captura', () => {
   });
 });
 
+// Helper: configura fetch com rota otimizada e carrega ate fase em_rota via historico
+function buildFetchComRota(rotaId: string, paradas: object[]) {
+  return vi.fn(async (url: string | Request, _init?: RequestInit) => {
+    const u = typeof url === 'string' ? url : url.url;
+    if (u.includes('/api/routing/rotas?')) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          rotas: [{ id: rotaId, status: 'otimizada', distancia_total_km: 5, tempo_total_min: 15, criada_em: '2026-05-29T10:00:00Z' }],
+        }),
+      } as unknown as Response;
+    }
+    if (u.includes(`/api/routing/rota/${rotaId}`)) {
+      return {
+        ok: true, status: 200,
+        json: async () => ({
+          rota: { id: rotaId, distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
+          paradas,
+        }),
+      } as unknown as Response;
+    }
+    return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
+  });
+}
+
 describe('RotaPage — fase em_rota', () => {
-  it('quando ha rota com status otimizada, abre direto na fase em_rota com mapa', async () => {
+  it('quando ha rota com status otimizada, mostra historico e ao clicar vai pra em_rota', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    setupFetch([
+    vi.stubGlobal('fetch', buildFetchComRota('r1', [
       {
-        match: (u) => u.includes('/api/routing/rotas?'),
-        res: {
-          rotas: [
-            {
-              id: 'r1',
-              motorista_id: 'mot-1',
-              empresa_id: 'emp-1',
-              status: 'otimizada',
-              distancia_total_km: 25,
-              tempo_total_min: 60,
-            },
-          ],
-        },
+        id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1,
+        endereco: { logradouro: 'A', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.5, longitude: -46.6,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
       },
       {
-        match: (u) => u.match(/\/api\/routing\/rota\/r1$/) !== null,
-        res: {
-          rota: {
-            id: 'r1',
-            motorista_id: 'mot-1',
-            empresa_id: 'emp-1',
-            data: '2026-05-29',
-            distancia_total_km: 25,
-            tempo_total_min: 60,
-            status: 'otimizada',
-            otimizada_em: '2026-05-29T12:00:00Z',
-            criada_em: '2026-05-29T11:50:00Z',
-          },
-          paradas: [
-            {
-              id: 'p1',
-              rota_id: 'r1',
-              nota_id: 'n1',
-              ordem: 1,
-              endereco: { logradouro: 'A', bairro: '', cidade: 'SP', uf: 'SP' },
-              latitude: -23.5,
-              longitude: -46.6,
-              fixada: false,
-              janela_horario: null,
-              tempo_descarga_min: 5,
-              observacao: null,
-              concluida_em: null,
-            },
-            {
-              id: 'p2',
-              rota_id: 'r1',
-              nota_id: 'n2',
-              ordem: 2,
-              endereco: { logradouro: 'B', bairro: '', cidade: 'SP', uf: 'SP' },
-              latitude: -23.6,
-              longitude: -46.7,
-              fixada: false,
-              janela_horario: null,
-              tempo_descarga_min: 5,
-              observacao: null,
-              concluida_em: null,
-            },
-          ],
-        },
+        id: 'p2', rota_id: 'r1', nota_id: 'n2', ordem: 2,
+        endereco: { logradouro: 'B', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.6, longitude: -46.7,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
       },
-    ]);
+    ]));
 
+    const user = userEvent.setup();
     render(<RotaPage />);
+
+    // Primeiro fica na fase inicio mostrando o historico
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    expect(screen.getByText(/Rota em aberto/)).toBeDefined();
+
+    // Clica pra retomar a rota
+    await user.click(screen.getByTestId('rota-historico-r1'));
 
     await waitFor(() => expect(screen.getByTestId('mapa-rota')).toBeDefined());
     expect(screen.getByTestId('parada-1')).toBeDefined();
     expect(screen.getByTestId('parada-2')).toBeDefined();
-    expect(screen.getByText(/25.0 km/)).toBeDefined();
     expect(screen.getByTestId('link-ajustar')).toBeDefined();
   });
 
@@ -306,24 +373,16 @@ describe('RotaPage — fase em_rota', () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    setupFetch([
-      {
-        match: (u) => u.includes('/api/routing/rotas?'),
-        res: { rotas: [{ id: 'r1', status: 'otimizada', distancia_total_km: 10, tempo_total_min: 20 }] },
-      },
-      {
-        match: (u) => u.match(/\/api\/routing\/rota\/r1$/) !== null,
-        res: {
-          rota: { id: 'r1', distancia_total_km: 10, tempo_total_min: 20, status: 'otimizada' },
-          paradas: [],
-        },
-      },
-    ]);
+    vi.stubGlobal('fetch', buildFetchComRota('r1', []));
 
     const user = userEvent.setup();
     render(<RotaPage />);
 
+    // Navega ate em_rota via historico
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
     await waitFor(() => screen.getByTestId('btn-encerrar'));
+
     await user.click(screen.getByTestId('btn-encerrar'));
 
     await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
@@ -333,50 +392,24 @@ describe('RotaPage — fase em_rota', () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    const fetchSpy = vi.fn(async (url: string | Request, _init?: RequestInit) => {
-      const u = typeof url === 'string' ? url : url.url;
-      if (u.includes('/api/routing/rotas?')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ rotas: [{ id: 'r1', status: 'otimizada', distancia_total_km: 5, tempo_total_min: 15 }] }),
-        } as unknown as Response;
-      }
-      if (u.match(/\/api\/routing\/rota\/r1$/) !== null) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            rota: { id: 'r1', distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
-            paradas: [
-              {
-                id: 'p1',
-                rota_id: 'r1',
-                nota_id: 'n1',
-                ordem: 1,
-                endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
-                latitude: -23.5,
-                longitude: -46.6,
-                fixada: false,
-                janela_horario: null,
-                tempo_descarga_min: 5,
-                observacao: null,
-                concluida_em: null,
-              },
-            ],
-          }),
-        } as unknown as Response;
-      }
-      // PATCH paradas
-      return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
-    });
+    const fetchSpy = buildFetchComRota('r1', [
+      {
+        id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1,
+        endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.5, longitude: -46.6,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
+      },
+    ]);
     vi.stubGlobal('fetch', fetchSpy);
 
     const user = userEvent.setup();
     render(<RotaPage />);
 
-    // 1. Clique em "Concluí" — agora abre modal de confirmacao em vez de
-    //    marcar direto (motorista pode ter apertado sem querer)
+    // Navega ate em_rota via historico
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
+
+    // 1. Clique em "Concluí" — abre modal de confirmacao
     await waitFor(() => screen.getByTestId('btn-concluir-1'));
     await user.click(screen.getByTestId('btn-concluir-1'));
 
@@ -404,46 +437,22 @@ describe('RotaPage — fase em_rota', () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    const fetchSpy = vi.fn(async (url: string | Request) => {
-      const u = typeof url === 'string' ? url : url.url;
-      if (u.includes('/api/routing/rotas?')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ rotas: [{ id: 'r1', status: 'otimizada' }] }),
-        } as unknown as Response;
-      }
-      if (u.match(/\/api\/routing\/rota\/r1$/) !== null) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            rota: { id: 'r1', distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
-            paradas: [
-              {
-                id: 'p1',
-                rota_id: 'r1',
-                nota_id: 'n1',
-                ordem: 1,
-                endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
-                latitude: -23.5,
-                longitude: -46.6,
-                fixada: false,
-                janela_horario: null,
-                tempo_descarga_min: 5,
-                observacao: null,
-                concluida_em: null,
-              },
-            ],
-          }),
-        } as unknown as Response;
-      }
-      return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
-    });
+    const fetchSpy = buildFetchComRota('r1', [
+      {
+        id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1,
+        endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.5, longitude: -46.6,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
+      },
+    ]);
     vi.stubGlobal('fetch', fetchSpy);
 
     const user = userEvent.setup();
     render(<RotaPage />);
+
+    // Navega ate em_rota via historico
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
 
     await waitFor(() => screen.getByTestId('btn-concluir-1'));
     await user.click(screen.getByTestId('btn-concluir-1'));
@@ -465,45 +474,22 @@ describe('RotaPage — fase em_rota', () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    const fetchSpy = vi.fn(async (url: string | Request) => {
-      const u = typeof url === 'string' ? url : url.url;
-      if (u.includes('/api/routing/rotas?')) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({ rotas: [{ id: 'r1', status: 'otimizada' }] }),
-        } as unknown as Response;
-      }
-      if (u.match(/\/api\/routing\/rota\/r1$/) !== null) {
-        return {
-          ok: true,
-          status: 200,
-          json: async () => ({
-            rota: { id: 'r1', distancia_total_km: 5, tempo_total_min: 15, status: 'otimizada' },
-            paradas: [
-              {
-                id: 'p1',
-                rota_id: 'r1',
-                nota_id: 'n1',
-                ordem: 1,
-                endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
-                latitude: -23.5,
-                longitude: -46.6,
-                fixada: false,
-                janela_horario: null,
-                tempo_descarga_min: 5,
-                observacao: null,
-                concluida_em: null,
-              },
-            ],
-          }),
-        } as unknown as Response;
-      }
-      return { ok: true, status: 200, json: async () => ({ ok: true }) } as unknown as Response;
-    });
+    const fetchSpy = buildFetchComRota('r1', [
+      {
+        id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1,
+        endereco: { logradouro: 'X', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.5, longitude: -46.6,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
+      },
+    ]);
     vi.stubGlobal('fetch', fetchSpy);
 
+    const user = userEvent.setup();
     render(<RotaPage />);
+
+    // Navega ate em_rota via historico
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
 
     // Espera chegar na fase em_rota
     await waitFor(() => screen.getByTestId('mapa-rota'));
