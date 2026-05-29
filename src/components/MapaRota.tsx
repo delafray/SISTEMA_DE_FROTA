@@ -3,28 +3,31 @@
 /**
  * MapaRota — mapa Leaflet com pinos numerados nas paradas e traçado da rota.
  *
- * Por que dynamic import com ssr:false:
- * - Leaflet manipula window/document direto (SSR quebra)
- * - react-leaflet exige browser pra renderizar
+ * Pinos seguem padrao de mercado (cor por status):
+ *   - azul: pendente
+ *   - laranja: proxima a entregar (destaque)
+ *   - verde: concluida
+ *   - vermelho: fixada
  *
- * Props:
- * - paradas: Array<Parada com lat/lng e ordem> — desenha pino numerado em cada
- * - polylineEncoded?: string — geometria devolvida pelo OSRM (decoded inline)
- * - altura?: number — altura do container em px (default 360)
+ * Suporta interacao: ao tocar pino, dispara onParadaClick com id.
+ * Use `paradaSelecionada` pra destacar visualmente um pino especifico.
  *
- * Referencia: PLANO_ROTEIRIZACAO.md passo 1.11.
+ * Referencia: PLANO_ROTEIRIZACAO.md passo 1.11 + padroes Onfleet/Circuit/Route4Me.
  */
 
 import dynamic from 'next/dynamic';
 import type { Parada } from '@/lib/routing/types';
 
 export interface MapaRotaProps {
-  paradas: Array<Pick<Parada, 'ordem' | 'latitude' | 'longitude' | 'endereco' | 'fixada'>>;
+  paradas: Array<
+    Pick<Parada, 'id' | 'ordem' | 'latitude' | 'longitude' | 'endereco' | 'fixada' | 'concluida_em'>
+  >;
   polylineEncoded?: string;
   altura?: number;
+  paradaSelecionada?: string | null;
+  onParadaClick?: (id: string) => void;
 }
 
-// Carrega o inner so no client (Leaflet quebra em SSR)
 const MapaRotaInner = dynamic(() => import('./MapaRotaInner'), {
   ssr: false,
   loading: () => (
@@ -38,6 +41,7 @@ const MapaRotaInner = dynamic(() => import('./MapaRotaInner'), {
         alignItems: 'center',
         justifyContent: 'center',
         color: '#64748b',
+        minHeight: 200,
       }}
     >
       Carregando mapa…

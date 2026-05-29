@@ -20,7 +20,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
-import { adicionarNota, listarTodas } from '@/lib/offline/fila';
+import { adicionarNota, listarTodas, remover } from '@/lib/offline/fila';
 import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
 import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
 import type { NotaNaFila } from '@/lib/offline/types';
@@ -44,6 +44,22 @@ export default function CapturaNotasPage(): React.ReactElement {
     const todas = await listarTodas(motoristaId);
     setNotas(todas);
   }, [motoristaId]);
+
+  // Trava em retrato ao montar (Android Chrome suporta; iOS ignora silenciosamente)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    type SO = ScreenOrientation & { lock?: (o: string) => Promise<void> };
+    const so = screen.orientation as SO | undefined;
+    if (so?.lock) so.lock('portrait').catch(() => { /* ok */ });
+  }, []);
+
+  const handleDesfazerUltima = useCallback(async () => {
+    if (notas.length === 0) return;
+    const ordenadas = [...notas].sort((a, b) => b.capturado_em.localeCompare(a.capturado_em));
+    await remover(ordenadas[0].id_local);
+    if (typeof navigator !== 'undefined' && navigator.vibrate) navigator.vibrate([30, 20, 30]);
+    await recarregar();
+  }, [notas, recarregar]);
 
   // Mount: workers + listeners + load inicial
   useEffect(() => {
@@ -141,6 +157,7 @@ export default function CapturaNotasPage(): React.ReactElement {
           numeroNF={numeroNF}
           totalNFs={totalEsperado}
           onConfirmar={handleConfirmar}
+          onDesfazerUltima={notas.length > 0 ? handleDesfazerUltima : undefined}
         />
       )}
 

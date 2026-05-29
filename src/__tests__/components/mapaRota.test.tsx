@@ -29,18 +29,22 @@ describe('MapaRota', () => {
   it('renderiza inner (mock) com paradas + polyline quando dados presentes', () => {
     const paradas = [
       {
+        id: 'p1',
         ordem: 1,
         latitude: -23.5,
         longitude: -46.6,
         endereco: { logradouro: 'X', bairro: 'B', cidade: 'SP', uf: 'SP' },
         fixada: false,
+        concluida_em: null,
       },
       {
+        id: 'p2',
         ordem: 2,
         latitude: -23.6,
         longitude: -46.7,
         endereco: { logradouro: 'Y', bairro: 'B', cidade: 'SP', uf: 'SP' },
         fixada: true,
+        concluida_em: null,
       },
     ];
 
@@ -54,11 +58,13 @@ describe('MapaRota', () => {
   it('renderiza inner sem polyline quando nao tem traçado', () => {
     const paradas = [
       {
+        id: 'p1',
         ordem: 1,
         latitude: -23.5,
         longitude: -46.6,
         endereco: { logradouro: 'X', bairro: 'B', cidade: 'SP', uf: 'SP' },
         fixada: false,
+        concluida_em: null,
       },
     ];
     render(<MapaRota paradas={paradas} />);

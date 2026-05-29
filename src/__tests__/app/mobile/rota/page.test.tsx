@@ -313,7 +313,7 @@ describe('RotaPage — fase em_rota', () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 
-    const fetchSpy = vi.fn(async (url: string | Request) => {
+    const fetchSpy = vi.fn(async (url: string | Request, _init?: RequestInit) => {
       const u = typeof url === 'string' ? url : url.url;
       if (u.includes('/api/routing/rotas?')) {
         return {

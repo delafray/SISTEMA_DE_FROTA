@@ -34,6 +34,9 @@ export interface InputEnderecoNFProps {
   totalNFs: number;         // total: "70" em "24 de 70"
   onConfirmar: (nota: NotaCapturadaInput) => void | Promise<void>;
   onCancelar?: () => void;
+  /** Se fornecido, mostra botão "↶ Desfazer última" no topo. Volta o estado
+   *  do app removendo a ultima NF capturada (logica fica no parent). */
+  onDesfazerUltima?: () => void | Promise<void>;
 }
 
 type Etapa = 'cep' | 'numero' | 'confirmar' | 'endereco_manual';
@@ -64,6 +67,7 @@ export function InputEnderecoNF({
   totalNFs,
   onConfirmar,
   onCancelar,
+  onDesfazerUltima,
 }: InputEnderecoNFProps): React.ReactElement {
   const [etapa, setEtapa] = useState<Etapa>('cep');
   const [cep, setCep] = useState<string>('');           // armazenado normalizado (so digitos)
@@ -145,8 +149,28 @@ export function InputEnderecoNF({
   // ─── RENDER ────────────────────────────────────────────────────────
 
   const cabecalho = (
-    <div style={{ fontSize: 14, fontWeight: 600, color: '#64748b', marginBottom: 12 }}>
-      NF {numeroNF} de {totalNFs}
+    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
+        NF {numeroNF} de {totalNFs}
+      </div>
+      {onDesfazerUltima && numeroNF > 1 && (
+        <button
+          type="button"
+          onClick={() => onDesfazerUltima()}
+          aria-label="desfazer ultima NF"
+          style={{
+            background: 'transparent',
+            border: '1px solid #cbd5e1',
+            borderRadius: 6,
+            padding: '4px 10px',
+            fontSize: 12,
+            color: '#64748b',
+            cursor: 'pointer',
+          }}
+        >
+          ↶ Desfazer última
+        </button>
+      )}
     </div>
   );
 

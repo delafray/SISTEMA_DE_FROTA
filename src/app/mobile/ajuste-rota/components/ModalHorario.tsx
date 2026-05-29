@@ -26,15 +26,42 @@ export interface ModalHorarioProps {
   onFechar: () => void;
 }
 
+type Preset = 'manha' | 'tarde' | 'noite' | 'custom';
+
+const PRESETS: Record<Preset, { label: string; inicio: string; fim: string }> = {
+  manha:  { label: '🌅 Manhã',  inicio: '08:00', fim: '12:00' },
+  tarde:  { label: '☀️ Tarde',   inicio: '13:00', fim: '18:00' },
+  noite:  { label: '🌙 Noite',   inicio: '19:00', fim: '22:00' },
+  custom: { label: '⏱️ Custom', inicio: '09:00', fim: '18:00' },
+};
+
+function presetDeJanela(inicio: string, fim: string): Preset {
+  if (inicio === PRESETS.manha.inicio && fim === PRESETS.manha.fim) return 'manha';
+  if (inicio === PRESETS.tarde.inicio && fim === PRESETS.tarde.fim) return 'tarde';
+  if (inicio === PRESETS.noite.inicio && fim === PRESETS.noite.fim) return 'noite';
+  return 'custom';
+}
+
 export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps): React.ReactElement {
   const janelaInicial = parada.janela_horario?.[0];
   const [temJanela, setTemJanela] = useState(Boolean(janelaInicial));
   const [inicio, setInicio] = useState(janelaInicial?.[0] ?? '09:00');
   const [fim, setFim] = useState(janelaInicial?.[1] ?? '18:00');
+  const [presetSel, setPresetSel] = useState<Preset>(
+    janelaInicial ? presetDeJanela(janelaInicial[0], janelaInicial[1]) : 'custom'
+  );
   const [fixada, setFixada] = useState(parada.fixada);
   const [observacao, setObservacao] = useState(parada.observacao ?? '');
 
   const horarioValido = !temJanela || (inicio < fim);
+
+  const aplicarPreset = (p: Preset) => {
+    setPresetSel(p);
+    if (p !== 'custom') {
+      setInicio(PRESETS[p].inicio);
+      setFim(PRESETS[p].fim);
+    }
+  };
 
   const handleSalvar = () => {
     if (!horarioValido) return;
@@ -73,23 +100,51 @@ export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps):
             <span>Restringir horario de entrega</span>
           </label>
           {temJanela && (
-            <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
-              <input
-                type="time"
-                value={inicio}
-                onChange={(e) => setInicio(e.target.value)}
-                aria-label="horario inicio"
-                style={inputTimeStyle}
-              />
-              <span>até</span>
-              <input
-                type="time"
-                value={fim}
-                onChange={(e) => setFim(e.target.value)}
-                aria-label="horario fim"
-                style={inputTimeStyle}
-              />
-            </div>
+            <>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }} role="group" aria-label="presets de horario">
+                {(Object.keys(PRESETS) as Preset[]).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => aplicarPreset(p)}
+                    aria-pressed={presetSel === p}
+                    style={{
+                      ...presetBtnStyle,
+                      background: presetSel === p ? '#2563eb' : '#f1f5f9',
+                      color: presetSel === p ? '#fff' : '#475569',
+                    }}
+                  >
+                    {PRESETS[p].label}
+                  </button>
+                ))}
+              </div>
+
+              {presetSel === 'custom' && (
+                <div style={{ display: 'flex', gap: 8, marginTop: 8, alignItems: 'center' }}>
+                  <input
+                    type="time"
+                    value={inicio}
+                    onChange={(e) => { setInicio(e.target.value); setPresetSel('custom'); }}
+                    aria-label="horario inicio"
+                    style={inputTimeStyle}
+                  />
+                  <span>até</span>
+                  <input
+                    type="time"
+                    value={fim}
+                    onChange={(e) => { setFim(e.target.value); setPresetSel('custom'); }}
+                    aria-label="horario fim"
+                    style={inputTimeStyle}
+                  />
+                </div>
+              )}
+
+              {presetSel !== 'custom' && (
+                <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+                  Janela: <strong>{inicio} – {fim}</strong>
+                </div>
+              )}
+            </>
           )}
           {temJanela && !horarioValido && (
             <div role="alert" style={{ marginTop: 8, color: '#dc2626', fontSize: 13 }}>
@@ -185,6 +240,15 @@ const inputTimeStyle: React.CSSProperties = {
   fontSize: 15,
   border: '1px solid #cbd5e1',
   borderRadius: 6,
+};
+
+const presetBtnStyle: React.CSSProperties = {
+  padding: '6px 12px',
+  fontSize: 13,
+  fontWeight: 600,
+  border: 'none',
+  borderRadius: 6,
+  cursor: 'pointer',
 };
 
 const botaoPrimarioStyle: React.CSSProperties = {

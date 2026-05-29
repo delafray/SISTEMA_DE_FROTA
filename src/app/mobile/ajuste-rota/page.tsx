@@ -35,7 +35,14 @@ import { CSS } from '@dnd-kit/utilities';
 import { MapaRota } from '@/components/MapaRota';
 import { Tijolinho } from './components/Tijolinho';
 import { ModalHorario, type ParadaEditavel } from './components/ModalHorario';
+import { distanciasEntreParadas, estimarKmTotal } from '@/lib/routing/utils';
 import type { Parada, RotaOtimizada } from '@/lib/routing/types';
+
+function vibrar(pattern: number | number[]) {
+  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
+    navigator.vibrate(pattern);
+  }
+}
 
 type Aba = 'ordenar' | 'detalhes';
 
@@ -56,6 +63,8 @@ export default function AjusteRotaPage(): React.ReactElement {
   const [erro, setErro] = useState<string | null>(null);
   const [paradaEditando, setParadaEditando] = useState<Parada | null>(null);
   const [dirty, setDirty] = useState(false);
+  const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
+  const [avisoLock, setAvisoLock] = useState<string | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
@@ -89,14 +98,33 @@ export default function AjusteRotaPage(): React.ReactElement {
         const newIndex = items.findIndex((p) => p.id === over.id);
         if (oldIndex < 0 || newIndex < 0) return items;
         // Nao move se a parada destino for fixada (mantem posicao)
-        if (items[newIndex].fixada) return items;
+        if (items[newIndex].fixada) {
+          vibrar([100, 50, 100]);
+          setAvisoLock(`Parada ${items[newIndex].ordem} está 🔒 fixada — vá em Detalhes pra liberar.`);
+          setTimeout(() => setAvisoLock(null), 3000);
+          return items;
+        }
         const moved = arrayMove(items, oldIndex, newIndex);
         // Renumera ordens
         return moved.map((p, i) => ({ ...p, ordem: i + 1 }));
       });
+      vibrar([50, 30, 50]);
       setDirty(true);
     },
     []
+  );
+
+  // Bloquear arrasto de parada fixada antes de comecar
+  const handleDragStart = useCallback(
+    (event: { active: { id: string | number } }) => {
+      const p = paradas.find((p) => p.id === event.active.id);
+      if (p?.fixada) {
+        vibrar([100, 50, 100]);
+        setAvisoLock(`Parada ${p.ordem} está 🔒 fixada — vá em Detalhes pra liberar.`);
+        setTimeout(() => setAvisoLock(null), 3000);
+      }
+    },
+    [paradas]
   );
 
   const handleSalvarEdicao = useCallback(
@@ -172,21 +200,39 @@ export default function AjusteRotaPage(): React.ReactElement {
     );
   }
 
+  // Calculos visuais dinamicos (atualizam ao reordenar)
+  const distancias = distanciasEntreParadas(paradas);
+  const kmEstimado = estimarKmTotal(paradas);
+  const kmExibido = dirty ? kmEstimado : (rotaInfo?.distancia_total_km ?? kmEstimado);
+  const minExibido = rotaInfo?.tempo_total_min ?? null;
+
   return (
     <div style={containerStyle}>
       <header style={headerStyle}>
         <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Ajuste de Rota</h1>
-        {rotaInfo && (
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-            {paradas.length} paradas
-            {rotaInfo.distancia_total_km !== null && <> · {rotaInfo.distancia_total_km.toFixed(1)} km</>}
-            {rotaInfo.tempo_total_min !== null && <> · ≈ {Math.round(rotaInfo.tempo_total_min)} min</>}
-          </div>
-        )}
+        <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
+          {paradas.length} paradas · {dirty && '≈ '}{kmExibido.toFixed(1)} km
+          {minExibido !== null && !dirty && <> · ≈ {Math.round(minExibido)} min</>}
+          {dirty && <span style={{ color: '#f97316', fontWeight: 600 }}> · alterado</span>}
+        </div>
       </header>
 
-      {/* Mapa */}
-      <MapaRota paradas={paradas} altura={280} />
+      {avisoLock && (
+        <div role="alert" style={{ ...erroStyle, background: '#fef3c7', color: '#92400e' }}>
+          {avisoLock}
+        </div>
+      )}
+
+      {/* Mapa interativo (tap pino destaca card) */}
+      <MapaRota
+        paradas={paradas}
+        altura={280}
+        paradaSelecionada={paradaSelecionada}
+        onParadaClick={(id) => {
+          setParadaSelecionada(id);
+          vibrar(30);
+        }}
+      />
 
       {/* Tabs */}
       <div role="tablist" style={tabsStyle}>
@@ -210,17 +256,37 @@ export default function AjusteRotaPage(): React.ReactElement {
 
       {/* Conteudo da aba ativa */}
       {aba === 'ordenar' ? (
-        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+        <DndContext
+          sensors={sensors}
+          collisionDetection={closestCenter}
+          onDragStart={handleDragStart}
+          onDragEnd={handleDragEnd}
+        >
           <SortableContext items={paradas.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-            {paradas.map((p) => (
-              <SortableTijolinho key={p.id} parada={p} />
+            {paradas.map((p, i) => (
+              <div
+                key={p.id}
+                onClick={() => setParadaSelecionada(p.id === paradaSelecionada ? null : p.id)}
+              >
+                <SortableTijolinho
+                  parada={p}
+                  distanciaAnteriorKm={distancias[i]}
+                  destacado={paradaSelecionada === p.id}
+                />
+              </div>
             ))}
           </SortableContext>
         </DndContext>
       ) : (
         <div>
           {paradas.map((p) => (
-            <Tijolinho key={p.id} parada={p} modo="detalhes" onClickDetalhes={() => setParadaEditando(p)} />
+            <Tijolinho
+              key={p.id}
+              parada={p}
+              modo="detalhes"
+              onClickDetalhes={() => setParadaEditando(p)}
+              destacado={paradaSelecionada === p.id}
+            />
           ))}
         </div>
       )}
@@ -257,9 +323,18 @@ export default function AjusteRotaPage(): React.ReactElement {
 
 // ─── SortableTijolinho ──────────────────────────────────────────────
 
-function SortableTijolinho({ parada }: { parada: Parada }) {
+function SortableTijolinho({
+  parada,
+  distanciaAnteriorKm,
+  destacado,
+}: {
+  parada: Parada;
+  distanciaAnteriorKm?: number;
+  destacado?: boolean;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: parada.id,
+    disabled: parada.fixada,
   });
 
   const style = {
@@ -273,6 +348,8 @@ function SortableTijolinho({ parada }: { parada: Parada }) {
       <Tijolinho
         parada={parada}
         modo="ordenar"
+        distanciaAnteriorKm={distanciaAnteriorKm}
+        destacado={destacado}
         draggableHandle={
           <span
             {...listeners}

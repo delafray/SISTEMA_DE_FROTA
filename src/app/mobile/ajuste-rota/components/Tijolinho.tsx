@@ -19,6 +19,10 @@ export interface TijolinhoProps {
   modo: ModoTijolinho;
   onClickDetalhes?: () => void;
   draggableHandle?: React.ReactNode;
+  /** Distancia em KM ate a parada anterior (linha reta, Haversine). Modo ordenar. */
+  distanciaAnteriorKm?: number;
+  /** Destaca visualmente este tijolinho (ex: parada selecionada no mapa). */
+  destacado?: boolean;
 }
 
 export function Tijolinho({
@@ -26,7 +30,10 @@ export function Tijolinho({
   modo,
   onClickDetalhes,
   draggableHandle,
+  distanciaAnteriorKm,
+  destacado,
 }: TijolinhoProps): React.ReactElement {
+  const temJanela = Boolean(parada.janela_horario && parada.janela_horario.length > 0);
   const enderecoCurto = `${parada.endereco.logradouro || '(sem nome)'} — ${parada.endereco.cidade}/${parada.endereco.uf}`;
   const enderecoCompleto = `${parada.endereco.logradouro || '(sem nome)'}, ${parada.endereco.bairro ? parada.endereco.bairro + ', ' : ''}${parada.endereco.cidade}/${parada.endereco.uf}`;
 
@@ -61,19 +68,24 @@ export function Tijolinho({
           gap: 12,
           padding: 12,
           background: '#fff',
-          border: '1px solid #e2e8f0',
+          border: destacado ? '2px solid #f97316' : '1px solid #e2e8f0',
           borderRadius: 8,
           marginBottom: 8,
+          boxShadow: destacado ? '0 0 0 3px rgba(249,115,22,0.2)' : undefined,
         }}
       >
         {numeroBox}
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-            {enderecoCurto}
+          <div style={{ fontWeight: 600, fontSize: 14, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{enderecoCurto}</span>
+            {temJanela && <span aria-label="tem janela de horario" style={{ flexShrink: 0 }}>⏰</span>}
           </div>
-          {parada.fixada && (
-            <div style={{ fontSize: 11, color: '#dc2626', marginTop: 2 }}>🔒 Fixada</div>
-          )}
+          <div style={{ display: 'flex', gap: 8, marginTop: 2, fontSize: 11, color: '#64748b' }}>
+            {typeof distanciaAnteriorKm === 'number' && distanciaAnteriorKm > 0 && (
+              <span>📏 {distanciaAnteriorKm.toFixed(1)} km</span>
+            )}
+            {parada.fixada && <span style={{ color: '#dc2626' }}>🔒 Fixada</span>}
+          </div>
         </div>
         {!parada.fixada && draggableHandle}
       </div>
