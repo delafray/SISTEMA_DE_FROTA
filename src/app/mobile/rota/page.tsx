@@ -419,14 +419,27 @@ function RotaContent(): React.ReactElement {
 
   const handleEncerrarRota = useCallback(async () => {
     if (rota) {
+      // fetch() NAO rejeita em HTTP 500/404 — so em erro de rede. Antes
+      // o catch ignorava silenciosamente erros do servidor: motorista
+      // clicava "Encerrar", frontend resetava o estado, mas a rota
+      // continuava 'otimizada' no banco — voltava vermelha na lista.
       try {
-        await fetch(`/api/routing/rota/${rota.id}`, {
+        const res = await fetch(`/api/routing/rota/${rota.id}`, {
           method: 'PATCH',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ status: 'concluida' }),
         });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          setErro(
+            `Nao foi possivel marcar rota como concluida (HTTP ${res.status}). ${data.error ?? ''} ${data.details ?? ''}`
+          );
+          // NAO reseta estado — motorista fica na fase em_rota e pode tentar de novo
+          return;
+        }
       } catch (err) {
-        console.error('Falha ao encerrar rota no backend:', err);
+        setErro(`Erro de rede ao encerrar: ${(err as Error).message}`);
+        return;
       }
     }
     setRota(null);
@@ -505,6 +518,17 @@ function RotaContent(): React.ReactElement {
           onIniciar={iniciarCaptura}
           onCarregarRota={handleCarregarRota}
           rotasHistorico={rotasHistorico}
+          onRefetchHistorico={async () => {
+            try {
+              const res = await fetch(
+                `/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`
+              );
+              const data = await res.json();
+              setRotasHistorico(data.rotas ?? []);
+            } catch {
+              /* ignora */
+            }
+          }}
         />
       )}
 
@@ -668,12 +692,39 @@ function FaseInicio({
   onIniciar,
   onCarregarRota,
   rotasHistorico,
+  onRefetchHistorico,
 }: {
   onIniciar: () => void;
   onCarregarRota: (rotaId: string) => Promise<void>;
   rotasHistorico: RotaOtimizada[];
+  onRefetchHistorico: () => Promise<void>;
 }) {
   const [carregando, setCarregando] = useState<string | null>(null);
+  const [marcandoConcluida, setMarcandoConcluida] = useState<string | null>(null);
+
+  // Marca rota como concluida no banco — pra "destrancar" rotas que ficaram
+  // em status 'otimizada' (encerrar antigo nao salvava no banco).
+  const handleForcarConcluir = useCallback(
+    async (rotaId: string) => {
+      setMarcandoConcluida(rotaId);
+      try {
+        const res = await fetch(`/api/routing/rota/${rotaId}`, {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: 'concluida' }),
+        });
+        if (!res.ok) {
+          const data = await res.json().catch(() => ({}));
+          alert(`Falhou (HTTP ${res.status}): ${data.error ?? ''} ${data.details ?? ''}`);
+          return;
+        }
+        await onRefetchHistorico();
+      } finally {
+        setMarcandoConcluida(null);
+      }
+    },
+    [onRefetchHistorico]
+  );
 
   const aberta = (status: string) => ['otimizada', 'em_andamento'].includes(status);
 
@@ -758,6 +809,30 @@ function FaseInicio({
                       <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b' }}>Carregando…</p>
                     )}
                   </button>
+                  {estaAberta && (
+                    <button
+                      type="button"
+                      data-testid={`btn-forcar-concluida-${r.id}`}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        void handleForcarConcluir(r.id);
+                      }}
+                      disabled={marcandoConcluida === r.id}
+                      style={{
+                        marginTop: 4,
+                        width: '100%',
+                        padding: '6px 10px',
+                        background: 'transparent',
+                        color: '#64748b',
+                        border: '1px dashed #cbd5e1',
+                        borderRadius: 6,
+                        fontSize: 11,
+                        cursor: marcandoConcluida === r.id ? 'wait' : 'pointer',
+                      }}
+                    >
+                      {marcandoConcluida === r.id ? 'Marcando…' : '✓ Já entreguei tudo desta rota — marcar como concluída'}
+                    </button>
+                  )}
                 </li>
               );
             })}
