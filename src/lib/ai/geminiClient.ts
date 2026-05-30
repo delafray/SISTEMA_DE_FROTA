@@ -55,7 +55,7 @@ export async function chatGemini(
   try {
     const client = getClient();
     const model = client.getGenerativeModel({
-      model: 'gemini-1.5-flash',
+      model: 'gemini-2.0-flash',
       systemInstruction: SYSTEM_PROMPT,
     });
 
@@ -73,7 +73,12 @@ export async function chatGemini(
     return { ok: true, texto };
   } catch (err) {
     const motivo = err instanceof Error ? err.message : String(err);
-    log.error('gemini_erro', { motivo });
+    // Log detalhado para facilitar diagnóstico via Vercel Logs
+    log.error('gemini_erro', {
+      motivo,
+      stack: err instanceof Error ? err.stack?.slice(0, 500) : undefined,
+      api_key_prefix: (process.env.GEMINI_API_KEY ?? '').slice(0, 8),
+    });
     return { ok: false, motivo };
   }
 }
