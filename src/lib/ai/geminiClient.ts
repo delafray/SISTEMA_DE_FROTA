@@ -111,28 +111,33 @@ export async function chatGeminiComAudio(
       AUDIO_MIME_TYPES.find((t) => contentType.includes(t)) ?? 'audio/ogg'
     ) as 'audio/ogg' | 'audio/mpeg' | 'audio/mp4' | 'audio/wav' | 'audio/webm';
 
+    log.info('gemini_audio_baixado', { bytes: audioBuffer.byteLength, mimeType });
+
     const client = getClient();
     const model = client.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: SYSTEM_PROMPT,
     });
 
-    const history = historico.map((h) => ({
-      role: h.role,
-      parts: [{ text: h.text }],
-    }));
-
-    const chat = model.startChat({ history });
-
+    // Usar generateContent direto (mais confiavel para audio inline que startChat)
     const prefixo = nomeRemetente ? `[Motorista: ${nomeRemetente}]` : '[Usuário]';
 
-    const result = await chat.sendMessage([
-      { text: prefixo },
+    // Incluir historico como contexto textual no prompt
+    const historicoTexto = historico
+      .map((h) => `${h.role === 'user' ? 'Usuário' : 'Assistente'}: ${h.text}`)
+      .join('\n');
+
+    const promptTexto = historicoTexto
+      ? `${historicoTexto}\nUsuário (mensagem de voz): ${prefixo}`
+      : `${prefixo} enviou uma mensagem de voz:`;
+
+    const result = await model.generateContent([
+      { text: promptTexto },
       { inlineData: { mimeType, data: audioBase64 } },
     ]);
 
     const texto = result.response.text().trim();
-    log.info('gemini_audio_ok', { chars: texto.length, mimeType });
+    log.info('gemini_audio_ok', { chars: texto.length, mimeType, bytes: audioBuffer.byteLength });
     return { ok: true, texto };
   } catch (err) {
     const motivo = err instanceof Error ? err.message : String(err);
