@@ -9,6 +9,7 @@
 
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createLogger } from '@/lib/logger';
+import { transcreverComDeepgram } from './deepgramClient';
 
 const log = createLogger('gemini-client');
 
@@ -85,66 +86,56 @@ export async function chatGemini(
 }
 
 /**
- * Envia áudio diretamente ao Gemini (sem Whisper/OpenAI).
- * O Gemini 2.5 Flash entende audio/ogg nativamente — formato padrão do WhatsApp.
- * Retorna a resposta em texto puro, nunca lança exceção.
+ * Pipeline áudio → texto → resposta:
+ * 1. Transcreve o áudio via Deepgram (modelo nova-2, pt-BR)
+ * 2. Manda o texto transcrito pro Gemini text-only (chatGemini)
+ *
+ * Por que NÃO mandar áudio direto pro Gemini: Gemini 2.5 Flash aceita
+ * 'audio/ogg' no MIME mas o decoder interno falha silenciosamente com o
+ * codec OGG/Opus usado pelo WhatsApp — responde algo genérico sem
+ * entender o conteúdo. Deepgram aceita Opus nativamente e devolve
+ * transcript confiável; daí o Gemini lida apenas com texto.
+ *
+ * O retorno `transcricao` é exposto pra que o chamador (geminiBot) possa
+ * guardar a transcrição real no histórico em vez de "(mensagem de voz)".
  */
+export type RespostaGeminiAudio =
+  | { ok: true; texto: string; transcricao: string }
+  | { ok: false; motivo: string };
+
 export async function chatGeminiComAudio(
   audioUrl: string,
   historico: HistoricoMensagem[] = [],
   nomeRemetente?: string
-): Promise<RespostaGemini> {
-  try {
-    // Baixar o áudio da URL da Evolution API
-    const respHttp = await fetch(audioUrl);
-    if (!respHttp.ok) {
-      return { ok: false, motivo: `Falha ao baixar audio: ${respHttp.status}` };
-    }
-    const audioBuffer = await respHttp.arrayBuffer();
-    const audioBase64 = Buffer.from(audioBuffer).toString('base64');
-
-    // Detectar MIME type: Evolution API retorna application/octet-stream para audios do WhatsApp.
-    // Audio do WhatsApp e sempre audio/ogg com codec Opus — forcamos esse tipo.
-    const contentType = respHttp.headers.get('content-type') ?? '';
-    const AUDIO_MIME_TYPES = ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/webm', 'audio/aac'];
-    const mimeType = (
-      AUDIO_MIME_TYPES.find((t) => contentType.includes(t)) ?? 'audio/ogg'
-    ) as 'audio/ogg' | 'audio/mpeg' | 'audio/mp4' | 'audio/wav' | 'audio/webm';
-
-    log.info('gemini_audio_baixado', { bytes: audioBuffer.byteLength, mimeType });
-
-    const client = getClient();
-    const model = client.getGenerativeModel({
-      model: 'gemini-2.5-flash',
-      systemInstruction: SYSTEM_PROMPT,
-    });
-
-    // Usar generateContent direto (mais confiavel para audio inline que startChat)
-    const prefixo = nomeRemetente ? `[Motorista: ${nomeRemetente}]` : '[Usuário]';
-
-    // Incluir historico como contexto textual no prompt
-    const historicoTexto = historico
-      .map((h) => `${h.role === 'user' ? 'Usuário' : 'Assistente'}: ${h.text}`)
-      .join('\n');
-
-    const promptTexto = historicoTexto
-      ? `${historicoTexto}\nUsuário (mensagem de voz): ${prefixo}`
-      : `${prefixo} enviou uma mensagem de voz:`;
-
-    const result = await model.generateContent([
-      { text: promptTexto },
-      { inlineData: { mimeType, data: audioBase64 } },
-    ]);
-
-    const texto = result.response.text().trim();
-    log.info('gemini_audio_ok', { chars: texto.length, mimeType, bytes: audioBuffer.byteLength });
-    return { ok: true, texto };
-  } catch (err) {
-    const motivo = err instanceof Error ? err.message : String(err);
-    log.error('gemini_audio_erro', {
-      motivo,
-      stack: err instanceof Error ? err.stack?.slice(0, 300) : undefined,
-    });
-    return { ok: false, motivo };
+): Promise<RespostaGeminiAudio> {
+  // 1. Transcrever via Deepgram
+  const transcricao = await transcreverComDeepgram(audioUrl);
+  if (!transcricao.ok) {
+    log.error('audio_transcricao_falhou', { motivo: transcricao.motivo });
+    return { ok: false, motivo: `transcricao_falhou: ${transcricao.motivo}` };
   }
+
+  // Áudio inaudível ou vazio (silêncio, ruído, gravação acidental)
+  if (!transcricao.texto || transcricao.texto.length === 0) {
+    log.warn('audio_transcricao_vazia');
+    return {
+      ok: false,
+      motivo: 'audio_inaudivel',
+    };
+  }
+
+  log.info('audio_transcricao_ok', { chars: transcricao.texto.length });
+
+  // 2. Enviar texto transcrito pro Gemini text-only.
+  // Prefixa com nome do remetente se disponível (mantém padrão de processarComGemini).
+  const mensagemComContexto = nomeRemetente
+    ? `[Motorista: ${nomeRemetente}] ${transcricao.texto}`
+    : transcricao.texto;
+
+  const resposta = await chatGemini(mensagemComContexto, historico);
+  if (!resposta.ok) {
+    return { ok: false, motivo: resposta.motivo };
+  }
+
+  return { ok: true, texto: resposta.texto, transcricao: transcricao.texto };
 }

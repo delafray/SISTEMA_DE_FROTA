@@ -70,8 +70,9 @@ export async function processarComGemini(
 }
 
 /**
- * Processa um áudio diretamente pelo Gemini (sem Whisper).
- * Gemini 2.5 Flash entende audio/ogg nativo do WhatsApp.
+ * Pipeline áudio → Deepgram (transcrição) → Gemini (resposta).
+ * O texto transcrito vai pro histórico — não mais "(mensagem de voz)" —
+ * pra que o próximo turno tenha contexto real.
  */
 export async function processarAudioComGemini(
   telefone: string,
@@ -85,14 +86,23 @@ export async function processarAudioComGemini(
 
   if (!resultado.ok) {
     log.error('gemini_audio_falhou', { telefone, motivo: resultado.motivo });
+    // Mensagem diferente quando o áudio veio inaudível (silêncio, ruído)
+    if (resultado.motivo === 'audio_inaudivel') {
+      return 'Nao consegui entender o audio. Pode repetir, falando mais perto do microfone? Ou se preferir, escreve a mensagem.';
+    }
     return 'Nao consegui processar o audio. Por favor, envie sua mensagem por escrito.';
   }
 
-  // Salvar no historico
-  adicionarAoHistorico(telefone, 'user', '(mensagem de voz)');
+  // Salva a transcricao real (nao "(mensagem de voz)") — proxima interacao
+  // tem contexto do que o motorista disse de fato
+  adicionarAoHistorico(telefone, 'user', resultado.transcricao);
   adicionarAoHistorico(telefone, 'model', resultado.texto);
 
-  log.info('gemini_audio_respondeu', { telefone, resp_len: resultado.texto.length });
+  log.info('gemini_audio_respondeu', {
+    telefone,
+    transcricao_len: resultado.transcricao.length,
+    resp_len: resultado.texto.length,
+  });
   return resultado.texto;
 }
 
