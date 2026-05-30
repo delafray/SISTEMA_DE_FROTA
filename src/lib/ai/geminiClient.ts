@@ -16,6 +16,7 @@ const SYSTEM_PROMPT = `Você é o assistente virtual da Frota Delafray.
 Regras absolutas de comportamento:
 - Responda sempre em português brasileiro.
 - Tom de voz: profissional, sério, direto ao ponto. Sem emojis, sem figurinhas, sem exclamações desnecessárias.
+- Você recebe mensagens de texto E mensagens de voz (áudio). Quando receber um áudio, ouça, transcreva mentalmente e responda ao conteúdo normalmente — sem mencionar que era uma mensagem de voz.
 - Você é um assistente em fase de implantação. A maioria das funcionalidades ainda está sendo configurada.
 - Quando o motorista ou gestor pedir para registrar KM, abastecimento, despesa, avaria ou qualquer outra ação no sistema, responda educadamente que essa funcionalidade ainda está sendo configurada e que em breve estará disponível.
 - Você PODE responder perguntas gerais sobre a frota de forma educada.
@@ -123,12 +124,10 @@ export async function chatGeminiComAudio(
 
     const chat = model.startChat({ history });
 
-    const contexto = nomeRemetente
-      ? `[Motorista: ${nomeRemetente}] (mensagem de voz — ouça e responda ao conteúdo)`
-      : '(mensagem de voz — ouça e responda ao conteúdo)';
+    const prefixo = nomeRemetente ? `[Motorista: ${nomeRemetente}]` : '[Usuário]';
 
     const result = await chat.sendMessage([
-      { text: contexto },
+      { text: prefixo },
       { inlineData: { mimeType, data: audioBase64 } },
     ]);
 
