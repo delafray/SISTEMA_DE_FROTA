@@ -84,6 +84,11 @@ export function InputEnderecoNF({
   const [numero, setNumero] = useState<string>(initialData?.numero ?? '');
   const [loading, setLoading] = useState<boolean>(false);
   const [erro, setErro] = useState<string | null>(null);
+  // Validacao do numero via Overpass (rodada na etapa 'confirmar', nao bloqueia)
+  const [validacao, setValidacao] = useState<null | {
+    status: 'confirmado' | 'plausivel' | 'suspeito' | 'sem_dados' | 'carregando';
+    mensagem?: string;
+  }>(null);
   // Lista de opcoes de geocoding para o motorista escolher
   const [opcoesFala, setOpcoesFala] = useState<(ResultadoGeocoding & { distanciaKm?: number })[]>([]);
 
@@ -127,6 +132,43 @@ export function InputEnderecoNF({
   }, [cep, etapa]);
 
   const [buscandoEndereco, setBuscandoEndereco] = useState<boolean>(false);
+
+  // Valida o numero contra o OSM via API server-side. Roda quando entra
+  // na etapa 'confirmar'. Nunca bloqueia o fluxo — so mostra badge visual.
+  useEffect(() => {
+    if (etapa !== 'confirmar' || !endereco || !numero || !cep) return;
+    let cancelado = false;
+    setValidacao({ status: 'carregando' });
+
+    fetch('/api/routing/validar-endereco', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        cep,
+        numero,
+        endereco,
+      }),
+    })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((data: { status?: string; mensagem?: string } | null) => {
+        if (cancelado) return;
+        if (!data || !data.status) {
+          setValidacao(null);
+          return;
+        }
+        setValidacao({
+          status: data.status as 'confirmado' | 'plausivel' | 'suspeito' | 'sem_dados',
+          mensagem: data.mensagem,
+        });
+      })
+      .catch(() => {
+        if (!cancelado) setValidacao(null);
+      });
+
+    return () => {
+      cancelado = true;
+    };
+  }, [etapa, endereco, numero, cep]);
 
   const handleTranscricao = useCallback(async (texto: string) => {
     // 1. Tenta extrair CEP direto
@@ -394,6 +436,7 @@ export function InputEnderecoNF({
             CEP {formatarCEP(cep)}
           </span>
         </div>
+        {validacao && <BadgeValidacao status={validacao.status} mensagem={validacao.mensagem} />}
         <button type="button" onClick={handleConfirmar} style={botaoPrimarioStyle}>
           ✅ Confirmar e proxima
         </button>
@@ -552,3 +595,86 @@ const erroStyle: React.CSSProperties = {
   borderRadius: 6,
   fontSize: 14,
 };
+
+// ─── BADGE DE VALIDACAO ────────────────────────────────────────────
+// Mostra ao motorista o resultado da validacao de numero contra OSM.
+// NUNCA bloqueia o fluxo — so informa. 4 status:
+//   🟢 confirmado — numero exato achado no mapa
+//   🟡 plausivel  — dentro da faixa conhecida, mas nao exato
+//   🟠 suspeito   — fora da faixa (avisar com destaque)
+//   ⚪ sem_dados   — rua sem cobertura — sem opinar
+//   ⏳ carregando — validando agora
+
+function BadgeValidacao({
+  status,
+  mensagem,
+}: {
+  status: 'confirmado' | 'plausivel' | 'suspeito' | 'sem_dados' | 'carregando';
+  mensagem?: string;
+}) {
+  if (status === 'sem_dados') return null; // nada pra mostrar
+
+  const config: Record<
+    typeof status,
+    { icone: string; bg: string; border: string; cor: string; label: string }
+  > = {
+    confirmado: {
+      icone: '🟢',
+      bg: '#f0fdf4',
+      border: '#86efac',
+      cor: '#166534',
+      label: 'Endereco confirmado no mapa',
+    },
+    plausivel: {
+      icone: '🟡',
+      bg: '#fefce8',
+      border: '#fde047',
+      cor: '#854d0e',
+      label: mensagem ?? 'Numero plausivel (dentro da faixa, mas nao confirmado)',
+    },
+    suspeito: {
+      icone: '🟠',
+      bg: '#fff7ed',
+      border: '#fdba74',
+      cor: '#9a3412',
+      label: mensagem ?? 'Numero suspeito — confirma?',
+    },
+    sem_dados: {
+      icone: '⚪',
+      bg: '#f8fafc',
+      border: '#cbd5e1',
+      cor: '#475569',
+      label: '',
+    },
+    carregando: {
+      icone: '⏳',
+      bg: '#f1f5f9',
+      border: '#cbd5e1',
+      cor: '#475569',
+      label: 'Validando endereco...',
+    },
+  };
+  const c = config[status];
+
+  return (
+    <div
+      role="status"
+      data-testid={`validacao-${status}`}
+      style={{
+        marginTop: 10,
+        padding: '10px 12px',
+        background: c.bg,
+        border: `1px solid ${c.border}`,
+        color: c.cor,
+        borderRadius: 6,
+        fontSize: 13,
+        display: 'flex',
+        alignItems: 'flex-start',
+        gap: 8,
+      }}
+    >
+      <span style={{ fontSize: 16, flexShrink: 0 }}>{c.icone}</span>
+      <span style={{ flex: 1 }}>{c.label}</span>
+    </div>
+  );
+}
