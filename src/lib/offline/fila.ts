@@ -150,7 +150,15 @@ export async function editarNota(
   });
 }
 
+/** Limpa todas as notas de um motorista específico da fila local. */
+export async function limparFila(motorista_id: string): Promise<void> {
+  const db = getDB();
+  const ids = await db.notas.where('motorista_id').equals(motorista_id).primaryKeys();
+  await db.notas.bulkDelete(ids);
+}
+
 /** Limpa toda a fila. Uso: testes e logout do motorista. */
 export async function limparTudo(): Promise<void> {
   await getDB().notas.clear();
 }
+

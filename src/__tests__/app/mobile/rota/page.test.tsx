@@ -20,6 +20,7 @@ vi.mock('@/lib/offline/fila', () => ({
   listarTodas: vi.fn().mockResolvedValue([]),
   contarPorStatus: vi.fn().mockResolvedValue({ pendente: 0, sincronizada: 0, erro: 0 }),
   remover: vi.fn().mockResolvedValue(undefined),
+  limparFila: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('@/lib/offline/sync', () => ({
@@ -62,7 +63,7 @@ vi.mock('@/components/mobile/InputEnderecoNF', () => ({
 }));
 
 import RotaPage from '@/app/mobile/rota/page';
-import { listarTodas, adicionarNota, editarNota } from '@/lib/offline/fila';
+import { listarTodas, adicionarNota, editarNota, limparFila } from '@/lib/offline/fila';
 import type { NotaNaFila } from '@/lib/offline/types';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
@@ -580,6 +581,33 @@ describe('RotaPage — editar NF capturada', () => {
 
     // editarNota foi chamado com o id_local correto
     await waitFor(() => expect(editarNota).toHaveBeenCalledWith('nota-abc', expect.objectContaining({ numero: '1' })));
+  });
+
+  it('iniciar nova rota limpa fila offline local e chama api/routing/notas/limpar no banco', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) } as unknown as Response));
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-iniciar'));
+    await user.click(screen.getByTestId('btn-iniciar'));
+
+    // 1. Deve limpar fila local com id do motorista
+    await waitFor(() => expect(limparFila).toHaveBeenCalledWith('mot-1'));
+
+    // 2. Deve enviar requisicao POST para limpar notas no banco
+    const clearCall = fetchSpy.mock.calls.find((c) => {
+      const u = typeof c[0] === 'string' ? c[0] : c[0].url;
+      const init = c[1] as RequestInit | undefined;
+      return u.includes('/api/routing/notas/limpar') && init?.method === 'POST';
+    });
+    expect(clearCall).toBeDefined();
+    const body = JSON.parse((clearCall?.[1] as RequestInit).body as string);
+    expect(body.motorista_id).toBe('mot-1');
+    expect(body.empresa_id).toBe('emp-1');
   });
 });
 

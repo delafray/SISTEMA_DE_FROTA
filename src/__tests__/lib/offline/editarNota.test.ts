@@ -5,7 +5,7 @@
 
 import 'fake-indexeddb/auto';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { adicionarNota, editarNota, buscarPorIdLocal, limparTudo } from '@/lib/offline/fila';
+import { adicionarNota, editarNota, buscarPorIdLocal, limparTudo, limparFila } from '@/lib/offline/fila';
 import type { NotaNaFila } from '@/lib/offline/types';
 
 // ─── helper ─────────────────────────────────────────────────────────
@@ -78,5 +78,17 @@ describe('editarNota', () => {
 
   it('nao falha se nota nao existe', async () => {
     await expect(editarNota('nota-inexistente', { numero: '1' })).resolves.toBeUndefined();
+  });
+});
+
+describe('limparFila', () => {
+  it('remove apenas as notas do motorista especificado', async () => {
+    await adicionarNota(notaBase({ id_local: 'n1', motorista_id: 'mot-1' }));
+    await adicionarNota(notaBase({ id_local: 'n2', motorista_id: 'mot-2' }));
+
+    await limparFila('mot-1');
+
+    expect(await buscarPorIdLocal('n1')).toBeUndefined();
+    expect(await buscarPorIdLocal('n2')).toBeDefined();
   });
 });

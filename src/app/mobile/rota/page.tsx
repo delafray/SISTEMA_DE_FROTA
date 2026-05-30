@@ -23,6 +23,7 @@ import {
   adicionarNota,
   contarPorStatus,
   editarNota,
+  limparFila,
   listarTodas,
   remover,
 } from '@/lib/offline/fila';
@@ -219,10 +220,26 @@ function RotaContent(): React.ReactElement {
 
   // ─── Handlers ──────────────────────────────────────────────────────
 
-  const iniciarCaptura = useCallback(() => {
+  const iniciarCaptura = useCallback(async () => {
     setErro(null);
+    if (motoristaId) {
+      try {
+        // 1. Limpa a fila offline local
+        await limparFila(motoristaId);
+        setNotas([]);
+
+        // 2. Limpa as notas no banco de dados para evitar acumular lixo
+        await fetch('/api/routing/notas/limpar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
+        });
+      } catch (err) {
+        console.error('Falha ao limpar notas antigas:', err);
+      }
+    }
     setFase('captura');
-  }, []);
+  }, [motoristaId, empresaId]);
 
   // Carrega uma rota existente do historico e vai direto pra fase em_rota
   const handleCarregarRota = useCallback(async (rotaId: string) => {
