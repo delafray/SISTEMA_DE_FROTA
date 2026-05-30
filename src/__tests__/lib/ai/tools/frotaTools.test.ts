@@ -116,4 +116,39 @@ describe('executarTool dispatcher', () => {
     expect(res.ok).toBe(false);
     expect(res.erro).toContain('desconhecida');
   });
+
+  // ─── Permission Loop: propor_atualizacao_km / confirmar_atualizacao_km ──
+
+  it('propor_atualizacao_km: NaN → erro de validacao (NUNCA grava)', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 'abc' });
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/NaN|invalido/);
+  });
+
+  it('propor_atualizacao_km: numero negativo → erro', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', { km_novo: -500 });
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/invalido|maior que zero/);
+  });
+
+  it('propor_atualizacao_km: undefined → erro', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', {});
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/invalido|tipo inesperado/);
+  });
+
+  it('propor_atualizacao_km: maior que limite (9.999.999) → erro', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 10_000_000 });
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/limite|invalido/);
+  });
+
+  it('confirmar_atualizacao_km: NaN → erro (mesma validacao)', async () => {
+    const res = await executarTool('confirmar_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 'xyz' });
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/NaN|invalido/);
+  });
+
+  // Nota: legacy redirect + integracao Permission Loop completa testados em
+  // src/__tests__/lib/frotaTools.test.ts (mocks do supabase mais robustos).
 });

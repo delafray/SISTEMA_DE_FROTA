@@ -37,7 +37,8 @@ function buildChain(result: unknown) {
 
 import {
   buscarKmCaminhao,
-  atualizarKmCaminhao,
+  proporAtualizacaoKm,
+  confirmarAtualizacaoKm,
   executarTool,
 } from '@/lib/ai/tools/frotaTools';
 
@@ -94,55 +95,119 @@ describe('buscarKmCaminhao', () => {
   });
 });
 
-// ─── atualizarKmCaminhao ──────────────────────────────────────────────
+// ─── Permission Loop — propor (read-only) + confirmar (executa) ────
 
-describe('atualizarKmCaminhao', () => {
-  it('registra novo km com sucesso quando valor e valido e maior que o atual', async () => {
-    // buscarKmCaminhao: km_logs → maybeSingle → {veiculo_id}
-    // buscarKmCaminhao: veiculos → maybeSingle → {placa, km_atual}
-    // atualizarKmCaminhao: veiculos (por placa) → maybeSingle → {id, km_atual}
-    // atualizarKmCaminhao: km_logs.insert → {error: null}
+describe('proporAtualizacaoKm — Permission Loop passo 1 (READ-ONLY)', () => {
+  it('devolve preview SEM gravar (mensagem_sugerida pronta pro Gemini)', async () => {
     mockFrom
       .mockReturnValueOnce(buildChain({ data: { veiculo_id: 'v-1', km_lido: 100, created_at: '2026-05-01' } }))
-      .mockReturnValueOnce(buildChain({ data: { placa: 'ABC1D23', km_atual: 100, apelido: null, marca: null, modelo: null } }))
-      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', km_atual: 100 } }))
-      .mockReturnValueOnce({ insert: vi.fn().mockResolvedValue({ error: null }) });
+      .mockReturnValueOnce(buildChain({ data: { placa: 'ABC1D23', km_atual: 100, apelido: 'Leao', marca: null, modelo: null } }))
+      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', placa: 'ABC1D23', apelido: 'Leao', km_atual: 100 } }));
 
-    const result = await atualizarKmCaminhao('empresa-1', 'motorista-1', 200);
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 200);
 
     expect(result.ok).toBe(true);
-    expect((result.dados as { km_registrado: number }).km_registrado).toBe(200);
-    expect((result.dados as { km_anterior: number }).km_anterior).toBe(100);
+    const d = result.dados as { km_novo: number; diferenca: number; mensagem_sugerida: string };
+    expect(d.km_novo).toBe(200);
+    expect(d.diferenca).toBe(100);
+    expect(d.mensagem_sugerida).toContain('Confirma?');
   });
 
-  it('rejeita km menor que o atual', async () => {
+  it('rejeita km menor que atual (hodometro nao volta)', async () => {
     mockFrom
       .mockReturnValueOnce(buildChain({ data: { veiculo_id: 'v-1', km_lido: 50000, created_at: '2026-05-01' } }))
       .mockReturnValueOnce(buildChain({ data: { placa: 'ABC1D23', km_atual: 50000, apelido: null, marca: null, modelo: null } }))
-      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', km_atual: 50000 } }));
+      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', placa: 'ABC1D23', apelido: null, km_atual: 50000 } }));
 
-    const result = await atualizarKmCaminhao('empresa-1', 'motorista-1', 30000);
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 30000);
 
     expect(result.ok).toBe(false);
-    expect(result.erro).toContain('menor que o atual');
+    expect(result.erro).toMatch(/menor|hodometro/i);
   });
 
-  it('rejeita km invalido (zero)', async () => {
-    const result = await atualizarKmCaminhao('empresa-1', 'motorista-1', 0);
+  // ─── B2: validacao NaN — bug critico fixado ────────────────────────
+
+  it('rejeita NaN (Number("abc")) sem chamar DB', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 'abc');
     expect(result.ok).toBe(false);
-    expect(result.erro).toContain('km invalido');
+    expect(result.erro).toMatch(/NaN|invalido/);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 
-  it('rejeita km invalido (acima do maximo)', async () => {
-    const result = await atualizarKmCaminhao('empresa-1', 'motorista-1', 10_000_000);
+  it('rejeita undefined', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', undefined);
     expect(result.ok).toBe(false);
-    expect(result.erro).toContain('km invalido');
+    expect(result.erro).toMatch(/invalido|tipo/);
   });
 
-  it('retorna erro quando motoristaId esta vazio', async () => {
-    const result = await atualizarKmCaminhao('empresa-1', '', 45000);
+  it('rejeita Infinity', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', Infinity);
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/Infinity|invalido/);
+  });
+
+  it('rejeita zero', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 0);
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/invalido|maior que zero/);
+  });
+
+  it('rejeita negativo', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', -100);
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/invalido|maior que zero/);
+  });
+
+  it('rejeita acima do limite (9.999.999)', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 10_000_000);
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/limite|invalido/);
+  });
+
+  it('rejeita decimal nao inteiro', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', 45000.5);
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/inteiro|invalido/);
+  });
+
+  it('aceita string numerica ("45000")', async () => {
+    mockFrom
+      .mockReturnValueOnce(buildChain({ data: { veiculo_id: 'v-1', km_lido: 100, created_at: '2026-05-01' } }))
+      .mockReturnValueOnce(buildChain({ data: { placa: 'ABC1D23', km_atual: 100, apelido: null, marca: null, modelo: null } }))
+      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', placa: 'ABC1D23', apelido: null, km_atual: 100 } }));
+
+    const result = await proporAtualizacaoKm('empresa-1', 'motorista-1', '45000');
+    expect(result.ok).toBe(true);
+  });
+
+  it('motoristaId vazio → erro', async () => {
+    const result = await proporAtualizacaoKm('empresa-1', '', 45000);
     expect(result.ok).toBe(false);
     expect(result.erro).toBe('motorista nao identificado');
+  });
+});
+
+describe('confirmarAtualizacaoKm — Permission Loop passo 2 (EXECUTA)', () => {
+  it('grava km_log quando confirmacao chega com valor valido', async () => {
+    mockFrom
+      .mockReturnValueOnce(buildChain({ data: { veiculo_id: 'v-1', km_lido: 100, created_at: '2026-05-01' } }))
+      .mockReturnValueOnce(buildChain({ data: { placa: 'ABC1D23', km_atual: 100, apelido: 'Leao', marca: null, modelo: null } }))
+      .mockReturnValueOnce(buildChain({ data: { id: 'v-1', placa: 'ABC1D23', apelido: 'Leao', km_atual: 100 } }))
+      .mockReturnValueOnce({ insert: vi.fn().mockResolvedValue({ error: null }) });
+
+    const result = await confirmarAtualizacaoKm('empresa-1', 'motorista-1', 200);
+
+    expect(result.ok).toBe(true);
+    const d = result.dados as { km_registrado: number; km_anterior: number };
+    expect(d.km_registrado).toBe(200);
+    expect(d.km_anterior).toBe(100);
+  });
+
+  it('rejeita NaN tambem na confirmacao (mesma validacao)', async () => {
+    const result = await confirmarAtualizacaoKm('empresa-1', 'motorista-1', 'xyz');
+    expect(result.ok).toBe(false);
+    expect(result.erro).toMatch(/NaN|invalido/);
+    expect(mockFrom).not.toHaveBeenCalled();
   });
 });
 
@@ -159,15 +224,33 @@ describe('executarTool — novas tools', () => {
     expect(result.ok).toBe(false); // sem km_log retorna erro
   });
 
-  it('dispatcha atualizar_km_caminhao com args', async () => {
-    // sem km_log → buscarKmCaminhao retorna erro → atualizarKmCaminhao falha early
+  it('dispatcha propor_atualizacao_km com args', async () => {
+    // sem km_log → buscarKmCaminhao retorna erro → propor falha early
+    mockFrom
+      .mockReturnValueOnce(buildChain({ data: null }))
+      .mockReturnValueOnce(buildChain({ data: null }));
+
+    const result = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 45000 });
+    expect(result.ok).toBe(false);
+  });
+
+  it('dispatcha confirmar_atualizacao_km com args', async () => {
+    mockFrom
+      .mockReturnValueOnce(buildChain({ data: null }))
+      .mockReturnValueOnce(buildChain({ data: null }));
+
+    const result = await executarTool('confirmar_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 45000 });
+    expect(result.ok).toBe(false);
+  });
+
+  it('tool legacy "atualizar_km_caminhao" redireciona pra propor (NUNCA executa direto)', async () => {
     mockFrom
       .mockReturnValueOnce(buildChain({ data: null }))
       .mockReturnValueOnce(buildChain({ data: null }));
 
     const result = await executarTool('atualizar_km_caminhao', 'emp-1', 'mot-1', { km_novo: 45000 });
+    // Pode retornar ok=false (sem veiculo), mas NUNCA chega no insert
     expect(result.ok).toBe(false);
-    expect(result.erro).toContain('caminhao');
   });
 
   it('retorna erro para tool desconhecida', async () => {

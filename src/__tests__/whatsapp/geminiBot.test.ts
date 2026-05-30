@@ -1,101 +1,126 @@
 /**
- * Testes do processarAudioComGemini — fluxo completo + grava transcrição no histórico.
+ * Testes do processarAudioComGemini + processarComGemini.
+ * Historico persiste via Supabase (lib/whatsapp/historico) — mockado aqui.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
-// Mock chatGemini + chatGeminiComAudio antes de importar
-const chatGeminiComAudioMock = vi.fn();
-const chatGeminiMock = vi.fn();
-vi.mock('@/lib/ai/geminiClient', () => ({
-  chatGemini: (m: string, h: unknown) => chatGeminiMock(m, h),
-  chatGeminiComAudio: (url: string, h: unknown, nome?: string, empresaId?: string, motoristaId?: string) =>
-    chatGeminiComAudioMock(url, h, nome, empresaId, motoristaId),
+// vi.hoisted garante mocks antes do vi.mock (que e hoisted)
+const mocks = vi.hoisted(() => ({
+  chatGemini: vi.fn(),
+  chatGeminiComAudio: vi.fn(),
+  lerHistorico: vi.fn(),
+  gravarMensagem: vi.fn(),
+  limparHistorico: vi.fn(),
 }));
 
-import { processarAudioComGemini, limparHistoricoGemini } from '@/lib/whatsapp/geminiBot';
+vi.mock('@/lib/ai/geminiClient', () => ({
+  chatGemini: mocks.chatGemini,
+  chatGeminiComAudio: mocks.chatGeminiComAudio,
+}));
+
+vi.mock('@/lib/whatsapp/historico', () => ({
+  lerHistorico: mocks.lerHistorico,
+  gravarMensagem: mocks.gravarMensagem,
+  limparHistorico: mocks.limparHistorico,
+}));
+
+import {
+  processarComGemini,
+  processarAudioComGemini,
+  limparHistoricoGemini,
+} from '@/lib/whatsapp/geminiBot';
 
 beforeEach(() => {
   vi.clearAllMocks();
-  limparHistoricoGemini('+5511999999999');
+  mocks.lerHistorico.mockResolvedValue([]);
+  mocks.gravarMensagem.mockResolvedValue(undefined);
+  vi.spyOn(console, 'log').mockImplementation(() => {});
+  vi.spyOn(console, 'warn').mockImplementation(() => {});
+  vi.spyOn(console, 'error').mockImplementation(() => {});
 });
 
-describe('processarAudioComGemini', () => {
-  it('sucesso: retorna resposta do Gemini', async () => {
-    chatGeminiComAudioMock.mockResolvedValue({
-      ok: true,
-      texto: 'Funcionalidade ainda em configuração.',
-      transcricao: 'Quero registrar 50 km',
-    });
-
-    const resp = await processarAudioComGemini('+5511999999999', 'https://audio', 'João');
-
-    expect(resp).toBe('Funcionalidade ainda em configuração.');
-    expect(chatGeminiComAudioMock).toHaveBeenCalledWith('https://audio', [], 'João', undefined, undefined);
-  });
-
-  it('salva TRANSCRIÇÃO real no histórico (não "(mensagem de voz)")', async () => {
-    // Capturamos snapshot do historico no momento de CADA chamada — sem isso
-    // mock.calls[N][1] daria a referencia ja mutada pelas chamadas seguintes
-    const snapshots: Array<unknown[]> = [];
-    chatGeminiComAudioMock.mockImplementation((_url, historico) => {
-      snapshots.push([...(historico as unknown[])]);
-      // Devolve transcricao diferente por chamada (via call count)
-      return snapshots.length === 1
-        ? Promise.resolve({ ok: true, texto: 'Confirmado.', transcricao: 'Bom dia, registra 100 km hoje' })
-        : Promise.resolve({ ok: true, texto: 'OK.', transcricao: 'segunda mensagem' });
-    });
-
-    await processarAudioComGemini('+5511999999999', 'https://audio1', 'Carlos');
-    await processarAudioComGemini('+5511999999999', 'https://audio2', 'Carlos');
-
-    // 1ª chamada: historico vazio (era a primeira)
-    expect(snapshots[0]).toEqual([]);
-    // 2ª chamada: historico deve ter a TRANSCRICAO real (nao "(mensagem de voz)")
-    expect(snapshots[1]).toEqual([
-      { role: 'user', text: 'Bom dia, registra 100 km hoje' },
-      { role: 'model', text: 'Confirmado.' },
+describe('processarComGemini — texto', () => {
+  it('sucesso: chama chatGemini com historico do Supabase + grava resposta', async () => {
+    mocks.lerHistorico.mockResolvedValue([
+      { role: 'user', text: 'oi' },
+      { role: 'model', text: 'ola' },
     ]);
+    mocks.chatGemini.mockResolvedValue({ ok: true, texto: 'Funcionalidade ja existe.' });
+
+    const r = await processarComGemini('+5511999999999', 'quanto km tem?', 'Carlos', 'emp-1', 'mot-1');
+
+    expect(r).toBe('Funcionalidade ja existe.');
+    expect(mocks.lerHistorico).toHaveBeenCalledWith('+5511999999999');
+    expect(mocks.chatGemini).toHaveBeenCalledWith(
+      '[Motorista: Carlos] quanto km tem?',
+      [
+        { role: 'user', text: 'oi' },
+        { role: 'model', text: 'ola' },
+      ],
+      'emp-1',
+      'mot-1'
+    );
+    // Grava user + model (fire-and-forget)
+    expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'user', 'quanto km tem?');
+    expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'model', 'Funcionalidade ja existe.');
   });
 
-  it('áudio inaudível → mensagem específica pedindo pra repetir', async () => {
-    chatGeminiComAudioMock.mockResolvedValue({
-      ok: false,
-      motivo: 'audio_inaudivel',
-    });
+  it('Gemini falha → mensagem amigavel, NAO grava no historico', async () => {
+    mocks.chatGemini.mockResolvedValue({ ok: false, motivo: 'rate limit' });
 
-    const resp = await processarAudioComGemini('+5511999999999', 'https://audio');
+    const r = await processarComGemini('+5511999999999', 'oi');
 
-    expect(resp).toContain('Nao consegui entender o audio');
-    expect(resp).toContain('repetir');
+    expect(r).toContain('problema temporario');
+    expect(mocks.gravarMensagem).not.toHaveBeenCalled();
   });
 
-  it('erro genérico (rede, API) → mensagem padrão pedindo pra escrever', async () => {
-    chatGeminiComAudioMock.mockResolvedValue({
-      ok: false,
-      motivo: 'transcricao_falhou: 500 internal',
-    });
+  it('sem nome do remetente: nao prefixa com [Motorista: ...]', async () => {
+    mocks.chatGemini.mockResolvedValue({ ok: true, texto: 'ok' });
 
-    const resp = await processarAudioComGemini('+5511999999999', 'https://audio');
+    await processarComGemini('+5511999999999', 'mensagem nua');
 
-    expect(resp).toContain('Nao consegui processar');
-    expect(resp).toContain('escrito');
+    expect(mocks.chatGemini).toHaveBeenCalledWith('mensagem nua', [], undefined, undefined);
   });
+});
 
-  it('NÃO grava no histórico quando o áudio falha', async () => {
-    chatGeminiComAudioMock.mockResolvedValueOnce({ ok: false, motivo: 'audio_inaudivel' });
-
-    await processarAudioComGemini('+5511999999999', 'https://audio1');
-
-    // Próximo áudio: histórico deve estar vazio (falha não grava)
-    chatGeminiComAudioMock.mockResolvedValueOnce({
+describe('processarAudioComGemini — audio', () => {
+  it('sucesso: grava transcricao real (nao "(mensagem de voz)")', async () => {
+    mocks.chatGeminiComAudio.mockResolvedValue({
       ok: true,
-      texto: 'OK',
-      transcricao: 'mensagem nova',
+      texto: 'Confirmado.',
+      transcricao: 'meu km e 45000',
     });
-    await processarAudioComGemini('+5511999999999', 'https://audio2');
 
-    const segundaChamada = chatGeminiComAudioMock.mock.calls[1];
-    expect(segundaChamada[1]).toEqual([]); // histórico vazio
+    await processarAudioComGemini('+5511999999999', 'https://audio', 'Carlos', 'emp-1', 'mot-1');
+
+    expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'user', 'meu km e 45000');
+    expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'model', 'Confirmado.');
+  });
+
+  it('audio inaudivel → mensagem especifica pedindo pra repetir', async () => {
+    mocks.chatGeminiComAudio.mockResolvedValue({ ok: false, motivo: 'audio_inaudivel' });
+
+    const r = await processarAudioComGemini('+5511999999999', 'https://audio');
+
+    expect(r).toContain('Nao consegui entender');
+    expect(r).toContain('repetir');
+    expect(mocks.gravarMensagem).not.toHaveBeenCalled();
+  });
+
+  it('erro generico → pede pra escrever', async () => {
+    mocks.chatGeminiComAudio.mockResolvedValue({ ok: false, motivo: 'transcricao_falhou: HTTP 500' });
+
+    const r = await processarAudioComGemini('+5511999999999', 'https://audio');
+
+    expect(r).toContain('Nao consegui processar');
+    expect(r).toContain('escrito');
+  });
+});
+
+describe('limparHistoricoGemini', () => {
+  it('delega pra limparHistorico do supabase', async () => {
+    await limparHistoricoGemini('+5511999999999');
+    expect(mocks.limparHistorico).toHaveBeenCalledWith('+5511999999999');
   });
 });

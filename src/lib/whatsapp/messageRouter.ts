@@ -343,11 +343,17 @@ async function processarSelecaoVeiculo(
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: veiculo } = await supabase
+  const { data: veiculo, error: errVeiculo } = await supabase
     .from('veiculos')
     .select('id, placa, km_atual')
     .eq('id', veiculoId)
     .single();
+
+  if (errVeiculo) {
+    log.error('selecao_veiculo_db_error', { veiculoId, code: errVeiculo.code, message: errVeiculo.message });
+    await enviarTexto(msg.from, 'Erro temporario ao buscar o caminhao. Tente em alguns segundos.');
+    return;
+  }
 
   if (!veiculo) {
     await enviarTexto(msg.from, 'Caminhão não encontrado. Tente novamente.');
@@ -690,23 +696,33 @@ async function enviarStatusVeiculo(para: string, sessao: Sessao): Promise<void> 
     process.env.SUPABASE_SERVICE_ROLE_KEY!
   );
 
-  const { data: veiculo } = await supabase
+  const { data: veiculo, error: errVeiculo } = await supabase
     .from('veiculos')
     .select('placa, km_atual, marca, modelo')
     .eq('id', sessao.contexto.veiculo_id)
     .single();
 
+  if (errVeiculo) {
+    log.error('status_veiculo_db_error', { veiculoId: sessao.contexto.veiculo_id, code: errVeiculo.code, message: errVeiculo.message });
+    await enviarTexto(para, 'Erro temporario ao buscar o caminhao. Tente em alguns segundos.');
+    return;
+  }
   if (!veiculo) {
     await enviarTexto(para, 'Caminhão não encontrado.');
     return;
   }
 
   // Buscar avarias abertas
-  const { data: avarias } = await supabase
+  const { data: avarias, error: errAvarias } = await supabase
     .from('avarias')
     .select('descricao, urgencia')
     .eq('veiculo_id', sessao.contexto.veiculo_id)
     .in('status', ['aberta', 'em_analise']);
+
+  if (errAvarias) {
+    log.warn('avarias_query_warn', { veiculoId: sessao.contexto.veiculo_id, message: errAvarias.message });
+    // Continua com avarias=null, mensagem mostra "sem dados de avaria"
+  }
 
   const temProblema = avarias && avarias.length > 0;
   const kmFormatado = veiculo.km_atual ? new Intl.NumberFormat('pt-BR').format(veiculo.km_atual) : '---';

@@ -68,18 +68,35 @@ export const declarations: FunctionDeclaration[] = [
     },
   },
   {
-    name: 'atualizar_km_caminhao',
+    name: 'propor_atualizacao_km',
     description:
-      'Atualiza a quilometragem (KM do hodometro) do caminhao do motorista. ' +
-      'Use quando o motorista disser o km atual, como: "meu km e 45320", ' +
-      '"o caminhao ta em 125.000 km", "quero atualizar o km para 89500", ' +
-      '"registra 45000 km", "coloca 89000 no km". Extraia o numero do km da mensagem e chame esta funcao.',
+      'PRIMEIRO passo pra atualizar o KM do caminhao. NAO atualiza nada — devolve preview ' +
+      'pra mostrar pro motorista (km_atual vs km_novo, diferenca). ' +
+      'Use quando o motorista informar o KM novo (ex: "meu km e 45320", "ta em 125000"). ' +
+      'Apresente o preview e pergunte "confirma?". Depois da confirmacao, use confirmar_atualizacao_km.',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {
         km_novo: {
           type: SchemaType.NUMBER,
-          description: 'O valor de KM do hodometro a ser registrado (numero inteiro positivo).',
+          description: 'KM do hodometro proposto. Numero inteiro positivo.',
+        },
+      },
+      required: ['km_novo'],
+    },
+  },
+  {
+    name: 'confirmar_atualizacao_km',
+    description:
+      'SEGUNDO passo — executa a gravacao do KM no banco. Use APENAS depois que o motorista ' +
+      'confirmou EXPLICITAMENTE ("sim", "confirma", "isso", "pode", "ok") a proposta feita ' +
+      'pela propor_atualizacao_km. NUNCA chame esta tool sem confirmacao explicita do motorista.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        km_novo: {
+          type: SchemaType.NUMBER,
+          description: 'O MESMO KM que foi proposto e confirmado pelo motorista.',
         },
       },
       required: ['km_novo'],
@@ -239,51 +256,150 @@ export async function buscarKmCaminhao(
 }
 
 /**
- * Registra novo KM para o caminhão do motorista via km_logs.
- * O trigger do banco propaga o valor para veiculos.km_atual automaticamente.
- * Rejeita valores menores que o km_atual atual (integridade do odômetro).
+ * Validação rigorosa do KM informado pela tool. Bloqueia:
+ * - NaN (Number("abc") → NaN; antes passava como "verdadeiro")
+ * - Infinity
+ * - <= 0
+ * - > 9.999.999 (caminhão extremo, qualquer coisa acima é digitação)
+ * - não-inteiro (KM de hodômetro é sempre inteiro)
  */
-export async function atualizarKmCaminhao(
-  empresaId: string,
-  motoristaId: string,
-  kmNovo: number
-): Promise<ResultadoTool> {
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
-  if (!kmNovo || kmNovo <= 0 || kmNovo > 9_999_999) {
-    return { ok: false, erro: `km invalido: ${kmNovo}` };
+function validarKm(kmNovo: unknown): { ok: true; valor: number } | { ok: false; erro: string } {
+  if (typeof kmNovo !== 'number' && typeof kmNovo !== 'string') {
+    return { ok: false, erro: `km invalido (tipo inesperado: ${typeof kmNovo})` };
   }
+  const n = typeof kmNovo === 'number' ? kmNovo : Number(kmNovo);
+  if (!Number.isFinite(n)) {
+    return { ok: false, erro: `km invalido (NaN ou Infinity)` };
+  }
+  if (n <= 0) {
+    return { ok: false, erro: `km invalido (deve ser maior que zero): ${n}` };
+  }
+  if (n > 9_999_999) {
+    return { ok: false, erro: `km invalido (excede limite de 9.999.999): ${n}` };
+  }
+  // Aceita decimais que sao inteiros disfarcados (ex: 45000.0)
+  const inteiro = Math.trunc(n);
+  if (Math.abs(n - inteiro) > 0.01) {
+    return { ok: false, erro: `km invalido (precisa ser inteiro): ${n}` };
+  }
+  return { ok: true, valor: inteiro };
+}
 
-  const supabase = getSupabase();
-
-  // Reutiliza busca para encontrar o veiculo
+/**
+ * Localiza o veículo do motorista e devolve { id, placa, km_atual }.
+ * Centraliza a logica usada pelas tools de KM (DRY).
+ */
+async function localizarVeiculoDoMotorista(
+  empresaId: string,
+  motoristaId: string
+): Promise<
+  | { ok: true; veiculo: { id: string; placa: string; apelido: string | null; km_atual: number } }
+  | { ok: false; erro: string }
+> {
   const kmResult = await buscarKmCaminhao(empresaId, motoristaId);
   if (!kmResult.ok) {
-    return { ok: false, erro: 'Nao encontrei o caminhao vinculado a voce.' };
+    return { ok: false, erro: kmResult.erro ?? 'caminhao nao localizado' };
   }
+  const dados = kmResult.dados as { placa: string; km_atual: number | null; apelido?: string | null };
 
-  const dados = kmResult.dados as { placa: string; km_atual: number | null };
-
-  const { data: veiculo } = await supabase
+  const supabase = getSupabase();
+  const { data: veiculo, error } = await supabase
     .from('veiculos')
-    .select('id, km_atual')
+    .select('id, placa, apelido, km_atual')
     .eq('placa', dados.placa)
     .eq('empresa_id', empresaId)
     .maybeSingle();
 
+  if (error) {
+    log.error('localizar_veiculo_erro', { motoristaId, message: error.message });
+    return { ok: false, erro: error.message };
+  }
   if (!veiculo) {
     return { ok: false, erro: 'Veiculo nao encontrado no banco.' };
   }
+  return {
+    ok: true,
+    veiculo: {
+      id: veiculo.id as string,
+      placa: veiculo.placa as string,
+      apelido: (veiculo.apelido as string | null) ?? null,
+      km_atual: (veiculo.km_atual as number) ?? 0,
+    },
+  };
+}
 
-  const kmAtual = veiculo.km_atual ?? 0;
-  if (kmNovo < kmAtual) {
+/**
+ * Permission Loop — PASSO 1 (READ-ONLY).
+ * Devolve preview da atualizacao SEM gravar nada. O Gemini usa o preview
+ * pra perguntar "confirma?" ao motorista. Depois da confirmacao explicita,
+ * Gemini chama confirmarAtualizacaoKm.
+ */
+export async function proporAtualizacaoKm(
+  empresaId: string,
+  motoristaId: string,
+  kmNovoRaw: unknown
+): Promise<ResultadoTool> {
+  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+
+  const val = validarKm(kmNovoRaw);
+  if (!val.ok) return { ok: false, erro: val.erro };
+  const kmNovo = val.valor;
+
+  const vRes = await localizarVeiculoDoMotorista(empresaId, motoristaId);
+  if (!vRes.ok) return { ok: false, erro: vRes.erro };
+  const v = vRes.veiculo;
+
+  if (kmNovo < v.km_atual) {
     return {
       ok: false,
-      erro: `O KM informado (${kmNovo.toLocaleString('pt-BR')}) e menor que o atual (${kmAtual.toLocaleString('pt-BR')}). Verifique o valor ou fale com o gestor.`,
+      erro: `O KM proposto (${kmNovo.toLocaleString('pt-BR')}) e MENOR que o atual (${v.km_atual.toLocaleString('pt-BR')}). Hodometro nao volta — verifique o valor.`,
     };
   }
 
+  log.info('proposta_km_gerada', { motoristaId, placa: v.placa, kmNovo, kmAtual: v.km_atual });
+  return {
+    ok: true,
+    dados: {
+      placa: v.placa,
+      apelido: v.apelido,
+      km_atual: v.km_atual,
+      km_novo: kmNovo,
+      diferenca: kmNovo - v.km_atual,
+      mensagem_sugerida: `Vou registrar ${kmNovo.toLocaleString('pt-BR')} km no ${v.apelido ?? v.placa} (atual ${v.km_atual.toLocaleString('pt-BR')}). Confirma?`,
+    },
+  };
+}
+
+/**
+ * Permission Loop — PASSO 2 (EXECUTA).
+ * Re-valida tudo no momento da gravacao (optimistic — banco e a fonte da verdade).
+ * Se motorista demorou pra confirmar e algo mudou, falha com mensagem clara.
+ */
+export async function confirmarAtualizacaoKm(
+  empresaId: string,
+  motoristaId: string,
+  kmNovoRaw: unknown
+): Promise<ResultadoTool> {
+  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+
+  const val = validarKm(kmNovoRaw);
+  if (!val.ok) return { ok: false, erro: val.erro };
+  const kmNovo = val.valor;
+
+  const vRes = await localizarVeiculoDoMotorista(empresaId, motoristaId);
+  if (!vRes.ok) return { ok: false, erro: vRes.erro };
+  const v = vRes.veiculo;
+
+  if (kmNovo < v.km_atual) {
+    return {
+      ok: false,
+      erro: `O KM (${kmNovo.toLocaleString('pt-BR')}) e menor que o atual (${v.km_atual.toLocaleString('pt-BR')}). Outra atualizacao ja foi feita?`,
+    };
+  }
+
+  const supabase = getSupabase();
   const { error } = await supabase.from('km_logs').insert({
-    veiculo_id: veiculo.id,
+    veiculo_id: v.id,
     motorista_id: motoristaId,
     empresa_id: empresaId,
     km_lido: kmNovo,
@@ -291,17 +407,19 @@ export async function atualizarKmCaminhao(
   });
 
   if (error) {
-    log.error('atualizar_km_erro', { motoristaId, kmNovo, message: error.message });
+    log.error('confirmar_km_erro', { motoristaId, kmNovo, message: error.message });
     return { ok: false, erro: error.message };
   }
 
-  log.info('atualizar_km_ok', { motoristaId, placa: dados.placa, kmNovo });
+  log.info('confirmar_km_ok', { motoristaId, placa: v.placa, kmNovo });
   return {
     ok: true,
     dados: {
-      placa: dados.placa,
+      placa: v.placa,
+      apelido: v.apelido,
       km_registrado: kmNovo,
-      km_anterior: kmAtual,
+      km_anterior: v.km_atual,
+      mensagem_sugerida: `Registrado: ${kmNovo.toLocaleString('pt-BR')} km no ${v.apelido ?? v.placa}.`,
     },
   };
 }
@@ -321,10 +439,15 @@ export async function executarTool(
       return listarVeiculos(empresaId);
     case 'buscar_km_caminhao':
       return buscarKmCaminhao(empresaId, motoristaId ?? '');
-    case 'atualizar_km_caminhao': {
-      const kmNovo = typeof args?.km_novo === 'number' ? args.km_novo : Number(args?.km_novo);
-      return atualizarKmCaminhao(empresaId, motoristaId ?? '', kmNovo);
-    }
+    case 'propor_atualizacao_km':
+      return proporAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
+    case 'confirmar_atualizacao_km':
+      return confirmarAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
+    // BACKWARD-COMPAT: nome antigo redireciona pra propor (NUNCA executa direto).
+    // Mantém pra historicos em cache ainda referenciarem a tool antiga sem erro.
+    case 'atualizar_km_caminhao':
+      log.warn('tool_legacy_atualizar_km', { motoristaId, args });
+      return proporAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
     default:
       return { ok: false, erro: `tool desconhecida: ${nome}` };
   }
