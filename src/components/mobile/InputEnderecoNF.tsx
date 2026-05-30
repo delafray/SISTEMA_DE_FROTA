@@ -615,7 +615,7 @@ function BadgeValidacao({
   if (status === 'sem_dados') return null; // nada pra mostrar
 
   const config: Record<
-    typeof status,
+    Exclude<typeof status, 'sem_dados'>,
     { icone: string; bg: string; border: string; cor: string; label: string }
   > = {
     confirmado: {
@@ -639,13 +639,6 @@ function BadgeValidacao({
       cor: '#9a3412',
       label: mensagem ?? 'Numero suspeito — confirma?',
     },
-    sem_dados: {
-      icone: '⚪',
-      bg: '#f8fafc',
-      border: '#cbd5e1',
-      cor: '#475569',
-      label: '',
-    },
     carregando: {
       icone: '⏳',
       bg: '#f1f5f9',
@@ -654,7 +647,8 @@ function BadgeValidacao({
       label: 'Validando endereco...',
     },
   };
-  const c = config[status];
+  const c = config[status as Exclude<typeof status, 'sem_dados'>];
+
 
   return (
     <div

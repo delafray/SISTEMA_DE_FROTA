@@ -207,13 +207,16 @@ export async function buscarKmCaminhao(
     .maybeSingle();
 
   if (pedido && pedido.veiculos) {
-    const v = pedido.veiculos as {
+    type VeiculoJoin = {
       placa: string;
       km_atual: number | null;
       apelido: string | null;
       marca: string | null;
       modelo: string | null;
     };
+    // Supabase pode retornar objeto ou array dependendo da relação — normaliza
+    const raw = pedido.veiculos as unknown;
+    const v: VeiculoJoin = Array.isArray(raw) ? (raw[0] as VeiculoJoin) : (raw as VeiculoJoin);
     log.info('buscar_km_caminhao_via_pedido', { motoristaId, placa: v.placa });
     return {
       ok: true,
