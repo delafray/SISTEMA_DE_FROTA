@@ -188,6 +188,7 @@ Exemplo:
 - 2026-05-29 Gemini 2.5 Pro / Antigravity — Múltiplos resultados de geocoding ao falar endereço: `geocodarMultiplos` + `calcularDistanciaKm` em geocoding.ts, GET em `/api/routing/geocodar`, componente `ListaOpcoesEndereco`, nova etapa `escolha_endereco` em `InputEnderecoNF` com geolocalização GPS para ordenar por proximidade. Edição de NF capturada: `editarNota` em fila.ts, botão ✏️ e modo edição em `FaseCaptura` — +22 testes novos em 3 arquivos novos — ✅ 558/558 passando (52 arquivos)
 - 2026-05-29 Gemini 3.5 Flash (High) / Antigravity — Criou método PATCH em /api/routing/rota/[id] para atualização do status da rota no banco de dados e integrou na ação 'Encerrar rota' do motorista — +5 testes novos — ✅ 563/563 passando (52 arquivos)
 - 2026-05-29 Gemini 3.5 Flash (High) / Antigravity — Criou endpoint POST /api/routing/notas/limpar e limparFila no Dexie para zerar totalmente a fila offline e as notas capturadas pendentes no Supabase ao iniciar uma nova rota — +5 testes novos em 2 arquivos novos — ✅ 568/568 passando (54 arquivos)
+- 2026-05-29 Gemini 2.5 Pro / Antigravity — Fallback progressivo no geocoding: quando Nominatim não encontra com query completa (logradouro+numero+bairro+cidade+uf+cep), tenta automaticamente sem bairro/CEP, só com número, e por fim só logradouro+cidade+uf. Resolve endereços brasileiros que o Nominatim público não encontra na busca completa — +2 testes novos — ✅ 570/570 passando (53 arquivos)
 
 ---
 

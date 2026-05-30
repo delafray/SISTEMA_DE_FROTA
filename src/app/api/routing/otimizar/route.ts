@@ -30,7 +30,7 @@ import {
   traduzirParadasComMapping,
   montarParadasPersistir,
 } from '@/lib/routing/restricoes';
-import type { Coordenada, NotaCapturada } from '@/lib/routing/types';
+import type { Coordenada, NotaCapturada, ResultadoGeocoding } from '@/lib/routing/types';
 
 const log = createLogger('api_routing_otimizar');
 
@@ -95,18 +95,67 @@ async function geocodarPendentes(
       continue;
     }
 
-    const enderecoBusca = formatarEnderecoParaGeocoding({
-      logradouro: nota.endereco.logradouro,
-      numero: nota.numero,
-      bairro: nota.endereco.bairro,
-      cidade: nota.endereco.cidade,
-      uf: nota.endereco.uf,
-      cep: nota.cep,
-    });
+    // Estratégia de fallback progressivo:
+    // 1. logradouro + numero + bairro + cidade + uf + cep (mais específico)
+    // 2. logradouro + numero + cidade + uf (sem CEP e bairro)
+    // 3. logradouro + numero + cidade + uf + cep (sem bairro, com CEP)
+    // 4. logradouro + cidade + uf (sem numero, sem CEP, sem bairro)
+    //
+    // Nominatim público frequentemente falha em endereços brasileiros quando
+    // a query inclui muitas partes. Remover CEP e/ou bairro costuma resolver.
+    const tentativas = [
+      formatarEnderecoParaGeocoding({
+        logradouro: nota.endereco.logradouro,
+        numero: nota.numero,
+        bairro: nota.endereco.bairro,
+        cidade: nota.endereco.cidade,
+        uf: nota.endereco.uf,
+        cep: nota.cep,
+      }),
+      formatarEnderecoParaGeocoding({
+        logradouro: nota.endereco.logradouro,
+        numero: nota.numero,
+        cidade: nota.endereco.cidade,
+        uf: nota.endereco.uf,
+      }),
+      formatarEnderecoParaGeocoding({
+        logradouro: nota.endereco.logradouro,
+        numero: nota.numero,
+        cidade: nota.endereco.cidade,
+        uf: nota.endereco.uf,
+        cep: nota.cep,
+      }),
+      formatarEnderecoParaGeocoding({
+        logradouro: nota.endereco.logradouro,
+        cidade: nota.endereco.cidade,
+        uf: nota.endereco.uf,
+      }),
+    ];
 
-    const r = await geocodar(enderecoBusca);
-    if (!r.ok) {
-      log.warn('geocoding_falhou', { nota_id: nota.id, motivo: r.motivo });
+    // Remove duplicatas (ex: se bairro e cep estavam vazios, tentativa 1 == 2)
+    const tentativasUnicas = [...new Set(tentativas)];
+
+    let resultado: ResultadoGeocoding | null = null;
+    for (let i = 0; i < tentativasUnicas.length; i++) {
+      const r = await geocodar(tentativasUnicas[i]);
+      if (r.ok) {
+        if (i > 0) {
+          log.info('geocoding_fallback_ok', {
+            nota_id: nota.id,
+            tentativa: i + 1,
+            query: tentativasUnicas[i],
+          });
+        }
+        resultado = r.resultado;
+        break;
+      }
+    }
+
+    if (!resultado) {
+      log.warn('geocoding_falhou_todas_tentativas', {
+        nota_id: nota.id,
+        tentativas: tentativasUnicas.length,
+      });
       sem_geocoding.push(nota.id);
       continue;
     }
@@ -115,8 +164,8 @@ async function geocodarPendentes(
     const { error: errUp } = await supabase
       .from('notas_capturadas')
       .update({
-        latitude: r.resultado.lat,
-        longitude: r.resultado.lng,
+        latitude: resultado.lat,
+        longitude: resultado.lng,
         status: 'geocodificada',
       })
       .eq('id', nota.id);
@@ -129,8 +178,8 @@ async function geocodarPendentes(
 
     geocodificadas.push({
       ...nota,
-      latitude: r.resultado.lat,
-      longitude: r.resultado.lng,
+      latitude: resultado.lat,
+      longitude: resultado.lng,
       status: 'geocodificada',
     });
   }

@@ -26,7 +26,7 @@ vi.mock('@/lib/routing/geocoding', () => ({
 
 import { POST } from '@/app/api/routing/otimizar/route';
 import { otimizarRota } from '@/lib/routing/vroom';
-import { geocodar } from '@/lib/routing/geocoding';
+import { geocodar, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding';
 import { NextRequest } from 'next/server';
 
 const ORIGEM = { lat: -23.5505, lng: -46.6333 };
@@ -290,5 +290,84 @@ describe('POST /api/routing/otimizar — falhas', () => {
     );
 
     expect(res.status).toBe(503);
+  });
+});
+
+describe('POST /api/routing/otimizar — fallback geocoding', () => {
+  it('usa segunda tentativa quando primeira falha', async () => {
+    setupMocks({
+      notas: [
+        notaSeed({ id: 'n-fallback', latitude: null, longitude: null, status: 'capturada' }),
+      ],
+    });
+
+    // formatarEnderecoParaGeocoding retorna strings diferentes pra cada chamada
+    // pra que o Set não deduplicar e o fallback realmente rode
+    let callCount = 0;
+    (formatarEnderecoParaGeocoding as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      callCount++;
+      return `endereco-tentativa-${callCount}`;
+    });
+
+    // Primeira chamada falha, segunda sucesso
+    (geocodar as ReturnType<typeof vi.fn>)
+      .mockResolvedValueOnce({ ok: false, motivo: 'nao_encontrado' })
+      .mockResolvedValueOnce({
+        ok: true,
+        resultado: { lat: -19.92, lng: -43.93, endereco_normalizado: 'Rua Praia Grande, Contagem' },
+      });
+
+    const res = await POST(
+      makeReq({ motorista_id: 'mot-1', empresa_id: 'emp-1', origem: ORIGEM })
+    );
+
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    // Nota foi incluida na rota (não caiu em nao_atendidas)
+    expect(body.nao_atendidas).not.toContain('n-fallback');
+    // geocodar foi chamado 2 vezes (primeira falhou, segunda OK)
+    expect(geocodar).toHaveBeenCalledTimes(2);
+  });
+
+  it('inclui nota em nao_atendidas apenas quando todas as tentativas falham', async () => {
+    setupMocks({
+      notas: [
+        notaSeed({ id: 'n-ok', latitude: -23.5, longitude: -46.6 }),
+        notaSeed({ id: 'n-todas-falharam', latitude: null, longitude: null }),
+      ],
+    });
+
+    // Cada chamada retorna string diferente → 4 tentativas únicas
+    let c2 = 0;
+    (formatarEnderecoParaGeocoding as ReturnType<typeof vi.fn>).mockImplementation(() => {
+      c2++;
+      return `endereco-v${c2}`;
+    });
+
+    // Todas falham
+    (geocodar as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: false,
+      motivo: 'nao_encontrado',
+    });
+
+    // VROOM recebe 1 nota (n-ok), devolve 1 parada
+    (otimizarRota as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      resultado: {
+        paradas: [{ nota_id: '1', ordem: 1, chegada_estimada: '2026-05-28T10:30:00Z' }],
+        distancia_total_km: 5,
+        tempo_total_min: 10,
+        paradas_nao_atendidas: [],
+      },
+    });
+
+    const res = await POST(
+      makeReq({ motorista_id: 'mot-1', empresa_id: 'emp-1', origem: ORIGEM })
+    );
+
+    const body = await res.json();
+    expect(body.nao_atendidas).toContain('n-todas-falharam');
+    // geocodar chamado 4 vezes (4 tentativas unicas, todas falharam)
+    expect((geocodar as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(4);
   });
 });
