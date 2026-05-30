@@ -34,11 +34,40 @@ export async function transcreverComDeepgram(
     }
 
     const audioBuffer = await respHttp.arrayBuffer();
-    const contentType = respHttp.headers.get('content-type') ?? 'audio/ogg';
+    const contentTypeHeader = respHttp.headers.get('content-type') ?? '';
+    const bytes = new Uint8Array(audioBuffer);
 
-    log.info('deepgram_audio_baixado', { bytes: audioBuffer.byteLength, contentType });
+    // Detecta magic number — ajuda a debugar se Evolution devolveu algo
+    // diferente de áudio (ex: HTML de erro, JSON, etc).
+    // OGG = "OggS", MP3 = "ID3" ou 0xFFFB, WebM/Matroska = 0x1A45DFA3
+    let magic = 'unknown';
+    if (bytes.length >= 4) {
+      const head4 = String.fromCharCode(bytes[0], bytes[1], bytes[2], bytes[3]);
+      if (head4 === 'OggS') magic = 'ogg';
+      else if (head4.startsWith('ID3')) magic = 'mp3-id3';
+      else if (bytes[0] === 0xff && (bytes[1] & 0xe0) === 0xe0) magic = 'mp3';
+      else if (bytes[0] === 0x1a && bytes[1] === 0x45) magic = 'webm/matroska';
+      else if (head4 === 'RIFF') magic = 'wav';
+      else magic = `outro (hex: ${[bytes[0], bytes[1], bytes[2], bytes[3]].map((b) => b.toString(16).padStart(2, '0')).join(' ')})`;
+    }
 
-    // 2. Chamar o endpoint /v1/listen do Deepgram enviando o binário direto
+    log.info('deepgram_audio_baixado', {
+      bytes: audioBuffer.byteLength,
+      contentTypeHeader,
+      magic,
+    });
+
+    if (audioBuffer.byteLength === 0) {
+      return { ok: false, motivo: 'Áudio vazio (0 bytes) — Evolution API devolveu nada' };
+    }
+
+    // 2. Chamar o endpoint /v1/listen do Deepgram enviando o binário direto.
+    //
+    // Content-Type FORÇADO para 'audio/ogg' — WhatsApp sempre devolve OGG/Opus,
+    // mas Evolution API marca como 'application/octet-stream'. Sem hint correto
+    // Deepgram tenta adivinhar e falha com "corrupt or unsupported data".
+    //
+    // Se o magic não for OGG, mantém o header original (talvez seja MP3/WAV).
     const queryParams = new URLSearchParams({
       model: 'nova-2',
       language: 'pt-BR',
@@ -46,6 +75,8 @@ export async function transcreverComDeepgram(
     });
 
     const deepgramUrl = `https://api.deepgram.com/v1/listen?${queryParams.toString()}`;
+
+    const contentType = magic === 'ogg' ? 'audio/ogg' : contentTypeHeader || 'audio/ogg';
 
     const response = await fetch(deepgramUrl, {
       method: 'POST',
