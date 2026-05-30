@@ -10,6 +10,7 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createLogger } from '@/lib/logger';
 import { transcreverComDeepgram } from './deepgramClient';
+import { declarations as frotaToolDeclarations, executarTool } from './tools/frotaTools';
 
 const log = createLogger('gemini-client');
 
@@ -21,6 +22,10 @@ Regras absolutas de comportamento:
 - Você é um assistente em fase de implantação. A maioria das funcionalidades ainda está sendo configurada.
 - Quando o motorista ou gestor pedir para registrar KM, abastecimento, despesa, avaria ou qualquer outra ação no sistema, responda educadamente que essa funcionalidade ainda está sendo configurada e que em breve estará disponível.
 - Você PODE responder perguntas gerais sobre a frota de forma educada.
+- Você TEM ferramentas pra consultar dados reais da frota:
+  - "listar_motoristas" — usa quando perguntarem quantos/quais motoristas
+  - "listar_veiculos" — usa quando perguntarem sobre caminhões, placas, apelidos
+  Chame as ferramentas SEMPRE que a pergunta precisar desses dados. Não invente nomes nem placas.
 - Jamais invente dados. Se não souber, diga que não sabe.
 - Nunca mencione que você é o ChatGPT, OpenAI ou qualquer outro produto. Você é o assistente da Frota Delafray.`;
 
@@ -48,20 +53,27 @@ export type RespostaGemini =
 
 /**
  * Envia uma mensagem para o Gemini Flash com histórico de contexto.
+ *
+ * Quando `empresaId` é fornecido, registra tools (function calling) — o
+ * Gemini pode decidir chamar funcoes do banco (ex: listar motoristas)
+ * e a gente envia o resultado de volta pra ele formatar a resposta.
+ *
  * Retorna a resposta em texto puro, nunca lança exceção.
  */
 export async function chatGemini(
   mensagemAtual: string,
-  historico: HistoricoMensagem[] = []
+  historico: HistoricoMensagem[] = [],
+  empresaId?: string
 ): Promise<RespostaGemini> {
   try {
     const client = getClient();
     const model = client.getGenerativeModel({
       model: 'gemini-2.5-flash',
       systemInstruction: SYSTEM_PROMPT,
+      // Tools so quando temos empresa_id (motorista/gestor identificado)
+      tools: empresaId ? [{ functionDeclarations: frotaToolDeclarations }] : undefined,
     });
 
-    // Converter histórico para o formato do SDK
     const history = historico.map((h) => ({
       role: h.role,
       parts: [{ text: h.text }],
@@ -69,13 +81,34 @@ export async function chatGemini(
 
     const chat = model.startChat({ history });
     const result = await chat.sendMessage(mensagemAtual);
-    const texto = result.response.text().trim();
 
+    // Se Gemini decidiu chamar uma tool, executa e devolve o resultado
+    const calls = result.response.functionCalls?.() ?? [];
+    if (calls.length > 0 && empresaId) {
+      const respostas = await Promise.all(
+        calls.map(async (call) => {
+          log.info('gemini_tool_call', { name: call.name });
+          const resultado = await executarTool(call.name, empresaId);
+          return {
+            functionResponse: {
+              name: call.name,
+              response: resultado as unknown as Record<string, unknown>,
+            },
+          };
+        })
+      );
+      // Manda os resultados de volta pro Gemini formatar resposta natural
+      const result2 = await chat.sendMessage(respostas);
+      const texto = result2.response.text().trim();
+      log.info('gemini_resposta_pos_tool', { chars: texto.length, tools_chamadas: calls.length });
+      return { ok: true, texto };
+    }
+
+    const texto = result.response.text().trim();
     log.info('gemini_resposta_ok', { chars: texto.length });
     return { ok: true, texto };
   } catch (err) {
     const motivo = err instanceof Error ? err.message : String(err);
-    // Log detalhado para facilitar diagnóstico via Vercel Logs
     log.error('gemini_erro', {
       motivo,
       stack: err instanceof Error ? err.stack?.slice(0, 500) : undefined,
@@ -106,7 +139,8 @@ export type RespostaGeminiAudio =
 export async function chatGeminiComAudio(
   audioUrl: string,
   historico: HistoricoMensagem[] = [],
-  nomeRemetente?: string
+  nomeRemetente?: string,
+  empresaId?: string
 ): Promise<RespostaGeminiAudio> {
   // 1. Transcrever via Deepgram
   const transcricao = await transcreverComDeepgram(audioUrl);
@@ -132,7 +166,7 @@ export async function chatGeminiComAudio(
     ? `[Motorista: ${nomeRemetente}] ${transcricao.texto}`
     : transcricao.texto;
 
-  const resposta = await chatGemini(mensagemComContexto, historico);
+  const resposta = await chatGemini(mensagemComContexto, historico, empresaId);
   if (!resposta.ok) {
     return { ok: false, motivo: resposta.motivo };
   }

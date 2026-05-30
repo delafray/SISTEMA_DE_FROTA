@@ -108,7 +108,7 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
 
     if (isTexto || isAudio) {
-      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo);
+      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id);
       return;
     }
   }
@@ -744,7 +744,11 @@ export function isSaudacao(msg: ParsedMessage): boolean {
  * Se for audio, transcreve antes de enviar.
  * Retorna sempre uma resposta em texto.
  */
-async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promise<void> {
+async function rotearComGemini(
+  msg: ParsedMessage,
+  nomeRemetente: string,
+  empresaId?: string
+): Promise<void> {
   // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
   // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
   // (que descriptografa) e mandar como data URL pro pipeline transcrever.
@@ -754,7 +758,7 @@ async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promi
       await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
       return;
     }
-    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente);
+    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId);
     await enviarTexto(msg.from, resposta);
     return;
   }
@@ -766,7 +770,7 @@ async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promi
     return;
   }
 
-  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente);
+  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId);
   await enviarTexto(msg.from, resposta);
 }
 

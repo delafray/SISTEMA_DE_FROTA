@@ -26,7 +26,18 @@ vi.mock('@google/generative-ai', () => {
       };
     }
   }
-  return { GoogleGenerativeAI };
+  // SchemaType e FunctionDeclaration sao usados em frotaTools — precisam existir
+  // no mock pra import nao quebrar.
+  return {
+    GoogleGenerativeAI,
+    SchemaType: {
+      OBJECT: 'object',
+      STRING: 'string',
+      NUMBER: 'number',
+      BOOLEAN: 'boolean',
+      ARRAY: 'array',
+    },
+  };
 });
 
 vi.mock('@/lib/ai/deepgramClient', () => ({

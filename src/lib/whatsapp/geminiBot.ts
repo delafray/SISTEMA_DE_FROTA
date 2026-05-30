@@ -43,18 +43,18 @@ function adicionarAoHistorico(
 export async function processarComGemini(
   telefone: string,
   mensagem: string,
-  nomeRemetente?: string
+  nomeRemetente?: string,
+  empresaId?: string
 ): Promise<string> {
-  log.info('gemini_processando', { telefone, msg_len: mensagem.length });
+  log.info('gemini_processando', { telefone, msg_len: mensagem.length, com_tools: !!empresaId });
 
-  // Adicionar contexto do remetente se disponível
   const mensagemComContexto = nomeRemetente
     ? `[Motorista: ${nomeRemetente}] ${mensagem}`
     : mensagem;
 
   const historico = getHistorico(telefone);
 
-  const resultado = await chatGemini(mensagemComContexto, historico);
+  const resultado = await chatGemini(mensagemComContexto, historico, empresaId);
 
   if (!resultado.ok) {
     log.error('gemini_falhou', { telefone, motivo: resultado.motivo });
@@ -77,12 +77,13 @@ export async function processarComGemini(
 export async function processarAudioComGemini(
   telefone: string,
   audioUrl: string,
-  nomeRemetente?: string
+  nomeRemetente?: string,
+  empresaId?: string
 ): Promise<string> {
-  log.info('gemini_audio_processando', { telefone });
+  log.info('gemini_audio_processando', { telefone, com_tools: !!empresaId });
 
   const historico = getHistorico(telefone);
-  const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente);
+  const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente, empresaId);
 
   if (!resultado.ok) {
     log.error('gemini_audio_falhou', { telefone, motivo: resultado.motivo });
