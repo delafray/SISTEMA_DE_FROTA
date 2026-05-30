@@ -179,14 +179,11 @@ export function InputEnderecoNF({
               : undefined,
         }));
 
-        if (comDistancia.length === 1) {
-          // Resultado único: preenche direto sem mostrar lista
-          preencherPorGeocodingResultado(comDistancia[0], texto);
-        } else {
-          // Múltiplos: motorista escolhe
-          setOpcoesFala(comDistancia);
-          setEtapa('escolha_endereco');
-        }
+        // SEMPRE mostra a lista (mesmo com 1 resultado) — motorista precisa
+        // confirmar visualmente que e o endereco certo. Antes preenchia direto
+        // quando vinha so 1 e o motorista nem via o que o Nominatim escolheu.
+        setOpcoesFala(comDistancia);
+        setEtapa('escolha_endereco');
       } else {
         setErro('Não encontrei esse endereço. Tente novamente ou use o CEP.');
       }
@@ -197,18 +194,29 @@ export function InputEnderecoNF({
     }
   }, []);
 
-  /** Preenche estado de endereço a partir de um resultado de geocoding. */
+  /** Preenche estado de endereço a partir de um resultado de geocoding.
+   *  Usa os campos estruturados (logradouro/bairro/cidade/uf) parseados do
+   *  Nominatim — antes o display_name inteiro virava logradouro e os demais
+   *  ficavam vazios, parada salvava sem bairro/cidade. */
   function preencherPorGeocodingResultado(resultado: ResultadoGeocoding, textoOriginal: string) {
     setEndereco({
-      logradouro: resultado.endereco_normalizado,
-      bairro: '',
-      cidade: '',
-      uf: '',
+      logradouro: resultado.logradouro || resultado.endereco_normalizado.split(',')[0]?.trim() || '',
+      bairro: resultado.bairro ?? '',
+      cidade: resultado.cidade ?? '',
+      uf: resultado.uf ?? '',
     });
-    // Tenta extrair número do texto falado
-    const matchNumero = textoOriginal.match(/\b\d+\b/);
-    if (matchNumero) {
-      setNumero(matchNumero[0]);
+    // Preferencia: numero estruturado do Nominatim > extracao do texto falado
+    if (resultado.numero) {
+      setNumero(resultado.numero);
+    } else {
+      const matchNumero = textoOriginal.match(/\b\d+\b/);
+      if (matchNumero) {
+        setNumero(matchNumero[0]);
+      }
+    }
+    // Tambem preenche o CEP se Nominatim devolveu
+    if (resultado.cep && /^\d{8}$/.test(resultado.cep)) {
+      setCep(resultado.cep);
     }
     setEtapa('numero');
     setTimeout(() => numeroRef.current?.focus(), 50);

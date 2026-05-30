@@ -45,6 +45,21 @@ interface NominatimItem {
   lat: string;
   lon: string;
   display_name: string;
+  /** Presente quando passamos addressdetails=1 — campos estruturados. */
+  address?: {
+    road?: string;
+    pedestrian?: string;
+    house_number?: string;
+    suburb?: string;
+    neighbourhood?: string;
+    city_district?: string;
+    city?: string;
+    town?: string;
+    municipality?: string;
+    state?: string;
+    state_code?: string;
+    postcode?: string;
+  };
 }
 
 // ─── HELPERS PUBLICOS ───────────────────────────────────────────────
@@ -208,7 +223,27 @@ export async function geocodarMultiplos(
   url.searchParams.set('format', 'json');
   url.searchParams.set('limit', String(Math.min(limite, 10)));
   url.searchParams.set('countrycodes', 'br');
-  url.searchParams.set('addressdetails', '0');
+  // addressdetails=1: Nominatim devolve campos estruturados (rua, bairro,
+  // cidade, uf) em vez de so o display_name como string. Frontend usa pra
+  // mostrar pro motorista escolher entre "Rua X em Bairro A" vs "Rua X
+  // em Bairro B" com clareza.
+  url.searchParams.set('addressdetails', '1');
+
+  // Viewbox: enviesa busca pra raio ~50km ao redor do motorista quando
+  // disponivel. Nominatim ainda devolve resultados fora da box, mas prioriza
+  // os de dentro — alinha com expectativa do motorista de ver primeiro o que
+  // esta perto.
+  if (userLat !== undefined && userLng !== undefined) {
+    const delta = 0.5; // ~50km de lado
+    const viewbox = [
+      userLng - delta,
+      userLat + delta,
+      userLng + delta,
+      userLat - delta,
+    ].join(',');
+    url.searchParams.set('viewbox', viewbox);
+    url.searchParams.set('bounded', '0'); // permite resultados fora da box (com prioridade menor)
+  }
 
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
@@ -233,11 +268,20 @@ export async function geocodarMultiplos(
 
     // Converte, filtra invalidos
     const resultados: ResultadoGeocoding[] = data
-      .map((item) => ({
-        lat: parseFloat(item.lat),
-        lng: parseFloat(item.lon),
-        endereco_normalizado: item.display_name,
-      }))
+      .map((item) => {
+        const a = item.address ?? {};
+        return {
+          lat: parseFloat(item.lat),
+          lng: parseFloat(item.lon),
+          endereco_normalizado: item.display_name,
+          logradouro: a.road ?? a.pedestrian ?? undefined,
+          numero: a.house_number ?? undefined,
+          bairro: a.suburb ?? a.neighbourhood ?? a.city_district ?? undefined,
+          cidade: a.city ?? a.town ?? a.municipality ?? undefined,
+          uf: a.state_code?.toUpperCase() ?? a.state ?? undefined,
+          cep: a.postcode?.replace(/\D/g, '') ?? undefined,
+        };
+      })
       .filter((r) => !Number.isNaN(r.lat) && !Number.isNaN(r.lng));
 
     // Ordena por distancia ao usuario quando disponivel

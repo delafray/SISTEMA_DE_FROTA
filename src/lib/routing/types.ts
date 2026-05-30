@@ -102,4 +102,12 @@ export interface ResultadoGeocoding {
   lat: number;
   lng: number;
   endereco_normalizado: string;      // como o Nominatim devolveu
+  /** Campos estruturados parseados do address Nominatim (addressdetails=1).
+   *  Permite mostrar "Rua X em Bairro Y, Cidade Z" pro motorista escolher. */
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  uf?: string;
+  cep?: string;
 }

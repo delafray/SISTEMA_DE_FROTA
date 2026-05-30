@@ -74,11 +74,22 @@ export function ListaOpcoesEndereco({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a' }}>
-                    {extrairLabelCurto(opcao.endereco_normalizado)}
+                  {/* Linha 1: logradouro + numero (campos estruturados se disponivel) */}
+                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a', wordBreak: 'break-word' }}>
+                    {opcao.logradouro
+                      ? `${opcao.logradouro}${opcao.numero ? `, ${opcao.numero}` : ''}`
+                      : extrairLabelCurto(opcao.endereco_normalizado)}
                   </div>
-                  {extrairSublabel(opcao.endereco_normalizado) && (
-                    <div style={{ fontSize: 12, color: '#475569', marginTop: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                  {/* Linha 2: bairro · cidade/UF (info mais util pra desambiguar) */}
+                  {(opcao.bairro || opcao.cidade) ? (
+                    <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
+                      {opcao.bairro && <strong>{opcao.bairro}</strong>}
+                      {opcao.bairro && (opcao.cidade || opcao.uf) ? ' · ' : ''}
+                      {opcao.cidade}
+                      {opcao.cidade && opcao.uf ? `/${opcao.uf}` : opcao.uf ?? ''}
+                    </div>
+                  ) : extrairSublabel(opcao.endereco_normalizado) && (
+                    <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
                       {extrairSublabel(opcao.endereco_normalizado)}
                     </div>
                   )}
