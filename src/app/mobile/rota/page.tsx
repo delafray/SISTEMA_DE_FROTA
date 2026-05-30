@@ -78,6 +78,12 @@ function RotaContent(): React.ReactElement {
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [toast, setToast] = useState<string | null>(null);
   const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
+  // NFs que a otimizacao nao conseguiu incluir (geocoding falhou ou VROOM
+  // nao encaixou) — antes eram dropadas silenciosamente, motorista capturava
+  // 10 e via 5 no mapa. Agora avisamos no topo da fase em_rota.
+  const [naoAtendidas, setNaoAtendidas] = useState<
+    Array<{ id: string; motivo: string; endereco: { logradouro?: string; cidade?: string; uf?: string } | null; numero: string | null; cep: string | null }>
+  >([]);
   // Historico de rotas para mostrar na tela de inicio
   const [rotasHistorico, setRotasHistorico] = useState<RotaOtimizada[]>([]);
 
@@ -358,6 +364,10 @@ function RotaContent(): React.ReactElement {
         return;
       }
 
+      // Guarda lista de NFs nao incluidas (geocoding fail OU vroom excluiu)
+      // pra exibir aviso destacado na fase em_rota.
+      setNaoAtendidas(data.nao_atendidas_detalhe ?? []);
+
       // Carrega rota recém criada
       const rotaRes = await fetch(`/api/routing/rota/${data.rota_id}`);
       const rotaData = (await rotaRes.json()) as RotaResponse;
@@ -518,15 +528,67 @@ function RotaContent(): React.ReactElement {
       )}
 
       {fase === 'em_rota' && rota && (
-        <FaseEmRota
-          rota={rota}
-          paradas={paradas}
-          paradaSelecionada={paradaSelecionada}
-          onSelectParada={setParadaSelecionada}
-          onConcluirParada={handleConcluirParada}
-          onEncerrar={handleEncerrarRota}
-          posicaoAtual={posicaoAtual}
-        />
+        <>
+          {naoAtendidas.length > 0 && (
+            <section
+              data-testid="aviso-nao-atendidas"
+              role="alert"
+              style={{
+                marginBottom: 12,
+                padding: 12,
+                background: '#fef3c7',
+                border: '2px solid #f59e0b',
+                borderRadius: 8,
+              }}
+            >
+              <div style={{ fontWeight: 700, color: '#92400e', marginBottom: 6, fontSize: 14 }}>
+                ⚠️ {naoAtendidas.length} NF{naoAtendidas.length > 1 ? 's' : ''} NÃO incluída{naoAtendidas.length > 1 ? 's' : ''} na rota
+              </div>
+              <ul style={{ listStyle: 'none', padding: 0, margin: 0, fontSize: 12, color: '#78350f' }}>
+                {naoAtendidas.map((n) => (
+                  <li key={n.id} style={{ padding: '4px 0', borderTop: '1px solid #fcd34d' }}>
+                    <div style={{ fontWeight: 600 }}>
+                      📍 {n.endereco?.logradouro ?? '(sem rua)'}
+                      {n.numero ? `, ${n.numero}` : ''}
+                      {n.cep ? ` — CEP ${n.cep}` : ''}
+                    </div>
+                    <div style={{ fontSize: 11, opacity: 0.85 }}>
+                      Motivo: {n.motivo === 'geocoding_falhou'
+                        ? 'endereço não encontrado pelo GPS — confira logradouro/CEP'
+                        : 'algoritmo não conseguiu encaixar na rota — horário/distância'}
+                    </div>
+                  </li>
+                ))}
+              </ul>
+              <button
+                type="button"
+                onClick={() => setNaoAtendidas([])}
+                style={{
+                  marginTop: 8,
+                  padding: '6px 12px',
+                  background: '#f59e0b',
+                  color: '#fff',
+                  border: 'none',
+                  borderRadius: 6,
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Entendi, dispensar
+              </button>
+            </section>
+          )}
+          <FaseEmRota
+            rota={rota}
+            paradas={paradas}
+            paradaSelecionada={paradaSelecionada}
+            onSelectParada={setParadaSelecionada}
+            onConcluirParada={handleConcluirParada}
+            onEncerrar={handleEncerrarRota}
+            posicaoAtual={posicaoAtual}
+          />
+        </>
       )}
     </div>
   );

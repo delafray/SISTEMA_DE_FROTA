@@ -254,7 +254,30 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       paradasTraduzidas.map((p) => p.nota_id_local)
     );
 
-  const response: OtimizarResponse = {
+  // Enriquece nao_atendidas com endereco + motivo pra mostrar no app.
+  // Antes vinha so id; motorista nao tinha ideia de QUAIS NFs caiu.
+  const notasMapPorId = new Map(notas.map((n) => [n.id, n]));
+  const naoAtendidasVROOM = otim.resultado.paradas_nao_atendidas
+    .map((idVroom) => mapping.get(Number(idVroom)))
+    .filter((id): id is string => Boolean(id));
+  const naoAtendidasDetalhe = [
+    ...sem_geocoding.map((id) => ({
+      id,
+      motivo: 'geocoding_falhou' as const,
+      endereco: notasMapPorId.get(id)?.endereco ?? null,
+      numero: notasMapPorId.get(id)?.numero ?? null,
+      cep: notasMapPorId.get(id)?.cep ?? null,
+    })),
+    ...naoAtendidasVROOM.map((id) => ({
+      id,
+      motivo: 'vroom_nao_encaixou' as const,
+      endereco: notasMapPorId.get(id)?.endereco ?? null,
+      numero: notasMapPorId.get(id)?.numero ?? null,
+      cep: notasMapPorId.get(id)?.cep ?? null,
+    })),
+  ];
+
+  const response: OtimizarResponse & { nao_atendidas_detalhe: typeof naoAtendidasDetalhe } = {
     rota_id: rotaInserida.id as string,
     paradas: (paradasInseridas ?? []).map((p) => ({
       nota_id: p.nota_id as string,
@@ -268,16 +291,16 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     })),
     distancia_total_km: otim.resultado.distancia_total_km,
     tempo_total_min: Math.round(otim.resultado.tempo_total_min),
-    nao_atendidas: [
-      ...sem_geocoding,
-      ...otim.resultado.paradas_nao_atendidas.map((idVroom) => mapping.get(Number(idVroom)) ?? idVroom),
-    ],
+    nao_atendidas: naoAtendidasDetalhe.map((n) => n.id),
+    nao_atendidas_detalhe: naoAtendidasDetalhe,
   };
 
   log.info('rota_otimizada', {
     rota_id: response.rota_id,
     paradas: response.paradas.length,
     nao_atendidas: response.nao_atendidas.length,
+    sem_geocoding: sem_geocoding.length,
+    vroom_excluiu: naoAtendidasVROOM.length,
   });
 
   return NextResponse.json(response, { status: 201 });
