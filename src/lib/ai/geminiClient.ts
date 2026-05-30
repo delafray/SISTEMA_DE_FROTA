@@ -102,14 +102,13 @@ export async function chatGeminiComAudio(
     const audioBuffer = await respHttp.arrayBuffer();
     const audioBase64 = Buffer.from(audioBuffer).toString('base64');
 
-    // Detectar MIME type pelo Content-Type ou assumir ogg (padrão WhatsApp)
-    const contentType = respHttp.headers.get('content-type') ?? 'audio/ogg';
-    const mimeType = contentType.split(';')[0].trim() as
-      | 'audio/ogg'
-      | 'audio/mpeg'
-      | 'audio/mp4'
-      | 'audio/wav'
-      | 'audio/webm';
+    // Detectar MIME type: Evolution API retorna application/octet-stream para audios do WhatsApp.
+    // Audio do WhatsApp e sempre audio/ogg com codec Opus — forcamos esse tipo.
+    const contentType = respHttp.headers.get('content-type') ?? '';
+    const AUDIO_MIME_TYPES = ['audio/ogg', 'audio/mpeg', 'audio/mp4', 'audio/wav', 'audio/webm', 'audio/aac'];
+    const mimeType = (
+      AUDIO_MIME_TYPES.find((t) => contentType.includes(t)) ?? 'audio/ogg'
+    ) as 'audio/ogg' | 'audio/mpeg' | 'audio/mp4' | 'audio/wav' | 'audio/webm';
 
     const client = getClient();
     const model = client.getGenerativeModel({
