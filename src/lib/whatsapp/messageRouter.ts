@@ -99,21 +99,16 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     return;
   }
 
-  // ── GEMINI MODE: substitui o menu de ações pelo Gemini Flash ───────
-  // Intercepta apenas quando o motorista está no estado aguardando_acao
-  // (onde antes era exibido o menu rígido de opções).
-  // Fluxos ativos (aguardando_foto_km, aguardando_avaria_midia, etc.),
-  // seleção de veículo e mensagens do gestor NÃO são interceptados.
-  if (
-    GEMINI_MODE &&
-    identity.tipo === 'motorista' &&
-    sessao.estado === 'aguardando_acao'
-  ) {
+  // ── GEMINI MODE: IA responde a TUDO desde o primeiro contato ────────
+  // Todos os textos e audios vao direto para o Gemini Flash.
+  // Os fluxos rigidos de menu foram desativados.
+  // Para reverter ao bot antigo: altere GEMINI_MODE para false.
+  if (GEMINI_MODE) {
     const isTexto = msgResolvida.tipo === 'texto' && !!msgResolvida.texto;
     const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
 
     if (isTexto || isAudio) {
-      await rotearComGemini(msgResolvida, identity.nome ?? 'Motorista');
+      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo);
       return;
     }
   }

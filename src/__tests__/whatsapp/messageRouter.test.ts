@@ -147,7 +147,7 @@ describe('processarMensagem — identidade', () => {
     expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
-  it('responde gestor — chama gestorFlow (não interceptado pelo GEMINI_MODE)', async () => {
+  it('gestor → Gemini responde (GEMINI_MODE universal intercepta gestor tambem)', async () => {
     (identificarRemetente as ReturnType<typeof vi.fn>).mockResolvedValue({
       tipo: 'gestor',
       usuario_id: 'u-1',
@@ -158,11 +158,9 @@ describe('processarMensagem — identidade', () => {
 
     await processarMensagem(makeMsg({ texto: 'oi' }));
 
-    // Gestor nao e interceptado pelo GEMINI_MODE — vai para rotearGestor -> processarGestorFlow (mockado)
-    const { processarGestorFlow } = await import('@/lib/whatsapp/flows/gestorFlow');
-    expect(processarGestorFlow).toHaveBeenCalledOnce();
-    // enviarTexto nao e chamado pelo router (gestorFlow e quem responde, e ele esta mockado)
-    expect(enviarMenuLista).not.toHaveBeenCalled();
+    // GEMINI_MODE universal: gestor tambem e atendido pelo Gemini.
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
   });
 });
 
@@ -192,22 +190,17 @@ describe('processarMensagem — roteamento motorista', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('sessão nova → envia seleção de veículo', async () => {
+  it('sessão nova → Gemini responde desde o primeiro contato (sem menu de veiculo)', async () => {
     mockSessao('novo');
     await processarMensagem(makeMsg({ texto: 'oi' }));
-    expect(enviarMenuLista).toHaveBeenCalledOnce();
-    const args = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0];
-    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?)
-    expect(args[0]).toBe('sess-1');
-    expect(args[1]).toBe('5531999');
-    expect(args[2]).toContain('caminhão');
-    expect(updateSession).toHaveBeenCalledWith('sess-1', { estado: 'aguardando_veiculo' });
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
+    expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
-  it('saudação em aguardando_acao → Gemini responde (GEMINI_MODE substitui menu de ações)', async () => {
+  it('saudação → Gemini responde (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_acao', { veiculo_id: 'v-1' });
     await processarMensagem(makeMsg({ texto: 'oi' }));
-    // Com GEMINI_MODE, saudação em aguardando_acao vai para o Gemini
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
     expect(enviarMenuLista).not.toHaveBeenCalled();
@@ -220,18 +213,21 @@ describe('processarMensagem — roteamento motorista', () => {
     expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
-  it('estado aguardando_avaria_midia → delega ao avariaFlow', async () => {
+  it('estado aguardando_avaria_midia → audio vai para Gemini (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_avaria_midia');
     await processarMensagem(makeMsg({ tipo: 'audio', mediaId: 'a-1' }));
-    expect(processarAvariaFlow).toHaveBeenCalledOnce();
+    // Com GEMINI_MODE universal, audio em qualquer estado vai para o Gemini.
+    // transcreverAudio e chamado, depois Gemini responde.
+    // Como o mock de transcreverAudio retorna ok:false (fallback), o bot pede texto escrito.
+    expect(processarAvariaFlow).not.toHaveBeenCalled();
   });
 
-  it('seleção de veículo inválida — handler pede pra selecionar da lista (Gemini não intercepta em aguardando_veiculo)', async () => {
+  it('seleção de veículo inválida — Gemini responde (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_veiculo');
     await processarMensagem(makeMsg({ texto: 'não sei' }));
-    // GEMINI_MODE só intercepta em aguardando_acao; nesse estado o handler original responde.
+    // Gemini intercepta antes do handler de selecao de veiculo.
     expect(enviarTexto).toHaveBeenCalledOnce();
-    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('lista');
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
   });
 });
 
@@ -282,19 +278,18 @@ describe('processarMensagem — resposta numerica → lista/botao', () => {
     expect(semSelecao).toBe(false);
   });
 
-  it('texto "1" sem menu_opcoes → flow recebe msg.tipo=texto inalterado', async () => {
-    mockSessao('aguardando_veiculo'); // contexto vazio
+  it('texto "1" sem menu_opcoes → Gemini responde (GEMINI_MODE universal)', async () => {
+    mockSessao('aguardando_veiculo');
 
     await processarMensagem(makeMsg({ texto: '1' }));
 
-    // Sem menu_opcoes a conversao nao acontece; handler de selecao recebe texto
-    // "1" e responde com o pedido de selecao.
+    // Com GEMINI_MODE universal, texto vai para o Gemini independente do estado.
     const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
-    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
-    expect(pediuSelecao).toBe(true);
+    const geminiRespondeu = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t === 'Resposta simulada do Gemini');
+    expect(geminiRespondeu).toBe(true);
   });
 
-  it('texto fora do range (ex: "99") com menu_opcoes — handler pede seleção (Gemini não intercepta em aguardando_veiculo)', async () => {
+  it('texto fora do range (ex: "99") com menu_opcoes → Gemini responde (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_veiculo', {
       menu_opcoes: {
         tipo_original: 'lista',
@@ -304,14 +299,13 @@ describe('processarMensagem — resposta numerica → lista/botao', () => {
 
     await processarMensagem(makeMsg({ texto: '99' }));
 
-    // GEMINI_MODE so intercepta em aguardando_acao; texto "99" (fora do range) nao converte
-    // e o handler pede para selecionar da lista.
+    // GEMINI_MODE universal: texto vai para o Gemini.
     const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
-    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
-    expect(pediuSelecao).toBe(true);
+    const geminiRespondeu = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t === 'Resposta simulada do Gemini');
+    expect(geminiRespondeu).toBe(true);
   });
 
-  it('texto nao-numerico com menu_opcoes — handler pede seleção (Gemini não intercepta em aguardando_veiculo)', async () => {
+  it('texto nao-numerico com menu_opcoes → Gemini responde (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_veiculo', {
       menu_opcoes: {
         tipo_original: 'lista',
@@ -321,11 +315,10 @@ describe('processarMensagem — resposta numerica → lista/botao', () => {
 
     await processarMensagem(makeMsg({ texto: 'qualquer coisa' }));
 
-    // GEMINI_MODE so intercepta em aguardando_acao; texto livre em aguardando_veiculo
-    // vai para o handler de selecao que pede para escolher da lista.
+    // GEMINI_MODE universal: texto vai para o Gemini.
     const enviarTextoCalls = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls;
-    const pediuSelecao = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t.includes('Por favor, selecione'));
-    expect(pediuSelecao).toBe(true);
+    const geminiRespondeu = enviarTextoCalls.some(([, t]) => typeof t === 'string' && t === 'Resposta simulada do Gemini');
+    expect(geminiRespondeu).toBe(true);
   });
 });
 

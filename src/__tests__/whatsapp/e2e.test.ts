@@ -210,26 +210,16 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 1. "Oi" → seleção de veículo ─────────────────────────────────────
 
-  it('1) motorista manda "oi" em sessão nova → envia lista de caminhões e estado vai pra aguardando_veiculo', async () => {
+  it('1) motorista manda "oi" em sessão nova → Gemini responde (sem menu de caminhões)', async () => {
     mockSessao('novo');
-    supabaseComVeiculos();
 
     await processarMensagem(makeMsg({ texto: 'oi' }));
 
-    expect(enviarMenuLista).toHaveBeenCalledOnce();
-    const [sessionId, para, corpo, opcoes] = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(sessionId).toBe('sess-1');
-    expect(para).toBe('5531999');
-    expect(corpo).toContain('João');
-    expect(corpo).toContain('caminhão');
-    // Apos o refactor, as opcoes sao um array flat (sem secoes)
-    expect(opcoes[0]).toMatchObject({
-      id: 'veiculo_v-1',
-      titulo: 'ABC1D23',
-    });
-    expect(updateSession).toHaveBeenCalledWith('sess-1', {
-      estado: 'aguardando_veiculo',
-    });
+    // GEMINI_MODE universal: desde o primeiro contato a IA responde.
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    const [, resposta] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(resposta).toBe('Resposta simulada do Gemini');
+    expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
   // ─── 2. Seleção de veículo válida ─────────────────────────────────────
@@ -259,17 +249,16 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 3. Seleção de veículo inválida ───────────────────────────────────
 
-  it('3) texto em aguardando_veiculo → bot pede pra selecionar da lista', async () => {
+  it('3) texto em aguardando_veiculo → Gemini responde (GEMINI_MODE universal)', async () => {
     mockSessao('aguardando_veiculo');
 
     await processarMensagem(makeMsg({ texto: 'não sei qual' }));
 
+    // Com GEMINI_MODE universal, texto em qualquer estado vai para o Gemini.
     expect(enviarTexto).toHaveBeenCalledOnce();
     const [para, txt] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(para).toBe('5531999');
-    expect(txt.toLowerCase()).toContain('lista');
-    // não muda estado
-    expect(updateSession).not.toHaveBeenCalled();
+    expect(txt).toBe('Resposta simulada do Gemini');
   });
 
   // ─── 4. Menu "Informar KM" ────────────────────────────────────────────
@@ -448,17 +437,13 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     await processarMensagem(makeMsg({ tipo: 'texto', texto: '185000' }));
 
-    // estado aguardando_km_manual NAO e interceptado pelo GEMINI_MODE (so aguardando_acao e interceptado)
-    // portanto o kmFlow processa o texto normalmente
-    expect(kmLogsInsert).not.toBeNull();
-    expect(kmLogsInsert).toHaveBeenCalledOnce();
-    const payload = (kmLogsInsert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(payload).toMatchObject({
-      veiculo_id: 'v-1',
-      km_lido: 185000,
-      tipo: 'informado',
-    });
-    expect(resetToMenu).toHaveBeenCalledWith('sess-1');
+    // Com GEMINI_MODE universal, texto em aguardando_km_manual vai para o Gemini,
+    // nao para o kmFlow. O kmFlow e chamado apenas via selecao de acao via lista/botao.
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    const [, resposta] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(resposta).toBe('Resposta simulada do Gemini');
+    // kmLogs nao e gravado (kmFlow nao foi chamado)
+    expect(resetToMenu).not.toHaveBeenCalled();
   });
 
   // ─── 10. Saudação reseta fluxo ────────────────────────────────────────
