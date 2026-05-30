@@ -82,3 +82,66 @@ export async function chatGemini(
     return { ok: false, motivo };
   }
 }
+
+/**
+ * Envia áudio diretamente ao Gemini (sem Whisper/OpenAI).
+ * O Gemini 2.5 Flash entende audio/ogg nativamente — formato padrão do WhatsApp.
+ * Retorna a resposta em texto puro, nunca lança exceção.
+ */
+export async function chatGeminiComAudio(
+  audioUrl: string,
+  historico: HistoricoMensagem[] = [],
+  nomeRemetente?: string
+): Promise<RespostaGemini> {
+  try {
+    // Baixar o áudio da URL da Evolution API
+    const respHttp = await fetch(audioUrl);
+    if (!respHttp.ok) {
+      return { ok: false, motivo: `Falha ao baixar audio: ${respHttp.status}` };
+    }
+    const audioBuffer = await respHttp.arrayBuffer();
+    const audioBase64 = Buffer.from(audioBuffer).toString('base64');
+
+    // Detectar MIME type pelo Content-Type ou assumir ogg (padrão WhatsApp)
+    const contentType = respHttp.headers.get('content-type') ?? 'audio/ogg';
+    const mimeType = contentType.split(';')[0].trim() as
+      | 'audio/ogg'
+      | 'audio/mpeg'
+      | 'audio/mp4'
+      | 'audio/wav'
+      | 'audio/webm';
+
+    const client = getClient();
+    const model = client.getGenerativeModel({
+      model: 'gemini-2.5-flash',
+      systemInstruction: SYSTEM_PROMPT,
+    });
+
+    const history = historico.map((h) => ({
+      role: h.role,
+      parts: [{ text: h.text }],
+    }));
+
+    const chat = model.startChat({ history });
+
+    const contexto = nomeRemetente
+      ? `[Motorista: ${nomeRemetente}] (mensagem de voz — ouça e responda ao conteúdo)`
+      : '(mensagem de voz — ouça e responda ao conteúdo)';
+
+    const result = await chat.sendMessage([
+      { text: contexto },
+      { inlineData: { mimeType, data: audioBase64 } },
+    ]);
+
+    const texto = result.response.text().trim();
+    log.info('gemini_audio_ok', { chars: texto.length, mimeType });
+    return { ok: true, texto };
+  } catch (err) {
+    const motivo = err instanceof Error ? err.message : String(err);
+    log.error('gemini_audio_erro', {
+      motivo,
+      stack: err instanceof Error ? err.stack?.slice(0, 300) : undefined,
+    });
+    return { ok: false, motivo };
+  }
+}

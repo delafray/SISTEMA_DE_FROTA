@@ -5,7 +5,7 @@
  * Essa é a fase 1: apenas conversação, sem ações no banco.
  */
 
-import { chatGemini, type HistoricoMensagem } from '@/lib/ai/geminiClient';
+import { chatGemini, chatGeminiComAudio, type HistoricoMensagem } from '@/lib/ai/geminiClient';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('gemini-bot');
@@ -70,8 +70,32 @@ export async function processarComGemini(
 }
 
 /**
- * Limpa o histórico de um número (útil ao iniciar nova sessão).
+ * Processa um áudio diretamente pelo Gemini (sem Whisper).
+ * Gemini 2.5 Flash entende audio/ogg nativo do WhatsApp.
  */
+export async function processarAudioComGemini(
+  telefone: string,
+  audioUrl: string,
+  nomeRemetente?: string
+): Promise<string> {
+  log.info('gemini_audio_processando', { telefone });
+
+  const historico = getHistorico(telefone);
+  const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente);
+
+  if (!resultado.ok) {
+    log.error('gemini_audio_falhou', { telefone, motivo: resultado.motivo });
+    return 'Nao consegui processar o audio. Por favor, envie sua mensagem por escrito.';
+  }
+
+  // Salvar no historico
+  adicionarAoHistorico(telefone, 'user', '(mensagem de voz)');
+  adicionarAoHistorico(telefone, 'model', resultado.texto);
+
+  log.info('gemini_audio_respondeu', { telefone, resp_len: resultado.texto.length });
+  return resultado.texto;
+}
+
 export function limparHistoricoGemini(telefone: string): void {
   _historicos.delete(telefone);
   log.info('historico_limpo', { telefone });

@@ -38,7 +38,7 @@ import { processarAdiantamentoFlow } from '@/lib/whatsapp/flows/adiantamentoFlow
 import { processarDespesaFlow } from '@/lib/whatsapp/flows/despesaFlow';
 import { processarImprevistoFlow } from '@/lib/whatsapp/flows/imprevistoFlow';
 import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
-import { processarComGemini } from '@/lib/whatsapp/geminiBot';
+import { processarComGemini, processarAudioComGemini } from '@/lib/whatsapp/geminiBot';
 
 
 const log = createLogger('router');
@@ -745,26 +745,20 @@ export function isSaudacao(msg: ParsedMessage): boolean {
  * Retorna sempre uma resposta em texto.
  */
 async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promise<void> {
-  let textoParaGemini = msg.texto ?? '';
-
-  // Se for audio, transcrever primeiro
+  // Áudio: processar diretamente pelo Gemini (sem Whisper/OpenAI)
   if (msg.tipo === 'audio' && msg.mediaId) {
     const mediaUrl = await getMediaUrl(msg.mediaId);
-    if (mediaUrl) {
-      const transcricao = await transcreverAudio(mediaUrl);
-      if (transcricao.ok) {
-        textoParaGemini = transcricao.data.texto;
-        log.info('audio_transcrito_para_gemini', { chars: textoParaGemini.length });
-      } else {
-        await enviarTexto(msg.from, 'Nao foi possivel processar o audio. Por favor, envie sua mensagem por escrito.');
-        return;
-      }
-    } else {
+    if (!mediaUrl) {
       await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
       return;
     }
+    const resposta = await processarAudioComGemini(msg.from, mediaUrl, nomeRemetente);
+    await enviarTexto(msg.from, resposta);
+    return;
   }
 
+  // Texto: fluxo normal
+  const textoParaGemini = msg.texto ?? '';
   if (!textoParaGemini) {
     await enviarTexto(msg.from, 'Nao consegui entender a mensagem. Por favor, envie um texto.');
     return;
