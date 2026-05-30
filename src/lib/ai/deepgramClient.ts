@@ -37,14 +37,21 @@ export async function transcreverComDeepgram(
     let contentTypeHeader = '';
 
     if (audioUrl.startsWith('data:')) {
-      // Formato: data:audio/ogg;base64,XXX
-      const match = audioUrl.match(/^data:([^;]+);base64,(.+)$/);
-      if (!match) {
-        return { ok: false, motivo: 'data URL invalida (formato esperado: data:mime;base64,...)' };
+      // Formato: data:<MIME>[;<param>=<val>]*;base64,<dados>
+      // Ex Evolution API real: "data:audio/ogg; codecs=opus;base64,XXX"
+      //                                       ^^^^^^^^^^^^^^^ param extra
+      // Encontra o marcador ";base64," — tudo antes (sem o "data:") e o MIME
+      // completo, tudo depois e o conteudo base64.
+      const idxBase64 = audioUrl.indexOf(';base64,');
+      if (idxBase64 === -1) {
+        return { ok: false, motivo: `data URL sem marcador ;base64, (prefixo: ${audioUrl.slice(0, 40)})` };
       }
-      contentTypeHeader = match[1];
-      const base64 = match[2];
+      contentTypeHeader = audioUrl.slice(5, idxBase64); // pula "data:"
+      const base64 = audioUrl.slice(idxBase64 + 8); // pula ";base64,"
       const buf = Buffer.from(base64, 'base64');
+      if (buf.byteLength === 0) {
+        return { ok: false, motivo: 'data URL com base64 vazio ou invalido' };
+      }
       audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
       log.info('deepgram_audio_data_url', { mime: contentTypeHeader, bytes: audioBuffer.byteLength });
     } else {

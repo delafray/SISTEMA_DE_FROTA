@@ -115,6 +115,30 @@ describe('transcreverComDeepgram', () => {
     if (res.ok) expect(res.texto).toBe('');
   });
 
+  it('aceita data URL com parametro codecs (real do Evolution API: audio/ogg; codecs=opus)', async () => {
+    // Bug real reportado em producao: Evolution API retorna
+    // "data:audio/ogg; codecs=opus;base64,XXX" — com parametro extra
+    // antes do ;base64,. Meu regex antigo (/^data:([^;]+);base64,/)
+    // falhava porque so aceitava UM ;.
+    const ogg = Buffer.from([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00]);
+    const dataUrl = `data:audio/ogg; codecs=opus;base64,${ogg.toString('base64')}`;
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: { channels: [{ alternatives: [{ transcript: 'ola' }] }] },
+      }),
+    } as unknown as Response);
+    global.fetch = fetchMock as typeof fetch;
+
+    const res = await transcreverComDeepgram(dataUrl);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.texto).toBe('ola');
+    // Content-Type enviado pro Deepgram: 'audio/ogg' (limpo via magic OggS)
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('audio/ogg');
+  });
+
   it('aceita data URL (base64) sem fazer fetch', async () => {
     // Audio: "OggS" + bytes
     const ogg = Buffer.from([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00]);
