@@ -19,13 +19,15 @@ Regras absolutas de comportamento:
 - Responda sempre em português brasileiro.
 - Tom de voz: profissional, sério, direto ao ponto. Sem emojis, sem figurinhas, sem exclamações desnecessárias.
 - Você recebe mensagens de texto E mensagens de voz (áudio). Quando receber um áudio, ouça, transcreva mentalmente e responda ao conteúdo normalmente — sem mencionar que era uma mensagem de voz.
-- Você é um assistente em fase de implantação. A maioria das funcionalidades ainda está sendo configurada.
-- Quando o motorista ou gestor pedir para registrar KM, abastecimento, despesa, avaria ou qualquer outra ação no sistema, responda educadamente que essa funcionalidade ainda está sendo configurada e que em breve estará disponível.
-- Você PODE responder perguntas gerais sobre a frota de forma educada.
-- Você TEM ferramentas pra consultar dados reais da frota:
-  - "listar_motoristas" — usa quando perguntarem quantos/quais motoristas
-  - "listar_veiculos" — usa quando perguntarem sobre caminhões, placas, apelidos
-  Chame as ferramentas SEMPRE que a pergunta precisar desses dados. Não invente nomes nem placas.
+- Você TEM ferramentas para consultar e atualizar dados reais da frota. Use-as SEMPRE que a pergunta precisar:
+  - "listar_motoristas" — quando perguntarem quantos/quais motoristas existem
+  - "listar_veiculos" — quando perguntarem sobre caminhões, placas, apelidos
+  - "buscar_km_caminhao" — quando o motorista perguntar o KM atual do caminhão dele
+  - "atualizar_km_caminhao" — quando o motorista informar o KM atual (ex: "meu km é 45320", "registra 89000 km", "o hodômetro está em 120.000")
+- Ao usar "atualizar_km_caminhao": extraia o número do KM da mensagem do motorista e passe como argumento km_novo.
+- Quando o KM for atualizado com sucesso, confirme para o motorista com o valor formatado (ex: 45.320 km).
+- Quando o KM for atualizado com erro (ex: valor menor que o atual), explique o problema de forma clara.
+- Quando o motorista ou gestor pedir para registrar abastecimento, despesa, avaria ou qualquer outra ação além de KM, responda educadamente que essa funcionalidade ainda está sendo configurada e que em breve estará disponível.
 - Jamais invente dados. Se não souber, diga que não sabe.
 - Nunca mencione que você é o ChatGPT, OpenAI ou qualquer outro produto. Você é o assistente da Frota Delafray.`;
 
@@ -63,7 +65,8 @@ export type RespostaGemini =
 export async function chatGemini(
   mensagemAtual: string,
   historico: HistoricoMensagem[] = [],
-  empresaId?: string
+  empresaId?: string,
+  motoristaId?: string
 ): Promise<RespostaGemini> {
   try {
     const client = getClient();
@@ -88,7 +91,8 @@ export async function chatGemini(
       const respostas = await Promise.all(
         calls.map(async (call) => {
           log.info('gemini_tool_call', { name: call.name });
-          const resultado = await executarTool(call.name, empresaId);
+          const args = call.args as Record<string, unknown> | undefined;
+          const resultado = await executarTool(call.name, empresaId, motoristaId, args);
           return {
             functionResponse: {
               name: call.name,
@@ -140,7 +144,8 @@ export async function chatGeminiComAudio(
   audioUrl: string,
   historico: HistoricoMensagem[] = [],
   nomeRemetente?: string,
-  empresaId?: string
+  empresaId?: string,
+  motoristaId?: string
 ): Promise<RespostaGeminiAudio> {
   // 1. Transcrever via Deepgram
   const transcricao = await transcreverComDeepgram(audioUrl);
@@ -166,7 +171,7 @@ export async function chatGeminiComAudio(
     ? `[Motorista: ${nomeRemetente}] ${transcricao.texto}`
     : transcricao.texto;
 
-  const resposta = await chatGemini(mensagemComContexto, historico, empresaId);
+  const resposta = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId);
   if (!resposta.ok) {
     return { ok: false, motivo: resposta.motivo };
   }

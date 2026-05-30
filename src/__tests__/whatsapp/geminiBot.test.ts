@@ -9,8 +9,8 @@ const chatGeminiComAudioMock = vi.fn();
 const chatGeminiMock = vi.fn();
 vi.mock('@/lib/ai/geminiClient', () => ({
   chatGemini: (m: string, h: unknown) => chatGeminiMock(m, h),
-  chatGeminiComAudio: (url: string, h: unknown, nome?: string) =>
-    chatGeminiComAudioMock(url, h, nome),
+  chatGeminiComAudio: (url: string, h: unknown, nome?: string, empresaId?: string, motoristaId?: string) =>
+    chatGeminiComAudioMock(url, h, nome, empresaId, motoristaId),
 }));
 
 import { processarAudioComGemini, limparHistoricoGemini } from '@/lib/whatsapp/geminiBot';
@@ -31,7 +31,7 @@ describe('processarAudioComGemini', () => {
     const resp = await processarAudioComGemini('+5511999999999', 'https://audio', 'João');
 
     expect(resp).toBe('Funcionalidade ainda em configuração.');
-    expect(chatGeminiComAudioMock).toHaveBeenCalledWith('https://audio', [], 'João');
+    expect(chatGeminiComAudioMock).toHaveBeenCalledWith('https://audio', [], 'João', undefined, undefined);
   });
 
   it('salva TRANSCRIÇÃO real no histórico (não "(mensagem de voz)")', async () => {

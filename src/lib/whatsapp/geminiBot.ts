@@ -44,7 +44,8 @@ export async function processarComGemini(
   telefone: string,
   mensagem: string,
   nomeRemetente?: string,
-  empresaId?: string
+  empresaId?: string,
+  motoristaId?: string
 ): Promise<string> {
   log.info('gemini_processando', { telefone, msg_len: mensagem.length, com_tools: !!empresaId });
 
@@ -54,7 +55,7 @@ export async function processarComGemini(
 
   const historico = getHistorico(telefone);
 
-  const resultado = await chatGemini(mensagemComContexto, historico, empresaId);
+  const resultado = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId);
 
   if (!resultado.ok) {
     log.error('gemini_falhou', { telefone, motivo: resultado.motivo });
@@ -78,12 +79,13 @@ export async function processarAudioComGemini(
   telefone: string,
   audioUrl: string,
   nomeRemetente?: string,
-  empresaId?: string
+  empresaId?: string,
+  motoristaId?: string
 ): Promise<string> {
   log.info('gemini_audio_processando', { telefone, com_tools: !!empresaId });
 
   const historico = getHistorico(telefone);
-  const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente, empresaId);
+  const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente, empresaId, motoristaId);
 
   if (!resultado.ok) {
     log.error('gemini_audio_falhou', { telefone, motivo: resultado.motivo });

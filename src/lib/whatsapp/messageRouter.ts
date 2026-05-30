@@ -108,7 +108,8 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
 
     if (isTexto || isAudio) {
-      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id);
+      const motoristaId = identity.tipo === 'motorista' ? identity.motorista_id : undefined;
+      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id, motoristaId);
       return;
     }
   }
@@ -747,7 +748,8 @@ export function isSaudacao(msg: ParsedMessage): boolean {
 async function rotearComGemini(
   msg: ParsedMessage,
   nomeRemetente: string,
-  empresaId?: string
+  empresaId?: string,
+  motoristaId?: string
 ): Promise<void> {
   // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
   // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
@@ -758,7 +760,7 @@ async function rotearComGemini(
       await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
       return;
     }
-    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId);
+    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId, motoristaId);
     await enviarTexto(msg.from, resposta);
     return;
   }
@@ -770,7 +772,7 @@ async function rotearComGemini(
     return;
   }
 
-  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId);
+  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId);
   await enviarTexto(msg.from, resposta);
 }
 
