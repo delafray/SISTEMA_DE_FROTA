@@ -25,6 +25,10 @@ vi.mock('@/lib/whatsapp/historico', () => ({
   limparHistorico: mocks.limparHistorico,
 }));
 
+vi.mock('@/lib/ai/metricas', () => ({
+  registrarMetrica: vi.fn(),
+}));
+
 import {
   processarComGemini,
   processarAudioComGemini,

@@ -156,7 +156,8 @@ describe('processarMensagem — identidade', () => {
     });
     mockSessao('novo');
 
-    await processarMensagem(makeMsg({ texto: 'oi' }));
+    // Pergunta real (saudacao agora cai no fast-path antes do Gemini)
+    await processarMensagem(makeMsg({ texto: 'quantos motoristas tenho?' }));
 
     // GEMINI_MODE universal: gestor tambem e atendido pelo Gemini.
     expect(enviarTexto).toHaveBeenCalledOnce();
@@ -190,19 +191,21 @@ describe('processarMensagem — roteamento motorista', () => {
 
   afterEach(() => vi.restoreAllMocks());
 
-  it('sessão nova → Gemini responde desde o primeiro contato (sem menu de veiculo)', async () => {
+  it('sessão nova + pergunta real → Gemini responde (sem menu de veiculo)', async () => {
     mockSessao('novo');
-    await processarMensagem(makeMsg({ texto: 'oi' }));
+    // Pergunta real (nao saudacao) — saudacao agora cai no fast-path
+    await processarMensagem(makeMsg({ texto: 'quanto km tem o leao?' }));
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
     expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
-  it('saudação → Gemini responde (GEMINI_MODE universal)', async () => {
+  it('saudação "oi" → fast-path responde sem chamar Gemini (economia de tokens)', async () => {
     mockSessao('aguardando_acao', { veiculo_id: 'v-1' });
     await processarMensagem(makeMsg({ texto: 'oi' }));
     expect(enviarTexto).toHaveBeenCalledOnce();
-    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
+    // Fast-path responde "Ola, <nome>." ou generico
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toMatch(/Ola/i);
     expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 

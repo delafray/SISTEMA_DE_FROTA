@@ -15,7 +15,11 @@ import {
   gravarMensagem,
   limparHistorico,
 } from '@/lib/whatsapp/historico';
+import { prefixarComRemetente } from '@/lib/ai/contexto';
+import { registrarMetrica } from '@/lib/ai/metricas';
 import { createLogger } from '@/lib/logger';
+
+const MODELO = 'gemini-2.5-flash';
 
 const log = createLogger('gemini-bot');
 
@@ -32,24 +36,36 @@ export async function processarComGemini(
 ): Promise<string> {
   log.info('gemini_processando', { telefone, msg_len: mensagem.length, com_tools: !!empresaId });
 
-  const mensagemComContexto = nomeRemetente
-    ? `[Motorista: ${nomeRemetente}] ${mensagem}`
-    : mensagem;
-
+  const mensagemComContexto = prefixarComRemetente(mensagem, nomeRemetente);
   const historico: HistoricoMensagem[] = await lerHistorico(telefone);
 
+  const inicio = Date.now();
   const resultado = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId);
+  const latencia = Date.now() - inicio;
 
   if (!resultado.ok) {
     log.error('gemini_falhou', { telefone, motivo: resultado.motivo });
+    void registrarMetrica({
+      telefone, empresa_id: empresaId, modo: 'gemini_texto',
+      modelo: MODELO, latency_ms: latencia, sucesso: false, erro: resultado.motivo,
+    });
     return 'Desculpe, o assistente encontrou um problema temporario. Tente novamente em instantes.';
   }
 
   // Persistencia fire-and-forget — nao espera, nao bloqueia resposta
   void gravarMensagem(telefone, 'user', mensagem);
   void gravarMensagem(telefone, 'model', resultado.texto);
+  void registrarMetrica({
+    telefone, empresa_id: empresaId, modo: 'gemini_texto', modelo: MODELO,
+    tokens_in: resultado.meta?.uso?.tokens_in,
+    tokens_out: resultado.meta?.uso?.tokens_out,
+    cached_tokens: resultado.meta?.uso?.cached_tokens,
+    tools_chamadas: resultado.meta?.tools_chamadas,
+    tool_rounds: resultado.meta?.tool_rounds,
+    latency_ms: latencia, sucesso: true,
+  });
 
-  log.info('gemini_respondeu', { telefone, resp_len: resultado.texto.length });
+  log.info('gemini_respondeu', { telefone, resp_len: resultado.texto.length, latencia_ms: latencia });
   return resultado.texto;
 }
 
@@ -67,10 +83,17 @@ export async function processarAudioComGemini(
   log.info('gemini_audio_processando', { telefone, com_tools: !!empresaId });
 
   const historico: HistoricoMensagem[] = await lerHistorico(telefone);
+
+  const inicio = Date.now();
   const resultado = await chatGeminiComAudio(audioUrl, historico, nomeRemetente, empresaId, motoristaId);
+  const latencia = Date.now() - inicio;
 
   if (!resultado.ok) {
     log.error('gemini_audio_falhou', { telefone, motivo: resultado.motivo });
+    void registrarMetrica({
+      telefone, empresa_id: empresaId, modo: 'gemini_audio',
+      modelo: MODELO, latency_ms: latencia, sucesso: false, erro: resultado.motivo,
+    });
     if (resultado.motivo === 'audio_inaudivel') {
       return 'Nao consegui entender o audio. Pode repetir, falando mais perto do microfone? Ou se preferir, escreve a mensagem.';
     }
@@ -80,6 +103,15 @@ export async function processarAudioComGemini(
   // Salva transcricao real (nao "(mensagem de voz)")
   void gravarMensagem(telefone, 'user', resultado.transcricao);
   void gravarMensagem(telefone, 'model', resultado.texto);
+  void registrarMetrica({
+    telefone, empresa_id: empresaId, modo: 'gemini_audio', modelo: MODELO,
+    tokens_in: resultado.meta?.uso?.tokens_in,
+    tokens_out: resultado.meta?.uso?.tokens_out,
+    cached_tokens: resultado.meta?.uso?.cached_tokens,
+    tools_chamadas: resultado.meta?.tools_chamadas,
+    tool_rounds: resultado.meta?.tool_rounds,
+    latency_ms: latencia, sucesso: true,
+  });
 
   log.info('gemini_audio_respondeu', {
     telefone,

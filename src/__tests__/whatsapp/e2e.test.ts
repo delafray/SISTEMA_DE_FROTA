@@ -210,10 +210,10 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 1. "Oi" → seleção de veículo ─────────────────────────────────────
 
-  it('1) motorista manda "oi" em sessão nova → Gemini responde (sem menu de caminhões)', async () => {
+  it('1) motorista manda pergunta em sessão nova → Gemini responde (sem menu de caminhões)', async () => {
     mockSessao('novo');
 
-    await processarMensagem(makeMsg({ texto: 'oi' }));
+    await processarMensagem(makeMsg({ texto: 'quanto km tem o leao?' }));
 
     // GEMINI_MODE universal: desde o primeiro contato a IA responde.
     expect(enviarTexto).toHaveBeenCalledOnce();
@@ -448,10 +448,10 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 10. Saudação reseta fluxo ────────────────────────────────────────
 
-  it('10) "oi" em aguardando_acao → Gemini responde (GEMINI_MODE substitui menu)', async () => {
+  it('10) pergunta em aguardando_acao → Gemini responde (GEMINI_MODE substitui menu)', async () => {
     mockSessao('aguardando_acao', { veiculo_id: 'v-1', veiculo_placa: 'ABC1D23' });
 
-    await processarMensagem(makeMsg({ texto: 'oi' }));
+    await processarMensagem(makeMsg({ texto: 'quanto km tem o leao?' }));
 
     // Com GEMINI_MODE ativo, saudacao em aguardando_acao vai para o Gemini em vez de reabrir menu.
     expect(enviarTexto).toHaveBeenCalledOnce();

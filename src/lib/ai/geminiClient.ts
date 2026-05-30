@@ -11,6 +11,13 @@ import { GoogleGenerativeAI } from '@google/generative-ai';
 import { createLogger } from '@/lib/logger';
 import { transcreverComDeepgram } from './deepgramClient';
 import { declarations as frotaToolDeclarations, executarTool } from './tools/frotaTools';
+import { comRetry } from './retry';
+import { prefixarComRemetente } from './contexto';
+
+// Cap pra prevenir loop infinito de tools (B6 do BOT_FRAMEWORK.md).
+// Cobre encadeamento natural (listar_veiculos → buscar_km), sem permitir
+// que Gemini fique chamando a mesma tool indefinidamente.
+const MAX_TOOL_ROUNDS = 5;
 
 const log = createLogger('gemini-client');
 
@@ -69,8 +76,20 @@ export type HistoricoMensagem = {
   text: string;
 };
 
+export interface UsoTokens {
+  tokens_in?: number;
+  tokens_out?: number;
+  cached_tokens?: number;
+}
+
+export interface MetadadoResposta {
+  uso?: UsoTokens;
+  tools_chamadas?: string[];
+  tool_rounds?: number;
+}
+
 export type RespostaGemini =
-  | { ok: true; texto: string }
+  | { ok: true; texto: string; meta?: MetadadoResposta }
   | { ok: false; motivo: string };
 
 /**
@@ -103,14 +122,24 @@ export async function chatGemini(
     }));
 
     const chat = model.startChat({ history });
-    const result = await chat.sendMessage(mensagemAtual);
 
-    // Se Gemini decidiu chamar uma tool, executa e devolve o resultado
-    const calls = result.response.functionCalls?.() ?? [];
-    if (calls.length > 0 && empresaId) {
+    // Primeira chamada com retry (resiliencia em 5xx/429/network)
+    let currentResult = await comRetry(() => chat.sendMessage(mensagemAtual), { nome: 'gemini_send' });
+
+    // Loop multi-turn de tools com cap. Gemini pode encadear: chamar tool A,
+    // ver resultado, chamar tool B (ex: listar_veiculos -> buscar_km do escolhido).
+    let toolsTotal = 0;
+    const toolsChamadas: string[] = [];
+    let rounds = 0;
+    for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+      const calls = currentResult.response.functionCalls?.() ?? [];
+      if (calls.length === 0 || !empresaId) break;
+      rounds = round + 1;
+
       const respostas = await Promise.all(
         calls.map(async (call) => {
-          log.info('gemini_tool_call', { name: call.name });
+          log.info('gemini_tool_call', { name: call.name, round });
+          toolsChamadas.push(call.name);
           const args = call.args as Record<string, unknown> | undefined;
           const resultado = await executarTool(call.name, empresaId, motoristaId, args);
           return {
@@ -121,16 +150,39 @@ export async function chatGemini(
           };
         })
       );
-      // Manda os resultados de volta pro Gemini formatar resposta natural
-      const result2 = await chat.sendMessage(respostas);
-      const texto = result2.response.text().trim();
-      log.info('gemini_resposta_pos_tool', { chars: texto.length, tools_chamadas: calls.length });
-      return { ok: true, texto };
+      toolsTotal += calls.length;
+      currentResult = await comRetry(() => chat.sendMessage(respostas), { nome: 'gemini_tool_response' });
     }
 
-    const texto = result.response.text().trim();
-    log.info('gemini_resposta_ok', { chars: texto.length });
-    return { ok: true, texto };
+    // Se ainda tem function calls pendentes apos MAX_ROUNDS, abortou — log + responde texto que houver
+    const callsPendentes = currentResult.response.functionCalls?.() ?? [];
+    if (callsPendentes.length > 0) {
+      log.warn('gemini_tool_loop_max_atingido', { tools_total: toolsTotal, pendentes: callsPendentes.length });
+    }
+
+    const texto = currentResult.response.text().trim();
+    log.info(toolsTotal > 0 ? 'gemini_resposta_pos_tool' : 'gemini_resposta_ok', {
+      chars: texto.length,
+      tools_chamadas: toolsTotal,
+    });
+
+    // Captura metadados de uso (tokens) — Gemini retorna em usageMetadata
+    const usage = (currentResult.response as unknown as { usageMetadata?: { promptTokenCount?: number; candidatesTokenCount?: number; cachedContentTokenCount?: number } }).usageMetadata;
+    return {
+      ok: true,
+      texto,
+      meta: {
+        uso: usage
+          ? {
+              tokens_in: usage.promptTokenCount,
+              tokens_out: usage.candidatesTokenCount,
+              cached_tokens: usage.cachedContentTokenCount,
+            }
+          : undefined,
+        tools_chamadas: toolsChamadas,
+        tool_rounds: rounds,
+      },
+    };
   } catch (err) {
     const motivo = err instanceof Error ? err.message : String(err);
     log.error('gemini_erro', {
@@ -157,7 +209,7 @@ export async function chatGemini(
  * guardar a transcrição real no histórico em vez de "(mensagem de voz)".
  */
 export type RespostaGeminiAudio =
-  | { ok: true; texto: string; transcricao: string }
+  | { ok: true; texto: string; transcricao: string; meta?: MetadadoResposta }
   | { ok: false; motivo: string };
 
 export async function chatGeminiComAudio(
@@ -186,15 +238,14 @@ export async function chatGeminiComAudio(
   log.info('audio_transcricao_ok', { chars: transcricao.texto.length });
 
   // 2. Enviar texto transcrito pro Gemini text-only.
-  // Prefixa com nome do remetente se disponível (mantém padrão de processarComGemini).
-  const mensagemComContexto = nomeRemetente
-    ? `[Motorista: ${nomeRemetente}] ${transcricao.texto}`
-    : transcricao.texto;
+  // Prefixa com nome do remetente — helper centralizado evita drift entre
+  // geminiClient e geminiBot (B8 do BOT_FRAMEWORK.md).
+  const mensagemComContexto = prefixarComRemetente(transcricao.texto, nomeRemetente);
 
   const resposta = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId);
   if (!resposta.ok) {
     return { ok: false, motivo: resposta.motivo };
   }
 
-  return { ok: true, texto: resposta.texto, transcricao: transcricao.texto };
+  return { ok: true, texto: resposta.texto, transcricao: transcricao.texto, meta: resposta.meta };
 }

@@ -39,6 +39,8 @@ import { processarDespesaFlow } from '@/lib/whatsapp/flows/despesaFlow';
 import { processarImprevistoFlow } from '@/lib/whatsapp/flows/imprevistoFlow';
 import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
 import { processarComGemini, processarAudioComGemini } from '@/lib/whatsapp/geminiBot';
+import { tentarFastPath } from '@/lib/whatsapp/fastPath';
+import { registrarMetrica } from '@/lib/ai/metricas';
 
 
 const log = createLogger('router');
@@ -785,6 +787,23 @@ async function rotearComGemini(
   const textoParaGemini = msg.texto ?? '';
   if (!textoParaGemini) {
     await enviarTexto(msg.from, 'Nao consegui entender a mensagem. Por favor, envie um texto.');
+    return;
+  }
+
+  // Fast Path: regex pra comandos obvios (saudacao, ajuda, /novo).
+  // Resolve sem chamar Gemini = 0 tokens, <1ms latencia.
+  const inicioFp = Date.now();
+  const fp = await tentarFastPath(textoParaGemini, msg.from, nomeRemetente);
+  if (fp.matched && fp.resposta) {
+    await enviarTexto(msg.from, fp.resposta);
+    void registrarMetrica({
+      telefone: msg.from,
+      empresa_id: empresaId,
+      modo: 'fast_path',
+      fast_path_matcher: fp.matcher,
+      latency_ms: Date.now() - inicioFp,
+      sucesso: true,
+    });
     return;
   }
 

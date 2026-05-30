@@ -5,6 +5,7 @@
  */
 
 import { createLogger } from '@/lib/logger';
+import { comRetry } from './retry';
 
 const log = createLogger('deepgram-client');
 
@@ -106,14 +107,26 @@ export async function transcreverComDeepgram(
 
     const contentType = magic === 'ogg' ? 'audio/ogg' : contentTypeHeader || 'audio/ogg';
 
-    const response = await fetch(deepgramUrl, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${apiKey}`,
-        'Content-Type': contentType,
-      },
-      body: Buffer.from(audioBuffer),
-    });
+    // Chamada com retry (5xx/network). 4xx (audio corrompido) NAO retry.
+    const response = await comRetry(
+      () =>
+        fetch(deepgramUrl, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Token ${apiKey}`,
+            'Content-Type': contentType,
+          },
+          body: Buffer.from(audioBuffer),
+        }).then(async (r) => {
+          if (!r.ok && r.status >= 500) {
+            // Forca throw em 5xx pra acionar retry
+            const body = await r.text().catch(() => '');
+            throw new Error(`${r.status} ${body.slice(0, 100)}`);
+          }
+          return r;
+        }),
+      { nome: 'deepgram_listen' }
+    );
 
     if (!response.ok) {
       const errorText = await response.text();
