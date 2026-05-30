@@ -233,6 +233,55 @@ function parseEvolutionMessage(data: EvolutionMessageData): ParsedMessage | null
  *
  * Como o `mediaId` já É a URL direta na Evolution API, simplesmente retornamos ela.
  */
+/**
+ * SEMPRE busca a mídia descriptografada via Evolution API e retorna como data URL
+ * (base64 inline). Use isso pra áudio: o WhatsApp encripta a mídia no CDN, então
+ * baixar a URL direta dá bytes inutilizáveis. Evolution API descriptografa via
+ * o endpoint /chat/getBase64FromMediaMessage usando o messageId.
+ *
+ * Retorna: `data:audio/ogg;base64,XXXX` ou null se falhar.
+ */
+export async function getMediaAsBase64DataUrl(messageId: string): Promise<string | null> {
+  if (!messageId) return null;
+
+  const apiUrl = process.env.EVOLUTION_API_URL;
+  const apiKey = process.env.EVOLUTION_API_KEY;
+  const instance = process.env.EVOLUTION_INSTANCE_NAME;
+
+  if (!apiUrl || !apiKey || !instance) {
+    console.error('[messageParser] Variáveis da Evolution API não configuradas (getMediaAsBase64DataUrl)');
+    return null;
+  }
+
+  try {
+    const res = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${instance}`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        apikey: apiKey,
+      },
+      body: JSON.stringify({ message: { key: { id: messageId } } }),
+    });
+
+    if (!res.ok) {
+      const erroTexto = await res.text().catch(() => '');
+      console.error('[messageParser] Falha getBase64FromMediaMessage:', res.status, erroTexto.slice(0, 200));
+      return null;
+    }
+
+    const data = (await res.json()) as { base64?: string; mimetype?: string };
+    if (!data.base64) {
+      console.error('[messageParser] Evolution devolveu sem campo base64');
+      return null;
+    }
+
+    return `data:${data.mimetype ?? 'audio/ogg'};base64,${data.base64}`;
+  } catch (err) {
+    console.error('[messageParser] Erro getMediaAsBase64DataUrl:', err);
+    return null;
+  }
+}
+
 export async function getMediaUrl(mediaId: string): Promise<string | null> {
   if (!mediaId) return null;
 

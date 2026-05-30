@@ -25,16 +25,37 @@ export async function transcreverComDeepgram(
       return { ok: false, motivo: 'DEEPGRAM_API_KEY não configurada no .env.local' };
     }
 
-    log.info('deepgram_baixando_audio', { audioUrl });
+    log.info('deepgram_baixando_audio', { audioUrl: audioUrl.slice(0, 80) });
 
-    // 1. Baixar o arquivo de áudio da Evolution API
-    const respHttp = await fetch(audioUrl);
-    if (!respHttp.ok) {
-      return { ok: false, motivo: `Falha ao baixar áudio da Evolution API: ${respHttp.status}` };
+    // 1. Carrega o áudio. Aceita 2 formas:
+    //   a) data URL (Evolution API getBase64FromMediaMessage) — base64 já
+    //      DECRIPTADO. Parse direto, sem fetch.
+    //   b) URL HTTP(S) — pode ser CDN do WhatsApp com áudio ENCRIPTADO
+    //      (não vai funcionar direto). Mas tentamos baixar pra não falhar
+    //      cenários de proxy interno.
+    let audioBuffer: ArrayBuffer;
+    let contentTypeHeader = '';
+
+    if (audioUrl.startsWith('data:')) {
+      // Formato: data:audio/ogg;base64,XXX
+      const match = audioUrl.match(/^data:([^;]+);base64,(.+)$/);
+      if (!match) {
+        return { ok: false, motivo: 'data URL invalida (formato esperado: data:mime;base64,...)' };
+      }
+      contentTypeHeader = match[1];
+      const base64 = match[2];
+      const buf = Buffer.from(base64, 'base64');
+      audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
+      log.info('deepgram_audio_data_url', { mime: contentTypeHeader, bytes: audioBuffer.byteLength });
+    } else {
+      const respHttp = await fetch(audioUrl);
+      if (!respHttp.ok) {
+        return { ok: false, motivo: `Falha ao baixar áudio da Evolution API: ${respHttp.status}` };
+      }
+      audioBuffer = await respHttp.arrayBuffer();
+      contentTypeHeader = respHttp.headers.get('content-type') ?? '';
     }
 
-    const audioBuffer = await respHttp.arrayBuffer();
-    const contentTypeHeader = respHttp.headers.get('content-type') ?? '';
     const bytes = new Uint8Array(audioBuffer);
 
     // Detecta magic number — ajuda a debugar se Evolution devolveu algo

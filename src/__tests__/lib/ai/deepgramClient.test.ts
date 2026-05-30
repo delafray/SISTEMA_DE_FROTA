@@ -115,6 +115,30 @@ describe('transcreverComDeepgram', () => {
     if (res.ok) expect(res.texto).toBe('');
   });
 
+  it('aceita data URL (base64) sem fazer fetch', async () => {
+    // Audio: "OggS" + bytes
+    const ogg = Buffer.from([0x4f, 0x67, 0x67, 0x53, 0x00, 0x02, 0x00]);
+    const dataUrl = `data:audio/ogg;base64,${ogg.toString('base64')}`;
+    // So o segundo fetch (Deepgram) deve ocorrer — fetch da Evolution NAO
+    const fetchMock = vi.fn().mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({
+        results: { channels: [{ alternatives: [{ transcript: 'oi' }] }] },
+      }),
+    } as unknown as Response);
+    global.fetch = fetchMock as typeof fetch;
+
+    const res = await transcreverComDeepgram(dataUrl);
+
+    expect(res.ok).toBe(true);
+    if (res.ok) expect(res.texto).toBe('oi');
+    // Apenas 1 fetch (Deepgram), nao 2
+    expect(fetchMock).toHaveBeenCalledOnce();
+    // Validar Content-Type: 'audio/ogg' (vindo do data URL)
+    const init = fetchMock.mock.calls[0][1] as RequestInit;
+    expect((init.headers as Record<string, string>)['Content-Type']).toBe('audio/ogg');
+  });
+
   it('exceção de rede → captura e retorna como erro', async () => {
     global.fetch = vi.fn().mockRejectedValue(new Error('network down')) as typeof fetch;
 

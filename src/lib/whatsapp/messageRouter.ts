@@ -12,7 +12,7 @@
  */
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
-import { getMediaUrl } from '@/lib/whatsapp/messageParser';
+import { getMediaUrl, getMediaAsBase64DataUrl } from '@/lib/whatsapp/messageParser';
 import { createLogger } from '@/lib/logger';
 import { identificarRemetente, type UserIdentity } from '@/lib/whatsapp/auth';
 import {
@@ -745,14 +745,16 @@ export function isSaudacao(msg: ParsedMessage): boolean {
  * Retorna sempre uma resposta em texto.
  */
 async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promise<void> {
-  // Áudio: processar diretamente pelo Gemini (sem Whisper/OpenAI)
-  if (msg.tipo === 'audio' && msg.mediaId) {
-    const mediaUrl = await getMediaUrl(msg.mediaId);
-    if (!mediaUrl) {
+  // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
+  // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
+  // (que descriptografa) e mandar como data URL pro pipeline transcrever.
+  if (msg.tipo === 'audio' && msg.messageId) {
+    const dataUrl = await getMediaAsBase64DataUrl(msg.messageId);
+    if (!dataUrl) {
       await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
       return;
     }
-    const resposta = await processarAudioComGemini(msg.from, mediaUrl, nomeRemetente);
+    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente);
     await enviarTexto(msg.from, resposta);
     return;
   }
