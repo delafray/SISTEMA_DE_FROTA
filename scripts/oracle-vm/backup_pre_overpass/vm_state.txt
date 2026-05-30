@@ -1,0 +1,123 @@
+[Unit]
+Description=OSRM Routing Engine
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/local/bin/osrm-routed --algorithm mld --max-table-size 10000 /home/ubuntu/osrm-data/brazil-latest.osrm --port 5000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+===SEP===VROOM===
+[Unit]
+Description=VROOM Route Optimizer API
+After=network.target osrm.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/vroom-express
+ExecStart=/usr/bin/node /home/ubuntu/vroom-express/src/index.js
+Environment=PORT=3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
+===SEP===IPTABLES===
+Chain INPUT (policy ACCEPT 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+  197  9226 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:80
+  374 32791 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:3000
+ 4646  516K ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            tcp dpt:5000
+ 774K 2683M ACCEPT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            state RELATED,ESTABLISHED
+    0     0 ACCEPT     icmp --  *      *       0.0.0.0/0            0.0.0.0/0           
+ 5003  504K ACCEPT     all  --  lo     *       0.0.0.0/0            0.0.0.0/0           
+ 1725 79712 ACCEPT     tcp  --  *      *       0.0.0.0/0            0.0.0.0/0            state NEW tcp dpt:22
+   20  4836 REJECT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            reject-with icmp-host-prohibited
+
+Chain FORWARD (policy DROP 0 packets, 0 bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DOCKER-USER  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 DOCKER-FORWARD  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 REJECT     all  --  *      *       0.0.0.0/0            0.0.0.0/0            reject-with icmp-host-prohibited
+
+Chain OUTPUT (policy ACCEPT 440K packets, 113M bytes)
+ pkts bytes target     prot opt in     out     source               destination         
+30637 2533K InstanceServices  all  --  *      *       0.0.0.0/0            169.254.0.0/16      
+
+Chain DOCKER (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DROP       all  --  !docker0 docker0  0.0.0.0/0            0.0.0.0/0           
+
+Chain DOCKER-BRIDGE (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DOCKER     all  --  *      docker0  0.0.0.0/0            0.0.0.0/0           
+
+Chain DOCKER-CT (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     all  --  *      docker0  0.0.0.0/0            0.0.0.0/0            ctstate RELATED,ESTABLISHED
+
+Chain DOCKER-FORWARD (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 DOCKER-CT  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 DOCKER-INTERNAL  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 DOCKER-BRIDGE  all  --  *      *       0.0.0.0/0            0.0.0.0/0           
+    0     0 ACCEPT     all  --  docker0 *       0.0.0.0/0            0.0.0.0/0           
+
+Chain DOCKER-INTERNAL (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain DOCKER-USER (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+
+Chain InstanceServices (1 references)
+ pkts bytes target     prot opt in     out     source               destination         
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.0.2          owner UID match 0 tcp dpt:3260 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.2.0/24       owner UID match 0 tcp dpt:3260 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.4.0/24       owner UID match 0 tcp dpt:3260 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.5.0/24       owner UID match 0 tcp dpt:3260 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.0.2          tcp dpt:80 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+ 6880  649K ACCEPT     udp  --  *      *       0.0.0.0/0            169.254.169.254      udp dpt:53 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.169.254      tcp dpt:53 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.0.3          owner UID match 0 tcp dpt:80 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.0.4          tcp dpt:80 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+23703 1880K ACCEPT     tcp  --  *      *       0.0.0.0/0            169.254.169.254      tcp dpt:80 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    2   624 ACCEPT     udp  --  *      *       0.0.0.0/0            169.254.169.254      udp dpt:67 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 ACCEPT     udp  --  *      *       0.0.0.0/0            169.254.169.254      udp dpt:69 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+   52  3952 ACCEPT     udp  --  *      *       0.0.0.0/0            169.254.169.254      udp dpt:123 /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */
+    0     0 REJECT     tcp  --  *      *       0.0.0.0/0            169.254.0.0/16       tcp /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */ reject-with tcp-reset
+    0     0 REJECT     udp  --  *      *       0.0.0.0/0            169.254.0.0/16       udp /* See the Oracle-Provided Images section in the Oracle Cloud Infrastructure documentation for security impact of modifying or removing this rule */ reject-with icmp-port-unreachable
+===SEP===CRON===
+===SEP===DIRS===
+total 600
+drwxr-x--- 11 ubuntu ubuntu   4096 May 29 13:15 .
+drwxr-xr-x  4 root   root     4096 May 28 21:03 ..
+-rw-r--r--  1 ubuntu ubuntu    220 Jan  6  2022 .bash_logout
+-rw-r--r--  1 ubuntu ubuntu   3771 Jan  6  2022 .bashrc
+drwx------  2 ubuntu ubuntu   4096 May 28 22:43 .cache
+drwxrwxr-x  4 ubuntu ubuntu   4096 May 29 13:13 .npm
+-rw-r--r--  1 ubuntu ubuntu    807 Jan  6  2022 .profile
+drwx------  2 ubuntu ubuntu   4096 May 29 13:20 .ssh
+-rw-r--r--  1 ubuntu ubuntu      0 May 28 22:44 .sudo_as_admin_successful
+-rw-rw-r--  1 ubuntu ubuntu 225130 May 29 04:13 build.log
+-rwxrwxr-x  1 ubuntu ubuntu    348 May 29 04:10 build_osrm.sh
+-rw-rw-r--  1 ubuntu ubuntu 255949 May 29 05:08 mapa.log
+drwxrwxr-x 21 ubuntu ubuntu   4096 May 29 04:10 osrm-backend
+drwxrwxr-x  2 ubuntu ubuntu   4096 May 29 05:08 osrm-data
+-rwxrwxr-x  1 ubuntu ubuntu    362 May 29 04:16 processar_mapa.sh
+drwxrwxr-x  2 ubuntu ubuntu   4096 May 28 22:48 routing
+-rwxrwxr-x  1 ubuntu ubuntu   3114 May 29 04:23 setup_completo.sh
+-rw-rw-r--  1 ubuntu ubuntu   2451 May 29 05:10 setup_final.log
+-rwxrwxr-x  1 ubuntu ubuntu   2961 May 29 11:40 setup_vroom.sh
+drwx------  3 ubuntu ubuntu   4096 May 29 02:38 snap
+-rwxrwxr-x  1 ubuntu ubuntu   1429 May 29 13:15 testar_servicos.sh
+drwxrwxr-x 11 ubuntu ubuntu   4096 May 29 12:32 vroom
+drwxrwxr-x  7 ubuntu ubuntu   4096 May 30 01:06 vroom-express
+-rw-rw-r--  1 ubuntu ubuntu  35102 May 29 12:32 vroom_build.log
+-rw-rw-r--  1 ubuntu ubuntu    906 May 29 11:41 vroom_setup.log
+===SEP===OSRMSIZE===
+15G	/home/ubuntu/osrm-data

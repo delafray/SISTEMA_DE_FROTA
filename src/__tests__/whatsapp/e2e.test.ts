@@ -69,6 +69,12 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
 }));
 
+// Mock do geminiBot — no e2e os testes verificam fluxos internos, não a IA conversacional.
+vi.mock('@/lib/whatsapp/geminiBot', () => ({
+  processarComGemini: vi.fn().mockResolvedValue('Resposta simulada do Gemini'),
+  limparHistoricoGemini: vi.fn(),
+}));
+
 // ─── IMPORTS após mocks ─────────────────────────────────────────────────
 
 import { processarMensagem } from '@/lib/whatsapp/messageRouter';
@@ -442,6 +448,8 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     await processarMensagem(makeMsg({ tipo: 'texto', texto: '185000' }));
 
+    // estado aguardando_km_manual NAO e interceptado pelo GEMINI_MODE (so aguardando_acao e interceptado)
+    // portanto o kmFlow processa o texto normalmente
     expect(kmLogsInsert).not.toBeNull();
     expect(kmLogsInsert).toHaveBeenCalledOnce();
     const payload = (kmLogsInsert as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
@@ -455,19 +463,17 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 10. Saudação reseta fluxo ────────────────────────────────────────
 
-  it('10) "oi" em aguardando_acao → volta para seleção de veículo (saudação detectada)', async () => {
+  it('10) "oi" em aguardando_acao → Gemini responde (GEMINI_MODE substitui menu)', async () => {
     mockSessao('aguardando_acao', { veiculo_id: 'v-1', veiculo_placa: 'ABC1D23' });
-    supabaseComVeiculos();
 
     await processarMensagem(makeMsg({ texto: 'oi' }));
 
-    expect(enviarMenuLista).toHaveBeenCalledOnce();
-    // Nova assinatura: (sessionId, para, corpo, opcoes, rodape?) → corpo é o índice 2
-    const corpo = (enviarMenuLista as ReturnType<typeof vi.fn>).mock.calls[0][2];
-    expect(corpo).toContain('caminhão');
-    expect(updateSession).toHaveBeenCalledWith('sess-1', {
-      estado: 'aguardando_veiculo',
-    });
+    // Com GEMINI_MODE ativo, saudacao em aguardando_acao vai para o Gemini em vez de reabrir menu.
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    const [, resposta] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(resposta).toBe('Resposta simulada do Gemini');
+    // Nao envia menu de veiculos
+    expect(enviarMenuLista).not.toHaveBeenCalled();
   });
 
   // ─── 11. Mídia solta em aguardando_acao (Smart Intent Router) ─────────

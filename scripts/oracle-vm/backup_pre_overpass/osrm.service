@@ -1,0 +1,13 @@
+[Unit]
+Description=OSRM Routing Engine
+After=network.target
+
+[Service]
+Type=simple
+User=ubuntu
+ExecStart=/usr/local/bin/osrm-routed --algorithm mld --max-table-size 10000 /home/ubuntu/osrm-data/brazil-latest.osrm --port 5000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

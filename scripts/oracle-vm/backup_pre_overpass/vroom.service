@@ -1,0 +1,15 @@
+[Unit]
+Description=VROOM Route Optimizer API
+After=network.target osrm.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/vroom-express
+ExecStart=/usr/bin/node /home/ubuntu/vroom-express/src/index.js
+Environment=PORT=3000
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

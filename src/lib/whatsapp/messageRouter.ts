@@ -38,10 +38,19 @@ import { processarAdiantamentoFlow } from '@/lib/whatsapp/flows/adiantamentoFlow
 import { processarDespesaFlow } from '@/lib/whatsapp/flows/despesaFlow';
 import { processarImprevistoFlow } from '@/lib/whatsapp/flows/imprevistoFlow';
 import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
+import { processarComGemini } from '@/lib/whatsapp/geminiBot';
+
 
 const log = createLogger('router');
 
 const SMART_ROUTER_CONFIANCA_MINIMA = 60;
+
+/**
+ * GEMINI_MODE: quando true, todas as mensagens de texto e audio sao
+ * processadas pelo Gemini Flash em vez dos fluxos de menu rigidos.
+ * Mudar para false para reverter ao comportamento anterior.
+ */
+const GEMINI_MODE = true;
 
 // ─── ROUTER PRINCIPAL ─────────────────────────────────────────────────
 
@@ -88,6 +97,25 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     log.info('opcao_voltar_acionada', { session_id: sessao.id, estado: sessao.estado });
     await handleVoltar(msgResolvida, sessao, identity);
     return;
+  }
+
+  // ── GEMINI MODE: substitui o menu de ações pelo Gemini Flash ───────
+  // Intercepta apenas quando o motorista está no estado aguardando_acao
+  // (onde antes era exibido o menu rígido de opções).
+  // Fluxos ativos (aguardando_foto_km, aguardando_avaria_midia, etc.),
+  // seleção de veículo e mensagens do gestor NÃO são interceptados.
+  if (
+    GEMINI_MODE &&
+    identity.tipo === 'motorista' &&
+    sessao.estado === 'aguardando_acao'
+  ) {
+    const isTexto = msgResolvida.tipo === 'texto' && !!msgResolvida.texto;
+    const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
+
+    if (isTexto || isAudio) {
+      await rotearComGemini(msgResolvida, identity.nome ?? 'Motorista');
+      return;
+    }
   }
 
   // 3. Rotear com base no role
@@ -713,3 +741,41 @@ export function isSaudacao(msg: ParsedMessage): boolean {
   const saudacoes = ['oi', 'olá', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'hey', 'hi', 'hello', 'e aí', 'eai', 'fala'];
   return saudacoes.some((s) => texto === s || texto.startsWith(s + ' ') || texto.startsWith(s + ',') || texto.startsWith(s + '!'));
 }
+
+// ─── ROTEAMENTO VIA GEMINI ────────────────────────────────────────────
+
+/**
+ * Processa a mensagem pelo Gemini Flash.
+ * Se for audio, transcreve antes de enviar.
+ * Retorna sempre uma resposta em texto.
+ */
+async function rotearComGemini(msg: ParsedMessage, nomeRemetente: string): Promise<void> {
+  let textoParaGemini = msg.texto ?? '';
+
+  // Se for audio, transcrever primeiro
+  if (msg.tipo === 'audio' && msg.mediaId) {
+    const mediaUrl = await getMediaUrl(msg.mediaId);
+    if (mediaUrl) {
+      const transcricao = await transcreverAudio(mediaUrl);
+      if (transcricao.ok) {
+        textoParaGemini = transcricao.data.texto;
+        log.info('audio_transcrito_para_gemini', { chars: textoParaGemini.length });
+      } else {
+        await enviarTexto(msg.from, 'Nao foi possivel processar o audio. Por favor, envie sua mensagem por escrito.');
+        return;
+      }
+    } else {
+      await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
+      return;
+    }
+  }
+
+  if (!textoParaGemini) {
+    await enviarTexto(msg.from, 'Nao consegui entender a mensagem. Por favor, envie um texto.');
+    return;
+  }
+
+  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente);
+  await enviarTexto(msg.from, resposta);
+}
+
