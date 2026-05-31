@@ -77,6 +77,48 @@ describe('lerHistorico', () => {
     const hist = await lerHistorico('+5511999999999');
     expect(hist).toEqual([]);
   });
+
+  it('janela cortando turno: descarta msgs model do INICIO (Gemini exige user primeiro)', async () => {
+    // Cenario real: janela MAX_MENSAGENS=8 corta um turno user/model no meio.
+    // Banco devolve (DESC): model, user, model, user, model, user, model, MODEL_ORFAO
+    // Apos reverse: MODEL_ORFAO, user, model, user, model, user, model, user
+    // Defesa deve descartar o MODEL_ORFAO inicial.
+    const agora = new Date().toISOString();
+    setupSelect([
+      { role: 'model', texto: '8', created_at: agora },
+      { role: 'user', texto: '7', created_at: agora },
+      { role: 'model', texto: '6', created_at: agora },
+      { role: 'user', texto: '5', created_at: agora },
+      { role: 'model', texto: '4', created_at: agora },
+      { role: 'user', texto: '3', created_at: agora },
+      { role: 'model', texto: '2', created_at: agora },
+      { role: 'model', texto: 'MODEL_ORFAO', created_at: agora },
+    ]);
+
+    const hist = await lerHistorico('+5511999999999');
+
+    expect(hist[0].role).toBe('user');
+    // Verifica que NAO comeca com 'model'
+    expect(hist.every((m, i) => i > 0 || m.role === 'user')).toBe(true);
+  });
+
+  it('race condition: primeiro evento e model (created_at invertido) → descarta', async () => {
+    // Race do Postgres na gravacao paralela: model insertou antes do user
+    // do MESMO turno. Banco DESC: [model_resp, user_pergunta] → reverse:
+    // [user_pergunta, model_resp]. OK quando esse e o unico turno. Mas se
+    // veio um turno antes com a mesma race, e a janela so pegou esse
+    // model orfao do turno anterior, ele lidera e quebra Gemini.
+    const agora = new Date().toISOString();
+    setupSelect([
+      { role: 'user', texto: 'pergunta atual', created_at: agora },
+      { role: 'model', texto: 'resposta_orfa_turno_anterior', created_at: agora },
+    ]);
+
+    const hist = await lerHistorico('+5511999999999');
+
+    // Reverse: [model_orfa, user_pergunta] → defesa descarta o model
+    expect(hist).toEqual([{ role: 'user', text: 'pergunta atual' }]);
+  });
 });
 
 describe('gravarMensagem', () => {

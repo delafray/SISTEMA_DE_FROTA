@@ -65,12 +65,24 @@ export async function lerHistorico(telefone: string): Promise<MensagemHistorico[
     }
 
     // Reverter pra ASC (mais antigo primeiro — formato esperado pelo Gemini)
-    return data
+    const ascendente: MensagemHistorico[] = data
       .reverse()
       .map((m) => ({
         role: m.role as Role,
         text: m.texto as string,
       }));
+
+    // DEFESA: Gemini exige que historico comece com role 'user'.
+    // Se a janela cortou um turno no meio (ou houve race na gravacao
+    // user/model do turno anterior), descarta msgs 'model' do inicio.
+    // Sem isso: "First content should be with role 'user', got model"
+    // quebra TODA chamada subsequente do bot.
+    let i = 0;
+    while (i < ascendente.length && ascendente[i].role !== 'user') i++;
+    if (i > 0) {
+      log.warn('historico_descartou_model_lider', { telefone, descartadas: i });
+    }
+    return ascendente.slice(i);
   } catch (err) {
     log.error('historico_read_excecao', { telefone, message: (err as Error).message });
     return [];

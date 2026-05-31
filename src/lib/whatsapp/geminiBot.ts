@@ -52,9 +52,12 @@ export async function processarComGemini(
     return 'Desculpe, o assistente encontrou um problema temporario. Tente novamente em instantes.';
   }
 
-  // Persistencia fire-and-forget — nao espera, nao bloqueia resposta
-  void gravarMensagem(telefone, 'user', mensagem);
-  void gravarMensagem(telefone, 'model', resultado.texto);
+  // Persistencia SEQUENCIAL: await user antes de model garante created_at
+  // monotonico. Em paralelo (void+void), Postgres podia inverter a ordem,
+  // e ai a proxima chamada lia historico iniciando em 'model' → Gemini
+  // rejeitava com "First content should be with role 'user', got model".
+  await gravarMensagem(telefone, 'user', mensagem);
+  await gravarMensagem(telefone, 'model', resultado.texto);
   void registrarMetrica({
     telefone, empresa_id: empresaId, modo: 'gemini_texto', modelo: MODELO,
     tokens_in: resultado.meta?.uso?.tokens_in,
@@ -100,9 +103,11 @@ export async function processarAudioComGemini(
     return 'Nao consegui processar o audio. Por favor, envie sua mensagem por escrito.';
   }
 
-  // Salva transcricao real (nao "(mensagem de voz)")
-  void gravarMensagem(telefone, 'user', resultado.transcricao);
-  void gravarMensagem(telefone, 'model', resultado.texto);
+  // Salva transcricao real (nao "(mensagem de voz)"). SEQUENCIAL — mesma
+  // razao do fluxo de texto: race do Postgres invertia ordem e quebrava
+  // a proxima chamada com "First content should be with role 'user'".
+  await gravarMensagem(telefone, 'user', resultado.transcricao);
+  await gravarMensagem(telefone, 'model', resultado.texto);
   void registrarMetrica({
     telefone, empresa_id: empresaId, modo: 'gemini_audio', modelo: MODELO,
     tokens_in: resultado.meta?.uso?.tokens_in,
