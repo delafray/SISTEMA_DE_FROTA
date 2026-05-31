@@ -18,7 +18,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
-import { geocodar, geocodarMultiplos } from '@/lib/routing/geocoding';
+import { geocodar, geocodarVozComVariantes } from '@/lib/routing/geocoding';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('api_routing_geocodar');
@@ -51,7 +51,10 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   log.info('geocodar_multiplos_req', { q, hasCoords, limite });
 
-  const resultado = await geocodarMultiplos(
+  // Cascata de variantes p/ texto FALADO: limpa "bairro"/"numero", gera variante
+  // de apostrofo (d'Alva) e cai pra so o logradouro com vies de GPS. Cobre o caso
+  // do motorista que fala "Rua X bairro Estrela Dalva" e o OSM tem "Estrela d'Alva".
+  const resultado = await geocodarVozComVariantes(
     q,
     limite,
     hasCoords ? userLat : undefined,

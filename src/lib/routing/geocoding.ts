@@ -270,6 +270,118 @@ export async function geocodarComFallback(parts: {
 }
 
 /**
+ * Prepara queries candidatas a partir de texto FALADO pro Nominatim.
+ *
+ * Voz e' hostil pro Nominatim publico, por 3 motivos que esta funcao trata:
+ *  1. o reconhecimento de voz transcreve "bairro"/"numero" LITERALMENTE —
+ *     viram tokens-lixo que o Nominatim nao entende como parte do endereco;
+ *  2. contracoes com apostrofo (d'Alva, Sant'Ana) saem da fala como UMA palavra
+ *     colada ("dalva"), mas o OSM indexa SEPARADO ("d alva") — o token unico
+ *     "dalva" nao casa com "d"+"alva", entao a busca falha;
+ *  3. quase nunca vem cidade/UF — so o vies de GPS (viewbox) segura a busca.
+ *
+ * Devolve uma lista ORDENADA do mais especifico pro mais amplo, pra tentar em
+ * cascata (igual ao geocodarComFallback do CEP). Deduplicada; descarta queries
+ * com < 3 chars. Lista vazia se o texto for vazio.
+ *
+ *   "Rua Buzios bairro Estrela Dalva"
+ *     -> ["Rua Buzios, Estrela Dalva",      (1: limpa "bairro")
+ *         "Rua Buzios, Estrela D Alva",     (2: variante de apostrofo)
+ *         "Rua Buzios"]                     (3: so logradouro + vies de GPS)
+ */
+export function prepararQueriesVoz(texto: string): string[] {
+  const base = (texto ?? '').trim();
+  if (!base) return [];
+
+  // 1. Limpa conectivos que o STT transcreve literalmente: "bairro" (com ou sem
+  //    "no/do/da" antes) e "numero/número/nro" viram separador (virgula).
+  const limpo = base
+    .replace(/\b(?:no |do |da )?bairro\b/gi, ',')
+    .replace(/\bn(?:[uú]mero|ro)\b/gi, ',')
+    .replace(/n[º°]/gi, ',')
+    .replace(/\s*,\s*/g, ', ')        // espaco unico ao redor das virgulas
+    .replace(/(?:,\s*){2,}/g, ', ')   // colapsa virgulas repetidas
+    .replace(/\s+/g, ' ')
+    .replace(/^[\s,]+|[\s,]+$/g, '')  // tira virgula/espaco das pontas
+    .trim();
+
+  const queries: string[] = [];
+  const add = (q: string) => {
+    const v = q.replace(/^[\s,]+|[\s,]+$/g, '').trim();
+    if (v.length >= 3 && !queries.includes(v)) queries.push(v);
+  };
+
+  add(limpo);
+
+  // 2. Variante de apostrofo: separa as contracoes coladas na fala pra casar
+  //    com o token do OSM. "dalva" -> "d alva"; "santana" -> "sant ana".
+  //    So roda como fallback (query 2), entao um split errado ("dois"->"d ois")
+  //    apenas nao acha nada — nunca atrapalha a query 1, que veio antes.
+  const VOGAL = 'aeiouáàâãéêíóôõ';
+  const LETRA = 'a-záàâãéêíóôõúüç';
+  const rxD = new RegExp(`^([dD])([${VOGAL}][${LETRA}]{2,})$`);
+  const rxSant = new RegExp(`^([sS]ant)([${VOGAL}][${LETRA}]+)$`);
+  const comApostrofo = limpo
+    .split(' ')
+    .map((palavra) => {
+      const temVirgula = palavra.endsWith(',');
+      const nucleo = temVirgula ? palavra.slice(0, -1) : palavra;
+      const sufixo = temVirgula ? ',' : '';
+      const mD = rxD.exec(nucleo);
+      if (mD) return `${mD[1]} ${mD[2]}${sufixo}`;
+      const mS = rxSant.exec(nucleo);
+      if (mS) return `${mS[1]} ${mS[2]}${sufixo}`;
+      return palavra;
+    })
+    .join(' ');
+  add(comApostrofo);
+
+  // 3. So o logradouro (descarta tudo apos a 1a virgula = bairro/extra).
+  //    Confia no vies de GPS pra desambiguar a rua quando o bairro atrapalha.
+  add(limpo.split(',')[0]);
+
+  return queries;
+}
+
+/**
+ * Geocoda texto FALADO tentando as variantes de `prepararQueriesVoz` em cascata.
+ * Devolve os resultados da PRIMEIRA variante que achar algo. Erros de
+ * rede/timeout/invalido abortam imediatamente (variar a query nao ajuda nesses).
+ *
+ * `variante` (1-based) indica qual candidata casou — util pra log/debug.
+ */
+export async function geocodarVozComVariantes(
+  texto: string,
+  limite = 5,
+  userLat?: number,
+  userLng?: number,
+): Promise<ResultadoGeocodarMultiplos & { variante?: number }> {
+  const queries = prepararQueriesVoz(texto);
+  if (queries.length === 0) {
+    return { ok: false, motivo: 'endereco_invalido' };
+  }
+
+  let ultimoErro: ResultadoGeocodarMultiplos = { ok: false, motivo: 'nao_encontrado' };
+
+  for (let i = 0; i < queries.length; i++) {
+    const r = await geocodarMultiplos(queries[i], limite, userLat, userLng);
+    if (r.ok && r.resultados.length > 0) {
+      if (i > 0) log.info('voz_variante_ok', { variante: i + 1, query: queries[i] });
+      return { ...r, variante: i + 1 };
+    }
+    if (!r.ok) {
+      ultimoErro = r;
+      if (r.motivo === 'erro_rede' || r.motivo === 'timeout' || r.motivo === 'endereco_invalido') {
+        return r;
+      }
+    }
+  }
+
+  log.info('voz_nenhuma_variante_achou', { variantes: queries.length });
+  return ultimoErro;
+}
+
+/**
  * Busca até `limite` resultados para um endereço.
  * Se `lat`/`lng` forem fornecidos, ordena os resultados por distância ao ponto.
  * Sempre devolve resultado tipado — nunca lança exceção.
