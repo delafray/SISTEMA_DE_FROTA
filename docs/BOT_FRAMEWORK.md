@@ -203,6 +203,8 @@ Estes só apareceram em uso real. **Toda IA que adicionar feature nova DEVE evit
 
 Auditoria estática + análise de padrões recorrentes em 4 módulos críticos revelou 8 bugs adicionais. **Devem ser corrigidos antes da Fase 3 (Arquitetura limpa).**
 
+> ✅ **STATUS 2026-05-31**: B17-B24 **TODOS RESOLVIDOS** na Fase 2.5. Migration `db/migration_session_atomic.sql` aplicar em prod antes do deploy. Suite 700/700.
+
 #### 🔴 CRÍTICO — vazamento entre empresas / corrupção de sessão
 
 **B17. `enviarStatusVeiculo` lê veículos sem filtrar por empresa**

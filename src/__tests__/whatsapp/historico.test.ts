@@ -22,13 +22,14 @@ beforeEach(() => {
 });
 
 function setupSelect(returnData: Array<{ role: string; texto: string; created_at: string }>, error: { message: string } | null = null) {
+  // B22: lerHistorico encadeia .order TWICE (created_at, depois id pra desempate).
+  // Mock devolve chainable .order que so termina em .limit.
+  const orderChain: Record<string, unknown> = {};
+  orderChain.order = vi.fn(() => orderChain);
+  orderChain.limit = vi.fn(() => Promise.resolve({ data: returnData, error }));
   supabaseFromMock.mockReturnValue({
     select: vi.fn(() => ({
-      eq: vi.fn(() => ({
-        order: vi.fn(() => ({
-          limit: vi.fn(() => Promise.resolve({ data: returnData, error })),
-        })),
-      })),
+      eq: vi.fn(() => orderChain),
     })),
   });
 }

@@ -183,8 +183,19 @@ export async function getOrCreateSession(params: {
   };
 }
 
+export type UpdateSessionResult =
+  | { ok: true }
+  | { ok: false; codigo: 'sessao_perdida' | 'db_error'; erro: string };
+
 /**
  * Atualiza o estado e/ou contexto de uma sessão.
+ *
+ * Usa a RPC `update_session_atomic` (FOR UPDATE + merge jsonb) pra evitar
+ * race condition entre 2 mensagens em rajada do mesmo telefone (B19) e
+ * detecta sessão removida entre turnos (B20).
+ *
+ * Retorna `{ ok: false, codigo: 'sessao_perdida' }` se a sessão sumiu;
+ * o caller deve tratar (ex: reiniciar fluxo, pedir "envie Oi" pro motorista).
  */
 export async function updateSession(
   sessionId: string,
@@ -192,36 +203,17 @@ export async function updateSession(
     estado?: EstadoSessao;
     contexto?: Partial<ContextoSessao>;
   }
-): Promise<void> {
+): Promise<UpdateSessionResult> {
   // Não persistir sessões temporárias
-  if (sessionId.startsWith('temp-')) return;
+  if (sessionId.startsWith('temp-')) return { ok: true };
 
   const supabase = getServiceClient();
 
-  const updateData: Record<string, unknown> = {
-    ultimo_contato: new Date().toISOString(),
-  };
-
-  if (updates.estado) {
-    updateData.estado = updates.estado;
-  }
-
-  if (updates.contexto) {
-    // Merge com o contexto existente (não sobrescrever tudo)
-    const { data: current } = await supabase
-      .from('sessoes_whatsapp')
-      .select('contexto')
-      .eq('id', sessionId)
-      .single();
-
-    const currentCtx = (current?.contexto as ContextoSessao) ?? {};
-    updateData.contexto = { ...currentCtx, ...updates.contexto };
-  }
-
-  const { error } = await supabase
-    .from('sessoes_whatsapp')
-    .update(updateData)
-    .eq('id', sessionId);
+  const { data, error } = await supabase.rpc('update_session_atomic', {
+    p_session_id: sessionId,
+    p_estado: updates.estado ?? null,
+    p_contexto_patch: updates.contexto ?? {},
+  });
 
   if (error) {
     log.error('update_failed', {
@@ -229,7 +221,17 @@ export async function updateSession(
       message: error.message,
       session_id: sessionId,
     });
+    return { ok: false, codigo: 'db_error', erro: error.message };
   }
+
+  // RPC retorna NULL quando a linha sumiu (sessao removida entre turnos).
+  // PostgREST devolve isso como `null` no `data`.
+  if (data === null || (Array.isArray(data) && data.length === 0)) {
+    log.warn('sessao_perdida', { session_id: sessionId });
+    return { ok: false, codigo: 'sessao_perdida', erro: 'sessao nao encontrada' };
+  }
+
+  return { ok: true };
 }
 
 /**

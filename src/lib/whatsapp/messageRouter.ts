@@ -347,8 +347,9 @@ async function processarSelecaoVeiculo(
 
   const { data: veiculo, error: errVeiculo } = await supabase
     .from('veiculos')
-    .select('id, placa, km_atual')
+    .select('id, placa, km_atual, empresa_id')
     .eq('id', veiculoId)
+    .eq('empresa_id', identity.empresa_id)
     .single();
 
   if (errVeiculo) {
@@ -700,8 +701,9 @@ async function enviarStatusVeiculo(para: string, sessao: Sessao): Promise<void> 
 
   const { data: veiculo, error: errVeiculo } = await supabase
     .from('veiculos')
-    .select('placa, km_atual, marca, modelo')
+    .select('placa, km_atual, marca, modelo, empresa_id')
     .eq('id', sessao.contexto.veiculo_id)
+    .eq('empresa_id', sessao.empresa_id)
     .single();
 
   if (errVeiculo) {
@@ -717,8 +719,9 @@ async function enviarStatusVeiculo(para: string, sessao: Sessao): Promise<void> 
   // Buscar avarias abertas
   const { data: avarias, error: errAvarias } = await supabase
     .from('avarias')
-    .select('descricao, urgencia')
+    .select('descricao, urgencia, empresa_id')
     .eq('veiculo_id', sessao.contexto.veiculo_id)
+    .eq('empresa_id', sessao.empresa_id)
     .in('status', ['aberta', 'em_analise']);
 
   if (errAvarias) {
@@ -726,17 +729,21 @@ async function enviarStatusVeiculo(para: string, sessao: Sessao): Promise<void> 
     // Continua com avarias=null, mensagem mostra "sem dados de avaria"
   }
 
-  const temProblema = avarias && avarias.length > 0;
+  // B23: usa avarias diretamente — temProblema era flag derivada redundante.
+  const temAvarias = !!avarias && avarias.length > 0;
   const kmFormatado = veiculo.km_atual ? new Intl.NumberFormat('pt-BR').format(veiculo.km_atual) : '---';
 
-  let mensagem = `🚛 *${veiculo.placa}* — ${temProblema ? 'ATENÇÃO ⚠️' : 'TUDO CERTO ✅'}\n\n`;
+  let mensagem = `🚛 *${veiculo.placa}* — ${temAvarias ? 'ATENÇÃO ⚠️' : 'TUDO CERTO ✅'}\n\n`;
   mensagem += `📏 KM atual: ${kmFormatado}\n`;
   mensagem += `🚛 ${veiculo.marca || ''} ${veiculo.modelo || ''}\n`;
 
-  if (temProblema && avarias) {
+  if (temAvarias) {
     mensagem += '\n';
     for (const av of avarias) {
-      const emoji = av.urgencia === 'critica' ? '🔴' : av.urgencia === 'alta' ? '🟠' : '🟡';
+      // B24: urgencia pode ser null em registros legados — default 'media' antes
+      // de renderizar (evita 'undefined' aparecer no WhatsApp).
+      const urgencia = av.urgencia ?? 'media';
+      const emoji = urgencia === 'critica' ? '🔴' : urgencia === 'alta' ? '🟠' : '🟡';
       mensagem += `${emoji} ${av.descricao}\n`;
     }
     mensagem += '\n⚠️ Fale com o gestor antes de iniciar nova viagem.';

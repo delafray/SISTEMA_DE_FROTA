@@ -153,16 +153,18 @@ function supabaseComVeiculos() {
  * .from('veiculos').select(...).eq('id', ...).single() retorna o veículo.
  */
 function supabaseSelecionandoVeiculo() {
+  // B17/B18: chain agora tem .eq('id').eq('empresa_id').single() (2 filtros).
+  // Mock retorna .eq() chainable (returns self) — qualquer numero de chamadas funciona.
+  const chain: Record<string, unknown> = {};
+  chain.eq = vi.fn(() => chain);
+  chain.single = vi.fn(() =>
+    Promise.resolve({
+      data: { id: 'v-1', placa: 'ABC1D23', km_atual: 100000, empresa_id: 'emp-1' },
+      error: null,
+    })
+  );
   supabaseFromMock.mockReturnValue({
-    select: () => ({
-      eq: () => ({
-        single: () =>
-          Promise.resolve({
-            data: { id: 'v-1', placa: 'ABC1D23', km_atual: 100000 },
-            error: null,
-          }),
-      }),
-    }),
+    select: vi.fn(() => chain),
   });
 }
 

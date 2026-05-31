@@ -263,6 +263,33 @@ describe('executarTool — novas rotas', () => {
     expect(res.erro).toContain('motorista');
   });
 
+  // B21: motoristaId undefined NAO deve virar string vazia silenciosamente.
+  // Dispatcher devolve codigo:'sem_permissao' explicito.
+  it('B21: motoristaId undefined em meu_caminhao → codigo sem_permissao', async () => {
+    const res = await executarTool('meu_caminhao', 'emp-1', undefined);
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
+    expect(res.erro).toContain('motorista');
+  });
+
+  it('B21: motoristaId="" tratado como ausente em propor_atualizacao_km', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', '', { km_novo: 50000 });
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
+  });
+
+  it('B21: motoristaId="   " (apenas whitespace) tratado como ausente', async () => {
+    const res = await executarTool('confirmar_atualizacao_km', 'emp-1', '   ', { km_novo: 50000 });
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
+  });
+
+  it('B21: km invalido → codigo "validacao" (nao "sem_permissao")', async () => {
+    const res = await executarTool('propor_atualizacao_km', 'emp-1', 'mot-1', { km_novo: 'abc' });
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('validacao');
+  });
+
   it('routeia buscar_km_caminhao com placa_ou_apelido nos args', async () => {
     supabaseFromMock.mockReturnValue({
       select: vi.fn(() => ({

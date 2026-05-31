@@ -44,11 +44,14 @@ const RESET_INATIVIDADE_MS = 30 * 60_000; // 30 min
 export async function lerHistorico(telefone: string): Promise<MensagemHistorico[]> {
   try {
     const supabase = getSupabase();
+    // B22: ordena por (created_at, id) — empate na mesma ms é real em Postgres,
+    // o id (uuid) atua como desempate determinístico pra evitar inversão user/model.
     const { data, error } = await supabase
       .from('whatsapp_historico')
-      .select('role, texto, created_at')
+      .select('role, texto, created_at, id')
       .eq('telefone', telefone)
       .order('created_at', { ascending: false })
+      .order('id', { ascending: false })
       .limit(MAX_MENSAGENS);
 
     if (error) {

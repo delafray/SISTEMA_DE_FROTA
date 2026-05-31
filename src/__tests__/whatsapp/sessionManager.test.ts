@@ -7,8 +7,9 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-role-key-test';
 // ─── MOCKS ──────────────────────────────────────────────────────────────
 
 const supabaseFromMock = vi.fn();
+const supabaseRpcMock = vi.fn();
 vi.mock('@supabase/supabase-js', () => ({
-  createClient: vi.fn(() => ({ from: supabaseFromMock })),
+  createClient: vi.fn(() => ({ from: supabaseFromMock, rpc: supabaseRpcMock })),
 }));
 
 // ─── IMPORTS após mocks ─────────────────────────────────────────────────
@@ -124,7 +125,9 @@ function makeBuilder(opts: {
 
 describe('sessionManager.getOrCreateSession', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset > clearAllMocks — limpa tambem a fila de mockReturnValueOnce
+    supabaseFromMock.mockReset();
+    supabaseRpcMock.mockReset();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -332,9 +335,12 @@ describe('sessionManager.getOrCreateSession', () => {
   });
 });
 
-describe('sessionManager.updateSession', () => {
+describe('sessionManager.updateSession (RPC atomica — B19/B20)', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset limpa tambem a fila de mockReturnValueOnce que sobrevive
+    // a vi.clearAllMocks — fundamental pra evitar cascade entre testes.
+    supabaseFromMock.mockReset();
+    supabaseRpcMock.mockReset();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -344,85 +350,83 @@ describe('sessionManager.updateSession', () => {
     vi.restoreAllMocks();
   });
 
-  it('apenas estado → update sem tocar em contexto', async () => {
-    const updateB = makeBuilder({ updateThenable: { data: null, error: null } });
-    supabaseFromMock.mockReturnValueOnce(updateB.builder);
+  it('apenas estado → RPC com p_contexto_patch={} (merge no-op)', async () => {
+    supabaseRpcMock.mockResolvedValueOnce({
+      data: { id: 'sess-1', estado: 'aguardando_foto_km', contexto: {} },
+      error: null,
+    });
 
-    await updateSession('sess-1', { estado: 'aguardando_foto_km' });
+    const r = await updateSession('sess-1', { estado: 'aguardando_foto_km' });
 
-    expect(updateB.calls.update).toHaveBeenCalledTimes(1);
-    const payload = updateB.calls.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.estado).toBe('aguardando_foto_km');
-    expect(payload).toHaveProperty('ultimo_contato');
-    expect(payload).not.toHaveProperty('contexto');
-    expect(updateB.calls.eq).toHaveBeenCalledWith('id', 'sess-1');
+    expect(r).toEqual({ ok: true });
+    expect(supabaseRpcMock).toHaveBeenCalledTimes(1);
+    const [fn, args] = supabaseRpcMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(fn).toBe('update_session_atomic');
+    expect(args.p_session_id).toBe('sess-1');
+    expect(args.p_estado).toBe('aguardando_foto_km');
+    expect(args.p_contexto_patch).toEqual({});
+    // B17/B18: NAO deve mais usar .from(...) pra UPDATE — tudo via RPC
+    expect(supabaseFromMock).not.toHaveBeenCalled();
   });
 
-  it('apenas contexto → merge com o contexto atual', async () => {
-    // 1ª: select para buscar contexto atual
-    const selectB = makeBuilder({
-      single: {
-        data: { contexto: { veiculo_id: 'v1', km_lido: 100 } },
-        error: null,
-      },
+  it('apenas contexto → RPC com p_estado=null (preserva estado atual)', async () => {
+    supabaseRpcMock.mockResolvedValueOnce({
+      data: { id: 'sess-1', estado: 'aguardando_acao', contexto: { foto_url: 'x' } },
+      error: null,
     });
-    // 2ª: update
-    const updateB = makeBuilder({ updateThenable: { data: null, error: null } });
 
-    supabaseFromMock
-      .mockReturnValueOnce(selectB.builder)
-      .mockReturnValueOnce(updateB.builder);
+    const r = await updateSession('sess-1', { contexto: { foto_url: 'x' } });
 
-    await updateSession('sess-1', { contexto: { foto_url: 'x' } });
-
-    expect(updateB.calls.update).toHaveBeenCalledTimes(1);
-    const payload = updateB.calls.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.contexto).toEqual({ veiculo_id: 'v1', km_lido: 100, foto_url: 'x' });
-    expect(payload).toHaveProperty('ultimo_contato');
-    expect(payload).not.toHaveProperty('estado');
+    expect(r).toEqual({ ok: true });
+    const [, args] = supabaseRpcMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(args.p_estado).toBeNull();
+    expect(args.p_contexto_patch).toEqual({ foto_url: 'x' });
   });
 
-  it('estado + contexto → ambos aplicados (com merge no contexto)', async () => {
-    const selectB = makeBuilder({
-      single: {
-        data: { contexto: { veiculo_id: 'v1' } },
-        error: null,
-      },
+  it('estado + contexto → RPC com ambos', async () => {
+    supabaseRpcMock.mockResolvedValueOnce({
+      data: { id: 'sess-1', estado: 'x', contexto: {} },
+      error: null,
     });
-    const updateB = makeBuilder({ updateThenable: { data: null, error: null } });
-
-    supabaseFromMock
-      .mockReturnValueOnce(selectB.builder)
-      .mockReturnValueOnce(updateB.builder);
 
     await updateSession('sess-1', {
       estado: 'aguardando_confirmacao_km',
       contexto: { km_lido: 200 },
     });
 
-    const payload = updateB.calls.update.mock.calls[0][0] as Record<string, unknown>;
-    expect(payload.estado).toBe('aguardando_confirmacao_km');
-    expect(payload.contexto).toEqual({ veiculo_id: 'v1', km_lido: 200 });
+    const [, args] = supabaseRpcMock.mock.calls[0] as [string, Record<string, unknown>];
+    expect(args.p_estado).toBe('aguardando_confirmacao_km');
+    expect(args.p_contexto_patch).toEqual({ km_lido: 200 });
   });
 
   it('sessão temporária (id "temp-...") → não chama supabase', async () => {
-    await updateSession('temp-123', { estado: 'aguardando_foto_km' });
+    const r = await updateSession('temp-123', { estado: 'aguardando_foto_km' });
+    expect(r).toEqual({ ok: true });
+    expect(supabaseRpcMock).not.toHaveBeenCalled();
     expect(supabaseFromMock).not.toHaveBeenCalled();
   });
 
-  it('update com erro → loga update_failed', async () => {
-    const updateB = makeBuilder({
-      updateThenable: {
-        data: null,
-        error: { code: 'XX', message: 'boom' },
-      },
-    });
-    supabaseFromMock.mockReturnValueOnce(updateB.builder);
+  it('B19/B20: RPC retorna null → sessao_perdida + log warn', async () => {
+    supabaseRpcMock.mockResolvedValueOnce({ data: null, error: null });
+    const consoleWarnSpy = vi.spyOn(console, 'warn');
 
+    const r = await updateSession('sess-foi-deletada', { estado: 'aguardando_acao' });
+
+    expect(r).toEqual({ ok: false, codigo: 'sessao_perdida', erro: 'sessao nao encontrada' });
+    const warnCalls = consoleWarnSpy.mock.calls.map((c) => String(c[0]));
+    expect(warnCalls.some((line) => line.includes('sessao_perdida'))).toBe(true);
+  });
+
+  it('update com erro → retorna db_error e loga update_failed', async () => {
+    supabaseRpcMock.mockResolvedValueOnce({
+      data: null,
+      error: { code: 'XX', message: 'boom' },
+    });
     const consoleErrorSpy = vi.spyOn(console, 'error');
 
-    await updateSession('sess-1', { estado: 'aguardando_foto_km' });
+    const r = await updateSession('sess-1', { estado: 'aguardando_foto_km' });
 
+    expect(r).toEqual({ ok: false, codigo: 'db_error', erro: 'boom' });
     const errorCalls = consoleErrorSpy.mock.calls.map((c) => String(c[0]));
     expect(errorCalls.some((line) => line.includes('update_failed'))).toBe(true);
   });
@@ -430,7 +434,9 @@ describe('sessionManager.updateSession', () => {
 
 describe('sessionManager.resetToMenu', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset > clearAllMocks — limpa tambem a fila de mockReturnValueOnce
+    supabaseFromMock.mockReset();
+    supabaseRpcMock.mockReset();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});
@@ -481,7 +487,9 @@ describe('sessionManager.resetToMenu', () => {
 
 describe('sessionManager.limparSessoesExpiradas', () => {
   beforeEach(() => {
-    vi.clearAllMocks();
+    // mockReset > clearAllMocks — limpa tambem a fila de mockReturnValueOnce
+    supabaseFromMock.mockReset();
+    supabaseRpcMock.mockReset();
     vi.spyOn(console, 'log').mockImplementation(() => {});
     vi.spyOn(console, 'error').mockImplementation(() => {});
     vi.spyOn(console, 'warn').mockImplementation(() => {});

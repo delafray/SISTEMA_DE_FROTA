@@ -130,6 +130,8 @@ export interface ResultadoTool {
   ok: boolean;
   dados?: unknown;
   erro?: string;
+  /** Codigo de erro tipado pra discriminar handling no caller (logging, retry, refusal). */
+  codigo?: 'sem_permissao' | 'nao_encontrado' | 'validacao' | 'db';
 }
 
 export async function listarMotoristas(empresaId: string): Promise<ResultadoTool> {
@@ -196,7 +198,7 @@ export async function listarVeiculos(empresaId: string): Promise<ResultadoTool> 
  */
 export async function buscarKmCaminhao(
   empresaId: string,
-  motoristaId: string,
+  motoristaId: string | undefined,
   placaOuApelido?: string
 ): Promise<ResultadoTool> {
   if (!empresaId) return { ok: false, erro: 'empresa nao identificada' };
@@ -250,7 +252,10 @@ export async function buscarKmCaminhao(
   }
 
   // ── MODO B: buscar caminhao vinculado ao motorista ──
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado (e nenhuma placa/apelido informados)' };
+  // B21: motoristaId pode ser undefined (semantica de "ausente"). Devolve sem_permissao.
+  if (typeof motoristaId !== 'string' || motoristaId.trim() === '') {
+    return { ok: false, codigo: 'sem_permissao', erro: 'motorista nao identificado (e nenhuma placa/apelido informados)' };
+  }
 
   // 1. Último km_log do motorista
   const { data: kmLog } = await supabase
@@ -335,9 +340,11 @@ export async function buscarKmCaminhao(
  */
 export async function meuCaminhao(
   empresaId: string,
-  motoristaId: string
+  motoristaId: string | undefined
 ): Promise<ResultadoTool> {
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+  if (typeof motoristaId !== 'string' || motoristaId.trim() === '') {
+    return { ok: false, codigo: 'sem_permissao', erro: 'motorista nao identificado' };
+  }
   return buscarKmCaminhao(empresaId, motoristaId);
 }
 
@@ -422,13 +429,15 @@ async function localizarVeiculoDoMotorista(
  */
 export async function proporAtualizacaoKm(
   empresaId: string,
-  motoristaId: string,
+  motoristaId: string | undefined,
   kmNovoRaw: unknown
 ): Promise<ResultadoTool> {
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+  if (typeof motoristaId !== 'string' || motoristaId.trim() === '') {
+    return { ok: false, codigo: 'sem_permissao', erro: 'motorista nao identificado' };
+  }
 
   const val = validarKm(kmNovoRaw);
-  if (!val.ok) return { ok: false, erro: val.erro };
+  if (!val.ok) return { ok: false, codigo: 'validacao', erro: val.erro };
   const kmNovo = val.valor;
 
   const vRes = await localizarVeiculoDoMotorista(empresaId, motoristaId);
@@ -463,13 +472,15 @@ export async function proporAtualizacaoKm(
  */
 export async function confirmarAtualizacaoKm(
   empresaId: string,
-  motoristaId: string,
+  motoristaId: string | undefined,
   kmNovoRaw: unknown
 ): Promise<ResultadoTool> {
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+  if (typeof motoristaId !== 'string' || motoristaId.trim() === '') {
+    return { ok: false, codigo: 'sem_permissao', erro: 'motorista nao identificado' };
+  }
 
   const val = validarKm(kmNovoRaw);
-  if (!val.ok) return { ok: false, erro: val.erro };
+  if (!val.ok) return { ok: false, codigo: 'validacao', erro: val.erro };
   const kmNovo = val.valor;
 
   const vRes = await localizarVeiculoDoMotorista(empresaId, motoristaId);
@@ -526,6 +537,9 @@ export async function executarTool(
   motoristaId?: string,
   args?: Record<string, unknown>
 ): Promise<ResultadoTool> {
+  // B21: NUNCA normalize undefined → ''. Tipos distintos = semantica distinta.
+  // Tool valida e devolve erro 'sem_permissao' explicito quando motorista ausente.
+  const motId = typeof motoristaId === 'string' && motoristaId.trim() !== '' ? motoristaId : undefined;
   switch (nome) {
     case 'listar_motoristas':
       return listarMotoristas(empresaId);
@@ -534,20 +548,20 @@ export async function executarTool(
     case 'buscar_km_caminhao':
       return buscarKmCaminhao(
         empresaId,
-        motoristaId ?? '',
+        motId,
         typeof args?.placa_ou_apelido === 'string' ? args.placa_ou_apelido : undefined
       );
     case 'meu_caminhao':
-      return meuCaminhao(empresaId, motoristaId ?? '');
+      return meuCaminhao(empresaId, motId);
     case 'propor_atualizacao_km':
-      return proporAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
+      return proporAtualizacaoKm(empresaId, motId, args?.km_novo);
     case 'confirmar_atualizacao_km':
-      return confirmarAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
+      return confirmarAtualizacaoKm(empresaId, motId, args?.km_novo);
     // BACKWARD-COMPAT: nome antigo redireciona pra propor (NUNCA executa direto).
     // Mantém pra historicos em cache ainda referenciarem a tool antiga sem erro.
     case 'atualizar_km_caminhao':
       log.warn('tool_legacy_atualizar_km', { motoristaId, args });
-      return proporAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
+      return proporAtualizacaoKm(empresaId, motId, args?.km_novo);
     default:
       return { ok: false, erro: `tool desconhecida: ${nome}` };
   }
