@@ -3,8 +3,8 @@
 > **Documento de arquitetura, regras invioláveis, padrões obrigatórios e roadmap.**
 > Toda IA que tocar no código do bot **deve ler este arquivo antes** de qualquer alteração.
 
-Última revisão: 2026-05-30 — Claude Opus 4.7
-Base: consolidação de 7 agentes (5 pesquisa documentação + 2 auditoria código).
+Última revisão: 2026-05-31 — Claude Opus 4.7 (adicionou B12-B16: lições de produção)
+Base: consolidação de 7 agentes (5 pesquisa documentação + 2 auditoria código) + 5 bugs vivos descobertos em uso real.
 
 ---
 
@@ -142,6 +142,60 @@ Auditoria do agente identificou e PRIORIZA:
 - **B9.** Sem retry/backoff em Gemini/Deepgram
 - **B10.** Cast `as string`/`as VeiculoJoin` sem runtime validation
 - **B11.** `messageRouter` chama Supabase direto (deveria delegar pra repo)
+
+### 🔥 BUGS DESCOBERTOS EM PRODUÇÃO (pós-deploy 2026-05-31) — LIÇÕES
+
+Estes só apareceram em uso real. **Toda IA que adicionar feature nova DEVE evitar repetir esses padrões.**
+
+**B12. Race condition em fire-and-forget de persistência ordenada**
+- Sintoma vivo: `[GoogleGenerativeAI Error]: First content should be with role 'user', got model` — Gemini rejeitava 100% das chamadas
+- Causa: `void gravarMensagem(user) + void gravarMensagem(model)` em paralelo. Postgres atribuía `created_at` na ordem que as roundtrips de rede chegavam — model às vezes vinha antes de user.
+- **REGRA INVIOLÁVEL:** quando 2+ inserts precisam preservar ordem temporal, **gravação SEMPRE sequencial com `await`**. Nunca `void` + `void` pra coisas ordenadas. Latência extra (~80ms) é aceitável.
+- **Defesa adicional:** `lerHistorico` filtra `model` do início — resiliência contra dados legados quebrados.
+- Commit: `60f0724`
+
+**B13. Tools com filtro fixo, sem aceitar identificador opcional**
+- Sintoma vivo: motorista perguntava "quanto km tem o leão" → bot respondia "não encontrei" porque `buscar_km_caminhao` só procurava o caminhão DO motorista, não aceitava apelido
+- Causa: tool desenhada pra UM caso (qual MEU km), não pra QUALQUER caso (qual km de X)
+- **REGRA:** toda tool de consulta com escopo "do usuário" deve aceitar **identificador opcional**. Sem param = comportamento padrão (do usuário). Com param = busca específica. Exemplo: `buscar_km_caminhao(placa_ou_apelido?: string)`.
+- **REGRA:** descrição da tool deve dar **2-3 exemplos de cada modo** (com e sem param) pro Gemini saber quando passar.
+- Commit: `b9490bc`
+
+**B14. CHECK constraints do banco não refletidas no código**
+- Sintoma vivo: `new row for relation "km_logs" violates check constraint "km_logs_tipo_check"` — insert com `tipo: 'informado'` rejeitado (banco só aceita `inicial/final/checkpoint/abastecimento/manutencao/pausa`)
+- Causa: código foi escrito com palpite do valor do enum, sem checar a constraint real
+- **REGRA INVIOLÁVEL antes de qualquer INSERT em tabela do Supabase:**
+  ```sql
+  SELECT pg_get_constraintdef(oid)
+  FROM pg_constraint
+  WHERE conrelid = 'NOME_DA_TABELA'::regclass;
+  ```
+  Lista TODAS as CHECKs/FKs. Documente os valores aceitos como comentário ao lado do insert.
+- Commit: `a2c6430`
+
+**B15. Triggers obsoletos após rename/drop de coluna**
+- Sintoma vivo: `record "new" has no field "frete_id"` — trigger `frete_iniciado_atualiza_status` em `km_logs` ainda referenciava `NEW.frete_id` (coluna removida) e `fretes` (tabela renomeada pra `entregas`)
+- Causa: migração `migration_limpeza_modelo.sql` dropou as colunas mas não auditou triggers que dependiam delas. PL/pgSQL faz lazy parsing — só explode na primeira invocação após o drop.
+- **REGRA INVIOLÁVEL ao dropar coluna ou renomear tabela:**
+  ```sql
+  -- Antes do ALTER, listar dependências
+  SELECT proname, prosrc FROM pg_proc
+  WHERE prosrc LIKE '%COLUNA_OU_TABELA%';
+  -- E triggers que referenciam
+  SELECT tgname, tgrelid::regclass FROM pg_trigger WHERE NOT tgisinternal;
+  ```
+- Commit: `a7bcfab`
+
+**B16. Insert sem setar flags que triggers exigem**
+- Sintoma vivo: `confirmar_atualizacao_km` gravava no `km_logs` mas `veiculos.km_atual` não atualizava — bot dizia "registrado" mas próxima consulta retornava KM antigo
+- Causa: trigger `propagar_km_para_veiculo` só dispara quando `confirmado=true AND correcao=false`. Insert da tool não setava nem uma das duas — Postgres assumia DEFAULT (NULL/false), trigger não disparava
+- **REGRA:** antes de inserir em tabela com triggers, **leia o `prosrc` de TODOS os triggers da tabela**:
+  ```sql
+  SELECT proname, prosrc FROM pg_proc
+  WHERE oid IN (SELECT tgfoid FROM pg_trigger WHERE tgrelid = 'TABELA'::regclass AND NOT tgisinternal);
+  ```
+  Identifique campos referenciados em `IF NEW.X = ...` e **sete-os explicitamente no insert** (não confie em DEFAULTs).
+- Commit: `a7bcfab`
 
 ---
 
