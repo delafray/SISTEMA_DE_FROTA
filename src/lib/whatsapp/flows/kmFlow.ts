@@ -194,12 +194,15 @@ async function salvarKm(
   // Inserir km_log (o trigger propaga para veiculos.km_atual)
   // tipo='checkpoint': constraint do banco aceita apenas
   // inicial/final/checkpoint/abastecimento/manutencao/pausa.
+  // confirmado+correcao: trigger propagar_km_para_veiculo exige.
   const { error } = await supabase.from('km_logs').insert({
     veiculo_id: veiculoId,
     motorista_id: sessao.motorista_id ?? '',
     empresa_id: sessao.empresa_id,
     km_lido: km,
     tipo: 'checkpoint',
+    confirmado: true,
+    correcao: false,
     foto_urls: sessao.contexto.foto_url ? [sessao.contexto.foto_url as string] : null,
     ia_raw_response: sessao.contexto.km_lido
       ? JSON.stringify({ km_lido: sessao.contexto.km_lido, confianca: sessao.contexto.km_confianca })

@@ -487,12 +487,17 @@ export async function confirmarAtualizacaoKm(
   // tipo='checkpoint': constraint km_logs_tipo_check aceita apenas
   // inicial/final/checkpoint/abastecimento/manutencao/pausa. Update do
   // motorista no meio da operacao = checkpoint.
+  // confirmado=true + correcao=false: trigger propagar_km_para_veiculo so
+  // atualiza veiculos.km_atual com essas duas flags. Como passou pelo
+  // Permission Loop (motorista ja confirmou), e seguro setar true.
   const { error } = await supabase.from('km_logs').insert({
     veiculo_id: v.id,
     motorista_id: motoristaId,
     empresa_id: empresaId,
     km_lido: kmNovo,
     tipo: 'checkpoint',
+    confirmado: true,
+    correcao: false,
   });
 
   if (error) {

@@ -399,6 +399,8 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
       veiculo_id: 'v-1',
       km_lido: 185000,
       tipo: 'checkpoint',
+      confirmado: true,
+      correcao: false,
     });
     // confirmação ao motorista
     const ultMsg = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls.at(-1)?.[1];
