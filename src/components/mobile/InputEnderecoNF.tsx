@@ -23,6 +23,7 @@ import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import { BotaoMicrofone } from './BotaoMicrofone';
 import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
+import { extrairNumeroDeTranscricao } from '@/lib/cep/extrairNumeroPorVoz';
 import { ListaOpcoesEndereco } from './ListaOpcoesEndereco';
 
 // ─── TIPOS ──────────────────────────────────────────────────────────
@@ -91,6 +92,9 @@ export function InputEnderecoNF({
   }>(null);
   // Lista de opcoes de geocoding para o motorista escolher
   const [opcoesFala, setOpcoesFala] = useState<(ResultadoGeocoding & { distanciaKm?: number })[]>([]);
+  // Texto bruto que o motorista falou — guardado pra extrair o numero da casa
+  // na hora que ele escolher a opcao (Nominatim raramente devolve house_number).
+  const [textoFala, setTextoFala] = useState<string>('');
 
   const numeroRef = useRef<HTMLInputElement | null>(null);
 
@@ -224,6 +228,7 @@ export function InputEnderecoNF({
         // SEMPRE mostra a lista (mesmo com 1 resultado) — motorista precisa
         // confirmar visualmente que e o endereco certo. Antes preenchia direto
         // quando vinha so 1 e o motorista nem via o que o Nominatim escolheu.
+        setTextoFala(texto); // guarda a fala pra extrair o numero na selecao
         setOpcoesFala(comDistancia);
         setEtapa('escolha_endereco');
       } else {
@@ -247,13 +252,15 @@ export function InputEnderecoNF({
       cidade: resultado.cidade ?? '',
       uf: resultado.uf ?? '',
     });
-    // Preferencia: numero estruturado do Nominatim > extracao do texto falado
+    // Preferencia: numero estruturado do Nominatim > extracao do texto falado.
+    // Nominatim raramente devolve house_number pra ruas BR, entao o caminho
+    // normal e extrair da fala (ultimo run de digitos).
     if (resultado.numero) {
       setNumero(resultado.numero);
     } else {
-      const matchNumero = textoOriginal.match(/\b\d+\b/);
-      if (matchNumero) {
-        setNumero(matchNumero[0]);
+      const numeroFalado = extrairNumeroDeTranscricao(textoOriginal);
+      if (numeroFalado) {
+        setNumero(numeroFalado);
       }
     }
     // Tambem preenche o CEP se Nominatim devolveu
@@ -368,8 +375,9 @@ export function InputEnderecoNF({
         <ListaOpcoesEndereco
           opcoes={opcoesFala}
           onSelecionar={(opcao) => {
-            preencherPorGeocodingResultado(opcao, '');
+            preencherPorGeocodingResultado(opcao, textoFala);
             setOpcoesFala([]);
+            setTextoFala('');
           }}
           onNenhumDesses={() => {
             setOpcoesFala([]);
