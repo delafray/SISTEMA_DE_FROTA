@@ -149,6 +149,62 @@ describe('validarNumero — cache hit', () => {
   });
 });
 
+describe('validarNumero — fix: coord exata sobrevive ao cache + vence cobertura', () => {
+  it('consulta fresca popula dados.coords (numero -> [lat,lng])', async () => {
+    lerCacheMock.mockResolvedValue(null);
+    consultarMock.mockResolvedValue({
+      ok: true,
+      enderecos: [
+        { numero: 100, lat: -19.91, lng: -43.91 },
+        { numero: 104, lat: -19.861, lng: -44.029 },
+        { numero: 200, lat: -19.92, lng: -43.93 },
+      ],
+    });
+
+    const r = await validarNumero({ ...params, numero: '104' });
+
+    expect(r.dados.coords).toBeDefined();
+    expect(r.dados.coords!['104']).toEqual([-19.861, -44.029]);
+  });
+
+  it('cache hit COM coords reconstroi confirmado + coordenada exata (antes se perdia)', async () => {
+    lerCacheMock.mockResolvedValue({
+      dados: {
+        quantidade: 120,
+        min: 100,
+        max: 8000,
+        numeros: [100, 5000, 8000],
+        confianca: 'alta',
+        coords: { '5000': [-19.8615, -44.0297] },
+      },
+    });
+
+    const r = await validarNumero({ ...params, numero: '5000' });
+
+    expect(r.cacheado).toBe(true);
+    expect(consultarMock).not.toHaveBeenCalled();
+    expect(r.status).toBe('confirmado');
+    expect(r.coordenada).toEqual({ lat: -19.8615, lng: -44.0297 });
+  });
+
+  it('numero exato mapeado vence mesmo com cobertura baixa (<30)', async () => {
+    lerCacheMock.mockResolvedValue(null);
+    consultarMock.mockResolvedValue({
+      ok: true,
+      enderecos: [
+        { numero: 104, lat: -19.861, lng: -44.029 },
+        { numero: 200, lat: -19.92, lng: -43.93 },
+      ],
+    });
+
+    // So 2 numeros (confianca 'baixa'), mas o 104 esta mapeado → confirmado.
+    const r = await validarNumero({ ...params, numero: '104' });
+
+    expect(r.status).toBe('confirmado');
+    expect(r.coordenada).toEqual({ lat: -19.861, lng: -44.029 });
+  });
+});
+
 describe('validarNumero — erros', () => {
   it('numero nao-numerico (SN) → sem_dados sem chamar Overpass', async () => {
     lerCacheMock.mockResolvedValue(null);

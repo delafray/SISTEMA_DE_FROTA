@@ -29,7 +29,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
-import { geocodarComFallback } from '@/lib/routing/geocoding';
+import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
 import { cheapestInsertion } from '@/lib/routing/utils';
 import type { EnderecoCEP } from '@/lib/cep/types';
 
@@ -92,10 +92,11 @@ export async function POST(
     );
   }
 
-  // 1. Geocodificar — com fallback progressivo (remove CEP/bairro/numero
-  // automaticamente se Nominatim nao achar a query completa). Mesma
-  // estrategia do endpoint /otimizar.
-  const geo = await geocodarComFallback({
+  // 1. Resolver coordenada por prioridade: aprendida (frota) > Overpass
+  // confirmado > Nominatim com fallback progressivo. Mesma estrategia do
+  // /otimizar — define tambem a confianca pra navegacao por coord vs endereco.
+  const coord = await resolverCoordenada({
+    empresa_id: body.empresa_id!,
     logradouro: body.endereco!.logradouro,
     numero: body.numero,
     bairro: body.endereco!.bairro,
@@ -103,10 +104,10 @@ export async function POST(
     uf: body.endereco!.uf,
     cep: body.cep,
   });
-  if (!geo.ok) {
-    log.warn('geocoding_falhou', { motivo: geo.motivo });
+  if (!coord) {
+    log.warn('geocoding_falhou', { rota_id: rotaId });
     return NextResponse.json(
-      { error: 'geocoding_falhou', motivo: geo.motivo },
+      { error: 'geocoding_falhou', motivo: 'nao_encontrado' },
       { status: 422 }
     );
   }
@@ -123,8 +124,8 @@ export async function POST(
       cep: body.cep!,
       numero: body.numero!,
       endereco: body.endereco!,
-      latitude: geo.resultado.lat,
-      longitude: geo.resultado.lng,
+      latitude: coord.lat,
+      longitude: coord.lng,
       status: 'em_rota',
       capturado_em: agora,
       sincronizado_em: agora,
@@ -163,7 +164,7 @@ export async function POST(
     // cheapest insertion
     novaOrdem = cheapestInsertion(
       paradasExistentes.map((p) => ({ latitude: p.latitude, longitude: p.longitude })),
-      { lat: geo.resultado.lat, lng: geo.resultado.lng }
+      { lat: coord.lat, lng: coord.lng }
     );
   }
 
@@ -203,9 +204,9 @@ export async function POST(
       rota_id: rotaId,
       nota_id: notaInserida.id,
       ordem: novaOrdem,
-      endereco: { ...body.endereco!, numero: body.numero },
-      latitude: geo.resultado.lat,
-      longitude: geo.resultado.lng,
+      endereco: { ...body.endereco!, numero: body.numero, coord_confianca: coord.confianca },
+      latitude: coord.lat,
+      longitude: coord.lng,
       fixada: false,
       janela_horario: null,
       tempo_descarga_min: 5,

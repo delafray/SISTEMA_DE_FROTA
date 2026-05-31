@@ -22,7 +22,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { otimizarRota } from '@/lib/routing/vroom';
-import { geocodarComFallback } from '@/lib/routing/geocoding';
+import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
 import {
   indexarJobs,
   notaParaJob,
@@ -30,7 +30,7 @@ import {
   traduzirParadasComMapping,
   montarParadasPersistir,
 } from '@/lib/routing/restricoes';
-import type { Coordenada, NotaCapturada, ResultadoGeocoding } from '@/lib/routing/types';
+import type { Coordenada, NotaCapturada } from '@/lib/routing/types';
 
 const log = createLogger('api_routing_otimizar');
 
@@ -95,9 +95,11 @@ async function geocodarPendentes(
       continue;
     }
 
-    // Geocoding com fallback progressivo (4 tentativas removendo CEP/bairro/numero).
-    // Helper compartilhado com /paradas/adicionar.
-    const geo = await geocodarComFallback({
+    // Resolve a melhor coordenada por prioridade: aprendida (frota) > Overpass
+    // confirmado > Nominatim com fallback. Define tambem a confianca, que
+    // propaga pro snapshot da parada (navegacao por coord vs por endereco).
+    const coord = await resolverCoordenada({
+      empresa_id: nota.empresa_id,
       logradouro: nota.endereco.logradouro,
       numero: nota.numero,
       bairro: nota.endereco.bairro,
@@ -106,18 +108,17 @@ async function geocodarPendentes(
       cep: nota.cep,
     });
 
-    if (!geo.ok) {
+    if (!coord) {
       sem_geocoding.push(nota.id);
       continue;
     }
-    const resultado: ResultadoGeocoding = geo.resultado;
 
     // Atualiza a nota com as coords e marca como geocodificada
     const { error: errUp } = await supabase
       .from('notas_capturadas')
       .update({
-        latitude: resultado.lat,
-        longitude: resultado.lng,
+        latitude: coord.lat,
+        longitude: coord.lng,
         status: 'geocodificada',
       })
       .eq('id', nota.id);
@@ -130,8 +131,9 @@ async function geocodarPendentes(
 
     geocodificadas.push({
       ...nota,
-      latitude: resultado.lat,
-      longitude: resultado.lng,
+      latitude: coord.lat,
+      longitude: coord.lng,
+      coord_confianca: coord.confianca,
       status: 'geocodificada',
     });
   }

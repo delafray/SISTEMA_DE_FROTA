@@ -23,6 +23,10 @@ export interface DadosRua {
   numeros: number[];
   /** Confianca calculada a partir da quantidade */
   confianca: Confianca;
+  /** Mapa numero->[lat,lng] dos numeros mapeados (limitado a 200). Permite que
+   *  um cache hit reconstrua a coordenada EXATA do numero sem reconsultar o
+   *  Overpass — antes a coord exata se perdia no cache (so status era reusado). */
+  coords?: Record<string, [number, number]>;
 }
 
 export interface ResultadoValidacao {

@@ -167,10 +167,16 @@ export function montarParadasPersistir(
       rota_id: rotaId,
       nota_id: nota.id,
       ordem: p.ordem,
-      // Snapshot completo: copia o numero da casa pra dentro do endereco
-      // jsonb. Sem isso a parada mostraria so "Rua Piata" em vez de
-      // "Rua Piata, 104". Sem migration — coluna ja e jsonb.
-      endereco: { ...nota.endereco, numero: nota.numero },
+      // Snapshot completo: copia o numero da casa + a confianca da coordenada
+      // pra dentro do endereco jsonb. Sem isso a parada mostraria so "Rua Piata"
+      // em vez de "Rua Piata, 104", e a tela de navegacao nao saberia se a coord
+      // e precisa. Sem migration — coluna ja e jsonb. Default 'baixa' pra notas
+      // que ja vinham geocodificadas (sem passar pelo resolver).
+      endereco: {
+        ...nota.endereco,
+        numero: nota.numero,
+        coord_confianca: nota.coord_confianca ?? 'baixa',
+      },
       latitude: nota.latitude,
       longitude: nota.longitude,
       fixada: false,

@@ -40,13 +40,38 @@ function comporDados(
   const numeros = enderecos.map((e) => e.numero).sort((a, b) => a - b);
   const min = numeros[0] ?? null;
   const max = numeros[numeros.length - 1] ?? null;
+  // Mapa numero->[lat,lng] (limitado a 200) pra cache hit reconstruir a coord
+  // exata. Em numeros duplicados, o ultimo vence — irrelevante pro proposito.
+  const coords: Record<string, [number, number]> = {};
+  for (const e of enderecos.slice(0, 200)) {
+    coords[String(e.numero)] = [e.lat, e.lng];
+  }
   return {
     quantidade: numeros.length,
     min,
     max,
     numeros: numeros.slice(0, 200), // limita pra nao explodir cache
     confianca: calcularConfianca(numeros.length),
+    coords,
   };
+}
+
+/**
+ * Acha a coordenada exata do numero pedido, seja no array fresco do Overpass
+ * (cache miss) ou no mapa `dados.coords` persistido no cache (cache hit).
+ * Esse era o bug B do framework: no cache hit passava-se `[]` e a coord exata
+ * se perdia — agora ela sobrevive via `dados.coords`.
+ */
+function acharCoordExata(
+  numeroPedido: number,
+  dados: DadosRua,
+  enderecos: Array<{ numero: number; lat: number; lng: number }>
+): { lat: number; lng: number } | null {
+  const exato = enderecos.find((e) => e.numero === numeroPedido);
+  if (exato) return { lat: exato.lat, lng: exato.lng };
+  const c = dados.coords?.[String(numeroPedido)];
+  if (c) return { lat: c[0], lng: c[1] };
+  return null;
 }
 
 /** Calcula status visual + mensagem + coordenada (se exato). */
@@ -55,22 +80,23 @@ function decidirStatus(
   dados: DadosRua,
   enderecos: Array<{ numero: number; lat: number; lng: number }>
 ): { status: StatusValidacao; coordenada: ResultadoValidacao['coordenada']; mensagem: string } {
-  // Sem cobertura — nao da pra opinar
+  // Numero exato encontrado — confirmado. Checado ANTES da cobertura: um numero
+  // mapeado e ouro mesmo numa rua com poucos numeros (a coord e precisa).
+  const coordExata = acharCoordExata(numeroPedido, dados, enderecos);
+  if (coordExata) {
+    return {
+      status: 'confirmado',
+      coordenada: coordExata,
+      mensagem: `Numero confirmado no mapa.`,
+    };
+  }
+
+  // Sem cobertura — nao da pra opinar sobre faixa
   if (dados.confianca === 'sem_dados' || dados.confianca === 'baixa') {
     return {
       status: 'sem_dados',
       coordenada: null,
       mensagem: 'Rua sem cobertura suficiente no mapa pra validar o numero.',
-    };
-  }
-
-  // Numero exato encontrado — confirmado
-  const exato = enderecos.find((e) => e.numero === numeroPedido);
-  if (exato) {
-    return {
-      status: 'confirmado',
-      coordenada: { lat: exato.lat, lng: exato.lng },
-      mensagem: `Numero confirmado no mapa.`,
     };
   }
 
@@ -119,7 +145,9 @@ export async function validarNumero(p: ParamsValidacao): Promise<ResultadoValida
   const cached = await lerCache(p.logradouro, p.cidade, p.uf);
   if (cached) {
     log.info('cache_hit', { rua: p.logradouro, cidade: p.cidade, uf: p.uf });
-    const decisao = decidirStatus(numeroPedido, cached.dados, []); // sem coord exata via cache
+    // Cache hit: passa [] como enderecos frescos, mas decidirStatus/acharCoordExata
+    // recupera a coord exata de cached.dados.coords (entradas gravadas apos o fix).
+    const decisao = decidirStatus(numeroPedido, cached.dados, []);
     return { ...decisao, dados: cached.dados, cacheado: true };
   }
 

@@ -38,6 +38,9 @@ export interface NotaCapturada {
   status: StatusNota;
   capturado_em: string;              // ISO timestamp
   sincronizado_em: string | null;
+  /** TRANSIENTE (nao e coluna do banco): confianca da coordenada resolvida
+   *  pelo resolverCoordenada. Usado pra propagar pro snapshot da parada. */
+  coord_confianca?: 'alta' | 'baixa';
 }
 
 // ─── rotas_otimizadas ───────────────────────────────────────────────
@@ -65,8 +68,16 @@ export interface RotaOtimizada {
 export type JanelaHorario = [string, string][];
 
 /** Snapshot completo do endereco salvo numa parada — inclui o numero da casa
- *  (que vem da nota, nao do ViaCEP). Persistido como jsonb na coluna `endereco`. */
-export type EnderecoParada = EnderecoCEP & { numero?: string };
+ *  (que vem da nota, nao do ViaCEP). Persistido como jsonb na coluna `endereco`.
+ *  `coord_confianca` indica se latitude/longitude e precisa ('alta' = aprendida
+ *  pela frota ou confirmada no Overpass) ou fraca ('baixa' = centro da rua via
+ *  Nominatim). A tela do motorista usa isso pra escolher entre navegar por
+ *  coordenada (alta) ou por endereco em texto (baixa, deixa o Waze/Google achar
+ *  o numero). Sem migration — coluna ja e jsonb. */
+export type EnderecoParada = EnderecoCEP & {
+  numero?: string;
+  coord_confianca?: 'alta' | 'baixa';
+};
 
 export interface Parada {
   id: string;

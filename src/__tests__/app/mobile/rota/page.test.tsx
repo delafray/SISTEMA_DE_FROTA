@@ -484,6 +484,50 @@ describe('RotaPage — fase em_rota', () => {
     expect(patchCalls.length).toBe(0);
   });
 
+  it('encaminhar ao Google: abre modal, vem ate 9 pre-marcadas, importa pro Maps', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    vi.stubGlobal('fetch', buildFetchComRota('r1', [
+      {
+        id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1,
+        endereco: { logradouro: 'Rua A', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.5, longitude: -46.6,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
+      },
+      {
+        id: 'p2', rota_id: 'r1', nota_id: 'n2', ordem: 2,
+        endereco: { logradouro: 'Rua B', bairro: '', cidade: 'SP', uf: 'SP' },
+        latitude: -23.6, longitude: -46.7,
+        fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null,
+      },
+    ]));
+
+    const openSpy = vi.fn();
+    vi.stubGlobal('open', openSpy);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
+    await waitFor(() => screen.getByTestId('btn-encaminhar-google'));
+
+    // Abre o modal
+    await user.click(screen.getByTestId('btn-encaminhar-google'));
+    await waitFor(() => screen.getByTestId('modal-encaminhar-maps'));
+
+    // As 2 paradas pendentes aparecem como tijolos e vem pre-marcadas (<= 9)
+    expect(screen.getByTestId('tijolo-encaminhar-1')).toBeDefined();
+    expect(screen.getByTestId('tijolo-encaminhar-2')).toBeDefined();
+    expect(screen.getByTestId('tijolo-encaminhar-1').getAttribute('aria-pressed')).toBe('true');
+
+    // Importa pro Maps → window.open com URL do Google Maps
+    await user.click(screen.getAllByTestId('btn-importar-maps')[0]);
+    expect(openSpy).toHaveBeenCalled();
+    expect(openSpy.mock.calls[0][0]).toContain('google.com/maps');
+  });
+
   it('refetch automatico ao voltar da tela ajuste-rota (visibilitychange)', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);

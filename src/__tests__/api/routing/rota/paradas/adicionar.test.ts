@@ -11,18 +11,12 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key-test';
 
 // ─── MOCKS ──────────────────────────────────────────────────────────
 
-// Geocodar mock — endpoint usa geocodarComFallback (wrapper com 4 tentativas)
-const geocodarMock = vi.fn();
-vi.mock('@/lib/routing/geocoding', async () => {
-  const real = await vi.importActual<typeof import('@/lib/routing/geocoding')>(
-    '@/lib/routing/geocoding'
-  );
-  return {
-    ...real,
-    geocodar: (...args: unknown[]) => geocodarMock(...args),
-    geocodarComFallback: (...args: unknown[]) => geocodarMock(...args),
-  };
-});
+// Resolver mock — endpoint usa resolverCoordenada (aprendida > Overpass >
+// Nominatim). A prioridade tem testes proprios em resolverCoordenada.test.ts.
+const resolverMock = vi.fn();
+vi.mock('@/lib/routing/resolverCoordenada', () => ({
+  resolverCoordenada: (...args: unknown[]) => resolverMock(...args),
+}));
 
 // Supabase mock — granular pra controlar cada chamada
 const supabaseFromMock = vi.fn();
@@ -131,10 +125,12 @@ beforeEach(() => {
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
 
-  // Geocoding sucesso default
-  geocodarMock.mockResolvedValue({
-    ok: true,
-    resultado: { lat: -23.5505, lng: -46.6333, endereco_normalizado: 'Rua X, 104, SP' },
+  // Resolver sucesso default (Nominatim, confianca baixa)
+  resolverMock.mockResolvedValue({
+    lat: -23.5505,
+    lng: -46.6333,
+    confianca: 'baixa',
+    fonte: 'nominatim',
   });
 });
 
@@ -174,8 +170,8 @@ describe('POST adicionar parada — validacao 400', () => {
 });
 
 describe('POST adicionar parada — geocoding falha', () => {
-  it('Nominatim nao_encontrado → 422 geocoding_falhou', async () => {
-    geocodarMock.mockResolvedValue({ ok: false, motivo: 'nao_encontrado' });
+  it('resolver retorna null → 422 geocoding_falhou', async () => {
+    resolverMock.mockResolvedValue(null);
 
     const res = await POST(makeReq(payload()), { params: Promise.resolve({ id: 'r1' }) });
     expect(res.status).toBe(422);

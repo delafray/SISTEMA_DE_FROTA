@@ -207,9 +207,21 @@ describe('montarParadasPersistir', () => {
     expect(out[0].nota_id).toBe('nota-1');
     expect(out[0].ordem).toBe(1);
     // endereco do snapshot deve incluir o numero da casa (do campo nota.numero)
-    expect(out[0].endereco).toEqual({ ...nota.endereco, numero: '104' });
+    // + a confianca da coord (default 'baixa' quando a nota nao passou pelo resolver)
+    expect(out[0].endereco).toEqual({ ...nota.endereco, numero: '104', coord_confianca: 'baixa' });
     expect(out[0].latitude).toBe(-23.5);
     expect(out[0].fixada).toBe(false);
+  });
+
+  it('propaga coord_confianca da nota pro snapshot da parada', () => {
+    const nota = makeNota({ id: 'nota-2', numero: '104', coord_confianca: 'alta' });
+    const notas = new Map([['nota-2', nota]]);
+    const out = montarParadasPersistir(
+      [{ nota_id_local: 'nota-2', ordem: 1, chegada_estimada: 'x' }],
+      notas,
+      'rota-uuid'
+    );
+    expect(out[0].endereco.coord_confianca).toBe('alta');
   });
 
   it('throw quando nota nao esta no mapping ou sem coords', () => {
