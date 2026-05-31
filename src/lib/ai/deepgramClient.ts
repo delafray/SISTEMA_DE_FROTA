@@ -1,7 +1,8 @@
 /**
  * Deepgram Client — serviço de transcrição Speech-to-Text de alta precisão.
  *
- * Utiliza o modelo nova-2 otimizado para português brasileiro.
+ * Modelo: nova-3 (24% menos WER em PT-BR vs nova-2 — Deepgram release notes 2026).
+ * Override via DEEPGRAM_MODEL pra rollback rapido sem deploy.
  */
 
 import { createLogger } from '@/lib/logger';
@@ -12,6 +13,37 @@ const log = createLogger('deepgram-client');
 export type TranscricaoResultado =
   | { ok: true; texto: string }
   | { ok: false; motivo: string };
+
+/**
+ * Vocabulario fixo de frota pra boost de transcricao em PT-BR.
+ * Termos raros que o motorista usa direto: ferramentas operacionais,
+ * jargao de mecanica, vocab logistico. Limite Deepgram: 100 keyterms/request.
+ * (Apelidos de caminhao / motorista entram dinamico via tool futura.)
+ */
+const VOCAB_FROTA_FIXO: readonly string[] = [
+  // Hodometro / KM
+  'hodometro', 'quilometragem', 'KM', 'rodagem',
+  // Combustivel
+  'diesel', 'arla', 'arla 32', 'gasolina', 'abastecimento', 'litros', 'bomba',
+  // Veiculo / Carroceria
+  'cavalo mecanico', 'carreta', 'reboque', 'baú', 'sider', 'graneleiro',
+  'caçamba', 'prancha', 'bitrem', 'rodotrem',
+  // Manutencao / Mecanica
+  'pneu', 'pneus', 'calibragem', 'alinhamento', 'balanceamento',
+  'pastilha', 'lonas', 'freio', 'oleo', 'filtro', 'correia',
+  'embreagem', 'cambio', 'motor', 'turbina', 'bateria',
+  'farol', 'lanterna', 'limpador', 'parabrisa',
+  // Operacao
+  'pedagio', 'balança', 'fiscalizacao', 'multa', 'CNH',
+  'manifesto', 'CTe', 'MDF-e', 'romaneio', 'bordereau', 'nota fiscal', 'NF',
+  'entrega', 'descarga', 'carga', 'destinatario', 'remetente',
+  // Custos
+  'adiantamento', 'acerto', 'despesa', 'diaria', 'pernoite',
+  // Estado do caminhao
+  'avaria', 'pane', 'panne', 'quebra', 'parado', 'guincho', 'socorro',
+  // Pessoas
+  'motorista', 'gestor', 'oficina', 'mecanico',
+];
 
 /**
  * Baixa o áudio de uma URL (provida pelo Evolution API) e transcreve via Deepgram.
@@ -97,11 +129,31 @@ export async function transcreverComDeepgram(
     // Deepgram tenta adivinhar e falha com "corrupt or unsupported data".
     //
     // Se o magic não for OGG, mantém o header original (talvez seja MP3/WAV).
+    //
+    // Params nova-3 otimizados (§8.6.1 do BOT_FRAMEWORK):
+    //   numerals: 'quarenta e cinco mil' → '45000' (sem regex no lado nosso)
+    //   endpointing 500: motorista pausa pra pensar sem cortar a fala
+    //   filler_words=false: remove 'é', 'tipo', 'aaah' que atrapalham o LLM
+    //   diarize=false: 1 falante so, economia de tokens no payload
+    const model = process.env.DEEPGRAM_MODEL ?? 'nova-3';
     const queryParams = new URLSearchParams({
-      model: 'nova-2',
+      model,
       language: 'pt-BR',
       smart_format: 'true',
+      punctuate: 'true',
+      numerals: 'true',
+      endpointing: '500',
+      filler_words: 'false',
+      diarize: 'false',
     });
+
+    // keyterm e exclusivo do nova-3 — boosta termos raros sem penalizar comuns.
+    // nova-2 / outros modelos usariam 'keywords' (legacy) — pulamos pra evitar erro.
+    if (model.startsWith('nova-3')) {
+      for (const termo of VOCAB_FROTA_FIXO) {
+        queryParams.append('keyterm', termo);
+      }
+    }
 
     const deepgramUrl = `https://api.deepgram.com/v1/listen?${queryParams.toString()}`;
 

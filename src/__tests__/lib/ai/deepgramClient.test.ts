@@ -44,11 +44,47 @@ describe('transcreverComDeepgram', () => {
     // Validou que enviou pro Deepgram com Authorization e o áudio
     const segundaChamada = fetchMock.mock.calls[1];
     expect(segundaChamada[0]).toContain('api.deepgram.com/v1/listen');
-    expect(segundaChamada[0]).toContain('model=nova-2');
+    // Default agora e nova-3 (Fase 5 Sprint 1 do BOT_FRAMEWORK)
+    expect(segundaChamada[0]).toContain('model=nova-3');
     expect(segundaChamada[0]).toContain('language=pt-BR');
+    // Params nova-3 otimizados pra frota PT-BR
+    expect(segundaChamada[0]).toContain('numerals=true');
+    expect(segundaChamada[0]).toContain('endpointing=500');
+    expect(segundaChamada[0]).toContain('filler_words=false');
+    // keyterms da frota — pelo menos 'hodometro' e 'pedagio' devem estar la
+    expect(segundaChamada[0]).toContain('keyterm=hodometro');
+    expect(segundaChamada[0]).toContain('keyterm=pedagio');
     const init = segundaChamada[1] as RequestInit;
     expect(init.method).toBe('POST');
     expect((init.headers as Record<string, string>).Authorization).toBe('Token test-key');
+  });
+
+  it('DEEPGRAM_MODEL=nova-2 override → usa nova-2 e NAO envia keyterm', async () => {
+    // Rollback rapido pra nova-2 via env, sem deploy. nova-2 nao aceita keyterm
+    // (parametro especifico do nova-3 — usar com nova-2 retorna 400).
+    process.env.DEEPGRAM_MODEL = 'nova-2';
+    const audioBytes = new Uint8Array([1, 2, 3, 4]).buffer;
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({
+        ok: true,
+        headers: { get: () => 'audio/ogg' },
+        arrayBuffer: async () => audioBytes,
+      } as unknown as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({
+          results: { channels: [{ alternatives: [{ transcript: 'oi' }] }] },
+        }),
+      } as unknown as Response);
+    global.fetch = fetchMock as typeof fetch;
+
+    await transcreverComDeepgram('https://api/audio.ogg');
+
+    const url = fetchMock.mock.calls[1][0] as string;
+    expect(url).toContain('model=nova-2');
+    expect(url).not.toContain('keyterm=');
+
+    delete process.env.DEEPGRAM_MODEL;
   });
 
   it('sem API key → retorna erro sem chamar APIs', async () => {

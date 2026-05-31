@@ -1039,7 +1039,7 @@ Sem isso, voamos cego nas próximas fases. Pré-requisito pra qualquer decisão 
 
 Áudio é 60%+ do tráfego do bot. Toda melhoria aqui multiplica.
 
-- [ ] **Migração Deepgram nova-2 → nova-3** (30min) — atualizar `deepgramClient.ts` com params otimizados (§8.6.1). Teste de snapshot com áudios reais salvos.
+- [x] **Migração Deepgram nova-2 → nova-3** (~30min, feito 2026-05-31) — `deepgramClient.ts` default nova-3 + numerals/endpointing/filler_words/punctuate (§8.6.1) + `VOCAB_FROTA_FIXO` (~55 keyterms PT-BR). Rollback via `DEEPGRAM_MODEL=nova-2`.
 - [ ] **Keyterm dinâmico por empresa** (1-2h) — `keytermsDaEmpresa()` (§8.6.2). Cache 10min em memória.
 - [ ] **Fallback chain** (2-3h) — Deepgram nova-3 → gpt-4o-mini-transcribe → Gemini audio. Loga `fallback_acionado` em `bot_metricas`.
 - [ ] **UX diferenciada por erro** (1h) — implementar tabela §8.7.1.
