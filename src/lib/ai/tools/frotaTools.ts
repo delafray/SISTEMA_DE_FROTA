@@ -484,12 +484,15 @@ export async function confirmarAtualizacaoKm(
   }
 
   const supabase = getSupabase();
+  // tipo='checkpoint': constraint km_logs_tipo_check aceita apenas
+  // inicial/final/checkpoint/abastecimento/manutencao/pausa. Update do
+  // motorista no meio da operacao = checkpoint.
   const { error } = await supabase.from('km_logs').insert({
     veiculo_id: v.id,
     motorista_id: motoristaId,
     empresa_id: empresaId,
     km_lido: kmNovo,
-    tipo: 'informado',
+    tipo: 'checkpoint',
   });
 
   if (error) {
