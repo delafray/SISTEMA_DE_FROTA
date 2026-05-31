@@ -11,7 +11,7 @@ process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-key-test';
 
 // ─── MOCKS ──────────────────────────────────────────────────────────
 
-// Geocodar mock
+// Geocodar mock — endpoint usa geocodarComFallback (wrapper com 4 tentativas)
 const geocodarMock = vi.fn();
 vi.mock('@/lib/routing/geocoding', async () => {
   const real = await vi.importActual<typeof import('@/lib/routing/geocoding')>(
@@ -20,6 +20,7 @@ vi.mock('@/lib/routing/geocoding', async () => {
   return {
     ...real,
     geocodar: (...args: unknown[]) => geocodarMock(...args),
+    geocodarComFallback: (...args: unknown[]) => geocodarMock(...args),
   };
 });
 

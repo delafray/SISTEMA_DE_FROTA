@@ -19,14 +19,18 @@ vi.mock('@/lib/routing/vroom', async () => {
   return { ...actual, otimizarRota: vi.fn() };
 });
 
+// Mockamos `geocodarComFallback` direto. O wrapper de fallback (4 tentativas
+// progressivas) tem testes unitarios proprios em geocoding.test.ts. Aqui so
+// importa o ok/!ok do resultado pra exercitar o fluxo de notas_atendidas.
 vi.mock('@/lib/routing/geocoding', () => ({
   geocodar: vi.fn(),
+  geocodarComFallback: vi.fn(),
   formatarEnderecoParaGeocoding: vi.fn(() => 'endereco montado'),
 }));
 
 import { POST } from '@/app/api/routing/otimizar/route';
 import { otimizarRota } from '@/lib/routing/vroom';
-import { geocodar, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding';
+import { geocodar, geocodarComFallback, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding';
 import { NextRequest } from 'next/server';
 
 const ORIGEM = { lat: -23.5505, lng: -46.6333 };
@@ -201,9 +205,10 @@ describe('POST /api/routing/otimizar — sucesso', () => {
         notaSeed({ id: 'n-sem-coords', latitude: null, longitude: null, status: 'capturada' }),
       ],
     });
-    (geocodar as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (geocodarComFallback as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       resultado: { lat: -23.5, lng: -46.6, endereco_normalizado: 'X' },
+      tentativa: 1,
     });
 
     const res = await POST(
@@ -211,7 +216,7 @@ describe('POST /api/routing/otimizar — sucesso', () => {
     );
 
     expect(res.status).toBe(201);
-    expect(geocodar).toHaveBeenCalled();
+    expect(geocodarComFallback).toHaveBeenCalled();
   });
 
   it('inclui em nao_atendidas as notas que geocoding falhou', async () => {
@@ -221,7 +226,7 @@ describe('POST /api/routing/otimizar — sucesso', () => {
         notaSeed({ id: 'n-fail', latitude: null, longitude: null }),
       ],
     });
-    (geocodar as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (geocodarComFallback as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
       motivo: 'nao_encontrado',
     });
@@ -250,7 +255,7 @@ describe('POST /api/routing/otimizar — falhas', () => {
     setupMocks({
       notas: [notaSeed({ id: 'n1', latitude: null, longitude: null })],
     });
-    (geocodar as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (geocodarComFallback as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
       motivo: 'nao_encontrado',
     });
@@ -294,28 +299,22 @@ describe('POST /api/routing/otimizar — falhas', () => {
 });
 
 describe('POST /api/routing/otimizar — fallback geocoding', () => {
-  it('usa segunda tentativa quando primeira falha', async () => {
+  // Semantica das 4 tentativas progressivas testada em geocoding.test.ts
+  // (unit test do geocodarComFallback). Aqui apenas validamos a integracao:
+  // sucesso → nota entra na rota; falha → nota cai em nao_atendidas.
+
+  it('geocodarComFallback retorna ok → nota entra na rota', async () => {
     setupMocks({
       notas: [
         notaSeed({ id: 'n-fallback', latitude: null, longitude: null, status: 'capturada' }),
       ],
     });
 
-    // formatarEnderecoParaGeocoding retorna strings diferentes pra cada chamada
-    // pra que o Set não deduplicar e o fallback realmente rode
-    let callCount = 0;
-    (formatarEnderecoParaGeocoding as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      callCount++;
-      return `endereco-tentativa-${callCount}`;
+    (geocodarComFallback as ReturnType<typeof vi.fn>).mockResolvedValue({
+      ok: true,
+      resultado: { lat: -19.92, lng: -43.93, endereco_normalizado: 'Rua Praia Grande, Contagem' },
+      tentativa: 2, // simula fallback (achou na 2a tentativa)
     });
-
-    // Primeira chamada falha, segunda sucesso
-    (geocodar as ReturnType<typeof vi.fn>)
-      .mockResolvedValueOnce({ ok: false, motivo: 'nao_encontrado' })
-      .mockResolvedValueOnce({
-        ok: true,
-        resultado: { lat: -19.92, lng: -43.93, endereco_normalizado: 'Rua Praia Grande, Contagem' },
-      });
 
     const res = await POST(
       makeReq({ motorista_id: 'mot-1', empresa_id: 'emp-1', origem: ORIGEM })
@@ -323,13 +322,10 @@ describe('POST /api/routing/otimizar — fallback geocoding', () => {
 
     expect(res.status).toBe(201);
     const body = await res.json();
-    // Nota foi incluida na rota (não caiu em nao_atendidas)
     expect(body.nao_atendidas).not.toContain('n-fallback');
-    // geocodar foi chamado 2 vezes (primeira falhou, segunda OK)
-    expect(geocodar).toHaveBeenCalledTimes(2);
   });
 
-  it('inclui nota em nao_atendidas apenas quando todas as tentativas falham', async () => {
+  it('geocodarComFallback retorna !ok → nota cai em nao_atendidas', async () => {
     setupMocks({
       notas: [
         notaSeed({ id: 'n-ok', latitude: -23.5, longitude: -46.6 }),
@@ -337,20 +333,11 @@ describe('POST /api/routing/otimizar — fallback geocoding', () => {
       ],
     });
 
-    // Cada chamada retorna string diferente → 4 tentativas únicas
-    let c2 = 0;
-    (formatarEnderecoParaGeocoding as ReturnType<typeof vi.fn>).mockImplementation(() => {
-      c2++;
-      return `endereco-v${c2}`;
-    });
-
-    // Todas falham
-    (geocodar as ReturnType<typeof vi.fn>).mockResolvedValue({
+    (geocodarComFallback as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: false,
       motivo: 'nao_encontrado',
     });
 
-    // VROOM recebe 1 nota (n-ok), devolve 1 parada
     (otimizarRota as ReturnType<typeof vi.fn>).mockResolvedValue({
       ok: true,
       resultado: {
@@ -367,7 +354,5 @@ describe('POST /api/routing/otimizar — fallback geocoding', () => {
 
     const body = await res.json();
     expect(body.nao_atendidas).toContain('n-todas-falharam');
-    // geocodar chamado 4 vezes (4 tentativas unicas, todas falharam)
-    expect((geocodar as ReturnType<typeof vi.fn>).mock.calls.length).toBeGreaterThanOrEqual(4);
   });
 });

@@ -202,6 +202,74 @@ export async function geocodar(endereco: string): Promise<ResultadoGeocodar> {
 }
 
 /**
+ * Geocoda com fallback progressivo — tenta até 4 variações removendo CEP/bairro/numero.
+ *
+ * Nominatim publico falha com frequencia em enderecos BR quando a query inclui
+ * todas as partes (CEP errado/inexistente no OSM, bairro com nome divergente, etc).
+ * Remover CEP e/ou bairro costuma resolver. Mesma estrategia usada pelo otimizar.
+ *
+ * Ordem das tentativas:
+ *   1. logradouro + numero + bairro + cidade + uf + cep (mais especifico)
+ *   2. logradouro + numero + cidade + uf (sem CEP nem bairro)
+ *   3. logradouro + numero + cidade + uf + cep (sem bairro, com CEP)
+ *   4. logradouro + cidade + uf (sem numero, sem CEP, sem bairro)
+ *
+ * Duplicatas (ex: se bairro/cep vazios, tentativa 1==2) sao deduplicadas.
+ * Devolve resultado tipado — nunca lanca.
+ */
+export async function geocodarComFallback(parts: {
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade: string;
+  uf: string;
+  cep?: string;
+}): Promise<ResultadoGeocodar & { tentativa?: number }> {
+  const tentativas = [
+    formatarEnderecoParaGeocoding(parts),
+    formatarEnderecoParaGeocoding({
+      logradouro: parts.logradouro,
+      numero: parts.numero,
+      cidade: parts.cidade,
+      uf: parts.uf,
+    }),
+    formatarEnderecoParaGeocoding({
+      logradouro: parts.logradouro,
+      numero: parts.numero,
+      cidade: parts.cidade,
+      uf: parts.uf,
+      cep: parts.cep,
+    }),
+    formatarEnderecoParaGeocoding({
+      logradouro: parts.logradouro,
+      cidade: parts.cidade,
+      uf: parts.uf,
+    }),
+  ];
+
+  const tentativasUnicas = [...new Set(tentativas)];
+  let ultimoErro: ResultadoGeocodar = { ok: false, motivo: 'nao_encontrado' };
+
+  for (let i = 0; i < tentativasUnicas.length; i++) {
+    const r = await geocodar(tentativasUnicas[i]);
+    if (r.ok) {
+      if (i > 0) {
+        log.info('geocoding_fallback_ok', { tentativa: i + 1, query: tentativasUnicas[i] });
+      }
+      return { ...r, tentativa: i + 1 };
+    }
+    ultimoErro = r;
+    // Se erro foi de rede/timeout/invalido nao adianta tentar variacoes
+    if (r.motivo === 'erro_rede' || r.motivo === 'timeout' || r.motivo === 'endereco_invalido') {
+      return r;
+    }
+  }
+
+  log.warn('geocoding_falhou_todas_tentativas', { tentativas: tentativasUnicas.length });
+  return ultimoErro;
+}
+
+/**
  * Busca até `limite` resultados para um endereço.
  * Se `lat`/`lng` forem fornecidos, ordena os resultados por distância ao ponto.
  * Sempre devolve resultado tipado — nunca lança exceção.

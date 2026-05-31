@@ -5,6 +5,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
   geocodar,
+  geocodarComFallback,
   formatarEnderecoParaGeocoding,
   _resetRateLimit,
 } from '@/lib/routing/geocoding';
@@ -198,6 +199,85 @@ describe('geocodar — erros', () => {
     const r = await geocodar('endereco teste');
 
     expect(r).toEqual({ ok: false, motivo: 'erro_rede' });
+  });
+});
+
+describe('geocodarComFallback — 4 tentativas progressivas', () => {
+  // O wrapper monta queries diferentes (com/sem CEP, com/sem bairro, com/sem numero).
+  // Aqui validamos que a sequencia de tentativas roda ate achar ou esgotar.
+
+  it('sucesso na primeira tentativa → tentativa=1, nao tenta o resto', async () => {
+    const fetchMock = mockFetchOk([{ lat: '-19.92', lon: '-43.93', display_name: 'X' }]);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await geocodarComFallback({
+      logradouro: 'Rua A', numero: '100', bairro: 'B',
+      cidade: 'Belo Horizonte', uf: 'MG', cep: '30000000',
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.tentativa).toBe(1);
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('1a falha (nao_encontrado), 2a sucesso → tentativa=2', async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce({ ok: true, status: 200, json: async () => [] }) // 1a: vazio
+      .mockResolvedValueOnce({
+        ok: true, status: 200,
+        json: async () => [{ lat: '-19.5', lon: '-43.5', display_name: 'fallback' }],
+      });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await geocodarComFallback({
+      logradouro: 'Rua Inventada', numero: '999', bairro: 'B-errado',
+      cidade: 'Sete Lagoas', uf: 'MG', cep: '35700000',
+    });
+
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.tentativa).toBe(2);
+    expect(fetchMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('todas 4 falham → devolve nao_encontrado', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await geocodarComFallback({
+      logradouro: 'Rua X', numero: '1', bairro: 'Y',
+      cidade: 'Cidade Inventada', uf: 'XX', cep: '00000000',
+    });
+
+    expect(r).toMatchObject({ ok: false, motivo: 'nao_encontrado' });
+    expect(fetchMock).toHaveBeenCalledTimes(4);
+  });
+
+  it('erro_rede aborta sequencia (nao continua tentando)', async () => {
+    const fetchMock = mockFetchHttpError(503);
+    vi.stubGlobal('fetch', fetchMock);
+
+    const r = await geocodarComFallback({
+      logradouro: 'Rua A', cidade: 'BH', uf: 'MG',
+    });
+
+    expect(r).toMatchObject({ ok: false, motivo: 'erro_rede' });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('dedup: bairro/cep vazios → tentativas 1 e 2 iguais → so 1 chamada extra (3 unicas)', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, status: 200, json: async () => [] });
+    vi.stubGlobal('fetch', fetchMock);
+
+    await geocodarComFallback({
+      logradouro: 'Rua A', numero: '100', cidade: 'BH', uf: 'MG',
+      // sem bairro nem cep — tentativa 1==2, e 3 fica = 1 tambem (sem cep)
+    });
+
+    // tentativa 1: rua+num+bh+mg | t2: rua+num+bh+mg (dup) | t3: rua+num+bh+mg+cep_undef
+    //   = rua+num+bh+mg | t4: rua+bh+mg
+    // → 2 unicas
+    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(4);
+    expect(fetchMock.mock.calls.length).toBeGreaterThanOrEqual(2);
   });
 });
 

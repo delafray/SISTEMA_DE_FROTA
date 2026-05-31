@@ -29,7 +29,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
-import { geocodar, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding';
+import { geocodarComFallback } from '@/lib/routing/geocoding';
 import { cheapestInsertion } from '@/lib/routing/utils';
 import type { EnderecoCEP } from '@/lib/cep/types';
 
@@ -92,8 +92,10 @@ export async function POST(
     );
   }
 
-  // 1. Geocodificar
-  const enderecoTexto = formatarEnderecoParaGeocoding({
+  // 1. Geocodificar — com fallback progressivo (remove CEP/bairro/numero
+  // automaticamente se Nominatim nao achar a query completa). Mesma
+  // estrategia do endpoint /otimizar.
+  const geo = await geocodarComFallback({
     logradouro: body.endereco!.logradouro,
     numero: body.numero,
     bairro: body.endereco!.bairro,
@@ -101,7 +103,6 @@ export async function POST(
     uf: body.endereco!.uf,
     cep: body.cep,
   });
-  const geo = await geocodar(enderecoTexto);
   if (!geo.ok) {
     log.warn('geocoding_falhou', { motivo: geo.motivo });
     return NextResponse.json(
