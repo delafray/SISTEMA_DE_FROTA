@@ -57,10 +57,30 @@ export const declarations: FunctionDeclaration[] = [
   {
     name: 'buscar_km_caminhao',
     description:
-      'Busca a quilometragem atual (KM do hodometro) do caminhao do motorista. ' +
-      'Use quando o motorista perguntar: "qual meu km", "quantos km tem o caminhao", ' +
-      '"me fala o km atual", "qual o km do caminhao", "qual e o hodometro". ' +
-      'Devolve placa, km_atual e data da ultima atualizacao.',
+      'Busca a quilometragem atual (KM do hodometro) de um caminhao. ' +
+      'Sem parametro: busca o caminhao VINCULADO ao motorista (via km_logs ou pedido ativo). ' +
+      'Com parametro: busca por placa OU apelido na empresa (ex: "leao", "ABC1234"). ' +
+      'Use quando perguntarem: "qual meu km", "quantos km tem o leao", "quanto km tem o caminhao X", ' +
+      '"qual o km do hodometro". Devolve placa, apelido, km_atual e data da ultima atualizacao.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        placa_ou_apelido: {
+          type: SchemaType.STRING,
+          description:
+            'OPCIONAL. Placa (ex: "ABC1234") ou apelido (ex: "leao", "tigrao") do caminhao. ' +
+            'Omita se o motorista nao especificou qual caminhao — ai usa o vinculado a ele.',
+        },
+      },
+      required: [],
+    },
+  },
+  {
+    name: 'meu_caminhao',
+    description:
+      'Devolve o caminhao VINCULADO ao motorista (placa, apelido, marca, modelo, km_atual). ' +
+      'Use quando o motorista perguntar: "qual e meu caminhao", "qual caminhao esta comigo", ' +
+      '"qual veiculo esta relacionado a mim", "que caminhao estou dirigindo".',
     parameters: {
       type: SchemaType.OBJECT,
       properties: {},
@@ -168,16 +188,69 @@ export async function listarVeiculos(empresaId: string): Promise<ResultadoTool> 
 }
 
 /**
- * Busca o km_atual do caminhão vinculado ao motorista.
- * Estratégia 1: último km_log do motorista → pega veiculo_id → busca veiculos.km_atual.
- * Estratégia 2 (fallback): pedido ativo do motorista → veiculo vinculado.
+ * Busca o km_atual de um caminhão.
+ * Modo A (placaOuApelido informado): busca por placa OU apelido (case-insensitive) na empresa.
+ * Modo B (sem parametro): busca o caminhão vinculado ao motorista
+ *   1. último km_log do motorista → pega veiculo_id → busca veiculos.km_atual
+ *   2. fallback: pedido ativo do motorista → veiculo vinculado
  */
 export async function buscarKmCaminhao(
   empresaId: string,
-  motoristaId: string
+  motoristaId: string,
+  placaOuApelido?: string
 ): Promise<ResultadoTool> {
-  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+  if (!empresaId) return { ok: false, erro: 'empresa nao identificada' };
   const supabase = getSupabase();
+
+  // ── MODO A: buscar caminhao por placa/apelido (qualquer um da empresa) ──
+  const filtro = (placaOuApelido ?? '').trim();
+  if (filtro) {
+    // ilike pra case-insensitive + or pra cobrir placa OU apelido
+    const { data: veiculos, error } = await supabase
+      .from('veiculos')
+      .select('id, placa, apelido, marca, modelo, km_atual')
+      .eq('empresa_id', empresaId)
+      .eq('ativo', true)
+      .or(`placa.ilike.%${filtro}%,apelido.ilike.%${filtro}%`)
+      .limit(5);
+
+    if (error) {
+      log.error('buscar_km_por_apelido_erro', { filtro, message: error.message });
+      return { ok: false, erro: error.message };
+    }
+
+    if (!veiculos || veiculos.length === 0) {
+      return {
+        ok: false,
+        erro: `Nao encontrei caminhao com placa ou apelido "${filtro}". Use listar_veiculos pra ver os disponiveis.`,
+      };
+    }
+
+    if (veiculos.length > 1) {
+      const opcoes = veiculos.map((v) => `${v.placa}${v.apelido ? ` (${v.apelido})` : ''}`).join(', ');
+      return {
+        ok: false,
+        erro: `Encontrei mais de um caminhao com "${filtro}": ${opcoes}. Pergunte ao motorista qual deles.`,
+      };
+    }
+
+    const v = veiculos[0];
+    log.info('buscar_km_por_apelido', { filtro, placa: v.placa });
+    return {
+      ok: true,
+      dados: {
+        placa: v.placa,
+        apelido: v.apelido ?? null,
+        marca: v.marca ?? null,
+        modelo: v.modelo ?? null,
+        km_atual: v.km_atual,
+        ultima_atualizacao: null,
+      },
+    };
+  }
+
+  // ── MODO B: buscar caminhao vinculado ao motorista ──
+  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado (e nenhuma placa/apelido informados)' };
 
   // 1. Último km_log do motorista
   const { data: kmLog } = await supabase
@@ -253,6 +326,19 @@ export async function buscarKmCaminhao(
     ok: false,
     erro: 'Nao encontrei um caminhao vinculado a voce. Informe qual caminhao voce esta usando.',
   };
+}
+
+/**
+ * Devolve o caminhão vinculado ao motorista (placa, apelido, marca, modelo, km_atual).
+ * Atalho: chama buscarKmCaminhao sem filtro — caminho de descoberta é o mesmo
+ * (km_logs do motorista → fallback pedido ativo).
+ */
+export async function meuCaminhao(
+  empresaId: string,
+  motoristaId: string
+): Promise<ResultadoTool> {
+  if (!motoristaId) return { ok: false, erro: 'motorista nao identificado' };
+  return buscarKmCaminhao(empresaId, motoristaId);
 }
 
 /**
@@ -438,7 +524,13 @@ export async function executarTool(
     case 'listar_veiculos':
       return listarVeiculos(empresaId);
     case 'buscar_km_caminhao':
-      return buscarKmCaminhao(empresaId, motoristaId ?? '');
+      return buscarKmCaminhao(
+        empresaId,
+        motoristaId ?? '',
+        typeof args?.placa_ou_apelido === 'string' ? args.placa_ou_apelido : undefined
+      );
+    case 'meu_caminhao':
+      return meuCaminhao(empresaId, motoristaId ?? '');
     case 'propor_atualizacao_km':
       return proporAtualizacaoKm(empresaId, motoristaId ?? '', args?.km_novo);
     case 'confirmar_atualizacao_km':

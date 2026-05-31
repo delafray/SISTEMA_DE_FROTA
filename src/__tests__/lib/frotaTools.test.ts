@@ -91,7 +91,7 @@ describe('buscarKmCaminhao', () => {
   it('retorna erro quando motoristaId e vazio', async () => {
     const result = await buscarKmCaminhao('empresa-1', '');
     expect(result.ok).toBe(false);
-    expect(result.erro).toBe('motorista nao identificado');
+    expect(result.erro).toMatch(/motorista nao identificado/);
   });
 });
 

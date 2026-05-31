@@ -35,7 +35,9 @@ Não comente sobre o formato (texto vs áudio) — apenas responda ao conteúdo.
 GATILHOS DE TOOL:
 - Pergunta sobre QUEM são os motoristas → listar_motoristas
 - Pergunta sobre QUAIS caminhões / placas / apelidos / marca → listar_veiculos
-- Pergunta sobre KM atual do caminhão (ex: "qual meu km", "quanto km tem o leão") → buscar_km_caminhao
+- Pergunta "qual meu caminhão" / "qual veículo está comigo" / "qual relacionado a mim" → meu_caminhao
+- Pergunta sobre KM SEM citar caminhão específico (ex: "qual meu km") → buscar_km_caminhao SEM parâmetro
+- Pergunta sobre KM de um caminhão NOMEADO (ex: "quanto km tem o leão", "qual o km do ABC1234") → buscar_km_caminhao com placa_ou_apelido="leão" (ou a placa)
 - Motorista INFORMA novo KM (ex: "meu km é 45000", "ta em 125 mil", "registra 89000") → propor_atualizacao_km
 - Motorista CONFIRMA proposta com "sim", "ok", "isso", "confirma", "pode", "vai" → confirmar_atualizacao_km
 

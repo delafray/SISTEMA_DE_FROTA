@@ -12,7 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
 }));
 
-import { listarMotoristas, listarVeiculos, executarTool } from '@/lib/ai/tools/frotaTools';
+import { listarMotoristas, listarVeiculos, executarTool, buscarKmCaminhao, meuCaminhao } from '@/lib/ai/tools/frotaTools';
 
 function setupSelect(returnData: unknown[], error: { message: string } | null = null) {
   supabaseFromMock.mockReturnValue({
@@ -151,4 +151,135 @@ describe('executarTool dispatcher', () => {
 
   // Nota: legacy redirect + integracao Permission Loop completa testados em
   // src/__tests__/lib/frotaTools.test.ts (mocks do supabase mais robustos).
+});
+
+describe('buscarKmCaminhao — modo placa_ou_apelido', () => {
+  function setupBuscaPorApelido(veiculos: unknown[], error: { message: string } | null = null) {
+    supabaseFromMock.mockReturnValue({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            or: vi.fn(() => ({
+              limit: vi.fn(() => Promise.resolve({ data: veiculos, error })),
+            })),
+          })),
+        })),
+      })),
+    });
+  }
+
+  it('com apelido "leao": acha 1 caminhao e devolve dados', async () => {
+    setupBuscaPorApelido([
+      { id: 'v-1', placa: 'ABC1234', apelido: 'leao', marca: 'Volvo', modelo: 'FH16', km_atual: 185000 },
+    ]);
+    const res = await buscarKmCaminhao('emp-1', 'mot-1', 'leao');
+    expect(res.ok).toBe(true);
+    expect((res.dados as { apelido: string; km_atual: number }).apelido).toBe('leao');
+    expect((res.dados as { km_atual: number }).km_atual).toBe(185000);
+  });
+
+  it('com apelido inexistente: erro descritivo', async () => {
+    setupBuscaPorApelido([]);
+    const res = await buscarKmCaminhao('emp-1', 'mot-1', 'panda');
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/panda/);
+    expect(res.erro).toMatch(/listar_veiculos/);
+  });
+
+  it('com apelido ambiguo: pede pra desambiguar', async () => {
+    setupBuscaPorApelido([
+      { id: 'v-1', placa: 'ABC1234', apelido: 'leao da silva', marca: null, modelo: null, km_atual: 100 },
+      { id: 'v-2', placa: 'XYZ9876', apelido: 'leao filho', marca: null, modelo: null, km_atual: 200 },
+    ]);
+    const res = await buscarKmCaminhao('emp-1', 'mot-1', 'leao');
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/mais de um/i);
+    expect(res.erro).toContain('ABC1234');
+    expect(res.erro).toContain('XYZ9876');
+  });
+
+  it('sem empresaId: erro', async () => {
+    const res = await buscarKmCaminhao('', 'mot-1', 'leao');
+    expect(res.ok).toBe(false);
+    expect(res.erro).toContain('empresa');
+  });
+});
+
+describe('meuCaminhao', () => {
+  it('sem motoristaId: erro', async () => {
+    const res = await meuCaminhao('emp-1', '');
+    expect(res.ok).toBe(false);
+    expect(res.erro).toContain('motorista');
+  });
+
+  it('com motoristaId: delega pra buscarKmCaminhao sem filtro (cai no fluxo de km_logs)', async () => {
+    // Mock retornando null em km_logs e null em pedidos → fim de fluxo com erro de "nao encontrei"
+    supabaseFromMock.mockImplementation((table: string) => {
+      if (table === 'km_logs') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                order: vi.fn(() => ({
+                  limit: vi.fn(() => ({
+                    maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+                  })),
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+      if (table === 'pedidos') {
+        return {
+          select: vi.fn(() => ({
+            eq: vi.fn(() => ({
+              eq: vi.fn(() => ({
+                in: vi.fn(() => ({
+                  order: vi.fn(() => ({
+                    limit: vi.fn(() => ({
+                      maybeSingle: vi.fn(() => Promise.resolve({ data: null, error: null })),
+                    })),
+                  })),
+                })),
+              })),
+            })),
+          })),
+        };
+      }
+      return { select: vi.fn(() => ({ eq: vi.fn(() => Promise.resolve({ data: null, error: null })) })) };
+    });
+    const res = await meuCaminhao('emp-1', 'mot-1');
+    // Sem km_logs nem pedido ativo, devolve erro de "nao encontrei caminhao vinculado"
+    expect(res.ok).toBe(false);
+    expect(res.erro).toMatch(/vinculado|nao encontrei/i);
+  });
+});
+
+describe('executarTool — novas rotas', () => {
+  it('routeia meu_caminhao', async () => {
+    const res = await executarTool('meu_caminhao', 'emp-1', '');
+    expect(res.ok).toBe(false);
+    expect(res.erro).toContain('motorista');
+  });
+
+  it('routeia buscar_km_caminhao com placa_ou_apelido nos args', async () => {
+    supabaseFromMock.mockReturnValue({
+      select: vi.fn(() => ({
+        eq: vi.fn(() => ({
+          eq: vi.fn(() => ({
+            or: vi.fn(() => ({
+              limit: vi.fn(() => Promise.resolve({
+                data: [{ id: 'v-1', placa: 'XYZ', apelido: 'tigrao', marca: null, modelo: null, km_atual: 50000 }],
+                error: null,
+              })),
+            })),
+          })),
+        })),
+      })),
+    });
+    const res = await executarTool('buscar_km_caminhao', 'emp-1', 'mot-1', { placa_ou_apelido: 'tigrao' });
+    expect(res.ok).toBe(true);
+    expect((res.dados as { km_atual: number }).km_atual).toBe(50000);
+  });
 });
