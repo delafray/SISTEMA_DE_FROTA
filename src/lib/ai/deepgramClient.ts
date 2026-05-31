@@ -130,9 +130,10 @@ export async function transcreverComDeepgram(
     //
     // Se o magic não for OGG, mantém o header original (talvez seja MP3/WAV).
     //
-    // Params nova-3 otimizados (§8.6.1 do BOT_FRAMEWORK):
+    // Params nova-3 otimizados (§8.6.1 do BOT_FRAMEWORK).
+    // NAO incluir endpointing aqui: e param de STREAMING ('/v1/listen' websocket).
+    // Em batch (POST com binario) Deepgram retorna 400 INVALID_QUERY_PARAMETER.
     //   numerals: 'quarenta e cinco mil' → '45000' (sem regex no lado nosso)
-    //   endpointing 500: motorista pausa pra pensar sem cortar a fala
     //   filler_words=false: remove 'é', 'tipo', 'aaah' que atrapalham o LLM
     //   diarize=false: 1 falante so, economia de tokens no payload
     const model = process.env.DEEPGRAM_MODEL ?? 'nova-3';
@@ -142,7 +143,6 @@ export async function transcreverComDeepgram(
       smart_format: 'true',
       punctuate: 'true',
       numerals: 'true',
-      endpointing: '500',
       filler_words: 'false',
       diarize: 'false',
     });

@@ -49,8 +49,9 @@ describe('transcreverComDeepgram', () => {
     expect(segundaChamada[0]).toContain('language=pt-BR');
     // Params nova-3 otimizados pra frota PT-BR
     expect(segundaChamada[0]).toContain('numerals=true');
-    expect(segundaChamada[0]).toContain('endpointing=500');
     expect(segundaChamada[0]).toContain('filler_words=false');
+    // endpointing NAO pode estar — exclusivo de streaming, batch retorna 400
+    expect(segundaChamada[0]).not.toContain('endpointing');
     // keyterms da frota — pelo menos 'hodometro' e 'pedagio' devem estar la
     expect(segundaChamada[0]).toContain('keyterm=hodometro');
     expect(segundaChamada[0]).toContain('keyterm=pedagio');
