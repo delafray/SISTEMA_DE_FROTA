@@ -170,18 +170,31 @@ export async function POST(
 
   // 5. Se cheapest insertion, shift paradas >= novaOrdem (+1) usando 2-pass
   // pra evitar violar UNIQUE(rota_id, ordem).
+  //
+  // Ordens temporarias POSITIVAS e ALTAS (acima de qualquer existente) — NUNCA
+  // negativas: a tabela paradas tem CHECK (ordem > 0), entao `-p.ordem` era
+  // rejeitado, o pass 1 falhava silencioso e o pass 2 colidia no UNIQUE
+  // (db_shift_falhou). Mesma estrategia do PATCH /paradas.
   if (body.posicao === 'reotimizar' && novaOrdem <= paradasExistentes.length) {
     const aMover = paradasExistentes.filter((p) => p.ordem >= novaOrdem);
+    const maxOrdem = paradasExistentes.reduce((m, p) => Math.max(m, p.ordem), 0);
+    const tempBase = maxOrdem + 1;
 
-    // Pass 1: ordens temporarias negativas (- ordem original)
-    for (const p of aMover) {
+    // Pass 1: move pra ordens temporarias altas (libera os slots originais)
+    for (let i = 0; i < aMover.length; i++) {
       const { error } = await supabase
         .from('paradas')
-        .update({ ordem: -p.ordem })
-        .eq('id', p.id);
-      if (error) log.warn('shift_temp_falhou', { id: p.id, message: error.message });
+        .update({ ordem: tempBase + i })
+        .eq('id', aMover[i].id);
+      if (error) {
+        log.error('shift_temp_falhou', { id: aMover[i].id, message: error.message });
+        return NextResponse.json(
+          { error: 'db_shift_falhou', detail: error.message },
+          { status: 500 }
+        );
+      }
     }
-    // Pass 2: aplica ordens finais (ordem + 1)
+    // Pass 2: aplica ordens finais (ordem original + 1)
     for (const p of aMover) {
       const { error } = await supabase
         .from('paradas')

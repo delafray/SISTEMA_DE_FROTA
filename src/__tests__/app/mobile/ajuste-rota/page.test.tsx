@@ -214,6 +214,82 @@ describe('AjusteRotaPage — edicao via modal', () => {
   });
 });
 
+describe('AjusteRotaPage — reorganizar (VROOM)', () => {
+  it('clicar 🪄 chama o endpoint reorganizar e aplica a nova ordem (dirty)', async () => {
+    setSearchParams({ rota_id: 'r1' });
+
+    const paradas = [
+      paradaSeed({ id: 'p1', ordem: 1, endereco: { logradouro: 'Avenida Um', bairro: 'B', cidade: 'SP', uf: 'SP' } }),
+      paradaSeed({ id: 'p2', ordem: 2, latitude: -23.6, longitude: -46.7, endereco: { logradouro: 'Avenida Dois', bairro: 'B', cidade: 'SP', uf: 'SP' } }),
+      paradaSeed({ id: 'p3', ordem: 3, latitude: -23.7, longitude: -46.8, endereco: { logradouro: 'Avenida Tres', bairro: 'B', cidade: 'SP', uf: 'SP' } }),
+    ];
+
+    const fetchMock = vi.fn(async (url: string | Request) => {
+      const u = typeof url === 'string' ? url : url.url;
+      if (u.includes('/reorganizar')) {
+        return {
+          ok: true,
+          status: 200,
+          json: async () => ({
+            ok: true,
+            reorganizou: true,
+            // nova ordem: p3, p1, p2
+            paradas: [
+              { id: 'p3', ordem: 1 },
+              { id: 'p1', ordem: 2 },
+              { id: 'p2', ordem: 3 },
+            ],
+            nao_atendidas: [],
+          }),
+        } as unknown as Response;
+      }
+      return {
+        ok: true,
+        status: 200,
+        json: async () => ({
+          rota: { id: 'r1', motorista_id: 'm1', empresa_id: 'e1', distancia_total_km: 15, tempo_total_min: 30 },
+          paradas,
+        }),
+      } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchMock);
+
+    const user = userEvent.setup();
+    render(<AjusteRotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-reorganizar'));
+    // Antes: posicao 1 = Avenida Um (p1)
+    expect(screen.getByTestId('tijolinho-ordenar-1').textContent).toMatch(/Avenida Um/);
+
+    await user.click(screen.getByTestId('btn-reorganizar'));
+
+    // Chamou o endpoint de reorganizacao
+    await waitFor(() => {
+      const chamou = fetchMock.mock.calls.some((c) => {
+        const u = typeof c[0] === 'string' ? c[0] : (c[0] as Request).url;
+        return u.includes('/api/routing/rota/r1/reorganizar');
+      });
+      expect(chamou).toBe(true);
+    });
+
+    // Depois: posicao 1 = Avenida Tres (p3) e Salvar habilitado
+    await waitFor(() => {
+      expect(screen.getByTestId('tijolinho-ordenar-1').textContent).toMatch(/Avenida Tres/);
+      expect((screen.getByRole('button', { name: /Salvar mudancas/ }) as HTMLButtonElement).disabled).toBe(false);
+    });
+  });
+
+  it('botao reorganizar desabilitado com menos de 2 paradas pendentes', async () => {
+    setSearchParams({ rota_id: 'r1' });
+    vi.stubGlobal('fetch', mockGetRotaOk([paradaSeed({ id: 'p1' })]));
+
+    render(<AjusteRotaPage />);
+
+    await waitFor(() => screen.getByTestId('btn-reorganizar'));
+    expect((screen.getByTestId('btn-reorganizar') as HTMLButtonElement).disabled).toBe(true);
+  });
+});
+
 describe('AjusteRotaPage — salvar', () => {
   it('clicar Salvar chama PATCH com paradas', async () => {
     setSearchParams({ rota_id: 'r1' });

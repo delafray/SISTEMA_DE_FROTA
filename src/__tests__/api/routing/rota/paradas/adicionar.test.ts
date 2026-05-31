@@ -245,6 +245,29 @@ describe('POST adicionar parada — modo reotimizar (cheapest insertion)', () =>
     }
   });
 
+  it('shift usa ordens POSITIVAS (regressao db_shift_falhou / CHECK ordem>0)', async () => {
+    // O resolver default devolve (-23.5505,-46.6333) == p1, entao a cheapest
+    // insertion crava em 1 (custo 0) → shift garantido das 2 paradas.
+    const { updateCalls } = setupSupabase({
+      paradasExistentes: [
+        { id: 'p1', ordem: 1, latitude: -23.5505, longitude: -46.6333 }, // == ponto novo
+        { id: 'p2', ordem: 2, latitude: -22.9056, longitude: -47.0608 },
+      ],
+    });
+
+    const res = await POST(
+      makeReq(payload({ posicao: 'reotimizar' })),
+      { params: Promise.resolve({ id: 'r1' }) }
+    );
+
+    expect(res.status).toBe(201);
+    // Houve shift, e NENHUMA ordem temporaria foi negativa (era o bug — CHECK ordem>0)
+    expect(updateCalls.length).toBeGreaterThan(0);
+    expect(updateCalls.every((c) => c.ordem > 0)).toBe(true);
+    // Usou ordem temporaria ACIMA do max existente (estrategia de temp alto)
+    expect(updateCalls.some((c) => c.ordem > 2)).toBe(true);
+  });
+
   it('lista vazia + reotimizar → ordem 1, sem shifts', async () => {
     const { updateCalls } = setupSupabase({ paradasExistentes: [] });
 

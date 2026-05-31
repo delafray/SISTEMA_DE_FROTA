@@ -242,6 +242,53 @@ function AjusteRotaContent(): React.ReactElement {
     setDirty(true);
   }, []);
 
+  // ─── Reorganizar: roteiriza tudo de novo (VROOM) ─────────────────
+  // Pega as paradas pendentes e pede pro VROOM reordenar do zero a partir do
+  // GPS do motorista. Igual ao Inverter, so altera a ordem local + marca dirty
+  // — o motorista revisa e salva. Entregues ficam pinadas no topo.
+  const [reorganizando, setReorganizando] = useState(false);
+  const handleReorganizar = useCallback(async () => {
+    if (!rotaId) return;
+    if (paradas.filter((p) => !p.concluida_em).length < 2) return;
+    setReorganizando(true);
+    setAvisoLock(null);
+    try {
+      const res = await fetch(`/api/routing/rota/${rotaId}/reorganizar`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ origem: posicaoAtual ?? undefined }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || data.ok === false) {
+        vibrar([100, 50, 100]);
+        setAvisoLock('Nao consegui reorganizar agora — tente de novo.');
+        setTimeout(() => setAvisoLock(null), 3500);
+        return;
+      }
+      const novaOrdem: { id: string; ordem: number }[] = data.paradas ?? [];
+      if (novaOrdem.length === 0) return;
+      const ordemMap = new Map(novaOrdem.map((o) => [o.id, o.ordem]));
+      setParadas((arr) =>
+        [...arr]
+          .sort((a, b) => (ordemMap.get(a.id) ?? a.ordem) - (ordemMap.get(b.id) ?? b.ordem))
+          .map((p, i) => ({ ...p, ordem: i + 1 }))
+      );
+      vibrar([30, 20, 30, 20, 60]);
+      setDirty(true);
+      const naoAtendidas: string[] = data.nao_atendidas ?? [];
+      if (naoAtendidas.length > 0) {
+        setAvisoLock(`${naoAtendidas.length} parada(s) o sistema nao encaixou — ficaram no fim.`);
+        setTimeout(() => setAvisoLock(null), 4000);
+      }
+    } catch {
+      vibrar([100, 50, 100]);
+      setAvisoLock('Erro de rede ao reorganizar.');
+      setTimeout(() => setAvisoLock(null), 3500);
+    } finally {
+      setReorganizando(false);
+    }
+  }, [rotaId, paradas, posicaoAtual]);
+
   // ─── Adicionar parada — fluxo em 3 passos ────────────────────────
   const handleCapturarNova = useCallback((dados: NotaCapturadaInput) => {
     setDadosNovaParada(dados);
@@ -450,6 +497,21 @@ function AjusteRotaContent(): React.ReactElement {
               style={{ ...iconBtnStyle, opacity: paradas.length < 2 ? 0.4 : 1 }}
             >
               ⇅
+            </button>
+            <button
+              type="button"
+              onClick={handleReorganizar}
+              title="reorganizar (roteirizar tudo de novo)"
+              aria-label="reorganizar rota"
+              data-testid="btn-reorganizar"
+              disabled={paradas.filter((p) => !p.concluida_em).length < 2 || reorganizando}
+              style={{
+                ...iconBtnStyle,
+                opacity:
+                  paradas.filter((p) => !p.concluida_em).length < 2 || reorganizando ? 0.4 : 1,
+              }}
+            >
+              {reorganizando ? '…' : '🪄'}
             </button>
           </div>
         </div>

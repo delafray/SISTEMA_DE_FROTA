@@ -37,6 +37,14 @@ describe('normalizarRua', () => {
     expect(normalizarRua('Avenida Do Contorno')).toBe(chave);
   });
 
+  it("apostrofo JUNTA as partes (D'Alva → dalva) — casa com quem escreve sem apostrofo", () => {
+    expect(normalizarRua("Estrela D'Alva")).toBe('estrela dalva');
+    expect(normalizarRua('Estrela Dalva')).toBe('estrela dalva'); // mesma chave
+    expect(normalizarRua("Sant'Ana")).toBe('santana');
+    // aspas simples tipografica do teclado de celular tambem junta
+    expect(normalizarRua('Estrela D’Alva')).toBe('estrela dalva');
+  });
+
   it('string vazia → vazia', () => {
     expect(normalizarRua('')).toBe('');
     expect(normalizarRua('   ')).toBe('');

@@ -44,7 +44,13 @@ const PREFIXOS = [
 export function normalizarRua(rua: string): string {
   if (!rua) return '';
   let n = removerAcentos(rua).toLowerCase();
-  n = n.replace(/[.,;:!?()'"]/g, ' ');
+  // Apostrofo JUNTA as partes (nao vira espaco): "D'Alva" → "dalva",
+  // "Sant'Ana" → "santana", "D'Avila" → "davila". Assim casa com quem digita
+  // ou fala o nome SEM o apostrofo, que e o caso comum em ruas/bairros do BR.
+  // Cobre as variantes de aspas simples que vem de teclado de celular.
+  n = n.replace(/['’‘`´]/g, '');
+  // Demais pontuacoes viram espaco.
+  n = n.replace(/[.,;:!?()"]/g, ' ');
   n = n.replace(/\s+/g, ' ').trim();
   // Remove prefixos do INICIO (so 1 vez). Ordem do alternation importa:
   // "dos|das" antes de "do|da" pra evitar "rua das flores" → "rua das" + "s flores"
