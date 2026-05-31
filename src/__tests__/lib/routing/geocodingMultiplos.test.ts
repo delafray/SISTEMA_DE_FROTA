@@ -141,4 +141,65 @@ describe('geocodarMultiplos', () => {
     const fetchCall = (fetch as ReturnType<typeof vi.fn>).mock.calls[0][0] as string;
     expect(fetchCall).toContain('limit=10');
   });
+
+  // Regressao: BH/Contagem. Bug reportado em prod 2026-05-31 — Rua Piata
+  // em Contagem retornava 'Nacional' (regiao) em vez de 'Sao Mateus' (bairro).
+  // OSM brasileiro em metropoles: suburb=regiao, neighbourhood=bairro real.
+  // Priorizar neighbourhood.
+  it('prefere neighbourhood (bairro) sobre suburb (regiao) — caso Contagem/MG', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            lat: '-19.91',
+            lon: '-44.05',
+            display_name: 'Rua Piatã, São Mateus, Contagem - MG',
+            address: {
+              road: 'Rua Piatã',
+              house_number: '100',
+              suburb: 'Nacional',           // regiao — NAO usar
+              neighbourhood: 'São Mateus',  // bairro real — usar este
+              city: 'Contagem',
+              state_code: 'MG',
+            },
+          },
+        ],
+      })
+    );
+    const r = await geocodarMultiplos('Rua Piatã, 100, Contagem, MG');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.resultados[0].bairro).toBe('São Mateus');
+      expect(r.resultados[0].bairro).not.toBe('Nacional');
+    }
+  });
+
+  it('cai pra suburb quando neighbourhood ausente (cidade pequena)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            lat: '-19.5',
+            lon: '-43.9',
+            display_name: 'Av Central, Centro, Sete Lagoas - MG',
+            address: {
+              road: 'Av Central',
+              suburb: 'Centro',  // OSM nao tem neighbourhood aqui — usa suburb
+              city: 'Sete Lagoas',
+              state_code: 'MG',
+            },
+          },
+        ],
+      })
+    );
+    const r = await geocodarMultiplos('Av Central, Sete Lagoas, MG');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.resultados[0].bairro).toBe('Centro');
+  });
 });

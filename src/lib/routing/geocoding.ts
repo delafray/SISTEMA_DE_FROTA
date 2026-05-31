@@ -276,7 +276,12 @@ export async function geocodarMultiplos(
           endereco_normalizado: item.display_name,
           logradouro: a.road ?? a.pedestrian ?? undefined,
           numero: a.house_number ?? undefined,
-          bairro: a.suburb ?? a.neighbourhood ?? a.city_district ?? undefined,
+          // OSM em metropoles BR (BH, Contagem, RJ, SP) mapeia:
+          //   suburb = REGIAO administrativa (ex: "Nacional", "Eldorado")
+          //   neighbourhood = BAIRRO real (ex: "São Mateus", "Cidade Industrial")
+          // Em cidades menores so vem suburb. Por isso: preferir neighbourhood
+          // (mais especifico quando os dois existem); cair pra suburb senao.
+          bairro: a.neighbourhood ?? a.suburb ?? a.city_district ?? undefined,
           cidade: a.city ?? a.town ?? a.municipality ?? undefined,
           uf: a.state_code?.toUpperCase() ?? a.state ?? undefined,
           cep: a.postcode?.replace(/\D/g, '') ?? undefined,
