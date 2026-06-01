@@ -241,6 +241,34 @@ function RotaContent(): React.ReactElement {
     };
   }, [fase, motoristaId]);
 
+  // ─── Interceptar botão Voltar do celular (Hardware Back Button) ────
+  useEffect(() => {
+    const handlePopState = () => {
+      const hash = window.location.hash.replace('#', '');
+      if (!hash) {
+        setFase('inicio');
+      } else if (['captura', 'otimizando', 'em_rota'].includes(hash)) {
+        setFase(hash as Fase);
+      }
+    };
+
+    if (fase !== 'carregando') {
+      const currentHash = window.location.hash.replace('#', '');
+      if (fase === 'inicio' && currentHash) {
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      } else if (fase !== 'inicio' && currentHash !== fase) {
+        if (currentHash) {
+          window.history.replaceState(null, '', `#${fase}`);
+        } else {
+          window.history.pushState(null, '', `#${fase}`);
+        }
+      }
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, [fase]);
+
   // ─── Handlers ──────────────────────────────────────────────────────
 
   const iniciarCaptura = useCallback(async () => {
@@ -720,11 +748,6 @@ function Header({
           {numCapturadas} NF{numCapturadas !== 1 ? 's' : ''} capturada{numCapturadas !== 1 ? 's' : ''}
         </div>
       )}
-      {fase === 'em_rota' && (
-        <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-          {numParadas} parada{numParadas !== 1 ? 's' : ''}
-        </div>
-      )}
     </header>
   );
 }
@@ -787,11 +810,18 @@ function FaseInicio({
   return (
     <div style={{ padding: 16 }}>
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
-        <div style={{ fontSize: 48, marginBottom: 8 }}>🚛</div>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Rota do Dia</h2>
-        <p style={{ fontSize: 13, color: '#64748b', margin: 0 }}>
+        <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>
           Retome uma rota existente ou comece uma nova.
         </p>
+        <button
+          type="button"
+          onClick={onIniciar}
+          style={botaoPrimarioStyle}
+          data-testid="btn-iniciar-topo"
+        >
+          🆕 Nova rota
+        </button>
       </div>
 
       {rotasHistorico.length > 0 && (
@@ -1116,7 +1146,7 @@ function FaseEmRota({
       {/* Progress bar visual */}
       <div style={{ marginBottom: 8 }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569', marginBottom: 4 }}>
-          <span>{concluidas}/{total} entregue{total !== 1 ? 's' : ''}</span>
+          <span>{concluidas}/{total} paradas entregues</span>
           <span>{totaisStr}</span>
         </div>
         <div

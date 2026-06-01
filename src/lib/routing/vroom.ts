@@ -154,6 +154,7 @@ export async function otimizarRota(input: {
   const body = {
     vehicles: input.veiculos.map(veiculoParaVroom),
     jobs: input.jobs.map((j) => jobParaVroom(j, input.dataBase)),
+    options: { g: true },
   };
 
   const controller = new AbortController();
