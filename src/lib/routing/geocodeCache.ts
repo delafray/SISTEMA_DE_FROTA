@@ -19,7 +19,10 @@ import { geocodarGoogle, type ResultadoGoogle } from './googleGeocoding';
 
 const log = createLogger('geocode_cache');
 
-const LIMITE_MENSAL = Number(process.env.GEOCODE_LIMITE_MENSAL ?? '38000');
+// Teto mensal de chamadas ao Google. 9800 fica logo abaixo do grátis (~10k/mês
+// do modelo novo) com margem — acima disso cai no ViaCEP e NUNCA gera cobrança.
+// Ajustavel sem deploy pela env GEOCODE_LIMITE_MENSAL.
+const LIMITE_MENSAL = Number(process.env.GEOCODE_LIMITE_MENSAL ?? '9800');
 
 function getSupabase() {
   return createClient(

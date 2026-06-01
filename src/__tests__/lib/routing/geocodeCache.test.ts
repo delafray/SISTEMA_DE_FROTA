@@ -147,7 +147,7 @@ describe('consumirCota', () => {
     expect(r).toEqual({ permitido: true, total: 5 });
     expect(rpcMock).toHaveBeenCalledWith(
       'consumir_geocode_cota',
-      expect.objectContaining({ p_limite: 38000, p_mes: expect.stringMatching(/^\d{4}-\d{2}$/) }),
+      expect.objectContaining({ p_limite: 9800, p_mes: expect.stringMatching(/^\d{4}-\d{2}$/) }),
     );
   });
 
