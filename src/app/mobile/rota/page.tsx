@@ -550,11 +550,39 @@ function RotaContent(): React.ReactElement {
     );
   }
 
+  // ─── Calculo dinamico de distancias ────────────────────────────────
+  const statsDinamicos = useMemo(() => {
+    if (fase !== 'em_rota' || !posicaoAtual || paradas.length === 0) return null;
+    const pendentes = paradas.filter(p => !p.concluida_em).sort((a,b) => a.ordem - b.ordem);
+    if (pendentes.length === 0) return null; // tudo entregue
+
+    const fator = 1.35; // Fator para estimar ruas reais a partir de linha reta
+    const minPerKm = 3; // ~20km/h media urbana
+
+    const proxima = pendentes[0];
+    const distProxima = calcularDistanciaKm(posicaoAtual.lat, posicaoAtual.lng, proxima.latitude, proxima.longitude) * fator;
+
+    let distFaltam = distProxima;
+    for (let i = 0; i < pendentes.length - 1; i++) {
+      distFaltam += calcularDistanciaKm(
+        pendentes[i].latitude, pendentes[i].longitude,
+        pendentes[i+1].latitude, pendentes[i+1].longitude
+      ) * fator;
+    }
+
+    return {
+      proxKm: distProxima,
+      proxMin: Math.round(distProxima * minPerKm),
+      faltamKm: distFaltam,
+      faltamMin: Math.round(distFaltam * minPerKm),
+    };
+  }, [fase, posicaoAtual, paradas]);
+
   // ─── Renderizacao por fase ─────────────────────────────────────────
 
   return (
     <div style={containerStyle}>
-      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} />
+      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} statsDinamicos={statsDinamicos} />
 
       {toast && (
         <div
@@ -711,11 +739,13 @@ function Header({
   online,
   numCapturadas,
   numParadas,
+  statsDinamicos,
 }: {
   fase: Fase;
   online: boolean;
   numCapturadas: number;
   numParadas: number;
+  statsDinamicos?: { proxKm: number; proxMin: number; faltamKm: number; faltamMin: number } | null;
 }) {
   const labelFase: Record<Fase, string> = {
     carregando: 'Carregando',
@@ -746,6 +776,12 @@ function Header({
       {fase === 'captura' && (
         <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
           {numCapturadas} NF{numCapturadas !== 1 ? 's' : ''} capturada{numCapturadas !== 1 ? 's' : ''}
+        </div>
+      )}
+      {fase === 'em_rota' && statsDinamicos && (
+        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569', marginTop: 8, borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
+          <span>Prox. {statsDinamicos.proxKm.toFixed(1)}km ≈{statsDinamicos.proxMin}min</span>
+          <span>Soma total: {statsDinamicos.faltamKm.toFixed(1)}km ≈{statsDinamicos.faltamMin}min</span>
         </div>
       )}
     </header>
