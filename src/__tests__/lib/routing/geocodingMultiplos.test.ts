@@ -3,7 +3,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { geocodarMultiplos, calcularDistanciaKm, _resetRateLimit } from '@/lib/routing/geocoding';
+import { geocodarMultiplos, calcularDistanciaKm, _resetRateLimit, dedupMesmaRua } from '@/lib/routing/geocoding';
+import type { ResultadoGeocoding } from '@/lib/routing/types';
 
 // ─── helpers ────────────────────────────────────────────────────────
 
@@ -201,5 +202,90 @@ describe('geocodarMultiplos', () => {
     const r = await geocodarMultiplos('Av Central, Sete Lagoas, MG');
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.resultados[0].bairro).toBe('Centro');
+  });
+
+  // Regressao: usuario falou "Rua Piata 104 Sao Mateus Contagem" e apareceram
+  // 2 cards identicos (mesma rua/bairro/cidade) com distancias quase iguais —
+  // o Nominatim devolveu 2 nos da mesma rua. Tem que virar 1.
+  it('dedupa nos repetidos da mesma rua (caso Rua Piata Contagem)', async () => {
+    const item = (lat: string, lon: string) => ({
+      lat,
+      lon,
+      display_name: 'Rua Piatã, São Mateus, Contagem - MG',
+      address: { road: 'Rua Piatã', suburb: 'São Mateus', city: 'Contagem', state_code: 'MG' },
+    });
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [item('-19.861', '-44.021'), item('-19.862', '-44.022')],
+      })
+    );
+    const r = await geocodarMultiplos('Rua Piatã, São Mateus, Contagem');
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.resultados).toHaveLength(1);
+      expect(r.resultados[0].lat).toBeCloseTo(-19.861, 3); // mantem o 1o
+    }
+  });
+});
+
+// ─── dedupMesmaRua (unit) ────────────────────────────────────────────
+
+describe('dedupMesmaRua', () => {
+  const base = (over: Partial<ResultadoGeocoding> = {}): ResultadoGeocoding => ({
+    lat: -19.861,
+    lng: -44.021,
+    endereco_normalizado: 'Rua Piatã, São Mateus, Contagem, MG',
+    logradouro: 'Rua Piatã',
+    bairro: 'São Mateus',
+    cidade: 'Contagem',
+    uf: 'MG',
+    ...over,
+  });
+
+  it('colapsa a mesma rua (logradouro+bairro+cidade+uf) em 1, mantendo o 1o', () => {
+    const r = dedupMesmaRua([base({ lat: -19.861 }), base({ lat: -19.862 })]);
+    expect(r).toHaveLength(1);
+    expect(r[0].lat).toBe(-19.861);
+  });
+
+  it('mantem ruas de bairros diferentes', () => {
+    const r = dedupMesmaRua([base({ bairro: 'São Mateus' }), base({ bairro: 'Eldorado' })]);
+    expect(r).toHaveLength(2);
+  });
+
+  it('ignora acento/caixa na chave (São Mateus = sao mateus)', () => {
+    const r = dedupMesmaRua([base({ bairro: 'São Mateus' }), base({ bairro: 'sao mateus' })]);
+    expect(r).toHaveLength(1);
+  });
+
+  it('NAO funde mesma rua em cidades diferentes', () => {
+    const r = dedupMesmaRua([
+      base({ cidade: 'Contagem' }),
+      base({ cidade: 'Belo Horizonte' }),
+    ]);
+    expect(r).toHaveLength(2);
+  });
+
+  it('herda numero/cep de um duplicado quando o 1o nao tinha', () => {
+    const r = dedupMesmaRua([
+      base({ numero: undefined, cep: undefined }),
+      base({ numero: '104', cep: '32330000' }),
+    ]);
+    expect(r).toHaveLength(1);
+    expect(r[0].numero).toBe('104');
+    expect(r[0].cep).toBe('32330000');
+  });
+
+  it('sem campos estruturados, usa o display_name inteiro (nao funde cidades diferentes)', () => {
+    const semEstrut = (display: string): ResultadoGeocoding => ({
+      lat: -23.5,
+      lng: -46.6,
+      endereco_normalizado: display,
+    });
+    const r = dedupMesmaRua([semEstrut('Rua A, São Paulo, SP'), semEstrut('Rua A, Rio de Janeiro, RJ')]);
+    expect(r).toHaveLength(2);
   });
 });

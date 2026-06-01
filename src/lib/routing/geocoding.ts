@@ -381,6 +381,54 @@ export async function geocodarVozComVariantes(
   return ultimoErro;
 }
 
+/** Normaliza texto pra chave de dedup: minusculo, sem acento, sem pontuacao,
+ *  espacos colapsados. "São Mateus" e "sao mateus" viram a mesma coisa. */
+function normalizarParaChave(s: string): string {
+  return (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
+ * Dedup de resultados que sao a MESMA rua (logradouro+bairro+cidade+uf). O
+ * Nominatim costuma devolver varios nos da mesma rua com distancias quase
+ * iguais — o motorista via 2 cards identicos. Mantem o 1o (= mais perto, pois
+ * a lista ja vem ordenada por distancia quando ha GPS) e herda numero/cep de
+ * um duplicado quando o 1o nao tinha.
+ */
+export function dedupMesmaRua(resultados: ResultadoGeocoding[]): ResultadoGeocoding[] {
+  const porChave = new Map<string, ResultadoGeocoding>();
+  const ordem: string[] = [];
+  for (const r of resultados) {
+    // Com campos estruturados (o caso real — addressdetails=1), a chave e
+    // rua+bairro+cidade+uf. Sem eles (resultado cru), usa o display_name
+    // inteiro pra NAO fundir "Rua A, SP" com "Rua A, RJ" (cidades diferentes).
+    const temEstruturado = !!(r.logradouro && r.cidade);
+    const chave = temEstruturado
+      ? [
+          normalizarParaChave(r.logradouro ?? ''),
+          normalizarParaChave(r.bairro ?? ''),
+          normalizarParaChave(r.cidade ?? ''),
+          (r.uf ?? '').toUpperCase(),
+        ].join('|')
+      : `raw:${normalizarParaChave(r.endereco_normalizado)}`;
+    const existente = porChave.get(chave);
+    if (!existente) {
+      porChave.set(chave, { ...r });
+      ordem.push(chave);
+    } else {
+      // Mesma rua repetida: herda numero/cep se o 1o (mais perto) nao tinha.
+      if (!existente.numero && r.numero) existente.numero = r.numero;
+      if (!existente.cep && r.cep) existente.cep = r.cep;
+    }
+  }
+  return ordem.map((k) => porChave.get(k)!);
+}
+
 /**
  * Busca até `limite` resultados para um endereço.
  * Se `lat`/`lng` forem fornecidos, ordena os resultados por distância ao ponto.
@@ -478,8 +526,16 @@ export async function geocodarMultiplos(
       );
     }
 
-    log.info('endereco_multiplos_geocodado', { endereco, total: resultados.length });
-    return { ok: true, resultados };
+    // Dedup: o Nominatim devolve varios NOS da mesma rua (distancias quase
+    // iguais) — viram 1 card so. Mantem o 1o (= mais perto, ja ordenado).
+    const unicos = dedupMesmaRua(resultados);
+
+    log.info('endereco_multiplos_geocodado', {
+      endereco,
+      total: unicos.length,
+      brutos: resultados.length,
+    });
+    return { ok: true, resultados: unicos };
   } catch (err) {
     const error = err as Error;
     if (error.name === 'AbortError') {
