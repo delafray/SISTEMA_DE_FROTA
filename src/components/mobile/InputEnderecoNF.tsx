@@ -1,11 +1,17 @@
 'use client';
 
 /**
- * InputEnderecoNF — fluxo de captura de uma NF em 3 telas:
+ * InputEnderecoNF — fluxo de captura de uma NF (telas mínimas):
  *
- *   1. CEP        → digita 8 digitos, auto-chama ViaCEP
- *   2. NUMERO     → mostra endereco, digita numero
- *   3. CONFIRMAR  → mostra resumo, motorista confirma/edita/cancela
+ *   CEP digitado: 1. CEP → 2. CONFIRMAR (endereco + campo de numero + botao
+ *                 "Confirmar e proxima" na MESMA tela)
+ *   Por VOZ:      1. fala "Afonso Pena 341" → 2. ESCOLHA (cards ja com
+ *                 numero+CEP) → 3. CONFIRMAR (numero ja pre-preenchido da fala)
+ *
+ * A tela CONFIRMAR e unica pros dois caminhos: mostra o endereco, um campo de
+ * numero editavel (vazio quando nao se sabe o numero — o botao confirma fica
+ * desabilitado ate digitar) e o badge de validacao do numero contra o OSM
+ * (debounce, nao bloqueia).
  *
  * Fallback: se ViaCEP nao encontrar o CEP, abre form manual de endereco
  * (logradouro/bairro/cidade/uf).
@@ -48,7 +54,7 @@ export interface InputEnderecoNFProps {
   initialData?: NotaCapturadaInput;
 }
 
-type Etapa = 'cep' | 'numero' | 'confirmar' | 'endereco_manual' | 'escolha_endereco';
+type Etapa = 'cep' | 'confirmar' | 'endereco_manual' | 'escolha_endereco';
 
 // ─── HELPERS ────────────────────────────────────────────────────────
 
@@ -113,8 +119,9 @@ export function InputEnderecoNF({
 
       if (resultado.ok) {
         setEndereco(resultado.endereco);
-        setEtapa('numero');
-        // Foca o input de numero apos a transicao
+        // CEP nao traz numero da casa — vai direto pra tela de confirmar, que
+        // ja tem o campo de numero (vazio, focado). Uma tela a menos.
+        setEtapa('confirmar');
         setTimeout(() => numeroRef.current?.focus(), 50);
         return;
       }
@@ -137,40 +144,44 @@ export function InputEnderecoNF({
 
   const [buscandoEndereco, setBuscandoEndereco] = useState<boolean>(false);
 
-  // Valida o numero contra o OSM via API server-side. Roda quando entra
-  // na etapa 'confirmar'. Nunca bloqueia o fluxo — so mostra badge visual.
+  // Valida o numero contra o OSM via API server-side. Roda na etapa 'confirmar'
+  // quando ha numero. Como o numero agora e editavel nessa mesma tela, usamos
+  // DEBOUNCE (700ms) pra so validar quando o motorista para de digitar — senao
+  // dispararia uma chamada ao Overpass a cada tecla. Nunca bloqueia o fluxo.
   useEffect(() => {
-    if (etapa !== 'confirmar' || !endereco || !numero || !cep) return;
+    if (etapa !== 'confirmar' || !endereco || !numero.trim() || !cep) {
+      setValidacao(null);
+      return;
+    }
     let cancelado = false;
     setValidacao({ status: 'carregando' });
 
-    fetch('/api/routing/validar-endereco', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        cep,
-        numero,
-        endereco,
-      }),
-    })
-      .then((r) => (r.ok ? r.json() : null))
-      .then((data: { status?: string; mensagem?: string } | null) => {
-        if (cancelado) return;
-        if (!data || !data.status) {
-          setValidacao(null);
-          return;
-        }
-        setValidacao({
-          status: data.status as 'confirmado' | 'plausivel' | 'suspeito' | 'sem_dados',
-          mensagem: data.mensagem,
-        });
+    const timer = setTimeout(() => {
+      fetch('/api/routing/validar-endereco', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ cep, numero, endereco }),
       })
-      .catch(() => {
-        if (!cancelado) setValidacao(null);
-      });
+        .then((r) => (r.ok ? r.json() : null))
+        .then((data: { status?: string; mensagem?: string } | null) => {
+          if (cancelado) return;
+          if (!data || !data.status) {
+            setValidacao(null);
+            return;
+          }
+          setValidacao({
+            status: data.status as 'confirmado' | 'plausivel' | 'suspeito' | 'sem_dados',
+            mensagem: data.mensagem,
+          });
+        })
+        .catch(() => {
+          if (!cancelado) setValidacao(null);
+        });
+    }, 700);
 
     return () => {
       cancelado = true;
+      clearTimeout(timer);
     };
   }, [etapa, endereco, numero, cep]);
 
@@ -244,7 +255,12 @@ export function InputEnderecoNF({
   /** Preenche estado de endereço a partir de um resultado de geocoding.
    *  Usa os campos estruturados (logradouro/bairro/cidade/uf) parseados do
    *  Nominatim — antes o display_name inteiro virava logradouro e os demais
-   *  ficavam vazios, parada salvava sem bairro/cidade. */
+   *  ficavam vazios, parada salvava sem bairro/cidade.
+   *
+   *  Fusao das etapas (voz): o motorista falou "Afonso Pena 341", escolheu o
+   *  card e vai direto pra 'confirmar' com o numero ja preenchido (da fala ou
+   *  do Nominatim). Quando nao ha numero, o campo na tela de confirmar nasce
+   *  vazio e focado — sem tela extra. */
   function preencherPorGeocodingResultado(resultado: ResultadoGeocoding, textoOriginal: string) {
     setEndereco({
       logradouro: resultado.logradouro || resultado.endereco_normalizado.split(',')[0]?.trim() || '',
@@ -255,20 +271,17 @@ export function InputEnderecoNF({
     // Preferencia: numero estruturado do Nominatim > extracao do texto falado.
     // Nominatim raramente devolve house_number pra ruas BR, entao o caminho
     // normal e extrair da fala (ultimo run de digitos).
-    if (resultado.numero) {
-      setNumero(resultado.numero);
-    } else {
-      const numeroFalado = extrairNumeroDeTranscricao(textoOriginal);
-      if (numeroFalado) {
-        setNumero(numeroFalado);
-      }
-    }
+    const numeroFinal = resultado.numero || extrairNumeroDeTranscricao(textoOriginal) || '';
+    setNumero(numeroFinal);
     // Tambem preenche o CEP se Nominatim devolveu
     if (resultado.cep && /^\d{8}$/.test(resultado.cep)) {
       setCep(resultado.cep);
     }
-    setEtapa('numero');
-    setTimeout(() => numeroRef.current?.focus(), 50);
+    setEtapa('confirmar');
+    // Sem numero pra mostrar → foca o campo pra digitar na hora.
+    if (!numeroFinal.trim()) {
+      setTimeout(() => numeroRef.current?.focus(), 50);
+    }
   }
 
   const handleCepChange = useCallback((valor: string) => {
@@ -288,9 +301,13 @@ export function InputEnderecoNF({
     setErro(null);
   }, [cep, numero, endereco, onConfirmar]);
 
-  const handleEditar = useCallback(() => {
-    setEtapa('numero');
-    setTimeout(() => numeroRef.current?.focus(), 50);
+  const handleVoltarParaCep = useCallback(() => {
+    setCep('');
+    setNumero('');
+    setEndereco(null);
+    setValidacao(null);
+    setErro(null);
+    setEtapa('cep');
   }, []);
 
   const handleCancelarNota = useCallback(() => {
@@ -374,6 +391,7 @@ export function InputEnderecoNF({
         {cabecalho}
         <ListaOpcoesEndereco
           opcoes={opcoesFala}
+          numeroFala={extrairNumeroDeTranscricao(textoFala) ?? undefined}
           onSelecionar={(opcao) => {
             preencherPorGeocodingResultado(opcao, textoFala);
             setOpcoesFala([]);
@@ -391,15 +409,24 @@ export function InputEnderecoNF({
     );
   }
 
-  if (etapa === 'numero' && endereco) {
+  // Tela unica de revisar+confirmar: endereco + campo de numero editavel +
+  // badge de validacao + confirmar de uma vez. Pros dois caminhos (CEP e voz).
+  if (etapa === 'confirmar' && endereco) {
     return (
       <div style={containerStyle}>
         {cabecalho}
+        <div style={{ fontWeight: 600, marginBottom: 12 }}>Confirmar?</div>
         <div style={enderecoBoxStyle}>
-          ✓ <strong>{endereco.logradouro || '(sem nome de rua)'}</strong>
+          📍 <strong>{endereco.logradouro || '(sem nome de rua)'}{numero.trim() ? `, ${numero.trim()}` : ''}</strong>
           <br />
           <span style={{ fontSize: 14, color: '#475569' }}>
-            {endereco.bairro && `${endereco.bairro} — `}{endereco.cidade}/{endereco.uf}
+            {endereco.bairro && `${endereco.bairro}, `}{endereco.cidade}/{endereco.uf}
+            {cep && (
+              <>
+                <br />
+                CEP {formatarCEP(cep)}
+              </>
+            )}
           </span>
         </div>
         <label style={labelStyle} htmlFor="campo-numero">Numero</label>
@@ -415,41 +442,17 @@ export function InputEnderecoNF({
           style={inputStyle}
           aria-label="Numero"
         />
+        {validacao && <BadgeValidacao status={validacao.status} mensagem={validacao.mensagem} />}
         <button
           type="button"
-          onClick={() => numero.trim() && setEtapa('confirmar')}
+          onClick={handleConfirmar}
           disabled={!numero.trim()}
           style={{ ...botaoPrimarioStyle, opacity: numero.trim() ? 1 : 0.4 }}
         >
-          → Confirmar
-        </button>
-        <button type="button" onClick={() => setEtapa('cep')} style={botaoSecundarioStyle}>
-          ← Voltar (mudar CEP)
-        </button>
-      </div>
-    );
-  }
-
-  if (etapa === 'confirmar' && endereco) {
-    return (
-      <div style={containerStyle}>
-        {cabecalho}
-        <div style={{ fontWeight: 600, marginBottom: 12 }}>Confirmar?</div>
-        <div style={enderecoBoxStyle}>
-          📍 <strong>{endereco.logradouro || '(sem nome de rua)'}, {numero}</strong>
-          <br />
-          <span style={{ fontSize: 14, color: '#475569' }}>
-            {endereco.bairro && `${endereco.bairro}, `}{endereco.cidade}/{endereco.uf}
-            <br />
-            CEP {formatarCEP(cep)}
-          </span>
-        </div>
-        {validacao && <BadgeValidacao status={validacao.status} mensagem={validacao.mensagem} />}
-        <button type="button" onClick={handleConfirmar} style={botaoPrimarioStyle}>
           ✅ Confirmar e proxima
         </button>
-        <button type="button" onClick={handleEditar} style={botaoSecundarioStyle}>
-          ✏️ Editar
+        <button type="button" onClick={handleVoltarParaCep} style={botaoSecundarioStyle}>
+          ← Voltar (trocar endereco)
         </button>
         <button type="button" onClick={handleCancelarNota} style={{ ...botaoSecundarioStyle, color: '#dc2626' }}>
           ❌ Cancelar esta NF
@@ -468,7 +471,7 @@ export function InputEnderecoNF({
           cepInicial={cep}
           onPreencher={(end) => {
             setEndereco(end);
-            setEtapa('numero');
+            setEtapa('confirmar');
             setTimeout(() => numeroRef.current?.focus(), 50);
           }}
           onVoltar={() => {

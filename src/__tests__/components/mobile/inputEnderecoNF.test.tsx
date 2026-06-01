@@ -139,28 +139,26 @@ describe('InputEnderecoNF — fluxo Numero', () => {
   });
 });
 
-describe('InputEnderecoNF — fluxo Confirmar', () => {
-  it('mostra resumo na tela de confirmacao e chama onConfirmar com os dados', async () => {
+describe('InputEnderecoNF — fluxo Confirmar (tela unica numero+confirmar)', () => {
+  it('apos ViaCEP cai direto na confirmacao; digita numero e chama onConfirmar', async () => {
     cepMock.mockResolvedValue({ ok: true, cep: '01310100', endereco: enderecoExemplo, fonte: 'api' });
     const onConfirmar = vi.fn();
 
     const user = userEvent.setup();
     render(<InputEnderecoNF numeroNF={1} totalNFs={70} onConfirmar={onConfirmar} />);
 
-    // CEP
+    // CEP → ja vai pra tela de confirmar (sem tela de numero separada)
     await user.type(screen.getByLabelText(/CEP/i), '01310100');
     await waitFor(() => screen.getByLabelText(/^Numero$/i));
-
-    // Numero
-    await user.type(screen.getByLabelText(/^Numero$/i), '123');
-    await user.click(screen.getByRole('button', { name: /Confirmar/ }));
-
-    // Tela de confirmacao
-    await waitFor(() => expect(screen.getByText(/Confirmar\?/)).toBeDefined());
-    expect(screen.getByText(/Avenida Paulista, 123/)).toBeDefined();
+    expect(screen.getByText(/Confirmar\?/)).toBeDefined();
+    expect(screen.getByText(/Avenida Paulista/)).toBeDefined();
     expect(screen.getByText(/CEP 01310-100/)).toBeDefined();
 
-    // Clica em "Confirmar e proxima"
+    // Digita o numero na mesma tela; o resumo passa a mostrar ", 123"
+    await user.type(screen.getByLabelText(/^Numero$/i), '123');
+    expect(screen.getByText(/Avenida Paulista, 123/)).toBeDefined();
+
+    // Confirma de uma vez
     await user.click(screen.getByRole('button', { name: /Confirmar e proxima/ }));
 
     expect(onConfirmar).toHaveBeenCalledWith({
@@ -170,7 +168,28 @@ describe('InputEnderecoNF — fluxo Confirmar', () => {
     });
   });
 
-  it('botao Editar volta pra tela de numero', async () => {
+  it('numero e editavel inline (sem botao Editar / sem tela separada)', async () => {
+    cepMock.mockResolvedValue({ ok: true, cep: '01310100', endereco: enderecoExemplo, fonte: 'api' });
+
+    const user = userEvent.setup();
+    render(<InputEnderecoNF numeroNF={1} totalNFs={70} onConfirmar={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/CEP/i), '01310100');
+    await waitFor(() => screen.getByLabelText(/^Numero$/i));
+
+    const numInput = screen.getByLabelText(/^Numero$/i);
+    await user.type(numInput, '123');
+    expect(screen.getByText(/Avenida Paulista, 123/)).toBeDefined();
+
+    await user.clear(numInput);
+    await user.type(numInput, '456');
+    expect(screen.getByText(/Avenida Paulista, 456/)).toBeDefined();
+
+    // Nao existe mais botao "Editar"
+    expect(screen.queryByRole('button', { name: /Editar/ })).toBeNull();
+  });
+
+  it('botao "Voltar (trocar endereco)" limpa e volta pra tela CEP', async () => {
     cepMock.mockResolvedValue({ ok: true, cep: '01310100', endereco: enderecoExemplo, fonte: 'api' });
 
     const user = userEvent.setup();
@@ -179,12 +198,30 @@ describe('InputEnderecoNF — fluxo Confirmar', () => {
     await user.type(screen.getByLabelText(/CEP/i), '01310100');
     await waitFor(() => screen.getByLabelText(/^Numero$/i));
     await user.type(screen.getByLabelText(/^Numero$/i), '123');
-    await user.click(screen.getByRole('button', { name: /^→ Confirmar$/ }));
 
-    await waitFor(() => screen.getByText(/Confirmar\?/));
-    await user.click(screen.getByRole('button', { name: /Editar/ }));
+    await user.click(screen.getByRole('button', { name: /Voltar \(trocar endereco\)/ }));
 
-    expect(screen.getByLabelText(/^Numero$/i)).toBeDefined();
+    await waitFor(() => {
+      const cepInput = screen.getByLabelText(/CEP/i) as HTMLInputElement;
+      expect(cepInput.value).toBe('');
+    });
+    expect(screen.queryByText(/Confirmar\?/)).toBeNull();
+  });
+
+  it('botao confirmar fica desabilitado enquanto numero esta vazio na confirmacao', async () => {
+    cepMock.mockResolvedValue({ ok: true, cep: '01310100', endereco: enderecoExemplo, fonte: 'api' });
+
+    const user = userEvent.setup();
+    render(<InputEnderecoNF numeroNF={1} totalNFs={70} onConfirmar={vi.fn()} />);
+
+    await user.type(screen.getByLabelText(/CEP/i), '01310100');
+    await waitFor(() => screen.getByLabelText(/^Numero$/i));
+
+    const btn = screen.getByRole('button', { name: /Confirmar e proxima/ }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+
+    await user.type(screen.getByLabelText(/^Numero$/i), '123');
+    expect(btn.disabled).toBe(false);
   });
 
   it('apos confirmar, reseta pra capturar proxima NF (volta pra tela CEP)', async () => {
@@ -196,8 +233,6 @@ describe('InputEnderecoNF — fluxo Confirmar', () => {
     await user.type(screen.getByLabelText(/CEP/i), '01310100');
     await waitFor(() => screen.getByLabelText(/^Numero$/i));
     await user.type(screen.getByLabelText(/^Numero$/i), '123');
-    await user.click(screen.getByRole('button', { name: /^→ Confirmar$/ }));
-    await waitFor(() => screen.getByText(/Confirmar\?/));
     await user.click(screen.getByRole('button', { name: /Confirmar e proxima/ }));
 
     // Volta pra tela CEP com input vazio

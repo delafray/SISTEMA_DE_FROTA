@@ -108,4 +108,66 @@ describe('ListaOpcoesEndereco', () => {
     );
     expect(screen.getByText(/350 m/)).toBeDefined();
   });
+
+  // ─── Fusao escolha+numero: card ja mostra numero + CEP ──────────────
+
+  it('mostra o numero FALADO no card quando a opcao nao traz house_number', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena' }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+        numeroFala="341"
+      />
+    );
+    expect(screen.getByText('Avenida Afonso Pena, 341')).toBeDefined();
+  });
+
+  it('prefere o numero do Nominatim sobre o falado', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Rua X'), logradouro: 'Rua X', numero: '1500' }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+        numeroFala="341"
+      />
+    );
+    expect(screen.getByText('Rua X, 1500')).toBeDefined();
+  });
+
+  it('exibe o CEP formatado no card quando disponivel', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena', cidade: 'Belo Horizonte', uf: 'MG', cep: '30130110' }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+        numeroFala="341"
+      />
+    );
+    expect(screen.getByText(/CEP 30130-110/)).toBeDefined();
+  });
+
+  it('nao mostra "CEP" quando a opcao nao tem CEP', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Rua Y'), logradouro: 'Rua Y', cidade: 'Contagem', uf: 'MG' }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+      />
+    );
+    // O botao "Nenhum desses — digitar o CEP" contem "CEP"; aqui checamos que
+    // NAO ha a linha de CEP do card (CEP seguido de digitos).
+    expect(screen.queryByText(/CEP \d{5}-\d{3}/)).toBeNull();
+  });
+
+  it('nao adiciona ", numero" quando nao ha numero nem fala', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Rua Z'), logradouro: 'Rua Z' }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+      />
+    );
+    expect(screen.getByText('Rua Z')).toBeDefined();
+  });
 });

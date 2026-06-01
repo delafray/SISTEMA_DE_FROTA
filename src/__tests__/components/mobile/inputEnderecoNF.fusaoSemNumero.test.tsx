@@ -1,10 +1,8 @@
 /**
- * Regressao: ao capturar endereco por VOZ, o numero da casa falado deve ser
- * preenchido automaticamente (antes era jogado fora — passava-se '' como texto
- * original na selecao da opcao).
- *
- * Fusao das etapas: como o numero ja veio da fala, escolher o card pula direto
- * pra etapa CONFIRMAR (sem a tela separada de digitar numero).
+ * Fusao das etapas (caminho por voz) — caso SEM numero:
+ * quando a fala NAO tem numero e o Nominatim tambem nao devolve house_number,
+ * escolher o card cai na tela unica de confirmar com o campo de numero VAZIO
+ * (focado) e o botao "Confirmar e proxima" DESABILITADO ate digitar.
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -15,13 +13,13 @@ vi.mock('@/lib/cep/client', () => ({
   consultarCEPBrowser: vi.fn(() => new Promise(() => {})),
 }));
 
-// Microfone: ao clicar, simula a transcricao de uma fala com numero no meio.
+// Microfone: fala SEM numero da casa.
 vi.mock('@/components/mobile/BotaoMicrofone', () => ({
   BotaoMicrofone: (props: { onTranscricao: (t: string) => void }) => (
     <button
       type="button"
       data-testid="mock-mic"
-      onClick={() => props.onTranscricao('Rua Piatã 104 São Mateus Contagem')}
+      onClick={() => props.onTranscricao('Avenida Afonso Pena Centro Belo Horizonte')}
     >
       mic
     </button>
@@ -43,14 +41,12 @@ vi.mock('@/components/mobile/ListaOpcoesEndereco', () => ({
 import { InputEnderecoNF } from '@/components/mobile/InputEnderecoNF';
 
 beforeEach(() => {
-  // jsdom nao tem geolocation — sem isso o await em getCurrentPosition trava.
   Object.defineProperty(navigator, 'geolocation', {
     value: { getCurrentPosition: (_s: unknown, e: (err: unknown) => void) => e({ code: 1 }) },
     configurable: true,
   });
 
-  // Nominatim devolve a rua SEM house_number (caso real BR) — o numero tem que
-  // vir da fala.
+  // Nominatim devolve a rua SEM house_number e sem CEP.
   vi.stubGlobal(
     'fetch',
     vi.fn(async () => ({
@@ -59,12 +55,12 @@ beforeEach(() => {
       json: async () => ({
         resultados: [
           {
-            lat: -19.86,
-            lng: -44.02,
-            endereco_normalizado: 'Rua Piatã, São Mateus, Contagem, MG',
-            logradouro: 'Rua Piatã',
-            bairro: 'São Mateus',
-            cidade: 'Contagem',
+            lat: -19.92,
+            lng: -43.94,
+            endereco_normalizado: 'Avenida Afonso Pena, Centro, Belo Horizonte, MG',
+            logradouro: 'Avenida Afonso Pena',
+            bairro: 'Centro',
+            cidade: 'Belo Horizonte',
             uf: 'MG',
           },
         ],
@@ -78,28 +74,28 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe('InputEnderecoNF — captura por voz preenche o numero', () => {
-  it('fala "Rua Piatã 104 ..." → pula pra CONFIRMAR ja com o numero 104', async () => {
+describe('InputEnderecoNF — voz sem numero', () => {
+  it('fala sem numero → confirmar com campo vazio e botao desabilitado', async () => {
     const user = userEvent.setup();
     render(<InputEnderecoNF numeroNF={1} onConfirmar={vi.fn()} />);
 
-    // 1. Fala o endereco (mock do microfone)
     await user.click(screen.getByTestId('mock-mic'));
 
-    // 2. Aparece a lista de opcoes; escolhe a primeira
     await waitFor(() => screen.getByTestId('mock-opcao'));
     await user.click(screen.getByTestId('mock-opcao'));
 
-    // 3. Como o numero (104) veio da fala, vai direto pra CONFIRMAR com o
-    //    resumo "Rua Piatã, 104" e o campo de numero ja preenchido com 104.
+    // Tela unica de confirmar, com o campo de numero VAZIO.
     await waitFor(() => {
-      expect(screen.getByText(/Confirmar\?/i)).toBeDefined();
       const input = screen.getByLabelText(/^Numero$/i) as HTMLInputElement;
-      expect(input.value).toBe('104');
+      expect(input).toBeDefined();
+      expect(input.value).toBe('');
     });
-    expect(screen.getByText(/Rua Piatã, 104/)).toBeDefined();
-    // Botao de confirmar e proxima presente e habilitado (tem numero)
+    // Botao confirmar desabilitado enquanto nao houver numero.
     const btn = screen.getByRole('button', { name: /Confirmar e proxima/i }) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+
+    // Ao digitar o numero, habilita.
+    await user.type(screen.getByLabelText(/^Numero$/i), '99');
     expect(btn.disabled).toBe(false);
   });
 });

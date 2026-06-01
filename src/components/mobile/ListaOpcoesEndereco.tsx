@@ -6,6 +6,10 @@ interface ListaOpcoesEnderecoProps {
   opcoes: (ResultadoGeocoding & { distanciaKm?: number })[];
   onSelecionar: (opcao: ResultadoGeocoding) => void;
   onNenhumDesses: () => void;
+  /** Numero da casa extraido da fala (ex: "Afonso Pena 341" → "341"). Usado
+   *  como fallback no card quando o Nominatim nao devolve house_number, pra o
+   *  motorista ja ver "Afonso Pena, 341" e confirmar de uma vez. */
+  numeroFala?: string;
 }
 
 /** Formata distância de forma legível: "2,3 km" ou "510 km" */
@@ -13,6 +17,13 @@ function formatarDistancia(km: number): string {
   if (km < 1) return `${Math.round(km * 1000)} m`;
   if (km < 10) return `${km.toFixed(1).replace('.', ',')} km`;
   return `${Math.round(km)} km`;
+}
+
+/** Formata CEP "30130110" → "30130-110". Devolve null se nao for 8 digitos. */
+function formatarCep(cep?: string): string | null {
+  const d = (cep ?? '').replace(/\D/g, '');
+  if (d.length !== 8) return null;
+  return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
 /**
@@ -42,6 +53,7 @@ export function ListaOpcoesEndereco({
   opcoes,
   onSelecionar,
   onNenhumDesses,
+  numeroFala,
 }: ListaOpcoesEnderecoProps): React.ReactElement {
   return (
     <div style={{ padding: '0 0 8px' }}>
@@ -55,7 +67,13 @@ export function ListaOpcoesEndereco({
         aria-label="Opções de endereço"
         data-testid="lista-opcoes-endereco"
       >
-        {opcoes.map((opcao, idx) => (
+        {opcoes.map((opcao, idx) => {
+          // Numero a exibir: o do Nominatim (raro no BR) ou o que o motorista
+          // falou. Assim o card ja mostra "Afonso Pena, 341" e ele confirma de
+          // uma vez, sem a tela separada de digitar o numero.
+          const numeroExibido = opcao.numero ?? numeroFala;
+          const cepFmt = formatarCep(opcao.cep);
+          return (
           <li key={`${opcao.lat}-${opcao.lng}-${idx}`}>
             <button
               type="button"
@@ -74,15 +92,17 @@ export function ListaOpcoesEndereco({
             >
               <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Linha 1: logradouro + numero (campos estruturados se disponivel) */}
+                  {/* Linha 1: logradouro + numero (numero falado como fallback) */}
                   <div style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a', wordBreak: 'break-word' }}>
                     {opcao.logradouro
-                      ? `${opcao.logradouro}${opcao.numero ? `, ${opcao.numero}` : ''}`
+                      ? `${opcao.logradouro}${numeroExibido ? `, ${numeroExibido}` : ''}`
                       : extrairLabelCurto(opcao.endereco_normalizado)}
                   </div>
-                  {/* Linha 2: bairro · cidade/UF (info mais util pra desambiguar) */}
-                  {(opcao.bairro || opcao.cidade) ? (
+                  {/* Linha 2: CEP · bairro · cidade/UF (info pra desambiguar) */}
+                  {(cepFmt || opcao.bairro || opcao.cidade) ? (
                     <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
+                      {cepFmt && <span>CEP {cepFmt}</span>}
+                      {cepFmt && (opcao.bairro || opcao.cidade || opcao.uf) ? ' · ' : ''}
                       {opcao.bairro && <strong>{opcao.bairro}</strong>}
                       {opcao.bairro && (opcao.cidade || opcao.uf) ? ' · ' : ''}
                       {opcao.cidade}
@@ -102,7 +122,8 @@ export function ListaOpcoesEndereco({
               </div>
             </button>
           </li>
-        ))}
+          );
+        })}
       </ul>
 
       <button
