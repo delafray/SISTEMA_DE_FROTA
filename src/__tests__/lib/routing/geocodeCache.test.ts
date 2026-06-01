@@ -37,6 +37,7 @@ import {
   gravarGeocodeCache,
   consumirCota,
   resolverGoogleCacheado,
+  lerUsoMes,
 } from '@/lib/routing/geocodeCache';
 
 beforeEach(() => {
@@ -162,6 +163,26 @@ describe('consumirCota', () => {
     rpcMock.mockResolvedValue({ data: null, error: { code: 'X', message: 'boom' } });
     const r = await consumirCota();
     expect(r.permitido).toBe(false);
+  });
+});
+
+describe('lerUsoMes', () => {
+  it('devolve total do mês + limite (default 9800) + mês YYYY-MM', async () => {
+    maybeSingleMock.mockResolvedValue({ data: { total: 1234 }, error: null });
+    const r = await lerUsoMes();
+    expect(r.total).toBe(1234);
+    expect(r.limite).toBe(9800);
+    expect(r.mes).toMatch(/^\d{4}-\d{2}$/);
+  });
+
+  it('sem linha do mês → total 0', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: null });
+    expect((await lerUsoMes()).total).toBe(0);
+  });
+
+  it('erro de leitura → total 0 (não lança)', async () => {
+    maybeSingleMock.mockResolvedValue({ data: null, error: { code: 'X', message: 'boom' } });
+    expect((await lerUsoMes()).total).toBe(0);
   });
 });
 

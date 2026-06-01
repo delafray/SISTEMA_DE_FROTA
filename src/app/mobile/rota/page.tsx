@@ -98,11 +98,32 @@ function RotaContent(): React.ReactElement {
   >([]);
   // Historico de rotas para mostrar na tela de inicio
   const [rotasHistorico, setRotasHistorico] = useState<RotaOtimizada[]>([]);
+  // Uso do Google no mes (pra mostrar na captura: cache vs API + quanto falta
+  // pro ViaCEP). Atualiza ao entrar na captura e a cada NF capturada.
+  const [usoGoogle, setUsoGoogle] = useState<{ total: number; limite: number } | null>(null);
 
   // Trava em retrato ao montar
   useEffect(() => {
     lockOrientacaoRetrato();
   }, []);
+
+  // Contador de uso do Google — refaz a leitura a cada NF capturada, pro
+  // motorista ver se a busca subiu o contador (API) ou nao (cache).
+  useEffect(() => {
+    if (fase !== 'captura') return;
+    let cancelado = false;
+    fetch('/api/routing/geocode-uso')
+      .then((r) => (r.ok ? r.json() : null))
+      .then((d: { total?: number; limite?: number } | null) => {
+        if (!cancelado && d && typeof d.total === 'number' && typeof d.limite === 'number') {
+          setUsoGoogle({ total: d.total, limite: d.limite });
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [fase, notas.length]);
 
   // Watch posicao do motorista durante "em_rota" — atualiza marcador no mapa
   // conforme ele se desloca. Para o watch ao sair da fase pra economizar
@@ -571,7 +592,7 @@ function RotaContent(): React.ReactElement {
 
   return (
     <div style={containerStyle}>
-      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} statsDinamicos={statsDinamicos} />
+      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} statsDinamicos={statsDinamicos} usoGoogle={usoGoogle} />
 
       {toast && (
         <div
@@ -729,12 +750,14 @@ function Header({
   numCapturadas,
   numParadas,
   statsDinamicos,
+  usoGoogle,
 }: {
   fase: Fase;
   online: boolean;
   numCapturadas: number;
   numParadas: number;
   statsDinamicos?: { proxKm: number; proxMin: number; faltamKm: number; faltamMin: number } | null;
+  usoGoogle?: { total: number; limite: number } | null;
 }) {
   const labelFase: Record<Fase, string> = {
     carregando: 'Carregando',
@@ -763,8 +786,19 @@ function Header({
         </div>
       </div>
       {fase === 'captura' && (
-        <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
-          {numCapturadas} NF{numCapturadas !== 1 ? 's' : ''} capturada{numCapturadas !== 1 ? 's' : ''}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#475569', marginTop: 4 }}>
+          <span>
+            {numCapturadas} NF{numCapturadas !== 1 ? 's' : ''} capturada{numCapturadas !== 1 ? 's' : ''}
+          </span>
+          {usoGoogle && (
+            <span
+              data-testid="uso-google"
+              title="Requisições ao Google neste mês. Não sobe = veio do cache. Ao bater o teto, usa o ViaCEP."
+              style={{ fontSize: 11, color: usoGoogle.total >= usoGoogle.limite ? '#dc2626' : '#94a3b8', fontFamily: 'ui-monospace, monospace' }}
+            >
+              🌍 {usoGoogle.total}/{usoGoogle.limite}
+            </span>
+          )}
         </div>
       )}
       {fase === 'em_rota' && statsDinamicos && (

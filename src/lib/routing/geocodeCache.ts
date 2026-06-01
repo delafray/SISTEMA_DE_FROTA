@@ -75,6 +75,28 @@ export function mesAtual(d: Date = new Date()): string {
   return `${ano}-${mes}`;
 }
 
+/** Lê o uso do mês corrente (chamadas reais ao Google) + o teto. Pra UI mostrar
+ *  "Google X/limite" e o motorista validar cache vs API. Nunca lança. */
+export async function lerUsoMes(): Promise<{ mes: string; total: number; limite: number }> {
+  const mes = mesAtual();
+  try {
+    const supabase = getSupabase();
+    const { data, error } = await supabase
+      .from('geocode_uso')
+      .select('total')
+      .eq('mes', mes)
+      .maybeSingle();
+    if (error) {
+      log.warn('uso_read_failed', { code: error.code, message: error.message });
+      return { mes, total: 0, limite: LIMITE_MENSAL };
+    }
+    return { mes, total: Number(data?.total ?? 0), limite: LIMITE_MENSAL };
+  } catch (err) {
+    log.warn('uso_read_exception', { error: (err as Error).message });
+    return { mes, total: 0, limite: LIMITE_MENSAL };
+  }
+}
+
 /** Lê o cache de geocoding. Null em miss/chave inválida/erro (nunca lança). */
 export async function lerGeocodeCache(consulta: string): Promise<ResultadoGoogle | null> {
   const chave = chaveGeocode(consulta);
