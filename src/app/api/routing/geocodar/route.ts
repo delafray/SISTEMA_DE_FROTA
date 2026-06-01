@@ -19,6 +19,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { geocodar, geocodarVozComVariantes } from '@/lib/routing/geocoding';
+import { resolverCepDaRua } from '@/lib/cep/viacep';
+import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('api_routing_geocodar');
@@ -62,7 +64,26 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   );
 
   if (resultado.ok) {
-    return NextResponse.json({ resultados: resultado.resultados }, { status: 200 });
+    // O `postcode` do Nominatim NAO e confiavel (CEP especial/de area que nao
+    // bate com a rua). Substitui pelo CEP REAL via busca reversa do ViaCEP por
+    // logradouro — em paralelo, sem bloquear em falha. So fica preenchido quando
+    // a rua tem 1 CEP unico (ou o bairro casou); senao vem cepMultiplos.
+    const resultados: ResultadoGeocoding[] = await Promise.all(
+      resultado.resultados.map(async (r) => {
+        if (r.logradouro && r.cidade && r.uf) {
+          const { cep, cepMultiplos } = await resolverCepDaRua({
+            uf: r.uf,
+            cidade: r.cidade,
+            logradouro: r.logradouro,
+            bairro: r.bairro,
+          });
+          return { ...r, cep, cepMultiplos };
+        }
+        // Sem rua/cidade/uf nao da pra validar — nao mostra o CEP cru do Nominatim.
+        return { ...r, cep: undefined, cepMultiplos: false };
+      }),
+    );
+    return NextResponse.json({ resultados }, { status: 200 });
   }
 
   const statusErro =

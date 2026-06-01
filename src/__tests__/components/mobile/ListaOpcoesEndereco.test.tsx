@@ -147,6 +147,20 @@ describe('ListaOpcoesEndereco', () => {
     expect(screen.getByText(/CEP 30130-110/)).toBeDefined();
   });
 
+  it('mostra aviso "vários CEPs nesta rua" quando cepMultiplos (sem chutar CEP)', () => {
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena', cidade: 'Belo Horizonte', uf: 'MG', cepMultiplos: true }]}
+        onSelecionar={vi.fn()}
+        onNenhumDesses={vi.fn()}
+        numeroFala="342"
+      />
+    );
+    expect(screen.getByText(/vários CEPs nesta rua/i)).toBeDefined();
+    // E nao mostra nenhum "CEP <digitos>" (nada de CEP chutado)
+    expect(screen.queryByText(/CEP \d{5}-\d{3}/)).toBeNull();
+  });
+
   it('nao mostra "CEP" quando a opcao nao tem CEP', () => {
     render(
       <ListaOpcoesEndereco

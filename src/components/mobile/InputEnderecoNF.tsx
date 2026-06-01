@@ -290,7 +290,10 @@ export function InputEnderecoNF({
   }, []);
 
   const handleConfirmar = useCallback(async () => {
-    if (!endereco || !cep || !numero) return;
+    // CEP e opcional: ruas/avenidas longas nao tem 1 CEP unico (ViaCEP marcou
+    // cepMultiplos) — o pino no mapa e resolvido por rua+cidade+numero. So o
+    // numero e obrigatorio.
+    if (!endereco || !numero.trim()) return;
     vibrar(50);
     await onConfirmar({ cep, numero, endereco });
     // Reset pra proxima NF

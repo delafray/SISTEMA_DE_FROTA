@@ -121,5 +121,12 @@ export interface ResultadoGeocoding {
   bairro?: string;
   cidade?: string;
   uf?: string;
+  /** CEP da rua VALIDADO via ViaCEP (busca reversa por logradouro). So vem
+   *  preenchido quando a rua tem 1 CEP unico (ou o bairro casou com 1). NUNCA
+   *  e o `postcode` cru do Nominatim (que costuma ser CEP especial/de area e
+   *  nao bate com a rua). undefined = nao deu pra cravar. */
   cep?: string;
+  /** True quando a rua tem VARIOS CEPs (ex: avenida longa) e nao deu pra cravar
+   *  um so — a UI mostra "varios CEPs nesta rua" em vez de um CEP errado. */
+  cepMultiplos?: boolean;
 }

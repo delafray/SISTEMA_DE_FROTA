@@ -73,6 +73,13 @@ export function ListaOpcoesEndereco({
           // uma vez, sem a tela separada de digitar o numero.
           const numeroExibido = opcao.numero ?? numeroFala;
           const cepFmt = formatarCep(opcao.cep);
+          // CEP validado (1 unico) → mostra. Varios CEPs → avisa sem chutar.
+          // Nenhum → nao mostra nada (nunca o postcode cru do Nominatim).
+          const cepSegmento = cepFmt
+            ? `CEP ${cepFmt}`
+            : opcao.cepMultiplos
+              ? 'vários CEPs nesta rua'
+              : null;
           return (
           <li key={`${opcao.lat}-${opcao.lng}-${idx}`}>
             <button
@@ -99,10 +106,14 @@ export function ListaOpcoesEndereco({
                       : extrairLabelCurto(opcao.endereco_normalizado)}
                   </div>
                   {/* Linha 2: CEP · bairro · cidade/UF (info pra desambiguar) */}
-                  {(cepFmt || opcao.bairro || opcao.cidade) ? (
+                  {(cepSegmento || opcao.bairro || opcao.cidade) ? (
                     <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
-                      {cepFmt && <span>CEP {cepFmt}</span>}
-                      {cepFmt && (opcao.bairro || opcao.cidade || opcao.uf) ? ' · ' : ''}
+                      {cepSegmento && (
+                        <span style={cepFmt ? undefined : { fontStyle: 'italic', color: '#94a3b8' }}>
+                          {cepSegmento}
+                        </span>
+                      )}
+                      {cepSegmento && (opcao.bairro || opcao.cidade || opcao.uf) ? ' · ' : ''}
                       {opcao.bairro && <strong>{opcao.bairro}</strong>}
                       {opcao.bairro && (opcao.cidade || opcao.uf) ? ' · ' : ''}
                       {opcao.cidade}

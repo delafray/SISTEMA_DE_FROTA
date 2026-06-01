@@ -151,3 +151,116 @@ export async function consultarCEP(cepInput: string): Promise<ResultadoCEP> {
     clearTimeout(timeout);
   }
 }
+
+// ─── BUSCA REVERSA: CEP REAL a partir do logradouro ─────────────────
+// O `postcode` que o Nominatim devolve por rua e NAO-confiavel no BR (pega
+// CEP especial/de grande usuario, tipo "...-909", ou CEP generico de faixa do
+// municipio). A busca reversa do ViaCEP (UF/cidade/logradouro) e autoritativa:
+// devolve os CEPs reais cadastrados naquela rua. So cravamos um CEP quando ha
+// 1 unico (ou o bairro casa com 1); com varios, marcamos `cepMultiplos` e NAO
+// chutamos. Nunca lanca excecao.
+
+interface ViaCEPReverseItem {
+  cep?: string;
+  logradouro?: string;
+  bairro?: string;
+  localidade?: string;
+  uf?: string;
+}
+
+/** Normaliza nome de logradouro/bairro pra comparar: minusculo, sem acento,
+ *  sem o TIPO no inicio (Rua/Avenida/...), espacos colapsados. Assim "Avenida
+ *  Afonso Pena" (ViaCEP) casa com "Av Afonso Pena" / "Afonso Pena" (Nominatim/fala). */
+function normalizarNomeLogradouro(s: string): string {
+  const v = (s ?? '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return v
+    .replace(
+      /^(avenida|av|rua|r|alameda|al|travessa|tv|rodovia|rod|estrada|estr|praca|pca|largo|via|viela|ladeira|passagem)\s+/,
+      '',
+    )
+    .trim();
+}
+
+/**
+ * Resolve o CEP real de uma rua via busca reversa do ViaCEP.
+ * Retorna `{ cep }` quando ha 1 CEP unico (ou o bairro narrowou pra 1),
+ * `{ cepMultiplos: true }` quando ha varios, ou ambos vazios quando a rua nao
+ * foi encontrada / parametros insuficientes / erro de rede.
+ */
+export async function resolverCepDaRua(params: {
+  uf: string;
+  cidade: string;
+  logradouro: string;
+  bairro?: string;
+}): Promise<{ cep?: string; cepMultiplos: boolean }> {
+  const uf = (params.uf ?? '').trim();
+  const cidade = (params.cidade ?? '').trim();
+  const logradouro = (params.logradouro ?? '').trim();
+
+  // ViaCEP exige UF (2 letras), cidade >= 3 e logradouro >= 3 chars.
+  if (uf.length !== 2 || cidade.length < 3 || logradouro.length < 3) {
+    return { cep: undefined, cepMultiplos: false };
+  }
+
+  const url = `${VIACEP_URL_BASE}/${encodeURIComponent(uf)}/${encodeURIComponent(cidade)}/${encodeURIComponent(logradouro)}/json/`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
+
+  try {
+    const res = await fetch(url, { signal: controller.signal });
+    if (!res.ok) {
+      log.warn('viacep_reverse_http_error', { uf, cidade, status: res.status });
+      return { cep: undefined, cepMultiplos: false };
+    }
+
+    const data = (await res.json()) as ViaCEPReverseItem[] | { erro?: boolean };
+    if (!Array.isArray(data) || data.length === 0) {
+      return { cep: undefined, cepMultiplos: false };
+    }
+
+    const alvoRua = normalizarNomeLogradouro(logradouro);
+    // Filtra so as entradas cuja rua bate exatamente (ViaCEP faz LIKE — pode
+    // trazer "Afonso Pena Junior" junto da "Afonso Pena").
+    let candidatos = data.filter(
+      (d) => d.cep && normalizarNomeLogradouro(d.logradouro ?? '') === alvoRua,
+    );
+
+    // Bairro informado e casa com algum → crava o CEP daquele bairro.
+    if (params.bairro && params.bairro.trim().length >= 2) {
+      const alvoBairro = normalizarNomeLogradouro(params.bairro);
+      const doBairro = candidatos.filter(
+        (d) => normalizarNomeLogradouro(d.bairro ?? '') === alvoBairro,
+      );
+      if (doBairro.length > 0) candidatos = doBairro;
+    }
+
+    const cepsDistintos = Array.from(
+      new Set(
+        candidatos
+          .map((d) => normalizarCEP(d.cep ?? ''))
+          .filter((c) => validarFormatoCEP(c)),
+      ),
+    );
+
+    if (cepsDistintos.length === 1) {
+      return { cep: cepsDistintos[0], cepMultiplos: false };
+    }
+    if (cepsDistintos.length > 1) {
+      log.info('viacep_reverse_multiplos', { uf, cidade, logradouro, total: cepsDistintos.length });
+      return { cep: undefined, cepMultiplos: true };
+    }
+    return { cep: undefined, cepMultiplos: false };
+  } catch (err) {
+    const error = err as Error;
+    log.warn('viacep_reverse_error', { uf, cidade, error: error.message });
+    return { cep: undefined, cepMultiplos: false };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
