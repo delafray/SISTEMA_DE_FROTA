@@ -20,6 +20,7 @@ const PhoneIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24
 const FuelIcon     = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M3 6a2 2 0 012-2h8a2 2 0 012 2v12H3V6z" /><path strokeLinecap="round" strokeLinejoin="round" d="M15 10h2a2 2 0 012 2v3a1 1 0 001 1 1 1 0 001-1V9l-3-3" /></svg>;
 const ChartIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" /></svg>;
 const CloseIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
+const GaugeIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l3-3m6 1a9 9 0 11-18 0 9 9 0 0118 0z" /><circle cx="12" cy="14" r="1" /></svg>;
 
 /* ─── NavItem ────────────────────────────────────────────────── */
 function NavItem({ href, label, icon: Icon, onNavigate }: {
@@ -118,6 +119,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <NavItem href="/empresas"     label="Empresas"    icon={BuildingIcon} onNavigate={onNavigate} />
             <NavItem href="/usuarios"     label="Usuários"    icon={UsersIcon}    onNavigate={onNavigate} />
+            <NavItem href="/uso-apis"     label="Uso de APIs" icon={GaugeIcon}    onNavigate={onNavigate} />
             <NavItem href="/preview-app"  label="Preview App" icon={PhoneIcon}    onNavigate={onNavigate} />
           </div>
 
