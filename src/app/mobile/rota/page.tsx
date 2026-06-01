@@ -1260,8 +1260,10 @@ function FaseEmRota({
               <div style={{ fontWeight: 700, fontSize: 15 }}>
                 {proximaParada.endereco.logradouro || '(sem rua)'}
                 {proximaParada.endereco.numero ? `, ${proximaParada.endereco.numero}` : ''}
+                {proximaParada.endereco.cep ? ` - CEP ${proximaParada.endereco.cep}` : ''}
               </div>
               <div style={{ fontSize: 13, color: '#64748b' }}>
+                {proximaParada.endereco.bairro ? `${proximaParada.endereco.bairro}, ` : ''}
                 {proximaParada.endereco.cidade}/{proximaParada.endereco.uf}
               </div>
               {proximaParada.janela_horario && proximaParada.janela_horario.length > 0 && (
@@ -1308,8 +1310,12 @@ function FaseEmRota({
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ fontWeight: 600, fontSize: 14 }}>
                     {p.endereco.logradouro || '(sem rua)'}
-                    {p.endereco.numero ? `, ${p.endereco.numero}` : ''}{' '}
-                    ({p.endereco.cidade}/{p.endereco.uf})
+                    {p.endereco.numero ? `, ${p.endereco.numero}` : ''}
+                    {p.endereco.cep ? ` - CEP ${p.endereco.cep}` : ''}
+                  </div>
+                  <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>
+                    {p.endereco.bairro ? `${p.endereco.bairro}, ` : ''}
+                    {p.endereco.cidade}/{p.endereco.uf}
                   </div>
                   {p.observacao && (
                     <div style={{ fontSize: 12, color: '#64748b', marginTop: 2 }}>💬 {p.observacao}</div>
