@@ -58,8 +58,40 @@ interface NominatimItem {
     municipality?: string;
     state?: string;
     state_code?: string;
+    /** Nominatim BR raramente manda state_code; manda `state` por extenso
+     *  ("Minas Gerais") e o ISO "BR-MG". Usamos pra derivar a sigla. */
+    'ISO3166-2-lvl4'?: string;
     postcode?: string;
   };
+}
+
+// ─── Estado por extenso → sigla (UF) ────────────────────────────────
+// O Nominatim BR quase nunca devolve `state_code`; devolve `state` por extenso
+// ("Minas Gerais"). Sem converter, a UF ficava "Minas Gerais" e quebrava a
+// busca reversa do ViaCEP (que exige sigla de 2 letras) — o CEP nunca saia.
+const ESTADO_PARA_UF: Record<string, string> = {
+  'acre': 'AC', 'alagoas': 'AL', 'amapa': 'AP', 'amazonas': 'AM', 'bahia': 'BA',
+  'ceara': 'CE', 'distrito federal': 'DF', 'espirito santo': 'ES', 'goias': 'GO',
+  'maranhao': 'MA', 'mato grosso': 'MT', 'mato grosso do sul': 'MS', 'minas gerais': 'MG',
+  'para': 'PA', 'paraiba': 'PB', 'parana': 'PR', 'pernambuco': 'PE', 'piaui': 'PI',
+  'rio de janeiro': 'RJ', 'rio grande do norte': 'RN', 'rio grande do sul': 'RS',
+  'rondonia': 'RO', 'roraima': 'RR', 'santa catarina': 'SC', 'sao paulo': 'SP',
+  'sergipe': 'SE', 'tocantins': 'TO',
+};
+
+/** Resolve a sigla UF a partir do que o Nominatim manda: ISO "BR-MG", ou
+ *  `state_code` (2 letras), ou `state` por extenso ("Minas Gerais"). */
+export function siglaUF(input?: string, iso?: string): string | undefined {
+  if (iso && /^BR-[A-Za-z]{2}$/.test(iso)) return iso.slice(3).toUpperCase();
+  const v = (input ?? '').trim();
+  if (/^[A-Za-z]{2}$/.test(v)) return v.toUpperCase();
+  const norm = v
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+  return ESTADO_PARA_UF[norm];
 }
 
 // ─── HELPERS PUBLICOS ───────────────────────────────────────────────
@@ -511,7 +543,7 @@ export async function geocodarMultiplos(
           // (mais especifico quando os dois existem); cair pra suburb senao.
           bairro: a.neighbourhood ?? a.suburb ?? a.city_district ?? undefined,
           cidade: a.city ?? a.town ?? a.municipality ?? undefined,
-          uf: a.state_code?.toUpperCase() ?? a.state ?? undefined,
+          uf: siglaUF(a.state_code ?? a.state, a['ISO3166-2-lvl4']),
           cep: a.postcode?.replace(/\D/g, '') ?? undefined,
         };
       })

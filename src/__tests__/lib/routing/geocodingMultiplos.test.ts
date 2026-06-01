@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { geocodarMultiplos, calcularDistanciaKm, _resetRateLimit, dedupMesmaRua } from '@/lib/routing/geocoding';
+import { geocodarMultiplos, calcularDistanciaKm, _resetRateLimit, dedupMesmaRua, siglaUF } from '@/lib/routing/geocoding';
 import type { ResultadoGeocoding } from '@/lib/routing/types';
 
 // ─── helpers ────────────────────────────────────────────────────────
@@ -204,6 +204,35 @@ describe('geocodarMultiplos', () => {
     if (r.ok) expect(r.resultados[0].bairro).toBe('Centro');
   });
 
+  // Regressao CRITICA: o Nominatim BR NAO manda state_code — manda `state` por
+  // extenso ("Minas Gerais"). Antes a UF virava "Minas Gerais" e quebrava a
+  // busca reversa do ViaCEP (exige sigla), entao o CEP nunca aparecia.
+  it('deriva a sigla UF quando Nominatim manda state por extenso (sem state_code)', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn().mockResolvedValue({
+        ok: true,
+        status: 200,
+        json: async () => [
+          {
+            lat: '-19.91',
+            lon: '-44.05',
+            display_name: 'Rua Piatã, São Mateus, Contagem - MG',
+            address: {
+              road: 'Rua Piatã',
+              neighbourhood: 'São Mateus',
+              city: 'Contagem',
+              state: 'Minas Gerais', // sem state_code — caso real do Nominatim BR
+            },
+          },
+        ],
+      })
+    );
+    const r = await geocodarMultiplos('Rua Piatã, São Mateus, Contagem');
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.resultados[0].uf).toBe('MG');
+  });
+
   // Regressao: usuario falou "Rua Piata 104 Sao Mateus Contagem" e apareceram
   // 2 cards identicos (mesma rua/bairro/cidade) com distancias quase iguais —
   // o Nominatim devolveu 2 nos da mesma rua. Tem que virar 1.
@@ -287,5 +316,31 @@ describe('dedupMesmaRua', () => {
     });
     const r = dedupMesmaRua([semEstrut('Rua A, São Paulo, SP'), semEstrut('Rua A, Rio de Janeiro, RJ')]);
     expect(r).toHaveLength(2);
+  });
+});
+
+// ─── siglaUF ─────────────────────────────────────────────────────────
+
+describe('siglaUF', () => {
+  it('converte nome por extenso → sigla (Minas Gerais → MG)', () => {
+    expect(siglaUF('Minas Gerais')).toBe('MG');
+    expect(siglaUF('São Paulo')).toBe('SP');
+    expect(siglaUF('Rio de Janeiro')).toBe('RJ');
+  });
+
+  it('mantem sigla de 2 letras (case-insensitive)', () => {
+    expect(siglaUF('mg')).toBe('MG');
+    expect(siglaUF('SP')).toBe('SP');
+  });
+
+  it('prefere o ISO3166-2-lvl4 quando presente (BR-MG → MG)', () => {
+    expect(siglaUF('Minas Gerais', 'BR-MG')).toBe('MG');
+    expect(siglaUF(undefined, 'BR-SP')).toBe('SP');
+  });
+
+  it('devolve undefined pra entrada desconhecida/vazia', () => {
+    expect(siglaUF(undefined)).toBeUndefined();
+    expect(siglaUF('Pais Inexistente')).toBeUndefined();
+    expect(siglaUF('')).toBeUndefined();
   });
 });
