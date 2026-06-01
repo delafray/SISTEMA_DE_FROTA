@@ -88,6 +88,13 @@ describe('formatarEnderecoNav', () => {
     );
   });
 
+  it('formata CEP de 8 digitos crus como XXXXX-XXX', () => {
+    // O CEP salvo na parada vem só com dígitos (Google/ViaCEP normalizam).
+    expect(formatarEnderecoNav({ ...PIATA, cep: '32180300' })).toBe(
+      'Rua Piatã, 104, São Mateus, Contagem - MG, 32180-300, Brasil'
+    );
+  });
+
   it('ignora partes vazias (sem numero, sem bairro)', () => {
     expect(formatarEnderecoNav({ logradouro: 'Rua X', cidade: 'SP', uf: 'SP' })).toBe(
       'Rua X, SP - SP, Brasil'

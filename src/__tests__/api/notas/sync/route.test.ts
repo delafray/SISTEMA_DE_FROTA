@@ -138,15 +138,26 @@ describe('POST /api/notas/sync — validacao 400', () => {
     expect(body.detail).toContain('motorista_id');
   });
 
-  it('multiplos campos faltando lista todos', async () => {
+  it('multiplos campos faltando lista todos (cep NAO e mais obrigatorio)', async () => {
     const res = await POST(makeRequest({ id_local: 'a' } as Record<string, unknown>));
     const body = await res.json();
     expect(body.detail).toEqual(
-      expect.arrayContaining(['motorista_id', 'empresa_id', 'cep', 'numero', 'endereco', 'capturado_em'])
+      expect.arrayContaining(['motorista_id', 'empresa_id', 'numero', 'endereco', 'capturado_em'])
     );
+    expect(body.detail).not.toContain('cep');
   });
 
-  it('CEP com formato invalido → 400 cep_formato_invalido', async () => {
+  it('CEP ausente → sincroniza normalmente (rua com varios CEPs)', async () => {
+    const { insert } = mockInsertOk('srv-sem-cep');
+    const p = payloadValido();
+    delete (p as Record<string, unknown>).cep;
+    const res = await POST(makeRequest(p as Record<string, unknown>));
+    expect(res.status).toBe(201);
+    const insertedRow = (insert.mock.calls[0] as unknown[])[0] as Record<string, unknown>;
+    expect(insertedRow.cep).toBe(''); // grava string vazia, nao null
+  });
+
+  it('CEP com formato invalido → 400 cep_formato_invalido (so quando informado)', async () => {
     const res = await POST(makeRequest(payloadValido({ cep: '01310-100' }))); // com hifen
     expect(res.status).toBe(400);
     const body = await res.json();

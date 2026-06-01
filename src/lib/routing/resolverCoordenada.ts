@@ -5,8 +5,9 @@
  *
  * Prioridade:
  *  1. Coordenada APRENDIDA pela frota (visita anterior, GPS real) → 'alta'
- *  2. Overpass CONFIRMADO (numero exato mapeado no OSM)            → 'alta'
- *  3. Nominatim com fallback progressivo (centro da rua)          → 'baixa'
+ *  2. GOOGLE rooftop/interpolated (porta exata, atras de cache+cota) → 'alta'
+ *  3. Overpass CONFIRMADO (numero exato mapeado no OSM)            → 'alta'
+ *  4. Nominatim com fallback progressivo (centro da rua)          → 'baixa'
  *
  * A confianca propaga pro snapshot da parada e a tela do motorista usa pra
  * decidir entre navegar por coordenada (alta) ou por endereco em texto (baixa,
@@ -18,6 +19,7 @@
 import { createLogger } from '@/lib/logger';
 import { geocodarComFallback } from './geocoding';
 import { lerCoordAprendida } from './coordsAprendidas';
+import { resolverGoogleCacheado, montarQueryEstruturada } from './geocodeCache';
 import { validarNumero } from './overpass/validar';
 
 const log = createLogger('resolver-coordenada');
@@ -36,8 +38,11 @@ export interface CoordResolvida {
   lat: number;
   lng: number;
   confianca: 'alta' | 'baixa';
-  fonte: 'aprendida' | 'overpass' | 'nominatim';
+  fonte: 'aprendida' | 'google' | 'overpass' | 'nominatim';
 }
+
+/** Precisões do Google que confiamos como pino exato (porta/quadra). */
+const PRECISAO_ALTA_GOOGLE = new Set(['ROOFTOP', 'RANGE_INTERPOLATED']);
 
 export async function resolverCoordenada(
   p: ParamsResolver
@@ -55,7 +60,18 @@ export async function resolverCoordenada(
     return { lat: aprendida.lat, lng: aprendida.lng, confianca: 'alta', fonte: 'aprendida' };
   }
 
-  // 2. Nominatim (fallback progressivo) — coord base, necessaria tambem pro
+  // 2. Google (atras de cache + cota): quando devolve ROOFTOP/RANGE_INTERPOLATED
+  //    a coord e na porta/quadra — confianca alta, curto-circuita. Cache hit nao
+  //    gera custo; sem chave/sem cota → null e segue pro Nominatim.
+  if (p.logradouro && p.cidade) {
+    const g = await resolverGoogleCacheado(montarQueryEstruturada(p));
+    if (g && g.resultado.precisao && PRECISAO_ALTA_GOOGLE.has(g.resultado.precisao)) {
+      log.info('coord_google_hit', { precisao: g.resultado.precisao, fonte: g.fonte });
+      return { lat: g.resultado.lat, lng: g.resultado.lng, confianca: 'alta', fonte: 'google' };
+    }
+  }
+
+  // 3. Nominatim (fallback progressivo) — coord base, necessaria tambem pro
   //    bbox do Overpass. Se nem isso acha a rua, desistimos.
   const geo = await geocodarComFallback({
     logradouro: p.logradouro,
@@ -75,7 +91,7 @@ export async function resolverCoordenada(
     fonte: 'nominatim',
   };
 
-  // 3. Overpass: se o numero exato estiver mapeado no OSM, a coord dele e
+  // 4. Overpass: se o numero exato estiver mapeado no OSM, a coord dele e
   //    precisa — sobrescreve o centro da rua do Nominatim. Best-effort: a
   //    validacao "nunca bloqueia" e qualquer falha mantem o Nominatim.
   if (p.numero && p.logradouro && p.cidade && p.uf) {

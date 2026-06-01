@@ -48,6 +48,15 @@ export interface EnderecoNav {
   cep?: string;
 }
 
+/** Formata o CEP pra navegacao: "30130009" → "30130-009". Mantem o que ja vier
+ *  formatado; devolve '' quando ausente/invalido. O hifen ajuda o geocoder do
+ *  Waze/Google a tratar como CEP em vez de um numero solto. */
+function formatarCepNav(cep?: string): string {
+  const d = (cep ?? '').replace(/\D/g, '');
+  if (d.length === 8) return `${d.slice(0, 5)}-${d.slice(5)}`;
+  return (cep ?? '').trim();
+}
+
 /**
  * Monta a string de endereco pra busca no Waze/Google.
  * Formato: "Logradouro, Numero, Bairro, Cidade - UF, CEP, Brasil".
@@ -60,7 +69,7 @@ export function formatarEnderecoNav(e: EnderecoNav): string {
     .join(', ');
   const cidadeUf =
     e.cidade && e.uf ? `${e.cidade.trim()} - ${e.uf.trim()}` : (e.cidade ?? e.uf ?? '').trim();
-  return [ruaNum, (e.bairro ?? '').trim(), cidadeUf, (e.cep ?? '').trim(), 'Brasil']
+  return [ruaNum, (e.bairro ?? '').trim(), cidadeUf, formatarCepNav(e.cep), 'Brasil']
     .map((s) => s.trim())
     .filter(Boolean)
     .join(', ');

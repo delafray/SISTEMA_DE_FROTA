@@ -55,7 +55,8 @@ function camposFaltando(b: Partial<AdicionarRequest>): string[] {
   const faltando: string[] = [];
   if (!b.motorista_id) faltando.push('motorista_id');
   if (!b.empresa_id) faltando.push('empresa_id');
-  if (!b.cep) faltando.push('cep');
+  // CEP e OPCIONAL: avenida longa tem varios CEPs (sem 1 unico) — a parada e
+  // localizada por rua+cidade+numero (resolverCoordenada). Nao bloquear.
   if (!b.numero) faltando.push('numero');
   if (!b.endereco) faltando.push('endereco');
   if (!b.posicao) faltando.push('posicao');
@@ -121,7 +122,7 @@ export async function POST(
     .insert({
       motorista_id: body.motorista_id!,
       empresa_id: body.empresa_id!,
-      cep: body.cep!,
+      cep: body.cep ?? '',
       numero: body.numero!,
       endereco: body.endereco!,
       latitude: coord.lat,

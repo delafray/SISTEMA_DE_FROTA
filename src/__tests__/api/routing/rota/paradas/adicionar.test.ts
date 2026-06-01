@@ -167,6 +167,20 @@ describe('POST adicionar parada — validacao 400', () => {
     const body = await res.json();
     expect(body.error).toBe('posicao_invalida');
   });
+
+  // Regressao: rua com varios CEPs vinha sem cep e o endpoint bloqueava com
+  // campos_faltando, impedindo adicionar a parada no ajuste de rota.
+  it('sem cep → NAO bloqueia (cep e opcional), adiciona normalmente', async () => {
+    setupSupabase({
+      paradasExistentes: [{ id: 'p1', ordem: 1, latitude: -23.5, longitude: -46.6 }],
+    });
+    const p: Record<string, unknown> = payload();
+    delete p.cep;
+    const res = await POST(makeReq(p), { params: Promise.resolve({ id: 'r1' }) });
+    expect(res.status).toBe(201);
+    const body = await res.json();
+    expect(body.ok).toBe(true);
+  });
 });
 
 describe('POST adicionar parada — geocoding falha', () => {

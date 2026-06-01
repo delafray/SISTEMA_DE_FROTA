@@ -43,7 +43,8 @@ function camposObrigatoriosFaltando(body: Partial<SyncRequest>): string[] {
   if (!body.id_local) faltando.push('id_local');
   if (!body.motorista_id) faltando.push('motorista_id');
   if (!body.empresa_id) faltando.push('empresa_id');
-  if (!body.cep) faltando.push('cep');
+  // CEP e OPCIONAL: rua com varios CEPs (avenida longa) pode nao ter 1 unico —
+  // a nota e localizada por rua+cidade+numero. Nao bloquear a sincronizacao.
   if (!body.numero) faltando.push('numero');
   if (!body.endereco) faltando.push('endereco');
   if (!body.capturado_em) faltando.push('capturado_em');
@@ -65,8 +66,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'campos_faltando', detail: faltando }, { status: 400 });
   }
 
-  // Validacao adicional do formato do CEP
-  if (!/^[0-9]{8}$/.test(body.cep!)) {
+  // Validacao do formato do CEP — SO quando informado (CEP e opcional).
+  if (body.cep && !/^[0-9]{8}$/.test(body.cep)) {
     log.warn('cep_formato_invalido', { cep: body.cep });
     return NextResponse.json({ error: 'cep_formato_invalido' }, { status: 400 });
   }
@@ -77,7 +78,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .insert({
       motorista_id: body.motorista_id!,
       empresa_id: body.empresa_id!,
-      cep: body.cep!,
+      cep: body.cep ?? '',
       numero: body.numero!,
       endereco: body.endereco!,
       latitude: body.latitude ?? null,

@@ -13,13 +13,31 @@ vi.mock('@/lib/cep/viacep', () => ({
   resolverCepDaRua: vi.fn(),
 }));
 
+vi.mock('@/lib/routing/googleGeocoding', () => ({
+  geocodarGoogle: vi.fn(),
+}));
+
+vi.mock('@/lib/routing/geocodeCache', () => ({
+  lerGeocodeCache: vi.fn(),
+  gravarGeocodeCache: vi.fn(),
+  consumirCota: vi.fn(),
+  montarQueryEstruturada: (e: Record<string, string | undefined>) =>
+    [e.logradouro, e.numero, e.cidade].filter(Boolean).join(', '),
+}));
+
 import { GET, POST } from '@/app/api/routing/geocodar/route';
 import { geocodar, geocodarVozComVariantes } from '@/lib/routing/geocoding';
 import { resolverCepDaRua } from '@/lib/cep/viacep';
+import { geocodarGoogle } from '@/lib/routing/googleGeocoding';
+import { lerGeocodeCache, gravarGeocodeCache, consumirCota } from '@/lib/routing/geocodeCache';
 import { NextRequest } from 'next/server';
 
 const vozMock = geocodarVozComVariantes as ReturnType<typeof vi.fn>;
 const cepMock = resolverCepDaRua as ReturnType<typeof vi.fn>;
+const googleMock = geocodarGoogle as ReturnType<typeof vi.fn>;
+const cacheLerMock = lerGeocodeCache as ReturnType<typeof vi.fn>;
+const cacheGravarMock = gravarGeocodeCache as ReturnType<typeof vi.fn>;
+const cotaMock = consumirCota as ReturnType<typeof vi.fn>;
 
 function makeReq(body: unknown) {
   return new NextRequest('http://localhost/api/routing/geocodar', {
@@ -38,6 +56,15 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
+  // Defaults: cache miss + sem chave Google → caminho de fallback (Nominatim+ViaCEP).
+  cacheLerMock.mockResolvedValue(null);
+  cacheGravarMock.mockResolvedValue(undefined);
+  cotaMock.mockResolvedValue({ permitido: true, total: 1 });
+  delete process.env.GOOGLE_MAPS_API_KEY;
+});
+
+afterEach(() => {
+  delete process.env.GOOGLE_MAPS_API_KEY;
 });
 
 afterEach(() => {
@@ -107,6 +134,90 @@ describe('GET /api/routing/geocodar — CEP validado via ViaCEP (nao confia no N
     vozMock.mockResolvedValue({ ok: false, motivo: 'erro_rede' });
     const res = await GET(makeGet('rua teste teste'));
     expect(res.status).toBe(503);
+  });
+});
+
+describe('GET /api/routing/geocodar — Google + cache (Etapa 2)', () => {
+  const fallbackResultados = [
+    {
+      lat: -19.92, lng: -43.94, endereco_normalizado: 'X', logradouro: 'Rua X',
+      bairro: 'B', cidade: 'Contagem', uf: 'MG',
+    },
+  ];
+
+  it('cache HIT → devolve do cache, NAO chama Google nem Nominatim', async () => {
+    cacheLerMock.mockResolvedValue({
+      lat: -19.92, lng: -43.93, cep: '30130009', logradouro: 'Avenida Afonso Pena',
+      numero: '342', bairro: 'Centro', cidade: 'Belo Horizonte', uf: 'MG',
+      precisao: 'ROOFTOP', endereco_formatado: 'Av. Afonso Pena, 342',
+    });
+
+    const res = await GET(makeGet('avenida afonso pena 342'));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fonte).toBe('cache');
+    expect(body.resultados[0].cep).toBe('30130009');
+    expect(googleMock).not.toHaveBeenCalled();
+    expect(vozMock).not.toHaveBeenCalled();
+  });
+
+  it('com chave + cota OK + Google OK → usa Google (cep exato), cacheia, NAO usa fallback', async () => {
+    process.env.GOOGLE_MAPS_API_KEY = 'k';
+    googleMock.mockResolvedValue({
+      ok: true,
+      resultados: [
+        {
+          lat: -19.9245, lng: -43.9352, cep: '30130009', logradouro: 'Avenida Afonso Pena',
+          numero: '342', bairro: 'Centro', cidade: 'Belo Horizonte', uf: 'MG',
+          precisao: 'ROOFTOP', endereco_formatado: 'Av. Afonso Pena, 342',
+        },
+      ],
+    });
+
+    const res = await GET(makeGet('avenida afonso pena 342'));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fonte).toBe('google');
+    expect(body.resultados[0].cep).toBe('30130009');
+    expect(body.resultados[0].numero).toBe('342');
+    expect(cacheGravarMock).toHaveBeenCalled(); // cacheia sob a chave da consulta + estruturada
+    expect(vozMock).not.toHaveBeenCalled();
+  });
+
+  it('cota ESTOURADA → cai no fallback (Nominatim+ViaCEP), nem chama o Google', async () => {
+    process.env.GOOGLE_MAPS_API_KEY = 'k';
+    cotaMock.mockResolvedValue({ permitido: false, total: 38000 });
+    vozMock.mockResolvedValue({ ok: true, resultados: fallbackResultados });
+    cepMock.mockResolvedValue({ cep: '32180650', cepMultiplos: false });
+
+    const res = await GET(makeGet('rua x contagem'));
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.fonte).toBeUndefined(); // fallback nao marca fonte
+    expect(googleMock).not.toHaveBeenCalled();
+    expect(vozMock).toHaveBeenCalledOnce();
+  });
+
+  it('Google sem resultado → cai no fallback', async () => {
+    process.env.GOOGLE_MAPS_API_KEY = 'k';
+    googleMock.mockResolvedValue({ ok: false, motivo: 'zero_resultados' });
+    vozMock.mockResolvedValue({ ok: true, resultados: fallbackResultados });
+    cepMock.mockResolvedValue({ cep: undefined, cepMultiplos: true });
+
+    const res = await GET(makeGet('rua x contagem'));
+    expect(res.status).toBe(200);
+    expect(vozMock).toHaveBeenCalledOnce();
+  });
+
+  it('sem chave Google → vai direto pro fallback (nao chama Google nem consome cota)', async () => {
+    vozMock.mockResolvedValue({ ok: true, resultados: fallbackResultados });
+    cepMock.mockResolvedValue({ cep: '32180650', cepMultiplos: false });
+
+    const res = await GET(makeGet('rua x contagem'));
+    expect(res.status).toBe(200);
+    expect(googleMock).not.toHaveBeenCalled();
+    expect(cotaMock).not.toHaveBeenCalled();
+    expect(vozMock).toHaveBeenCalledOnce();
   });
 });
 

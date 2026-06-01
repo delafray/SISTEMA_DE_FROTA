@@ -19,6 +19,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { geocodar, geocodarVozComVariantes } from '@/lib/routing/geocoding';
+import { geocodarGoogle, type ResultadoGoogle } from '@/lib/routing/googleGeocoding';
+import { lerGeocodeCache, gravarGeocodeCache, consumirCota, montarQueryEstruturada } from '@/lib/routing/geocodeCache';
 import { resolverCepDaRua } from '@/lib/cep/viacep';
 import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { createLogger } from '@/lib/logger';
@@ -27,6 +29,23 @@ const log = createLogger('api_routing_geocodar');
 
 interface GeocodarRequest {
   endereco: string;
+}
+
+/** Converte resultado do Google pro formato dos cards (ResultadoGeocoding).
+ *  O Google ja traz CEP validado + bairro/cidade/uf — sem cepMultiplos. */
+function googleParaGeocoding(g: ResultadoGoogle): ResultadoGeocoding {
+  return {
+    lat: g.lat,
+    lng: g.lng,
+    endereco_normalizado: g.endereco_formatado,
+    logradouro: g.logradouro,
+    numero: g.numero,
+    bairro: g.bairro,
+    cidade: g.cidade,
+    uf: g.uf,
+    cep: g.cep,
+    cepMultiplos: false,
+  };
 }
 
 // ─── GET /api/routing/geocodar?q=...&lat=...&lng=...&limite=... ──────
@@ -53,6 +72,45 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 
   log.info('geocodar_multiplos_req', { q, hasCoords, limite });
 
+  // ─── 0. CACHE primeiro (custo zero; nunca chama API se ja resolveu antes) ───
+  const cacheHit = await lerGeocodeCache(q);
+  if (cacheHit) {
+    log.info('geocodar_cache_hit', { q });
+    return NextResponse.json(
+      { resultados: [googleParaGeocoding(cacheHit)], fonte: 'cache' },
+      { status: 200 },
+    );
+  }
+
+  // ─── 1. GOOGLE (se ha chave e ainda ha cota no mes) ───
+  // Geocoder principal: CEP exato + pino rooftop + corrige digitacao. Atras de
+  // cota mensal (GEOCODE_LIMITE_MENSAL) — estourou, degrada pro fluxo gratis.
+  if (process.env.GOOGLE_MAPS_API_KEY) {
+    const cota = await consumirCota();
+    if (cota.permitido) {
+      const g = await geocodarGoogle(q, hasCoords ? { lat: userLat!, lng: userLng! } : undefined);
+      if (g.ok && g.resultados.length > 0) {
+        const escolhidos = g.resultados.slice(0, limite);
+        const resultados = escolhidos.map(googleParaGeocoding);
+        // Cacheia: (a) sob a chave da consulta (repetir a mesma busca = hit) e
+        // (b) cada opcao sob sua chave ESTRUTURADA — assim, ao otimizar, o
+        // resolverCoordenada acha no cache a opcao escolhida e NAO gasta uma 2a
+        // chamada ao Google. Tudo upsert (idempotente), sem custo de API.
+        await gravarGeocodeCache(q, escolhidos[0]);
+        await Promise.all(
+          escolhidos.map((r) => gravarGeocodeCache(montarQueryEstruturada(r), r)),
+        );
+        log.info('geocodar_google_ok', { q, total: resultados.length });
+        return NextResponse.json({ resultados, fonte: 'google' }, { status: 200 });
+      }
+      log.info('geocodar_google_sem_resultado', { q, motivo: g.ok ? 'vazio' : g.motivo });
+      // cai no fallback gratis abaixo
+    } else {
+      log.info('geocodar_cota_estourada', { total: cota.total });
+    }
+  }
+
+  // ─── 2. FALLBACK GRATIS: Nominatim (cascata voz) + ViaCEP reverso pro CEP ───
   // Cascata de variantes p/ texto FALADO: limpa "bairro"/"numero", gera variante
   // de apostrofo (d'Alva) e cai pra so o logradouro com vies de GPS. Cobre o caso
   // do motorista que fala "Rua X bairro Estrela Dalva" e o OSM tem "Estrela d'Alva".
