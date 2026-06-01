@@ -76,6 +76,7 @@ export type JanelaHorario = [string, string][];
  *  o numero). Sem migration — coluna ja e jsonb. */
 export type EnderecoParada = EnderecoCEP & {
   numero?: string;
+  cep?: string;
   coord_confianca?: 'alta' | 'baixa';
 };
 
