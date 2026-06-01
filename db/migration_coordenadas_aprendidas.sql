@@ -31,3 +31,7 @@ create index if not exists idx_coordenadas_aprendidas_empresa
 -- RLS: acesso so via service_role (server actions / API routes). Sem policies
 -- pra anon/authenticated — o app acessa pela service role key no backend.
 alter table public.coordenadas_aprendidas enable row level security;
+
+-- GRANT: service_role tem BYPASSRLS mas precisa do GRANT de tabela, senao da
+-- "permission denied for table" (42501) na leitura/escrita do aprendizado.
+grant all privileges on table public.coordenadas_aprendidas to service_role;

@@ -218,7 +218,7 @@ export async function POST(
       rota_id: rotaId,
       nota_id: notaInserida.id,
       ordem: novaOrdem,
-      endereco: { ...body.endereco!, numero: body.numero, coord_confianca: coord.confianca },
+      endereco: { ...body.endereco!, numero: body.numero, coord_confianca: coord.confianca, coord_fonte: coord.fonte },
       latitude: coord.lat,
       longitude: coord.lng,
       fixada: false,

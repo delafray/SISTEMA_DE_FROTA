@@ -37,11 +37,6 @@ import type { Parada, RotaOtimizada } from '@/lib/routing/types';
 
 const PERCENT_SYNC_MIN = 0.9; // 90% sincronizadas pra liberar Finalizar
 
-// Distancia maxima (km) entre o GPS do motorista e a coord da parada pra
-// "aprender" a coordenada. Filtra conclusoes feitas longe (ex: marcou tudo de
-// casa horas depois) sem barrar a correcao real de ~2 quarteiroes.
-const RAIO_APRENDER_KM = 1;
-
 /** Monta o alvo de navegacao de uma parada: coord + endereco + confianca.
  *  A confianca (salva no snapshot jsonb) decide coord vs endereco em texto. */
 function alvoDe(p: Parada): AlvoNavegacao {
@@ -428,7 +423,7 @@ function RotaContent(): React.ReactElement {
   }, [motoristaId, empresaId]);
 
   const handleConcluirParada = useCallback(
-    async (paradaId: string) => {
+    async (paradaId: string, aprenderPonto = false) => {
       const agora = new Date().toISOString();
       // Optimistic update — UI marca instantaneamente
       setParadas((arr) => arr.map((p) => (p.id === paradaId ? { ...p, concluida_em: agora } : p)));
@@ -450,38 +445,32 @@ function RotaContent(): React.ReactElement {
           );
           setErro(`Nao consegui salvar entrega: ${data.erros?.[0]?.message ?? res.status}`);
           setTimeout(() => setErro(null), 5000);
-        } else {
-          // Entrega salva. Aprende a coordenada real: se temos o GPS do
-          // motorista e ele esta perto da parada, grava como coord aprendida —
-          // a proxima entrega nesse endereco usa essa coord precisa em vez do
-          // centro da rua do Nominatim. Best-effort: nunca atrapalha a entrega.
+        } else if (aprenderPonto) {
+          // Aprendizado DELIBERADO: so quando o motorista toca "marcar este
+          // ponto como endereco correto" no modal de baixa. Grava o GPS atual
+          // como coord aprendida — prioridade maxima no resolverCoordenada,
+          // sobrepoe Google/ViaCEP. SEM checar distancia: e acao consciente.
+          // (O aprendizado AUTOMATICO por proximidade foi removido porque o
+          // motorista costuma dar baixa ja dirigindo, gravando ponto errado.)
           const parada = paradas.find((p) => p.id === paradaId);
           if (posicaoAtual && parada && empresaId) {
-            const dist = calcularDistanciaKm(
-              posicaoAtual.lat,
-              posicaoAtual.lng,
-              parada.latitude,
-              parada.longitude
-            );
-            if (dist <= RAIO_APRENDER_KM) {
-              void fetch('/api/routing/coord-aprendida', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  empresa_id: empresaId,
-                  endereco: {
-                    logradouro: parada.endereco.logradouro,
-                    numero: parada.endereco.numero,
-                    cidade: parada.endereco.cidade,
-                    uf: parada.endereco.uf,
-                  },
-                  lat: posicaoAtual.lat,
-                  lng: posicaoAtual.lng,
-                }),
-              }).catch(() => {
-                /* aprender e best-effort */
-              });
-            }
+            void fetch('/api/routing/coord-aprendida', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                empresa_id: empresaId,
+                endereco: {
+                  logradouro: parada.endereco.logradouro,
+                  numero: parada.endereco.numero,
+                  cidade: parada.endereco.cidade,
+                  uf: parada.endereco.uf,
+                },
+                lat: posicaoAtual.lat,
+                lng: posicaoAtual.lng,
+              }),
+            }).catch(() => {
+              /* aprender e best-effort */
+            });
           }
         }
       } catch (err) {
@@ -1136,7 +1125,7 @@ function FaseEmRota({
   paradas: Parada[];
   paradaSelecionada: string | null;
   onSelectParada: (id: string | null) => void;
-  onConcluirParada: (id: string) => void | Promise<void>;
+  onConcluirParada: (id: string, aprenderPonto?: boolean) => void | Promise<void>;
   onEncerrar: () => void;
   posicaoAtual: { lat: number; lng: number } | null;
 }) {
@@ -1174,7 +1163,16 @@ function FaseEmRota({
     if (!paradaConfirmando) return;
     const id = paradaConfirmando;
     setParadaConfirmando(null);
-    await onConcluirParada(id);
+    await onConcluirParada(id, false);
+  }, [paradaConfirmando, onConcluirParada]);
+
+  // Aprendizado DELIBERADO: conclui a entrega E grava o GPS atual como o
+  // endereco correto (vira coord 'aprendida', azul, prioridade maxima).
+  const confirmarConcluirEAprender = useCallback(async () => {
+    if (!paradaConfirmando) return;
+    const id = paradaConfirmando;
+    setParadaConfirmando(null);
+    await onConcluirParada(id, true);
   }, [paradaConfirmando, onConcluirParada]);
 
   return (
@@ -1434,6 +1432,36 @@ function FaseEmRota({
               >
                 ✓ Sim, entreguei
               </button>
+            </div>
+
+            {/* Aprendizado deliberado — bem separado, embaixo. So aparece com
+                GPS. Marca o ponto ATUAL como o endereco correto (azul, vence
+                Google/ViaCEP nas proximas rotas). E a UNICA forma de aprender. */}
+            <div style={{ borderTop: '1px solid #e2e8f0', marginTop: 14, paddingTop: 12 }}>
+              <button
+                type="button"
+                onClick={confirmarConcluirEAprender}
+                disabled={!posicaoAtual}
+                data-testid="btn-aprender-ponto"
+                style={{
+                  width: '100%',
+                  padding: '10px',
+                  background: posicaoAtual ? '#eff6ff' : '#f1f5f9',
+                  color: posicaoAtual ? '#1d4ed8' : '#94a3b8',
+                  border: `1px solid ${posicaoAtual ? '#bfdbfe' : '#e2e8f0'}`,
+                  borderRadius: 8,
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: posicaoAtual ? 'pointer' : 'not-allowed',
+                }}
+              >
+                📍 Estou na porta — marcar este ponto como o endereço correto
+              </button>
+              <div style={{ fontSize: 11, color: '#94a3b8', marginTop: 6, textAlign: 'center' }}>
+                {posicaoAtual
+                  ? 'Use só quando estiver parado na porta da entrega.'
+                  : 'Sem GPS no momento — não dá pra marcar o ponto.'}
+              </div>
             </div>
           </div>
         </div>

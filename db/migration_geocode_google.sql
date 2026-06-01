@@ -54,10 +54,12 @@ begin
   insert into public.geocode_uso (mes, total) values (p_mes, 0)
     on conflict (mes) do nothing;
 
-  update public.geocode_uso
-    set total = total + 1, atualizado_em = now()
-    where mes = p_mes and total < p_limite
-    returning total into v_total;
+  -- Alias `gu` + colunas qualificadas pra evitar ambiguidade com a coluna de
+  -- saída `total` do RETURNS TABLE (erro 42702).
+  update public.geocode_uso gu
+    set total = gu.total + 1, atualizado_em = now()
+    where gu.mes = p_mes and gu.total < p_limite
+    returning gu.total into v_total;
 
   if found then
     return query select true, v_total;
@@ -71,3 +73,9 @@ $$;
 -- RLS: acesso so via service_role (API routes no backend). Sem policies anon.
 alter table public.geocode_cache enable row level security;
 alter table public.geocode_uso  enable row level security;
+
+-- GRANTs: service_role tem BYPASSRLS mas AINDA precisa de GRANT de tabela —
+-- sem isto, da "permission denied for table" (42501) e o Google nunca roda.
+grant all privileges on table public.geocode_cache to service_role;
+grant all privileges on table public.geocode_uso  to service_role;
+grant execute on function public.consumir_geocode_cota(text, integer) to service_role;

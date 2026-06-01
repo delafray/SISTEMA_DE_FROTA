@@ -17,6 +17,16 @@ export interface Coordenada {
   lng: number;
 }
 
+/** Origem da coordenada resolvida (resolverCoordenada). Usada pra colorir o
+ *  selo no pino do mapa: aprendida=azul, google_cache=verde, google_api=laranja,
+ *  overpass/nominatim=vermelho (free/menos confiavel). */
+export type CoordFonte =
+  | 'aprendida'
+  | 'google_cache'
+  | 'google_api'
+  | 'overpass'
+  | 'nominatim';
+
 // ─── notas_capturadas ───────────────────────────────────────────────
 export type StatusNota =
   | 'capturada'
@@ -41,6 +51,9 @@ export interface NotaCapturada {
   /** TRANSIENTE (nao e coluna do banco): confianca da coordenada resolvida
    *  pelo resolverCoordenada. Usado pra propagar pro snapshot da parada. */
   coord_confianca?: 'alta' | 'baixa';
+  /** TRANSIENTE: origem da coordenada (resolverCoordenada). Propaga pro snapshot
+   *  da parada pra colorir o selo no mapa. */
+  coord_fonte?: CoordFonte;
 }
 
 // ─── rotas_otimizadas ───────────────────────────────────────────────
@@ -78,6 +91,8 @@ export type EnderecoParada = EnderecoCEP & {
   numero?: string;
   cep?: string;
   coord_confianca?: 'alta' | 'baixa';
+  /** Origem da coordenada — colore o selo no pino do mapa. */
+  coord_fonte?: CoordFonte;
 };
 
 export interface Parada {

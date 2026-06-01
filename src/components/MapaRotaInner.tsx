@@ -13,7 +13,7 @@ import { divIcon, type LatLngBoundsExpression, type LatLngExpression } from 'lea
 // aqui dentro do componente dinamico (ssr:false) carrega tarde e os tiles
 // nao se posicionam (motorista ve so os pinos sem mapa de fundo).
 import { decodePolyline } from '@/lib/routing/polyline';
-import { corDoStatus, statusDaParada } from '@/lib/routing/utils';
+import { corDoStatus, corDaFonteCoord, statusDaParada } from '@/lib/routing/utils';
 import type { MapaRotaProps } from './MapaRota';
 
 /**
@@ -49,24 +49,39 @@ function pinoPosicaoAtual() {
   });
 }
 
-function pinoNumeradoIcon(numero: number, cor: string, destaque: boolean, concluida: boolean) {
+function pinoNumeradoIcon(
+  numero: number,
+  cor: string,
+  destaque: boolean,
+  concluida: boolean,
+  corFonte?: string | null,
+) {
   const tamanho = destaque ? 40 : 32;
   const ring = destaque ? `box-shadow:0 0 0 4px rgba(249,115,22,0.35), 0 2px 6px rgba(0,0,0,0.4);` : `box-shadow:0 2px 4px rgba(0,0,0,0.3);`;
   const conteudoCentro = concluida
     ? `<span style="transform:rotate(45deg);font-size:18px;color:#fff;">✓</span>`
     : `<span style="transform:rotate(45deg);font-weight:700;font-size:${destaque ? 16 : 14}px;color:#fff;">${numero}</span>`;
+  // Selo de origem da coordenada: bolinha no canto superior-direito, fora do
+  // numero. So aparece quando ha fonte conhecida. Fica num wrapper NAO-rotacionado
+  // (o pino e rotacionado -45deg; a bolinha precisa ficar de pe).
+  const selo = corFonte
+    ? `<div title="origem da coordenada" style="position:absolute;top:-3px;right:-3px;width:11px;height:11px;border-radius:50%;background:${corFonte};border:2px solid #fff;box-shadow:0 1px 2px rgba(0,0,0,0.4);z-index:2;"></div>`
+    : '';
   return divIcon({
     className: 'pino-numerado',
-    html: `<div style="
-      width:${tamanho}px;height:${tamanho}px;
-      background:${cor};
-      border:2px solid #fff;
-      border-radius:50% 50% 50% 0;
-      transform:rotate(-45deg);
-      display:flex;align-items:center;justify-content:center;
-      ${ring}
-      transition: box-shadow 250ms ease, background-color 250ms ease, width 200ms ease, height 200ms ease;
-    ">${conteudoCentro}</div>`,
+    html: `<div style="position:relative;width:${tamanho}px;height:${tamanho}px;">
+      <div style="
+        width:${tamanho}px;height:${tamanho}px;
+        background:${cor};
+        border:2px solid #fff;
+        border-radius:50% 50% 50% 0;
+        transform:rotate(-45deg);
+        display:flex;align-items:center;justify-content:center;
+        ${ring}
+        transition: box-shadow 250ms ease, background-color 250ms ease, width 200ms ease, height 200ms ease;
+      ">${conteudoCentro}</div>
+      ${selo}
+    </div>`,
     iconSize: [tamanho, tamanho],
     iconAnchor: [tamanho / 2, tamanho],
     popupAnchor: [0, -tamanho],
@@ -127,7 +142,7 @@ export default function MapaRotaInner({
             <Marker
               key={p.id}
               position={[p.latitude, p.longitude]}
-              icon={pinoNumeradoIcon(p.ordem, cor, destaque, concluida)}
+              icon={pinoNumeradoIcon(p.ordem, cor, destaque, concluida, corDaFonteCoord(p.endereco?.coord_fonte))}
               eventHandlers={
                 onParadaClick
                   ? {

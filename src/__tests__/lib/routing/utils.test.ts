@@ -7,6 +7,7 @@ import {
   haversineKm,
   statusDaParada,
   corDoStatus,
+  corDaFonteCoord,
   distanciasEntreParadas,
   estimarKmTotal,
   cheapestInsertion,
@@ -63,6 +64,21 @@ describe('corDoStatus', () => {
 
   it('proxima e laranja (#f97316)', () => {
     expect(corDoStatus('proxima')).toBe('#f97316');
+  });
+});
+
+describe('corDaFonteCoord', () => {
+  it('aprendida=azul, google_cache=verde, google_api=laranja, nominatim/overpass=vermelho', () => {
+    expect(corDaFonteCoord('aprendida')).toBe('#2563eb');
+    expect(corDaFonteCoord('google_cache')).toBe('#16a34a');
+    expect(corDaFonteCoord('google_api')).toBe('#f59e0b');
+    expect(corDaFonteCoord('nominatim')).toBe('#dc2626');
+    expect(corDaFonteCoord('overpass')).toBe('#dc2626');
+  });
+
+  it('sem fonte (undefined/desconhecida) → null (nao desenha bolinha)', () => {
+    expect(corDaFonteCoord(undefined)).toBeNull();
+    expect(corDaFonteCoord('xpto')).toBeNull();
   });
 
   it('concluida e verde (#16a34a)', () => {

@@ -67,6 +67,30 @@ export function corDoStatus(status: StatusParada): string {
 }
 
 /**
+ * Cor do SELO de origem da coordenada (bolinha no cantinho do pino):
+ *   - aprendida (motorista marcou o ponto): azul
+ *   - google_cache (reuso, custo zero): verde
+ *   - google_api (consumiu cota): laranja
+ *   - nominatim/overpass (fallback grátis, menos confiável): vermelho
+ * Retorna null quando não há fonte (não desenha bolinha).
+ */
+export function corDaFonteCoord(fonte?: string): string | null {
+  switch (fonte) {
+    case 'aprendida':
+      return '#2563eb'; // azul
+    case 'google_cache':
+      return '#16a34a'; // verde
+    case 'google_api':
+      return '#f59e0b'; // laranja
+    case 'overpass':
+    case 'nominatim':
+      return '#dc2626'; // vermelho
+    default:
+      return null;
+  }
+}
+
+/**
  * Distancia entre paradas consecutivas (em km, linha reta).
  * Retorna array[N] onde indice 0 e 0 (primeira parada nao tem anterior).
  */

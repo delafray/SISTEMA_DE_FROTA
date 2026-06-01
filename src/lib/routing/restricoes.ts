@@ -176,6 +176,7 @@ export function montarParadasPersistir(
         ...nota.endereco,
         numero: nota.numero,
         coord_confianca: nota.coord_confianca ?? 'baixa',
+        coord_fonte: nota.coord_fonte ?? 'nominatim',
       },
       latitude: nota.latitude,
       longitude: nota.longitude,

@@ -208,7 +208,12 @@ describe('montarParadasPersistir', () => {
     expect(out[0].ordem).toBe(1);
     // endereco do snapshot deve incluir o numero da casa (do campo nota.numero)
     // + a confianca da coord (default 'baixa' quando a nota nao passou pelo resolver)
-    expect(out[0].endereco).toEqual({ ...nota.endereco, numero: '104', coord_confianca: 'baixa' });
+    expect(out[0].endereco).toEqual({
+      ...nota.endereco,
+      numero: '104',
+      coord_confianca: 'baixa',
+      coord_fonte: 'nominatim',
+    });
     expect(out[0].latitude).toBe(-23.5);
     expect(out[0].fixada).toBe(false);
   });
@@ -222,6 +227,24 @@ describe('montarParadasPersistir', () => {
       'rota-uuid'
     );
     expect(out[0].endereco.coord_confianca).toBe('alta');
+  });
+
+  it('propaga coord_fonte da nota pro snapshot (default nominatim)', () => {
+    const notaGoogle = makeNota({ id: 'n-g', numero: '104', coord_fonte: 'google_api' });
+    const out = montarParadasPersistir(
+      [{ nota_id_local: 'n-g', ordem: 1, chegada_estimada: 'x' }],
+      new Map([['n-g', notaGoogle]]),
+      'r'
+    );
+    expect(out[0].endereco.coord_fonte).toBe('google_api');
+
+    const notaSemFonte = makeNota({ id: 'n-s', numero: '104' });
+    const out2 = montarParadasPersistir(
+      [{ nota_id_local: 'n-s', ordem: 1, chegada_estimada: 'x' }],
+      new Map([['n-s', notaSemFonte]]),
+      'r'
+    );
+    expect(out2[0].endereco.coord_fonte).toBe('nominatim');
   });
 
   it('throw quando nota nao esta no mapping ou sem coords', () => {

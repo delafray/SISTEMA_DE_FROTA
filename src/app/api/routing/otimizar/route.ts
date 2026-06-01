@@ -134,6 +134,7 @@ async function geocodarPendentes(
       latitude: coord.lat,
       longitude: coord.lng,
       coord_confianca: coord.confianca,
+      coord_fonte: coord.fonte,
       status: 'geocodificada',
     });
   }

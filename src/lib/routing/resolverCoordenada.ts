@@ -21,6 +21,7 @@ import { geocodarComFallback } from './geocoding';
 import { lerCoordAprendida } from './coordsAprendidas';
 import { resolverGoogleCacheado, montarQueryEstruturada } from './geocodeCache';
 import { validarNumero } from './overpass/validar';
+import type { CoordFonte } from './types';
 
 const log = createLogger('resolver-coordenada');
 
@@ -38,7 +39,7 @@ export interface CoordResolvida {
   lat: number;
   lng: number;
   confianca: 'alta' | 'baixa';
-  fonte: 'aprendida' | 'google' | 'overpass' | 'nominatim';
+  fonte: CoordFonte;
 }
 
 /** Precisões do Google que confiamos como pino exato (porta/quadra). */
@@ -67,7 +68,9 @@ export async function resolverCoordenada(
     const g = await resolverGoogleCacheado(montarQueryEstruturada(p));
     if (g && g.resultado.precisao && PRECISAO_ALTA_GOOGLE.has(g.resultado.precisao)) {
       log.info('coord_google_hit', { precisao: g.resultado.precisao, fonte: g.fonte });
-      return { lat: g.resultado.lat, lng: g.resultado.lng, confianca: 'alta', fonte: 'google' };
+      // Distingue cache (verde) de chamada de API (laranja) no selo do mapa.
+      const fonte: CoordFonte = g.fonte === 'cache' ? 'google_cache' : 'google_api';
+      return { lat: g.resultado.lat, lng: g.resultado.lng, confianca: 'alta', fonte };
     }
   }
 

@@ -60,19 +60,32 @@ describe('resolverCoordenada — prioridade', () => {
     expect(mocks.validarNumero).not.toHaveBeenCalled();
   });
 
-  it('1.5) sem aprendida + Google ROOFTOP → coord do Google, alta, curto-circuita', async () => {
+  it('1.5) sem aprendida + Google ROOFTOP via API → fonte google_api, alta, curto-circuita', async () => {
     mocks.lerAprendida.mockResolvedValue(null);
     mocks.resolverGoogle.mockResolvedValue({
       resultado: { lat: -19.9245, lng: -43.9352, precisao: 'ROOFTOP', endereco_formatado: 'x' },
-      fonte: 'google',
+      fonte: 'google', // veio da API
     });
 
     const r = await resolverCoordenada(P);
 
-    expect(r).toEqual({ lat: -19.9245, lng: -43.9352, confianca: 'alta', fonte: 'google' });
+    expect(r).toEqual({ lat: -19.9245, lng: -43.9352, confianca: 'alta', fonte: 'google_api' });
     // Nem Nominatim nem Overpass rodam — Google ja cravou.
     expect(mocks.geocodarComFallback).not.toHaveBeenCalled();
     expect(mocks.validarNumero).not.toHaveBeenCalled();
+  });
+
+  it('1.6) Google do CACHE → fonte google_cache (verde)', async () => {
+    mocks.lerAprendida.mockResolvedValue(null);
+    mocks.resolverGoogle.mockResolvedValue({
+      resultado: { lat: -19.9245, lng: -43.9352, precisao: 'RANGE_INTERPOLATED', endereco_formatado: 'x' },
+      fonte: 'cache',
+    });
+
+    const r = await resolverCoordenada(P);
+
+    expect(r?.fonte).toBe('google_cache');
+    expect(r?.confianca).toBe('alta');
   });
 
   it('Google APPROXIMATE (coord grosseira) → ignora e cai pro Nominatim', async () => {
