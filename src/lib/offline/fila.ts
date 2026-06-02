@@ -16,16 +16,25 @@
  */
 
 import Dexie, { type Table } from 'dexie';
-import type { NotaNaFila, StatusSync } from './types';
+import type { NotaNaFila, StatusSync, SessaoLocal, RotaCacheada } from './types';
 
 class FilaDB extends Dexie {
   notas!: Table<NotaNaFila, string>;
+  sessao_local!: Table<SessaoLocal, string>;
+  rota_ativa!: Table<RotaCacheada, string>;
 
   constructor() {
     super('FrotaCapturaNotas');
     this.version(1).stores({
       // 'id_local' = PK; outros sao indexes secundarios pra queries comuns.
       notas: 'id_local, status_sync, motorista_id, capturado_em',
+    });
+    // v2: stores pra operacao offline — sessao do usuario e snapshot da rota ativa.
+    // (Dexie carrega 'notas' adiante automaticamente; re-declarado aqui por clareza.)
+    this.version(2).stores({
+      notas: 'id_local, status_sync, motorista_id, capturado_em',
+      sessao_local: 'id',                          // PK fixa 'atual'
+      rota_ativa: 'id, motorista_id, salvo_em',    // PK = rota_id
     });
   }
 }

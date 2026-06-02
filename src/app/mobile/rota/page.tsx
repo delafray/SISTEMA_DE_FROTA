@@ -29,6 +29,7 @@ import {
 } from '@/lib/offline/fila';
 import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
 import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
+import { salvarRotaAtiva, lerRotaAtiva, lerUltimaRotaAtiva } from '@/lib/offline/rotaCache';
 import { wazeNav, googleMapsNav, googleMapsMultiStopNav, type AlvoNavegacao } from '@/lib/routing/deepLinks';
 import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import { statusDaParada } from '@/lib/routing/utils';
@@ -188,11 +189,32 @@ function RotaContent(): React.ReactElement {
         // 3. Nada pendente — fase inicial com historico
         setFase('inicio');
       } catch (err) {
+        // Offline / erro de rede: tenta retomar a ultima rota guardada localmente
+        // pra o motorista seguir navegando e exportando pro Google Maps sem internet.
+        const cache = await lerUltimaRotaAtiva(motoristaId);
+        if (cache) {
+          setRota(cache.rota);
+          setParadas(cache.paradas);
+          setOnline(false);
+          setToast('📴 Sem internet — usando a rota salva no aparelho.');
+          setTimeout(() => setToast(null), 5000);
+          setFase('em_rota');
+          return;
+        }
         setErro(`Falha ao carregar: ${(err as Error).message}`);
         setFase('inicio');
       }
     })();
   }, [motoristaId, empresaId]);
+
+  // ─── Persiste a rota ativa localmente (IndexedDB) ──────────────────
+  // Sempre que a rota entra/atualiza na fase em_rota, guarda um snapshot pra o
+  // motorista ver paradas + mapa + exportar pro Google Maps mesmo offline. Roda
+  // tambem a cada baixa de parada (paradas muda), mantendo o progresso salvo.
+  useEffect(() => {
+    if (fase !== 'em_rota' || !rota) return;
+    void salvarRotaAtiva({ rota, paradas });
+  }, [fase, rota, paradas]);
 
   // ─── Auto-refresh ao voltar de outra tela (ex: ajuste-rota) ────────
   // Quando o motorista navega pra /mobile/ajuste-rota e volta (botao voltar
@@ -319,6 +341,17 @@ function RotaContent(): React.ReactElement {
       setParadas(rotaData.paradas);
       setFase('em_rota');
     } catch (err) {
+      // Sem internet: tenta o snapshot local desta rota.
+      const cache = await lerRotaAtiva(rotaId);
+      if (cache) {
+        setRota(cache.rota);
+        setParadas(cache.paradas);
+        setOnline(false);
+        setToast('📴 Sem internet — usando a rota salva no aparelho.');
+        setTimeout(() => setToast(null), 5000);
+        setFase('em_rota');
+        return;
+      }
       setErro(`Erro ao carregar rota: ${(err as Error).message}`);
     }
   }, []);

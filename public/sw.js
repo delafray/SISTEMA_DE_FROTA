@@ -1,45 +1,108 @@
 // ─────────────────────────────────────────────────────────────────────
-// SW Kill-Switch — versao 2026-05-29
+// Service Worker — cache offline ciente de versao.
 //
-// O service worker anterior fazia Network-First mas ainda cacheava HTML
-// e JS, segurando bundle antigo no navegador do motorista mesmo apos
-// deploy novo. Sintoma: mapa nao aparecia, "limpa cache" virava workaround.
+// Substitui o antigo kill-switch. Objetivo: deixar o app ABRIR offline (login
+// offline + rota offline) SEM repetir o bug historico de "bundle antigo apos
+// deploy".
 //
-// Este SW substitui o anterior e faz auto-destruicao:
-// 1. Ativa imediatamente (skipWaiting)
-// 2. Limpa todos os caches da origem
-// 3. Auto-unregistra
-// 4. Reload em todas as abas abertas (pra carregarem sem SW)
+// A logica aqui ESPELHA src/lib/offline/swCache.ts (que tem os testes). Se
+// mudar a estrategia, mude la primeiro.
 //
-// Apos isso, nenhum SW intercepta requests — usuario recebe sempre
-// HTML/JS fresco direto do servidor (com cache-control normal do
-// browser).
+// Versao por deploy: lida do ?v=<sha> da URL de registro
+// (PWAInstallPrompt registra /sw.js?v=NEXT_PUBLIC_BUILD_SHA). Quando o SHA muda,
+// a URL muda → o browser instala um SW novo → o activate purga os caches da
+// versao anterior.
 //
-// Quando re-introduzir PWA, usar Workbox + estrategia diferente por
-// tipo de asset (HTML: network-only; JS/CSS hashed: cache-first).
+// Estrategia:
+// - navegacao/HTML  → REDE-PRIMEIRO sem timeout (online = sempre fresco; cache
+//                     so quando o fetch REALMENTE falha = offline de verdade).
+// - /_next/static, /icons, /leaflet.css, /manifest → CACHE-FIRST (imutaveis, hash).
+// - /api/* e cross-origin → passthrough (rede). Offline de dados = IndexedDB.
 // ─────────────────────────────────────────────────────────────────────
 
+const VERSION = new URL(self.location).searchParams.get('v') || 'dev';
+const CACHE_SHELL = `frota-shell-${VERSION}`;
+const CACHE_STATIC = `frota-static-${VERSION}`;
+
 self.addEventListener('install', () => {
+  // Ativa imediatamente — a estrategia rede-primeiro garante frescor online.
   self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // 1. Limpa TODOS os caches da origem
-    const cacheNames = await caches.keys();
-    await Promise.all(cacheNames.map((name) => caches.delete(name)));
-
-    // 2. Auto-unregistra
-    await self.registration.unregister();
-
-    // 3. Forca reload de todas as abas abertas (sem SW agora)
-    const allClients = await self.clients.matchAll({ type: 'window' });
-    for (const client of allClients) {
-      // navigate() carrega a mesma URL sem SW interceptando
-      client.navigate(client.url).catch(() => {/* ok se nao puder */});
-    }
+    // Purga caches de versoes antigas (nao mexe em caches de terceiros).
+    const nomes = await caches.keys();
+    await Promise.all(
+      nomes
+        .filter((n) => n.startsWith('frota-') && !n.endsWith(`-${VERSION}`))
+        .map((n) => caches.delete(n))
+    );
+    await self.clients.claim();
   })());
 });
 
-// Nao intercepta fetch — passa direto pra rede.
-// (Sem listener 'fetch' = browser usa fetch padrao.)
+// classificarRequisicao — espelha src/lib/offline/swCache.ts
+function classificar(url, method, mode) {
+  if (method !== 'GET') return 'passthrough';
+  if (url.origin !== self.location.origin) return 'passthrough';
+  if (url.pathname.startsWith('/api/')) return 'passthrough';
+  if (
+    url.pathname.startsWith('/_next/static/') ||
+    url.pathname.startsWith('/icons/') ||
+    url.pathname === '/leaflet.css' ||
+    url.pathname === '/manifest.webmanifest'
+  ) {
+    return 'static';
+  }
+  if (mode === 'navigate') return 'navigate';
+  return 'passthrough';
+}
+
+self.addEventListener('fetch', (event) => {
+  const req = event.request;
+  const url = new URL(req.url);
+  const estrategia = classificar(url, req.method, req.mode);
+
+  if (estrategia === 'static') {
+    event.respondWith(cacheFirst(req));
+  } else if (estrategia === 'navigate') {
+    event.respondWith(networkFirstNav(req));
+  }
+  // 'passthrough' → nao chama respondWith; browser usa fetch padrao.
+});
+
+async function cacheFirst(req) {
+  const cache = await caches.open(CACHE_STATIC);
+  const hit = await cache.match(req);
+  if (hit) return hit;
+  const res = await fetch(req);
+  if (res && res.ok) cache.put(req, res.clone());
+  return res;
+}
+
+async function networkFirstNav(req) {
+  const cache = await caches.open(CACHE_SHELL);
+  try {
+    // SEM timeout: online sempre espera o HTML fresco (nunca serve cache por lentidao).
+    const res = await fetch(req);
+    if (res && res.ok) cache.put(req, res.clone());
+    return res;
+  } catch (e) {
+    // Offline REAL (fetch rejeitou) — serve o cache desta navegacao, ou um shell.
+    const hit =
+      (await cache.match(req)) ||
+      (await cache.match(new URL(req.url).pathname)) ||
+      (await cache.match('/motorista')) ||
+      (await cache.match('/mobile/rota'));
+    if (hit) return hit;
+    return new Response(
+      '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Offline</title><body style="font-family:system-ui;background:#0f172a;color:#f1f5f9;' +
+        'display:flex;min-height:100vh;align-items:center;justify-content:center;text-align:center;padding:2rem">' +
+        '<div><h1>📴 Sem conexão</h1><p>Esta tela ainda não foi aberta online neste aparelho.</p>' +
+        '<p>Conecte-se uma vez para usá-la offline depois.</p></div></body>',
+      { headers: { 'Content-Type': 'text/html; charset=utf-8' }, status: 503 }
+    );
+  }
+}

@@ -69,15 +69,18 @@ export function PWAInstallPrompt() {
     localStorage.setItem('pwa-install-dismissed', 'true')
   }
 
-  // Service Worker: registra o kill-switch (sw.js auto-unregistra na ativacao).
-  // Apos isso, browsers que ja tinham SW antigo cacheado vao limpar tudo e
-  // recarregar sem SW. Reintroducao futura: usar Workbox + cache hashed only.
+  // Service Worker: cache offline ciente de versao (ver public/sw.js + swCache.ts).
+  // Registramos com ?v=<build sha>: quando o deploy muda o SHA, a URL muda, o
+  // browser instala o SW novo e o activate purga o cache da versao anterior — o
+  // que evita o bug antigo de "bundle preso" (HTML usa rede-primeiro; assets com
+  // hash usam cache-first). updateViaCache:'none' garante que o proprio sw.js
+  // nunca venha do HTTP cache.
   useEffect(() => {
-    if ('serviceWorker' in navigator) {
-      navigator.serviceWorker
-        .register('/sw.js', { scope: '/', updateViaCache: 'none' })
-        .catch((err) => console.error('SW registration failed:', err))
-    }
+    if (!('serviceWorker' in navigator)) return
+    const versao = process.env.NEXT_PUBLIC_BUILD_SHA || 'dev'
+    navigator.serviceWorker
+      .register(`/sw.js?v=${versao}`, { scope: '/', updateViaCache: 'none' })
+      .catch((err) => console.error('SW registration failed:', err))
   }, [])
 
   if (isStandalone || dismissed || !showBanner) return null

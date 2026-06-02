@@ -4,6 +4,9 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { obterSessaoComFallback } from "@/lib/offline/authOffline";
+import { limparSessaoLocal } from "@/lib/offline/sessao";
+import { limparRotasAtivas } from "@/lib/offline/rotaCache";
 
 type PedidoCard = {
   id: string;
@@ -61,26 +64,34 @@ export default function MotoristaPage() {
   const [signingOut, setSigningOut] = useState(false);
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
   const [empresaId,   setEmpresaIdState] = useState<string | null>(null);
+  const [offline, setOffline] = useState(false);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      // Auth com fallback offline: online valida no Supabase e salva o perfil
+      // local; offline (sem rede) usa o perfil salvo (valido por 7 dias).
+      const auth = await obterSessaoComFallback(supabase);
+      if (!auth.ok || !auth.sessao) {
+        if (auth.motivo === "role_negado") { router.push("/"); return; }
+        router.push("/login");
+        return;
+      }
 
-      const { data: perfil } = await supabase
-        .from("perfis").select("nome,motorista_id").eq("id", auth.user.id).single();
-      if (perfil?.nome) setNome(perfil.nome);
-
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id,role")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) { router.push("/login"); return; }
-      const rolesPermitidos = ["motorista", "admin", "gestor"];
-      if (!rolesPermitidos.includes(ue.role)) { router.push("/"); return; }
-
-      const mId = perfil?.motorista_id ?? null;
+      const { motorista_id: mId, empresa_id: eId, nome: nomeUsr } = auth.sessao;
+      if (nomeUsr) setNome(nomeUsr);
       setMotoristaId(mId);
-      setEmpresaIdState(ue.empresa_id);
+      setEmpresaIdState(eId);
+
+      if (auth.origem === "offline_cache") {
+        // Sem rede: nao da pra buscar pedidos/adiantamentos/abastecimentos do
+        // servidor. Mantemos o motorista LOGADO e habilitamos a "Rota do dia"
+        // (que opera offline via cache local).
+        setOffline(true);
+        setLoading(false);
+        return;
+      }
+
       if (!mId) { setLoading(false); return; }
 
       const [pedidosRes, adtRes, abastRes] = await Promise.all([
@@ -112,6 +123,9 @@ export default function MotoristaPage() {
 
   const handleSignOut = async () => {
     setSigningOut(true);
+    // Corta o acesso offline: apaga a sessao local e o cache de rota antes de sair.
+    await limparSessaoLocal();
+    await limparRotasAtivas();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");
@@ -170,6 +184,15 @@ export default function MotoristaPage() {
           {signingOut ? "..." : "Sair"}
         </button>
       </div>
+
+      {offline && (
+        <div
+          data-testid="banner-offline"
+          style={{ background: "#78350f", color: "#fde68a", padding: "10px 16px", fontSize: "13px", fontWeight: 600, textAlign: "center" }}
+        >
+          📴 Modo offline — sem internet. Seus pedidos podem estar desatualizados, mas a Rota do dia funciona normalmente.
+        </div>
+      )}
 
       {/* KPI strip */}
       <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0", padding: "12px 16px", display: "flex" }}>
