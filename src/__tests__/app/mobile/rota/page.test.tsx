@@ -367,9 +367,39 @@ describe('RotaPage — fase em_rota', () => {
     await user.click(screen.getByTestId('rota-historico-r1'));
 
     await waitFor(() => expect(screen.getByTestId('mapa-rota')).toBeDefined());
-    expect(screen.getByTestId('parada-1')).toBeDefined();
+    // A proxima (ordem 1) fica destacada no card e NAO se repete na lista;
+    // a lista mostra as demais (parada-2).
+    expect(screen.getByTestId('proxima-parada')).toBeDefined();
+    expect(screen.queryByTestId('parada-1')).toBeNull();
     expect(screen.getByTestId('parada-2')).toBeDefined();
     expect(screen.getByTestId('link-ajustar')).toBeDefined();
+  });
+
+  it('nao repete a proxima na lista e empurra as entregas FEITAS pro fim da fila', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    vi.stubGlobal('fetch', buildFetchComRota('r1', [
+      { id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1, endereco: { logradouro: 'A', bairro: '', cidade: 'SP', uf: 'SP' }, latitude: -23.5, longitude: -46.6, fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null },
+      // p2 (ordem 2) JA concluida — deve ir pro fim, mesmo com ordem menor que p3
+      { id: 'p2', rota_id: 'r1', nota_id: 'n2', ordem: 2, endereco: { logradouro: 'B', bairro: '', cidade: 'SP', uf: 'SP' }, latitude: -23.6, longitude: -46.7, fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: '2026-06-02T10:00:00Z' },
+      { id: 'p3', rota_id: 'r1', nota_id: 'n3', ordem: 3, endereco: { logradouro: 'C', bairro: '', cidade: 'SP', uf: 'SP' }, latitude: -23.7, longitude: -46.8, fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null },
+    ]));
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+    await waitFor(() => screen.getByTestId('rota-historico-r1'));
+    await user.click(screen.getByTestId('rota-historico-r1'));
+    await waitFor(() => screen.getByTestId('mapa-rota'));
+
+    // Proxima (ordem 1) so no card destacado, fora da lista
+    expect(screen.getByTestId('proxima-parada')).toBeDefined();
+    expect(screen.queryByTestId('parada-1')).toBeNull();
+
+    // Na lista: a pendente (parada-3) vem ANTES da concluida (parada-2)
+    const p3 = screen.getByTestId('parada-3');
+    const p2 = screen.getByTestId('parada-2');
+    expect(p3.compareDocumentPosition(p2) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
   it('clicar Encerrar volta pra fase inicio e conclui a rota no banco', async () => {
@@ -423,9 +453,9 @@ describe('RotaPage — fase em_rota', () => {
     await waitFor(() => screen.getByTestId('rota-historico-r1'));
     await user.click(screen.getByTestId('rota-historico-r1'));
 
-    // 1. Clique em "Concluí" — abre modal de confirmacao
-    await waitFor(() => screen.getByTestId('btn-concluir-1'));
-    await user.click(screen.getByTestId('btn-concluir-1'));
+    // 1. Clique em "Concluí" na proxima parada (card destacado) — abre modal
+    await waitFor(() => screen.getByTestId('btn-concluir-proxima'));
+    await user.click(screen.getByTestId('btn-concluir-proxima'));
 
     // 2. Modal aparece com pergunta "Entrega concluida?"
     await waitFor(() => screen.getByTestId('modal-confirmar-entrega'));
@@ -468,8 +498,8 @@ describe('RotaPage — fase em_rota', () => {
     await waitFor(() => screen.getByTestId('rota-historico-r1'));
     await user.click(screen.getByTestId('rota-historico-r1'));
 
-    await waitFor(() => screen.getByTestId('btn-concluir-1'));
-    await user.click(screen.getByTestId('btn-concluir-1'));
+    await waitFor(() => screen.getByTestId('btn-concluir-proxima'));
+    await user.click(screen.getByTestId('btn-concluir-proxima'));
     await waitFor(() => screen.getByTestId('modal-confirmar-entrega'));
 
     // Clica "Nao" → modal fecha, nada acontece

@@ -1204,6 +1204,15 @@ function FaseEmRota({
   // Proxima parada = primeira nao concluida
   const proximaParada = paradas.find((p) => !p.concluida_em) ?? null;
 
+  // Lista abaixo do card grande: NAO repete a proxima (ja esta destacada no
+  // card) e empurra as entregas FEITAS pro fim da fila. Ordem: pendentes
+  // restantes (na ordem da rota) → concluidas no rodape.
+  const listaParadas = useMemo(() => {
+    const pendentes = paradas.filter((p) => !p.concluida_em && p.id !== proximaParada?.id);
+    const feitas = paradas.filter((p) => p.concluida_em);
+    return [...pendentes, ...feitas];
+  }, [paradas, proximaParada]);
+
   // Parada exibida no bottom sheet (so se motorista tocou no pino)
   const paradaSheet = useMemo(
     () => (paradaSelecionada ? paradas.find((p) => p.id === paradaSelecionada) ?? null : null),
@@ -1358,8 +1367,11 @@ function FaseEmRota({
       )}
 
       <ol style={{ listStyle: 'none', padding: 0, margin: '16px 0 0' }}>
-        {paradas.map((p, i) => {
-          const status = statusDaParada(p, i, paradas);
+        {listaParadas.map((p) => {
+          // status calculado contra a ordem ORIGINAL (nao a posicao na lista
+          // reordenada). A proxima nao aparece aqui (esta no card), entao os
+          // itens sao 'pendente'/'fixada'/'concluida' — nunca 'proxima'.
+          const status = statusDaParada(p, paradas.indexOf(p), paradas);
           const concluida = status === 'concluida';
           const ehProxima = status === 'proxima';
           const ehSelecionada = paradaSelecionada === p.id;
