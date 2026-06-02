@@ -503,9 +503,6 @@ describe('RotaPage — fase em_rota', () => {
       },
     ]));
 
-    const openSpy = vi.fn();
-    vi.stubGlobal('open', openSpy);
-
     const user = userEvent.setup();
     render(<RotaPage />);
 
@@ -522,10 +519,19 @@ describe('RotaPage — fase em_rota', () => {
     expect(screen.getByTestId('tijolo-encaminhar-2')).toBeDefined();
     expect(screen.getByTestId('tijolo-encaminhar-1').getAttribute('aria-pressed')).toBe('true');
 
-    // Importa pro Maps → window.open com URL do Google Maps
-    await user.click(screen.getAllByTestId('btn-importar-maps')[0]);
-    expect(openSpy).toHaveBeenCalled();
-    expect(openSpy.mock.calls[0][0]).toContain('google.com/maps');
+    // Importa pro Maps via link <a> REAL (nao window.open — evita o bloqueio de
+    // popup do mobile que obrigava clicar duas vezes). href ja aponta pro Maps.
+    const link = screen.getAllByTestId('btn-importar-maps')[0] as HTMLAnchorElement;
+    expect(link.tagName).toBe('A');
+    expect(link.getAttribute('target')).toBe('_blank');
+    expect(link.href).toContain('google.com/maps');
+
+    // Desmarcando tudo → vira botao desabilitado (sem href, nada a importar)
+    await user.click(screen.getByTestId('tijolo-encaminhar-1'));
+    await user.click(screen.getByTestId('tijolo-encaminhar-2'));
+    const desativado = screen.getAllByTestId('btn-importar-maps')[0] as HTMLButtonElement;
+    expect(desativado.tagName).toBe('BUTTON');
+    expect(desativado.disabled).toBe(true);
   });
 
   it('refetch automatico ao voltar da tela ajuste-rota (visibilitychange)', async () => {

@@ -1577,37 +1577,59 @@ function ModalEncaminharMaps({
     });
   }, []);
 
-  const importar = useCallback(() => {
-    // Mantem a ordem da rota entre os selecionados.
+  const qtd = selecionados.size;
+
+  // URL do Maps montada REATIVAMENTE (na ordem da rota), usada como href de um
+  // link <a> de verdade. Por que: `window.open(...)` via script era barrado pelo
+  // bloqueador de popup do mobile na 1a vez — o motorista precisava clicar duas
+  // vezes. Navegacao por <a target="_blank"> e gesto direto do usuario e NAO
+  // sofre esse bloqueio (abre de primeira).
+  const urlMaps = useMemo(() => {
     const alvos: AlvoNavegacao[] = pendentes
       .filter((p) => selecionados.has(p.id))
       .map((p) => alvoDe(p));
-    if (alvos.length === 0) return;
-    vibrar(30);
-    window.open(googleMapsMultiStopNav(alvos), '_blank', 'noopener');
-    onFechar();
-  }, [pendentes, selecionados, onFechar]);
+    return alvos.length > 0 ? googleMapsMultiStopNav(alvos) : null;
+  }, [pendentes, selecionados]);
 
-  const qtd = selecionados.size;
-  const botaoImportar = (
-    <button
-      type="button"
-      onClick={importar}
-      disabled={qtd === 0}
+  const aoImportar = useCallback(() => {
+    // Nao previne o default: o proprio <a> faz a navegacao pro Google Maps.
+    vibrar(30);
+    onFechar();
+  }, [onFechar]);
+
+  const estiloBotaoImportar = {
+    display: 'block',
+    width: '100%',
+    boxSizing: 'border-box' as const,
+    padding: '13px',
+    color: '#fff',
+    border: 'none',
+    borderRadius: 10,
+    fontSize: 15,
+    fontWeight: 700,
+    textAlign: 'center' as const,
+    textDecoration: 'none',
+  };
+
+  const botaoImportar = urlMaps ? (
+    <a
+      href={urlMaps}
+      target="_blank"
+      rel="noopener noreferrer"
+      onClick={aoImportar}
       data-testid="btn-importar-maps"
-      style={{
-        width: '100%',
-        padding: '13px',
-        background: qtd === 0 ? '#cbd5e1' : '#16a34a',
-        color: '#fff',
-        border: 'none',
-        borderRadius: 10,
-        fontSize: 15,
-        fontWeight: 700,
-        cursor: qtd === 0 ? 'default' : 'pointer',
-      }}
+      style={{ ...estiloBotaoImportar, background: '#16a34a', cursor: 'pointer' }}
     >
       🌍 Importar para o Maps{qtd > 0 ? ` (${qtd})` : ''}
+    </a>
+  ) : (
+    <button
+      type="button"
+      disabled
+      data-testid="btn-importar-maps"
+      style={{ ...estiloBotaoImportar, background: '#cbd5e1', cursor: 'default' }}
+    >
+      🌍 Importar para o Maps
     </button>
   );
 
