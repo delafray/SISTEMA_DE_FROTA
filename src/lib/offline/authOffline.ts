@@ -83,6 +83,12 @@ export async function obterSessaoComFallback(
   roles: string[] = ROLES_OPERACAO
 ): Promise<ResultadoAuth> {
   try {
+    // Atalho determinístico: se o NAVEGADOR ja sabe que esta offline, nem tenta
+    // o getUser (que faz uma chamada de rede). Sem isso, dependíamos de adivinhar
+    // a mensagem de erro do Supabase — e quando ele devolvia "sessao ausente" em
+    // vez de "erro de rede", o motorista caia no /login mesmo com cache valido.
+    if (!navegadorOnline()) return resolverOffline(roles);
+
     const { data: auth, error } = await supabase.auth.getUser();
 
     if (error) {

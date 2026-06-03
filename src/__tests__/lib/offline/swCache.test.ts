@@ -9,6 +9,7 @@ import {
   nomeCacheShell,
   nomeCacheStatic,
   deveLimparCache,
+  shellsParaPrecache,
   type RequisicaoSW,
 } from '@/lib/offline/swCache';
 
@@ -58,6 +59,20 @@ describe('nomes de cache', () => {
   it('versiona shell e static pelo sha', () => {
     expect(nomeCacheShell('abc123')).toBe('frota-shell-abc123');
     expect(nomeCacheStatic('abc123')).toBe('frota-static-abc123');
+  });
+});
+
+describe('shellsParaPrecache', () => {
+  it('inclui a home do motorista (start_url do PWA) e a tela de rota', () => {
+    const shells = shellsParaPrecache();
+    expect(shells).toContain('/motorista');
+    expect(shells).toContain('/mobile/rota');
+  });
+
+  it('todas as shells sao navegacoes same-origin (classificadas como navigate)', () => {
+    for (const path of shellsParaPrecache()) {
+      expect(classificarRequisicao(req({ pathname: path, mode: 'navigate' }))).toBe('navigate');
+    }
   });
 });
 

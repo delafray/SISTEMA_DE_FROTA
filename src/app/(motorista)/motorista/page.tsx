@@ -6,7 +6,7 @@ import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { obterSessaoComFallback } from "@/lib/offline/authOffline";
 import { limparSessaoLocal } from "@/lib/offline/sessao";
-import { limparRotasAtivas, listarRotasCacheadas } from "@/lib/offline/rotaCache";
+import { listarRotasCacheadas } from "@/lib/offline/rotaCache";
 import type { RotaCacheada } from "@/lib/offline/types";
 import { cores, statusRota } from "@/lib/mobile/ui";
 
@@ -113,9 +113,10 @@ export default function MotoristaPage() {
 
   const handleSignOut = async () => {
     setSigningOut(true);
-    // Corta o acesso offline: apaga a sessao local e o cache de rota antes de sair.
+    // Corta o acesso offline (apaga a sessao local), MAS preserva o cache de rotas:
+    // se o motorista tocar "Sair" sem querer, nao perde as rotas ja baixadas — elas
+    // voltam a ficar acessiveis offline assim que ele logar de novo (mesmo aparelho).
     await limparSessaoLocal();
-    await limparRotasAtivas();
     const supabase = createClient();
     await supabase.auth.signOut();
     router.push("/login");

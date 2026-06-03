@@ -46,6 +46,18 @@ export function classificarRequisicao(req: RequisicaoSW): EstrategiaSW {
   return 'passthrough';
 }
 
+/**
+ * Telas que o SW PRE-CACHEIA no install (enquanto online), pra o app abrir
+ * offline ja na PRIMEIRA vez depois de instalado — sem depender de o motorista
+ * ter visitado cada URL antes. Sao tambem o fallback de navegacao offline.
+ *
+ * '/motorista' = home (start_url do PWA); '/mobile/rota' = tela da rota;
+ * '/login' = pra cair numa tela util se a sessao offline expirar.
+ */
+export function shellsParaPrecache(): string[] {
+  return ['/motorista', '/mobile/rota', '/login'];
+}
+
 export function nomeCacheShell(versao: string): string {
   return `frota-shell-${versao}`;
 }

@@ -4,7 +4,7 @@
  */
 
 import 'fake-indexeddb/auto';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import type { SupabaseClient } from '@supabase/supabase-js';
 
 import {
@@ -36,6 +36,41 @@ function fakeSupabase(cfg: FakeCfg): SupabaseClient {
 
 beforeEach(async () => {
   await getDB().sessao_local.clear();
+  // Default: navegador "online". Cada teste que precisa, sobrescreve via stubGlobal.
+  vi.stubGlobal('navigator', { onLine: true });
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
+
+describe('obterSessaoComFallback — navegador OFFLINE (navigator.onLine=false)', () => {
+  it('atalho determinístico: nem chama getUser, entra direto pelo cache', async () => {
+    await salvarSessaoLocal({ usuario_id: 'cache-on', empresa_id: 'e', motorista_id: 'm', role: 'motorista', nome: 'Ana' });
+    vi.stubGlobal('navigator', { onLine: false });
+
+    let getUserChamado = false;
+    const supabase = fakeSupabase({
+      getUser: async () => { getUserChamado = true; return { data: { user: { id: 'x' } } }; },
+    });
+
+    const r = await obterSessaoComFallback(supabase);
+
+    expect(getUserChamado).toBe(false); // nao tentou a rede
+    expect(r.ok).toBe(true);
+    expect(r.origem).toBe('offline_cache');
+    expect(r.sessao?.usuario_id).toBe('cache-on');
+  });
+
+  it('navegador offline e SEM cache → offline_sem_cache (nao tenta rede)', async () => {
+    vi.stubGlobal('navigator', { onLine: false });
+    const supabase = fakeSupabase({ getUser: async () => ({ data: { user: { id: 'x' } } }) });
+
+    const r = await obterSessaoComFallback(supabase);
+
+    expect(r.ok).toBe(false);
+    expect(r.motivo).toBe('offline_sem_cache');
+  });
 });
 
 describe('ehErroDeRede', () => {

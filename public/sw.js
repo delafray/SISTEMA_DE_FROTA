@@ -24,9 +24,28 @@ const VERSION = new URL(self.location).searchParams.get('v') || 'dev';
 const CACHE_SHELL = `frota-shell-${VERSION}`;
 const CACHE_STATIC = `frota-static-${VERSION}`;
 
-self.addEventListener('install', () => {
+// Telas pre-cacheadas no install (espelha shellsParaPrecache() em swCache.ts).
+// Garante que o app ABRE offline ja na primeira vez depois de instalado, sem
+// depender de o motorista ter visitado cada URL antes.
+const PRECACHE_SHELLS = ['/motorista', '/mobile/rota', '/login'];
+
+self.addEventListener('install', (event) => {
   // Ativa imediatamente — a estrategia rede-primeiro garante frescor online.
   self.skipWaiting();
+  // Pre-cacheia as telas-chave (best-effort: se uma falhar, nao aborta o install).
+  event.waitUntil((async () => {
+    const cache = await caches.open(CACHE_SHELL);
+    await Promise.all(
+      PRECACHE_SHELLS.map(async (url) => {
+        try {
+          const res = await fetch(url, { credentials: 'same-origin' });
+          if (res && res.ok) await cache.put(url, res.clone());
+        } catch (_e) {
+          // offline durante o install (raro) — segue sem essa shell.
+        }
+      })
+    );
+  })());
 });
 
 self.addEventListener('activate', (event) => {
@@ -89,12 +108,17 @@ async function networkFirstNav(req) {
     if (res && res.ok) cache.put(req, res.clone());
     return res;
   } catch (e) {
-    // Offline REAL (fetch rejeitou) — serve o cache desta navegacao, ou um shell.
-    const hit =
+    // Offline REAL (fetch rejeitou) — serve o cache desta navegacao, ou um shell
+    // pre-cacheado (qualquer rota interna abre num shell util em vez do erro).
+    let hit =
       (await cache.match(req)) ||
-      (await cache.match(new URL(req.url).pathname)) ||
-      (await cache.match('/motorista')) ||
-      (await cache.match('/mobile/rota'));
+      (await cache.match(new URL(req.url).pathname));
+    if (!hit) {
+      for (const shell of PRECACHE_SHELLS) {
+        hit = await cache.match(shell);
+        if (hit) break;
+      }
+    }
     if (hit) return hit;
     return new Response(
       '<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +

@@ -66,3 +66,33 @@ export interface NotaNaFila extends Omit<NotaCapturada, 'id' | 'sincronizado_em'
   ultimo_erro?: string;
   proxima_tentativa?: string;        // ISO timestamp — backoff exponencial
 }
+
+/** Tipo de acao da rota que pode ser feita offline e ressincronizada depois. */
+export type TipoAcaoRota = 'concluir_parada' | 'encerrar_rota';
+
+/**
+ * Acao da rota enfileirada localmente (IndexedDB) pra quando o motorista opera
+ * SEM internet — dar baixa numa parada ("Concluir") ou encerrar a rota.
+ *
+ * Por que existe: antes, esses cliques faziam `fetch()` direto pro servidor.
+ * Offline o fetch falhava, a UI revertia e a baixa era PERDIDA. Agora a acao
+ * vai pra esta fila, a UI segue otimista, e o worker (syncAcoes.ts) reenvia o
+ * mesmo PATCH quando a internet volta.
+ *
+ * Guarda o endpoint/metodo/corpo prontos pra reexecutar a requisicao tal qual.
+ * PK = id_local (uuid gerado no celular). Idempotente no servidor.
+ */
+export interface AcaoRotaFila {
+  id_local: string;                  // uuid gerado no celular (PK)
+  tipo: TipoAcaoRota;
+  rota_id: string;
+  parada_id: string | null;          // preenchido so em 'concluir_parada'
+  endpoint: string;                  // ex.: '/api/routing/rota/<id>/paradas'
+  metodo: string;                    // 'PATCH'
+  corpo: Record<string, unknown>;    // body JSON do PATCH a reexecutar
+  status_sync: StatusSync;
+  tentativas: number;
+  ultimo_erro?: string;
+  proxima_tentativa?: string;        // ISO timestamp — backoff exponencial
+  criado_em: string;                 // ISO timestamp — ordem de aplicacao
+}

@@ -29,6 +29,8 @@ import {
 import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
 import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
 import { salvarRotaAtiva, lerRotaAtiva, lerUltimaRotaAtiva } from '@/lib/offline/rotaCache';
+import { enfileirarConcluirParada, enfileirarEncerrarRota } from '@/lib/offline/acoesRota';
+import { iniciarSyncAcoesWorker, sincronizarAcoes } from '@/lib/offline/syncAcoes';
 import { vibrar, lockOrientacaoRetrato } from '@/lib/mobile/dispositivo';
 import { fetchRota } from '@/lib/routing/api';
 import { containerStyle, erroStyle } from './styles';
@@ -214,6 +216,25 @@ function RotaContent(): React.ReactElement {
     if (fase !== 'em_rota' || !rota) return;
     void salvarRotaAtiva({ rota, paradas });
   }, [fase, rota, paradas]);
+
+  // ─── Sync das ACOES offline (concluir/encerrar) na fase em_rota ────
+  // Enquanto o motorista esta na rota, mantemos um worker tentando reenviar as
+  // baixas/encerramentos feitos offline. O evento `online` dispara na hora em
+  // que a internet volta; o interval cobre sinal intermitente que nao dispara
+  // o evento. Ao sair da fase, para tudo.
+  useEffect(() => {
+    if (fase !== 'em_rota') return;
+    const parar = iniciarSyncAcoesWorker(8000);
+    const aoVoltarOnline = () => {
+      setOnline(true);
+      void sincronizarAcoes();
+    };
+    window.addEventListener('online', aoVoltarOnline);
+    return () => {
+      parar();
+      window.removeEventListener('online', aoVoltarOnline);
+    };
+  }, [fase]);
 
   // ─── Auto-refresh ao voltar de outra tela (ex: ajuste-rota) ────────
   // Quando o motorista navega pra /mobile/ajuste-rota e volta (botao voltar
@@ -573,11 +594,15 @@ function RotaContent(): React.ReactElement {
           }
         }
       } catch (err) {
-        setParadas((arr) =>
-          arr.map((p) => (p.id === paradaId ? { ...p, concluida_em: null } : p))
-        );
-        setErro(`Erro de rede: ${(err as Error).message}`);
-        setTimeout(() => setErro(null), 5000);
+        // Erro de REDE (offline) — NAO reverte. Enfileira a baixa pra reenviar
+        // quando a internet voltar; a UI segue marcada e o snapshot local ja
+        // guarda o concluida_em (effect salvarRotaAtiva). Antes isso era perdido.
+        await enfileirarConcluirParada({ rota_id: rota.id, parada_id: paradaId, concluida_em: agora });
+        void sincronizarAcoes(); // best-effort: talvez tenha sido so um blip
+        setOnline(false);
+        setToast('📴 Sem internet — baixa salva no aparelho, sincroniza quando voltar.');
+        setTimeout(() => setToast(null), 5000);
+        void err; // erro de rede esperado offline — nao mostra alerta vermelho
       }
     },
     [rota, paradas, posicaoAtual, empresaId]
@@ -604,8 +629,16 @@ function RotaContent(): React.ReactElement {
           return;
         }
       } catch (err) {
-        setErro(`Erro de rede ao encerrar: ${(err as Error).message}`);
-        return;
+        // Erro de REDE (offline) — enfileira o encerramento e segue otimista:
+        // vai pra tela inicial e ressincroniza quando a internet voltar. Antes
+        // ficava travado em em_rota e a rota nunca era marcada como concluida.
+        await enfileirarEncerrarRota({ rota_id: rota.id });
+        void sincronizarAcoes();
+        // Atualiza o snapshot local pra a lista offline ja mostrar "concluida".
+        await salvarRotaAtiva({ rota: { ...rota, status: 'concluida' }, paradas });
+        setToast('📴 Sem internet — rota encerrada no aparelho, sincroniza quando voltar.');
+        setTimeout(() => setToast(null), 5000);
+        void err; // erro de rede esperado offline — segue pro cleanup abaixo
       }
     }
     setRota(null);
@@ -622,7 +655,7 @@ function RotaContent(): React.ReactElement {
       // Ignora erro — historico vai estar levemente desatualizado mas nao critico
     }
     setFase('inicio');
-  }, [empresaId, motoristaId, rota]);
+  }, [empresaId, motoristaId, rota, paradas]);
 
   // ─── Calculo dinamico de distancias ────────────────────────────────
   const statsDinamicos = useMemo(() => {

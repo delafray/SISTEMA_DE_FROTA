@@ -4,7 +4,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 
 process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
@@ -28,6 +28,8 @@ vi.mock('@/lib/offline/rotaCache', () => ({
 }));
 
 import MotoristaPage from '@/app/(motorista)/motorista/page';
+import { limparSessaoLocal } from '@/lib/offline/sessao';
+import { limparRotasAtivas } from '@/lib/offline/rotaCache';
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -56,5 +58,23 @@ describe('Motorista page — offline', () => {
     obterSessaoComFallback.mockResolvedValue({ ok: false, origem: 'online', motivo: 'sem_sessao' });
     render(<MotoristaPage />);
     await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/login'));
+  });
+
+  it('logout (Sair) corta a sessao local mas PRESERVA as rotas em cache', async () => {
+    obterSessaoComFallback.mockResolvedValue({
+      ok: true,
+      origem: 'offline_cache',
+      sessao: { usuario_id: 'u', empresa_id: 'emp-1', motorista_id: 'mot-1', role: 'motorista', nome: 'Carlos' },
+    });
+
+    render(<MotoristaPage />);
+    const sair = await waitFor(() => screen.getByText('Sair'));
+    fireEvent.click(sair);
+
+    await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/login'));
+    expect(limparSessaoLocal).toHaveBeenCalled();
+    // Decisao do dono: nao apagar rotas ao sair (motorista nao perde acesso offline
+    // se tocar Sair sem querer).
+    expect(limparRotasAtivas).not.toHaveBeenCalled();
   });
 });

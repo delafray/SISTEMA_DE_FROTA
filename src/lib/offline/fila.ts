@@ -16,12 +16,13 @@
  */
 
 import Dexie, { type Table } from 'dexie';
-import type { NotaNaFila, StatusSync, SessaoLocal, RotaCacheada } from './types';
+import type { NotaNaFila, StatusSync, SessaoLocal, RotaCacheada, AcaoRotaFila } from './types';
 
 class FilaDB extends Dexie {
   notas!: Table<NotaNaFila, string>;
   sessao_local!: Table<SessaoLocal, string>;
   rota_ativa!: Table<RotaCacheada, string>;
+  acoes_rota!: Table<AcaoRotaFila, string>;
 
   constructor() {
     super('FrotaCapturaNotas');
@@ -35,6 +36,14 @@ class FilaDB extends Dexie {
       notas: 'id_local, status_sync, motorista_id, capturado_em',
       sessao_local: 'id',                          // PK fixa 'atual'
       rota_ativa: 'id, motorista_id, salvo_em',    // PK = rota_id
+    });
+    // v3: fila de ACOES da rota (concluir parada / encerrar) feitas offline.
+    // Sem isso, dar baixa sem internet era perdido (fetch falhava e revertia).
+    this.version(3).stores({
+      notas: 'id_local, status_sync, motorista_id, capturado_em',
+      sessao_local: 'id',
+      rota_ativa: 'id, motorista_id, salvo_em',
+      acoes_rota: 'id_local, status_sync, rota_id, criado_em',
     });
   }
 }

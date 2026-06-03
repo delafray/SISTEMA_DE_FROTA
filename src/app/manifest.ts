@@ -5,7 +5,11 @@ export default function manifest(): MetadataRoute.Manifest {
     name: 'FROTA - Gestão Inteligente',
     short_name: 'Frota',
     description: 'Sistema de Gestão de Frotas para controle de veículos, motoristas e rotas',
-    start_url: '/',
+    // start_url aponta direto pra home do motorista (e nao '/'): '/' e um redirect
+    // resolvido pelo MIDDLEWARE no servidor — offline nao ha servidor, entao abrir
+    // o PWA em '/' caia no shell "sem conexao". '/motorista' e uma pagina real,
+    // servida do cache do SW e com login offline via IndexedDB.
+    start_url: '/motorista',
     display: 'standalone',
     background_color: '#0f172a',
     theme_color: '#0f172a',
