@@ -73,6 +73,30 @@ export function FaseCaptura({
         onDesfazerUltima={stats.total > 0 ? onDesfazerUltima : undefined}
       />
 
+      {/* Botão Finalizar logo abaixo do CEP, mais fino */}
+      <button
+        type="button"
+        onClick={onOtimizar}
+        disabled={!podeFinalizar}
+        style={{
+          ...botaoPrimarioStyle,
+          background: podeFinalizar ? '#16a34a' : '#94a3b8',
+          padding: '8px 14px',
+          fontSize: 14,
+          marginTop: 8,
+          opacity: podeFinalizar ? 1 : 0.6,
+        }}
+        data-testid="btn-otimizar"
+      >
+        🎯 Finalizar e otimizar rota ({stats.total})
+      </button>
+
+      {stats.total > 0 && !podeFinalizar && (
+        <div role="status" style={{ marginTop: 8, padding: 10, background: '#fef3c7', color: '#92400e', borderRadius: 6, fontSize: 13 }}>
+          ⏳ Aguarde sincronização — só {Math.round(pctSync * 100)}% das notas estão no servidor. Mínimo: {Math.round(PERCENT_SYNC_MIN * 100)}%.
+        </div>
+      )}
+
       {notas.length > 0 && (
         <section style={listaStyle} aria-label="Notas capturadas">
           <h2 style={{ fontSize: 14, fontWeight: 600, margin: '16px 0 8px' }}>
@@ -139,27 +163,6 @@ export function FaseCaptura({
           </ul>
         </section>
       )}
-
-      {stats.total > 0 && !podeFinalizar && (
-        <div role="status" style={{ marginTop: 12, padding: 10, background: '#fef3c7', color: '#92400e', borderRadius: 6, fontSize: 13 }}>
-          ⏳ Aguarde sincronização — só {Math.round(pctSync * 100)}% das notas estão no servidor. Mínimo: {Math.round(PERCENT_SYNC_MIN * 100)}%.
-        </div>
-      )}
-
-      <button
-        type="button"
-        onClick={onOtimizar}
-        disabled={!podeFinalizar}
-        style={{
-          ...botaoPrimarioStyle,
-          background: podeFinalizar ? '#16a34a' : '#94a3b8',
-          marginTop: 12,
-          opacity: podeFinalizar ? 1 : 0.6,
-        }}
-        data-testid="btn-otimizar"
-      >
-        🎯 Finalizar e otimizar rota ({stats.total})
-      </button>
     </div>
   );
 }
