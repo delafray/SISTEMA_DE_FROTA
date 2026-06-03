@@ -21,11 +21,18 @@ export function FaseInicio({
   onCarregarRota,
   rotasHistorico,
   onRefetchHistorico,
+  notasPendentes = 0,
+  onContinuarCaptura,
 }: {
   onIniciar: () => void;
   onCarregarRota: (rotaId: string) => Promise<void>;
   rotasHistorico: RotaOtimizada[];
   onRefetchHistorico: () => Promise<void>;
+  // Notas que ficaram salvas quando o motorista escolheu "Salvar e voltar
+  // depois" no modal de saida da captura. Quando > 0, mostramos o botao de
+  // retomar (sem zerar a fila, diferente de "Nova rota").
+  notasPendentes?: number;
+  onContinuarCaptura?: () => void;
 }) {
   const [carregando, setCarregando] = useState<string | null>(null);
   const [marcandoConcluida, setMarcandoConcluida] = useState<string | null>(null);
@@ -64,6 +71,28 @@ export function FaseInicio({
 
   return (
     <div style={{ padding: 16 }}>
+      {notasPendentes > 0 && onContinuarCaptura && (
+        <button
+          type="button"
+          onClick={onContinuarCaptura}
+          data-testid="btn-continuar-captura"
+          style={{
+            width: '100%',
+            padding: '14px',
+            marginBottom: 16,
+            fontSize: 15,
+            fontWeight: 700,
+            background: '#16a34a',
+            color: '#fff',
+            border: 'none',
+            borderRadius: 8,
+            cursor: 'pointer',
+          }}
+        >
+          ▶️ Continuar captura ({notasPendentes} nota{notasPendentes > 1 ? 's' : ''})
+        </button>
+      )}
+
       <div style={{ textAlign: 'center', marginBottom: 20 }}>
         <h2 style={{ fontSize: 18, fontWeight: 700, margin: '0 0 4px' }}>Rota do Dia</h2>
         <p style={{ fontSize: 13, color: '#64748b', margin: '0 0 12px' }}>

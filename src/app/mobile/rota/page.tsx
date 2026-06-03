@@ -15,7 +15,7 @@
  * Referencia: PLANO_ROTEIRIZACAO.md (consolidado dos passos 1.4 + 1.10 + 1.12 + 1.13).
  */
 
-import { useCallback, useEffect, useMemo, useState, Suspense } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
 import {
@@ -37,6 +37,7 @@ import { Header } from './components/Header';
 import { FaseInicio } from './components/FaseInicio';
 import { FaseCaptura } from './components/FaseCaptura';
 import { FaseEmRota } from './components/FaseEmRota';
+import { ModalSairCaptura } from './components/ModalSairCaptura';
 import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import type { NotaNaFila } from '@/lib/offline/types';
 import type { Parada, RotaOtimizada } from '@/lib/routing/types';
@@ -74,6 +75,13 @@ function RotaContent(): React.ReactElement {
   // Uso do Google no mes (pra mostrar na captura: cache vs API + quanto falta
   // pro ViaCEP). Atualiza ao entrar na captura e a cada NF capturada.
   const [usoGoogle, setUsoGoogle] = useState<{ total: number; limite: number } | null>(null);
+  // Modal de confirmacao ao apertar Voltar no meio da captura (evita descartar
+  // 5-10 NFs sem querer). Ver handlePopState abaixo.
+  const [confirmandoSaida, setConfirmandoSaida] = useState(false);
+  // Ref pra o handlePopState ler a contagem atual de notas sem precisar re-registrar
+  // o listener a cada nota capturada (o efeito do popstate depende so de `fase`).
+  const notasRef = useRef<NotaNaFila[]>(notas);
+  notasRef.current = notas;
 
   // Trava em retrato ao montar
   useEffect(() => {
@@ -269,6 +277,15 @@ function RotaContent(): React.ReactElement {
   // ─── Interceptar botão Voltar do celular (Hardware Back Button) ────
   useEffect(() => {
     const handlePopState = () => {
+      // Durante a captura com notas, o Voltar NAO descarta direto: re-empilha
+      // #captura (pra a pagina nao sair de fato) e abre o modal de confirmacao.
+      // Sem isso, um toque sem querer no Voltar jogava o motorista pra tela
+      // inicial e perdia as 5-10 NFs ja capturadas.
+      if (fase === 'captura' && notasRef.current.length > 0) {
+        window.history.pushState(null, '', '#captura');
+        setConfirmandoSaida(true);
+        return;
+      }
       const hash = window.location.hash.replace('#', '');
       if (!hash) {
         setFase('inicio');
@@ -316,6 +333,47 @@ function RotaContent(): React.ReactElement {
     }
     setFase('captura');
   }, [motoristaId, empresaId]);
+
+  // ─── Saida da captura via Voltar (modal salvar/descartar/continuar) ──
+
+  // Continua capturando — fecha o modal e fica na captura (caso comum: Voltar
+  // foi sem querer).
+  const continuarCapturando = useCallback(() => {
+    setConfirmandoSaida(false);
+  }, []);
+
+  // Salva e volta depois — mantem as NFs na fila (Dexie + sync ja persistem) e
+  // so vai pra tela inicial. La aparece "Continuar captura (N)" pra retomar.
+  const salvarESair = useCallback(() => {
+    setConfirmandoSaida(false);
+    setFase('inicio');
+  }, []);
+
+  // Descarta tudo — apaga a fila local e as notas no banco (mesma limpeza do
+  // "Nova rota"), depois volta pra tela inicial.
+  const descartarESair = useCallback(async () => {
+    setConfirmandoSaida(false);
+    if (motoristaId) {
+      try {
+        await limparFila(motoristaId);
+        await fetch('/api/routing/notas/limpar', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
+        });
+      } catch (err) {
+        console.error('Falha ao descartar notas:', err);
+      }
+    }
+    setNotas([]);
+    setFase('inicio');
+  }, [motoristaId, empresaId]);
+
+  // Retoma a captura a partir da tela inicial SEM limpar a fila (diferente do
+  // "Nova rota", que zera tudo). Usado pelo botao "Continuar captura (N)".
+  const retomarCaptura = useCallback(() => {
+    setFase('captura');
+  }, []);
 
   // Carrega uma rota existente do historico e vai direto pra fase em_rota
   const handleCarregarRota = useCallback(async (rotaId: string) => {
@@ -644,6 +702,15 @@ function RotaContent(): React.ReactElement {
         </div>
       )}
 
+      {confirmandoSaida && (
+        <ModalSairCaptura
+          quantidade={notas.length}
+          onContinuar={continuarCapturando}
+          onSalvar={salvarESair}
+          onDescartar={descartarESair}
+        />
+      )}
+
       {fase === 'carregando' && <div style={{ padding: 24, textAlign: 'center' }}>Carregando…</div>}
 
       {fase === 'inicio' && (
@@ -651,6 +718,8 @@ function RotaContent(): React.ReactElement {
           onIniciar={iniciarCaptura}
           onCarregarRota={handleCarregarRota}
           rotasHistorico={rotasHistorico}
+          notasPendentes={notas.length}
+          onContinuarCaptura={retomarCaptura}
           onRefetchHistorico={async () => {
             try {
               const res = await fetch(

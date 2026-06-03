@@ -628,6 +628,124 @@ describe('RotaPage — fase em_rota', () => {
   });
 });
 
+describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
+  it('apertar Voltar com notas capturadas abre o modal (nao descarta direto)', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([nota({ id_local: 'a' }), nota({ id_local: 'b' })]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    render(<RotaPage />);
+    // Monta direto na captura porque ha notas na fila
+    await waitFor(() => screen.getByTestId('input-endereco'));
+
+    // Simula o botao Voltar do celular
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    // Em vez de cair pra tela inicial, abre o modal de confirmacao
+    await waitFor(() => expect(screen.getByTestId('modal-sair-captura')).toBeDefined());
+    expect(screen.getByText(/Sair da captura/)).toBeDefined();
+    // Continua na captura por tras do modal (nao foi pra inicio)
+    expect(screen.queryByTestId('btn-iniciar')).toBeNull();
+  });
+
+  it('"Continuar capturando" fecha o modal e mantem a captura', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([nota({ id_local: 'a' })]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+    await waitFor(() => screen.getByTestId('input-endereco'));
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => screen.getByTestId('modal-sair-captura'));
+
+    await user.click(screen.getByTestId('btn-continuar-capturando'));
+
+    expect(screen.queryByTestId('modal-sair-captura')).toBeNull();
+    expect(screen.getByTestId('input-endereco')).toBeDefined();
+    // Nao limpou nada
+    expect(limparFila).not.toHaveBeenCalled();
+  });
+
+  it('"Descartar tudo" limpa fila local + banco e volta pro inicio', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([nota({ id_local: 'a' })]);
+    const fetchSpy = vi.fn(async (url: string | Request) => {
+      const u = typeof url === 'string' ? url : url.url;
+      if (u.includes('/api/routing/rotas?')) {
+        return { ok: true, status: 200, json: async () => ({ rotas: [] }) } as unknown as Response;
+      }
+      return { ok: true, status: 200, json: async () => ({}) } as unknown as Response;
+    });
+    vi.stubGlobal('fetch', fetchSpy);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+    await waitFor(() => screen.getByTestId('input-endereco'));
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => screen.getByTestId('modal-sair-captura'));
+
+    await user.click(screen.getByTestId('btn-descartar-tudo'));
+
+    // Limpou a fila local
+    await waitFor(() => expect(limparFila).toHaveBeenCalledWith('mot-1'));
+    // Chamou o limpar do banco
+    const clearCall = fetchSpy.mock.calls.find((c) => {
+      const u = typeof c[0] === 'string' ? c[0] : c[0].url;
+      const init = c[1] as RequestInit | undefined;
+      return u.includes('/api/routing/notas/limpar') && init?.method === 'POST';
+    });
+    expect(clearCall).toBeDefined();
+    // Voltou pra tela inicial
+    await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
+  });
+
+  it('"Salvar e voltar depois" preserva as notas e mostra "Continuar captura" no inicio', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([nota({ id_local: 'a' }), nota({ id_local: 'b' })]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+    await waitFor(() => screen.getByTestId('input-endereco'));
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
+    await waitFor(() => screen.getByTestId('modal-sair-captura'));
+
+    await user.click(screen.getByTestId('btn-salvar-sair'));
+
+    // Voltou pro inicio com o botao de retomar (2 notas preservadas), sem limpar
+    await waitFor(() => expect(screen.getByTestId('btn-continuar-captura')).toBeDefined());
+    expect(screen.getByText(/Continuar captura \(2 notas\)/)).toBeDefined();
+    expect(limparFila).not.toHaveBeenCalled();
+
+    // Retomar volta pra captura sem zerar a fila
+    await user.click(screen.getByTestId('btn-continuar-captura'));
+    await waitFor(() => expect(screen.getByTestId('input-endereco')).toBeDefined());
+    expect(limparFila).not.toHaveBeenCalled();
+  });
+
+  it('sem notas, o Voltar nao abre o modal (vai pro fluxo normal)', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+    setupFetch([{ match: (u) => u.includes('/api/routing/rotas?'), res: { rotas: [] } }]);
+
+    const user = userEvent.setup();
+    render(<RotaPage />);
+    // Sem notas, monta no inicio; entra na captura via Nova rota
+    await waitFor(() => screen.getByTestId('btn-iniciar'));
+    await user.click(screen.getByTestId('btn-iniciar'));
+    await waitFor(() => screen.getByTestId('input-endereco'));
+
+    window.dispatchEvent(new PopStateEvent('popstate'));
+
+    // Nenhum modal — captura vazia nao tem o que perder
+    expect(screen.queryByTestId('modal-sair-captura')).toBeNull();
+  });
+});
+
 describe('RotaPage — editar NF capturada', () => {
   it('botao editar aparece para cada nota na lista', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });

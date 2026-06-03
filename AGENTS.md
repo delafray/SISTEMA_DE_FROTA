@@ -18,5 +18,5 @@ Esta regra vale para **TODAS as IAs** (Claude, Gemini, GPT, Cursor, Windsurf, An
 
 Áreas com cobertura faltando estão listadas em `TESTING.md`. Comece por elas se for trabalhar nessas funcionalidades.
 
-Anexe sua execução no "Log de Execução" no final de `TESTING.md`.
+Anexe sua execução no final de `TESTING_LOG.md` (o histórico foi separado de `TESTING.md` para não inflar o contexto).
 <!-- END:mandatory-testing-rule -->
