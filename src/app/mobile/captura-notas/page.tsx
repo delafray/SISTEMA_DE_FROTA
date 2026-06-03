@@ -23,6 +23,8 @@ import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/In
 import { adicionarNota, listarTodas, remover } from '@/lib/offline/fila';
 import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
 import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
+import { lockOrientacaoRetrato } from '@/lib/mobile/dispositivo';
+import { cores } from '@/lib/mobile/ui';
 import type { NotaNaFila } from '@/lib/offline/types';
 
 const RELOAD_INTERVAL_MS = 3000;
@@ -48,12 +50,7 @@ function CapturaNotasContent(): React.ReactElement {
   }, [motoristaId]);
 
   // Trava em retrato ao montar (Android Chrome suporta; iOS ignora silenciosamente)
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    type SO = ScreenOrientation & { lock?: (o: string) => Promise<void> };
-    const so = screen.orientation as SO | undefined;
-    if (so?.lock) so.lock('portrait').catch(() => { /* ok */ });
-  }, []);
+  useEffect(() => { lockOrientacaoRetrato(); }, []);
 
   const handleDesfazerUltima = useCallback(async () => {
     if (notas.length === 0) return;
@@ -148,7 +145,7 @@ function CapturaNotasContent(): React.ReactElement {
             {online ? '🟢 Online' : '🔴 Offline'}
           </span>
         </div>
-        <div style={{ marginTop: 6, fontSize: 13, color: '#475569' }}>
+        <div style={{ marginTop: 6, fontSize: 13, color: cores.textoMedio }}>
           ✓ {stats.sincronizadas} sincronizadas &nbsp;·&nbsp; ⏳ {stats.pendentes} pendentes
           {stats.erros > 0 && <> &nbsp;·&nbsp; ❌ {stats.erros} erro(s)</>}
         </div>
@@ -165,7 +162,7 @@ function CapturaNotasContent(): React.ReactElement {
 
       {notas.length > 0 && (
         <section style={listaStyle} aria-label="Notas capturadas">
-          <h2 style={{ fontSize: 14, fontWeight: 600, color: '#334155', margin: '16px 0 8px' }}>
+          <h2 style={{ fontSize: 14, fontWeight: 600, color: cores.textoForte, margin: '16px 0 8px' }}>
             Capturadas ({notas.length})
           </h2>
           <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -178,14 +175,14 @@ function CapturaNotasContent(): React.ReactElement {
                 </span>
                 <span>
                   {n.endereco.logradouro || '(sem rua)'}, {n.numero}{' '}
-                  <span style={{ color: '#64748b', fontSize: 13 }}>
+                  <span style={{ color: cores.textoFraco, fontSize: 13 }}>
                     ({n.endereco.cidade}/{n.endereco.uf})
                   </span>
                 </span>
               </li>
             ))}
             {notas.length > 10 && (
-              <li style={{ color: '#64748b', fontSize: 13, padding: '8px 0' }}>
+              <li style={{ color: cores.textoFraco, fontSize: 13, padding: '8px 0' }}>
                 …e mais {notas.length - 10}
               </li>
             )}
@@ -214,7 +211,7 @@ function CapturaNotasContent(): React.ReactElement {
           A otimizacao das paradas sera feita assim que a infraestrutura do
           servidor (Oracle + OSRM) estiver pronta (passos 1.7+ do plano).
           {stats.pendentes > 0 && (
-            <div style={{ marginTop: 8, color: '#92400e' }}>
+            <div style={{ marginTop: 8, color: cores.textoAmbar }}>
               ⚠️ Ainda ha {stats.pendentes} nota(s) pendente(s) — mantenha o app
               aberto ate sincronizar.
             </div>
@@ -243,21 +240,21 @@ const containerStyle: React.CSSProperties = {
 
 const headerStyle: React.CSSProperties = {
   padding: 12,
-  background: '#fff',
+  background: cores.branco,
   borderRadius: 8,
-  border: '1px solid #e2e8f0',
+  border: `1px solid ${cores.borda}`,
   marginBottom: 16,
 };
 
 const listaStyle: React.CSSProperties = {
-  background: '#f8fafc',
+  background: cores.fundoApp,
   borderRadius: 8,
   padding: 12,
 };
 
 const itemStyle: React.CSSProperties = {
   padding: '8px 0',
-  borderBottom: '1px solid #e2e8f0',
+  borderBottom: `1px solid ${cores.borda}`,
   fontSize: 14,
 };
 
@@ -266,8 +263,8 @@ const botaoFinalizarStyle: React.CSSProperties = {
   padding: '14px',
   fontSize: 16,
   fontWeight: 600,
-  background: '#16a34a',
-  color: '#fff',
+  background: cores.verde,
+  color: cores.branco,
   border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
@@ -275,8 +272,8 @@ const botaoFinalizarStyle: React.CSSProperties = {
 
 const erroStyle: React.CSSProperties = {
   padding: 16,
-  background: '#fef2f2',
-  color: '#991b1b',
+  background: cores.fundoVermelho,
+  color: cores.vermelhoTexto,
   borderRadius: 8,
   fontSize: 15,
 };
@@ -284,8 +281,8 @@ const erroStyle: React.CSSProperties = {
 const finalizadoStyle: React.CSSProperties = {
   marginTop: 16,
   padding: 16,
-  background: '#f0fdf4',
-  color: '#166534',
+  background: cores.fundoVerde,
+  color: cores.textoVerde,
   borderRadius: 8,
   fontSize: 14,
 };

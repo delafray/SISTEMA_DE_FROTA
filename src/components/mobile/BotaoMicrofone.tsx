@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { useSpeechToText } from '@/hooks/useSpeechToText';
+import { cores } from '@/lib/mobile/ui';
 
 interface BotaoMicrofoneProps {
   onTranscricao: (texto: string) => void;
@@ -48,8 +49,8 @@ export function BotaoMicrofone({ onTranscricao, disabled }: BotaoMicrofoneProps)
         height: 48,
         borderRadius: '50%',
         border: 'none',
-        background: listening ? '#fee2e2' : '#f1f5f9',
-        color: listening ? '#ef4444' : '#64748b',
+        background: listening ? '#fee2e2' : cores.divisoria,
+        color: listening ? '#ef4444' : cores.textoFraco,
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',

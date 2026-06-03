@@ -18,7 +18,7 @@
 --   - Esta migration NÃO é reversível sem o backup
 --
 -- ⚠️ DEPOIS DE APLICAR:
---   - Rodar `npx supabase gen types typescript ... > src/lib/database.types.ts`
+--   - Rodar `npx supabase gen types typescript ... > src/types/database.types.ts`
 --   - Avisar a IA executora pra começar a ETAPA 2 do plano
 -- ============================================================================
 

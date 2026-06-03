@@ -7,6 +7,8 @@ import { createClient } from "@/lib/supabase/client";
 import { obterSessaoComFallback } from "@/lib/offline/authOffline";
 import { limparSessaoLocal } from "@/lib/offline/sessao";
 import { limparRotasAtivas, listarRotasCacheadas } from "@/lib/offline/rotaCache";
+import type { RotaCacheada } from "@/lib/offline/types";
+import { cores, statusRota } from "@/lib/mobile/ui";
 
 /** Item da lista de rotas na tela inicial do motorista. */
 type RotaItem = {
@@ -18,12 +20,24 @@ type RotaItem = {
   qtd_paradas?: number;
 };
 
-const ROTA_STATUS: Record<string, { label: string; bg: string; color: string; border: string }> = {
-  concluida:    { label: "Concluída",     bg: "#f0fdf4", color: "#166534", border: "#bbf7d0" },
-  em_andamento: { label: "Em andamento",  bg: "#eff6ff", color: "#1e40af", border: "#bfdbfe" },
-  otimizada:    { label: "Em aberto",     bg: "#fffbeb", color: "#92400e", border: "#fde68a" },
-  rascunho:     { label: "Rascunho",      bg: "#f8fafc", color: "#64748b", border: "#e2e8f0" },
-  cancelada:    { label: "Cancelada",     bg: "#fef2f2", color: "#991b1b", border: "#fecaca" },
+/** Converte uma rota cacheada (offline) no item de lista da tela. */
+function cacheParaItem(c: RotaCacheada): RotaItem {
+  return {
+    id: c.rota.id,
+    data: c.rota.data,
+    status: c.rota.status,
+    distancia_total_km: c.rota.distancia_total_km,
+    tempo_total_min: c.rota.tempo_total_min,
+    qtd_paradas: c.paradas.length,
+  };
+}
+
+const ROTA_LABEL: Record<string, string> = {
+  concluida: "Concluída",
+  em_andamento: "Em andamento",
+  otimizada: "Em aberto",
+  rascunho: "Rascunho",
+  cancelada: "Cancelada",
 };
 
 const fmtDate = (d: string | null) =>
@@ -68,16 +82,7 @@ export default function MotoristaPage() {
         setOffline(true);
         if (mId) {
           const cache = await listarRotasCacheadas(mId);
-          setRotas(
-            cache.map((c) => ({
-              id: c.rota.id,
-              data: c.rota.data,
-              status: c.rota.status,
-              distancia_total_km: c.rota.distancia_total_km,
-              tempo_total_min: c.rota.tempo_total_min,
-              qtd_paradas: c.paradas.length,
-            }))
-          );
+          setRotas(cache.map(cacheParaItem));
         }
         setLoading(false);
         return;
@@ -97,16 +102,7 @@ export default function MotoristaPage() {
         const cache = await listarRotasCacheadas(mId);
         if (cache.length > 0) {
           setOffline(true);
-          setRotas(
-            cache.map((c) => ({
-              id: c.rota.id,
-              data: c.rota.data,
-              status: c.rota.status,
-              distancia_total_km: c.rota.distancia_total_km,
-              tempo_total_min: c.rota.tempo_total_min,
-              qtd_paradas: c.paradas.length,
-            }))
-          );
+          setRotas(cache.map(cacheParaItem));
         }
       }
       setLoading(false);
@@ -128,7 +124,7 @@ export default function MotoristaPage() {
   const semVinculo = !loading && motoristaId === null;
 
   if (loading) return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: "#64748b", flexDirection: "column", gap: "12px" }}>
+    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", minHeight: "100vh", color: cores.textoFraco, flexDirection: "column", gap: "12px" }}>
       <div style={{ fontSize: "32px" }}>🚚</div>
       <div style={{ fontSize: "14px" }}>Carregando...</div>
     </div>
@@ -138,12 +134,12 @@ export default function MotoristaPage() {
     <div style={{ maxWidth: "480px", margin: "0 auto", padding: "0 0 32px 0", fontFamily: "system-ui, sans-serif" }}>
 
       {/* Header (menu) */}
-      <div style={{ background: "#313f50", padding: "20px 16px 16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ background: cores.headerEscuro, padding: "20px 16px 16px", display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
           <div style={{ fontSize: "11px", color: "rgba(147,197,253,0.7)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
             App Motorista
           </div>
-          <h1 style={{ fontSize: "20px", fontWeight: 700, color: "#fff", margin: "2px 0 0", lineHeight: 1.2 }}>
+          <h1 style={{ fontSize: "20px", fontWeight: 700, color: cores.branco, margin: "2px 0 0", lineHeight: 1.2 }}>
             Olá, {nome.split(" ")[0] || "Motorista"}
           </h1>
         </div>
@@ -175,7 +171,7 @@ export default function MotoristaPage() {
               display: "flex",
               alignItems: "center",
               gap: "14px",
-              background: "linear-gradient(135deg, #16a34a 0%, #15803d 100%)",
+              background: `linear-gradient(135deg, ${cores.verde} 0%, ${cores.verdeEscuro} 100%)`,
               borderRadius: "14px",
               padding: "16px 18px",
               textDecoration: "none",
@@ -184,7 +180,7 @@ export default function MotoristaPage() {
           >
             <div style={{ fontSize: "36px", lineHeight: 1 }}>🚛</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "17px", fontWeight: 800, color: "#fff", letterSpacing: "-0.3px" }}>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: cores.branco, letterSpacing: "-0.3px" }}>
                 Rota do dia
               </div>
               <div style={{ fontSize: "12px", color: "rgba(255,255,255,0.75)", marginTop: "2px" }}>
@@ -199,7 +195,7 @@ export default function MotoristaPage() {
               display: "flex",
               alignItems: "center",
               gap: "14px",
-              background: "#f1f5f9",
+              background: cores.divisoria,
               borderRadius: "14px",
               padding: "16px 18px",
               opacity: 0.6,
@@ -207,8 +203,8 @@ export default function MotoristaPage() {
           >
             <div style={{ fontSize: "36px", lineHeight: 1 }}>🚛</div>
             <div style={{ flex: 1 }}>
-              <div style={{ fontSize: "17px", fontWeight: 800, color: "#334155" }}>Rota do dia</div>
-              <div style={{ fontSize: "12px", color: "#94a3b8", marginTop: "2px" }}>
+              <div style={{ fontSize: "17px", fontWeight: 800, color: cores.textoForte }}>Rota do dia</div>
+              <div style={{ fontSize: "12px", color: cores.textoSuave, marginTop: "2px" }}>
                 Conta sem vínculo de motorista — solicite ao gestor
               </div>
             </div>
@@ -226,9 +222,9 @@ export default function MotoristaPage() {
             alignItems: "center",
             justifyContent: "center",
             gap: "8px",
-            background: "#fff",
-            border: "1px solid #fde68a",
-            color: "#92400e",
+            background: cores.branco,
+            border: `1px solid ${cores.bordaAmbar}`,
+            color: cores.textoAmbar,
             borderRadius: "10px",
             padding: "11px",
             fontSize: "14px",
@@ -241,7 +237,7 @@ export default function MotoristaPage() {
       </div>
 
       {semVinculo && (
-        <div style={{ margin: "16px 12px 0", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "10px", padding: "16px", color: "#92400e", fontSize: "13px", lineHeight: 1.6 }}>
+        <div style={{ margin: "16px 12px 0", background: cores.fundoAmbar, border: `1px solid ${cores.bordaAmbar}`, borderRadius: "10px", padding: "16px", color: cores.textoAmbar, fontSize: "13px", lineHeight: 1.6 }}>
           <strong>Conta não vinculada</strong><br />
           Seu usuário ainda não foi associado a um motorista cadastrado no sistema.<br />
           Solicite ao gestor que faça o vínculo.
@@ -250,12 +246,12 @@ export default function MotoristaPage() {
 
       {/* ── Lista de rotas (concluidas ou nao) ───────────────────── */}
       <div style={{ padding: "20px 12px 0" }}>
-        <div style={{ fontSize: "12px", color: "#94a3b8", fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px", paddingLeft: "2px" }}>
+        <div style={{ fontSize: "12px", color: cores.textoSuave, fontWeight: 700, textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "10px", paddingLeft: "2px" }}>
           Minhas rotas
         </div>
 
         {rotas.length === 0 ? (
-          <div style={{ textAlign: "center", padding: "40px 16px", color: "#94a3b8" }}>
+          <div style={{ textAlign: "center", padding: "40px 16px", color: cores.textoSuave }}>
             <div style={{ fontSize: "40px", marginBottom: "10px" }}>🗺️</div>
             <div style={{ fontWeight: 600, fontSize: "15px" }}>Nenhuma rota ainda</div>
             <div style={{ fontSize: "13px", marginTop: "4px" }}>Toque em “Rota do dia” pra criar a primeira.</div>
@@ -263,19 +259,20 @@ export default function MotoristaPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
             {rotas.map((r) => {
-              const st = ROTA_STATUS[r.status] ?? ROTA_STATUS.rascunho;
+              const st = statusRota[r.status] ?? statusRota.rascunho;
+              const label = ROTA_LABEL[r.status] ?? r.status;
               const distTempo = fmtDistTempo(r.distancia_total_km, r.tempo_total_min);
               const conteudo = (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: "#0f172a" }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: cores.texto }}>
                       {fmtDate(r.data)}
                     </div>
-                    <span style={{ background: st.bg, color: st.color, border: `1px solid ${st.border}`, borderRadius: "6px", padding: "3px 9px", fontSize: "11px", fontWeight: 700 }}>
-                      {st.label}
+                    <span style={{ background: st.bg, color: st.texto, border: `1px solid ${st.borda}`, borderRadius: "6px", padding: "3px 9px", fontSize: "11px", fontWeight: 700 }}>
+                      {label}
                     </span>
                   </div>
-                  <div style={{ fontSize: "12px", color: "#64748b", marginTop: "5px" }}>
+                  <div style={{ fontSize: "12px", color: cores.textoFraco, marginTop: "5px" }}>
                     {r.qtd_paradas != null ? `${r.qtd_paradas} ${r.qtd_paradas === 1 ? "parada" : "paradas"}` : ""}
                     {r.qtd_paradas != null && distTempo ? " · " : ""}
                     {distTempo}
@@ -284,9 +281,9 @@ export default function MotoristaPage() {
               );
               const cardStyle: React.CSSProperties = {
                 display: "block",
-                background: "#fff",
+                background: cores.branco,
                 borderRadius: "12px",
-                border: "1px solid #e2e8f0",
+                border: `1px solid ${cores.borda}`,
                 padding: "13px 14px",
                 textDecoration: "none",
                 boxShadow: "0 1px 3px rgba(0,0,0,0.04)",

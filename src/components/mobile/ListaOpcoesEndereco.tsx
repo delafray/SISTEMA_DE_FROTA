@@ -1,6 +1,7 @@
 'use client';
 
 import type { ResultadoGeocoding } from '@/lib/routing/types';
+import { cores } from '@/lib/mobile/ui';
 
 interface ListaOpcoesEnderecoProps {
   opcoes: (ResultadoGeocoding & { distanciaKm?: number })[];
@@ -57,7 +58,7 @@ export function ListaOpcoesEndereco({
 }: ListaOpcoesEnderecoProps): React.ReactElement {
   return (
     <div style={{ padding: '0 0 8px' }}>
-      <div style={{ fontSize: 14, fontWeight: 700, color: '#1e40af', marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
+      <div style={{ fontSize: 14, fontWeight: 700, color: cores.azulTexto, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
         <span>🎤</span>
         <span>Qual endereço é o certo?</span>
       </div>
@@ -91,8 +92,8 @@ export function ListaOpcoesEndereco({
                 textAlign: 'left',
                 padding: '12px 14px',
                 borderRadius: 10,
-                border: '1px solid #bfdbfe',
-                background: '#eff6ff',
+                border: `1px solid ${cores.bordaAzul}`,
+                background: cores.fundoAzul,
                 cursor: 'pointer',
                 transition: 'all 0.15s',
               }}
@@ -107,9 +108,9 @@ export function ListaOpcoesEndereco({
                   </div>
                   {/* Linha 2: CEP · bairro · cidade/UF (info pra desambiguar) */}
                   {(cepSegmento || opcao.bairro || opcao.cidade) ? (
-                    <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
+                    <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
                       {cepSegmento && (
-                        <span style={cepFmt ? undefined : { fontStyle: 'italic', color: '#94a3b8' }}>
+                        <span style={cepFmt ? undefined : { fontStyle: 'italic', color: cores.textoSuave }}>
                           {cepSegmento}
                         </span>
                       )}
@@ -120,13 +121,13 @@ export function ListaOpcoesEndereco({
                       {opcao.cidade && opcao.uf ? `/${opcao.uf}` : opcao.uf ?? ''}
                     </div>
                   ) : extrairSublabel(opcao.endereco_normalizado) && (
-                    <div style={{ fontSize: 12, color: '#475569', marginTop: 2, wordBreak: 'break-word' }}>
+                    <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
                       {extrairSublabel(opcao.endereco_normalizado)}
                     </div>
                   )}
                 </div>
                 {opcao.distanciaKm !== undefined && (
-                  <div style={{ fontSize: 12, color: '#64748b', whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2 }}>
+                  <div style={{ fontSize: 12, color: cores.textoFraco, whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2 }}>
                     📍 {formatarDistancia(opcao.distanciaKm)}
                   </div>
                 )}
@@ -146,8 +147,8 @@ export function ListaOpcoesEndereco({
           padding: '12px',
           fontSize: 14,
           background: 'transparent',
-          color: '#64748b',
-          border: '1px dashed #cbd5e1',
+          color: cores.textoFraco,
+          border: `1px dashed ${cores.bordaForte}`,
           borderRadius: 8,
           cursor: 'pointer',
           marginTop: 8,

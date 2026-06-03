@@ -38,13 +38,10 @@ import { Tijolinho } from './components/Tijolinho';
 import { ModalHorario, type ParadaEditavel } from './components/ModalHorario';
 import { InputEnderecoNF, type NotaCapturadaInput } from '@/components/mobile/InputEnderecoNF';
 import { distanciasEntreParadas, estimarKmTotal } from '@/lib/routing/utils';
+import { vibrar } from '@/lib/mobile/dispositivo';
+import { cores } from '@/lib/mobile/ui';
+import { fetchRota } from '@/lib/routing/api';
 import type { Parada, RotaOtimizada } from '@/lib/routing/types';
-
-function vibrar(pattern: number | number[]) {
-  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-    navigator.vibrate(pattern);
-  }
-}
 
 /**
  * Reordena paradas pondo as ja entregues (concluida_em != null) no topo,
@@ -83,11 +80,6 @@ function bipeCurto() {
 }
 
 type Aba = 'ordenar' | 'detalhes';
-
-interface RotaResponse {
-  rota: RotaOtimizada;
-  paradas: Parada[];
-}
 
 function AjusteRotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
@@ -133,11 +125,7 @@ function AjusteRotaContent(): React.ReactElement {
   useEffect(() => {
     if (!rotaId) return;
     setCarregando(true);
-    fetch(`/api/routing/rota/${rotaId}`)
-      .then(async (res) => {
-        if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        return (await res.json()) as RotaResponse;
-      })
+    fetchRota(rotaId)
       .then((data) => {
         setRotaInfo(data.rota);
         // Entregues primeiro (por concluida_em ASC), pendentes depois (por ordem).
@@ -342,8 +330,7 @@ function AjusteRotaContent(): React.ReactElement {
         }
 
         // Refetch da rota+paradas pra refletir a nova ordem
-        const rotaRes = await fetch(`/api/routing/rota/${rotaInfo.id}`);
-        const rotaData = (await rotaRes.json()) as RotaResponse;
+        const rotaData = await fetchRota(rotaInfo.id);
         setParadas(rotaData.paradas);
         setRotaInfo(rotaData.rota);
 
@@ -414,11 +401,12 @@ function AjusteRotaContent(): React.ReactElement {
       // que esta no banco. Antes a UI confiava no estado local; se o PATCH
       // falhasse silenciosamente, motorista via "Sem mudancas" mas no
       // proximo load voltava o antigo.
-      const refetch = await fetch(`/api/routing/rota/${rotaId}`);
-      if (refetch.ok) {
-        const rotaData = (await refetch.json()) as RotaResponse;
+      try {
+        const rotaData = await fetchRota(rotaId);
         setParadas(rotaData.paradas);
         setRotaInfo(rotaData.rota);
+      } catch {
+        // Refetch falhou (offline/erro) — mantem o estado local salvo.
       }
 
       setDirty(false);
@@ -469,7 +457,7 @@ function AjusteRotaContent(): React.ReactElement {
       ? Math.round((kmEstimado / kmOriginal - 1) * minExibido)
       : 0;
   const diffSinal = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-  const diffCor = (n: number) => (n > 0 ? '#dc2626' : n < 0 ? '#16a34a' : '#64748b');
+  const diffCor = (n: number) => (n > 0 ? cores.vermelho : n < 0 ? cores.verde : cores.textoFraco);
 
   return (
     <div style={containerStyle}>
@@ -515,7 +503,7 @@ function AjusteRotaContent(): React.ReactElement {
             </button>
           </div>
         </div>
-        <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
+        <div style={{ fontSize: 13, color: cores.textoMedio, marginTop: 4 }}>
           {paradas.length} paradas · {dirty && '≈ '}{kmExibido.toFixed(1)} km
           {minExibido !== null && !dirty && <> · ≈ {Math.round(minExibido)} min</>}
         </div>
@@ -553,7 +541,7 @@ function AjusteRotaContent(): React.ReactElement {
       </header>
 
       {avisoLock && (
-        <div role="alert" style={{ ...erroStyle, background: '#fef3c7', color: '#92400e' }}>
+        <div role="alert" style={{ ...erroStyle, background: cores.fundoAmbarClaro, color: cores.textoAmbar }}>
           {avisoLock}
         </div>
       )}
@@ -686,7 +674,7 @@ function AjusteRotaContent(): React.ReactElement {
             <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
               Onde adicionar?
             </div>
-            <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+            <div style={{ fontSize: 13, color: cores.textoFraco, marginBottom: 16 }}>
               📍 {dadosNovaParada.endereco.logradouro}, {dadosNovaParada.numero}
             </div>
 
@@ -697,7 +685,7 @@ function AjusteRotaContent(): React.ReactElement {
               data-testid="btn-reotimizar"
               style={{
                 ...overlayBotaoPrincipal,
-                background: '#16a34a',
+                background: cores.verde,
                 opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
               }}
             >
@@ -714,7 +702,7 @@ function AjusteRotaContent(): React.ReactElement {
               data-testid="btn-final"
               style={{
                 ...overlayBotaoPrincipal,
-                background: '#2563eb',
+                background: cores.azul,
                 opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
               }}
             >
@@ -734,7 +722,7 @@ function AjusteRotaContent(): React.ReactElement {
             </button>
 
             {modoAdicao === 'adicionando' && (
-              <div role="status" style={{ marginTop: 12, fontSize: 13, color: '#475569', textAlign: 'center' }}>
+              <div role="status" style={{ marginTop: 12, fontSize: 13, color: cores.textoMedio, textAlign: 'center' }}>
                 ⏳ Geocodificando e adicionando…
               </div>
             )}
@@ -835,7 +823,7 @@ const tabsStyle: React.CSSProperties = {
   gap: 4,
   marginTop: 12,
   marginBottom: 10,
-  borderBottom: '1px solid #e2e8f0',
+  borderBottom: `1px solid ${cores.borda}`,
 };
 
 const tabStyle: React.CSSProperties = {
@@ -844,15 +832,15 @@ const tabStyle: React.CSSProperties = {
   background: 'transparent',
   border: 'none',
   borderBottom: '2px solid transparent',
-  color: '#64748b',
+  color: cores.textoFraco,
   fontWeight: 500,
   cursor: 'pointer',
   fontSize: 14,
 };
 
 const tabAtivoStyle: React.CSSProperties = {
-  color: '#2563eb',
-  borderBottomColor: '#2563eb',
+  color: cores.azul,
+  borderBottomColor: cores.azul,
   fontWeight: 700,
 };
 
@@ -862,8 +850,8 @@ const botaoSalvarStyle: React.CSSProperties = {
   marginTop: 16,
   fontSize: 16,
   fontWeight: 600,
-  background: '#16a34a',
-  color: '#fff',
+  background: cores.verde,
+  color: cores.branco,
   border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
@@ -871,8 +859,8 @@ const botaoSalvarStyle: React.CSSProperties = {
 
 const erroStyle: React.CSSProperties = {
   padding: 12,
-  background: '#fef2f2',
-  color: '#991b1b',
+  background: cores.fundoVermelho,
+  color: cores.vermelhoTexto,
   borderRadius: 8,
   fontSize: 14,
 };
@@ -883,8 +871,8 @@ const iconBtnStyle: React.CSSProperties = {
   display: 'flex',
   alignItems: 'center',
   justifyContent: 'center',
-  background: '#f1f5f9',
-  border: '1px solid #cbd5e1',
+  background: cores.divisoria,
+  border: `1px solid ${cores.bordaForte}`,
   borderRadius: 6,
   fontSize: 16,
   cursor: 'pointer',
@@ -905,7 +893,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const overlayModalStyle: React.CSSProperties = {
-  background: '#fff',
+  background: cores.branco,
   borderRadius: 12,
   padding: 16,
   width: '100%',
@@ -920,7 +908,7 @@ const overlayBotaoPrincipal: React.CSSProperties = {
   marginBottom: 8,
   fontSize: 15,
   fontWeight: 700,
-  color: '#fff',
+  color: cores.branco,
   border: 'none',
   borderRadius: 10,
   cursor: 'pointer',
@@ -931,7 +919,7 @@ const overlayBotaoSecundario: React.CSSProperties = {
   width: '100%',
   padding: '10px',
   background: 'transparent',
-  color: '#64748b',
+  color: cores.textoFraco,
   border: 'none',
   fontSize: 14,
   cursor: 'pointer',

@@ -681,7 +681,7 @@ describe('RotaPage — editar NF capturada', () => {
   it('iniciar nova rota limpa fila offline local e chama api/routing/notas/limpar no banco', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
-    const fetchSpy = vi.fn(async () => ({ ok: true, status: 200, json: async () => ({}) } as unknown as Response));
+    const fetchSpy = vi.fn(async (_url: string | Request, _init?: RequestInit) => ({ ok: true, status: 200, json: async () => ({}) } as unknown as Response));
     vi.stubGlobal('fetch', fetchSpy);
 
     const user = userEvent.setup();

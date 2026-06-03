@@ -14,6 +14,7 @@ const PARADA_BASE = {
   fixada: false,
   janela_horario: null,
   observacao: null,
+  concluida_em: null,
 };
 
 describe('Tijolinho — modo ordenar', () => {

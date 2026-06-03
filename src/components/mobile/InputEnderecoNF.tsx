@@ -31,6 +31,8 @@ import { BotaoMicrofone } from './BotaoMicrofone';
 import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
 import { extrairNumeroDeTranscricao } from '@/lib/cep/extrairNumeroPorVoz';
 import { ListaOpcoesEndereco } from './ListaOpcoesEndereco';
+import { vibrar } from '@/lib/mobile/dispositivo';
+import { cores } from '@/lib/mobile/ui';
 
 // ─── TIPOS ──────────────────────────────────────────────────────────
 
@@ -67,12 +69,6 @@ function formatarCEP(digitsApenas: string): string {
   const d = digitsApenas.slice(0, 8);
   if (d.length <= 5) return d;
   return `${d.slice(0, 5)}-${d.slice(5)}`;
-}
-
-function vibrar(ms = 50): void {
-  if (typeof navigator !== 'undefined' && typeof navigator.vibrate === 'function') {
-    navigator.vibrate(ms);
-  }
 }
 
 // ─── COMPONENTE ─────────────────────────────────────────────────────
@@ -326,7 +322,7 @@ export function InputEnderecoNF({
 
   const cabecalho = (
     <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
-      <div style={{ fontSize: 14, fontWeight: 600, color: '#64748b' }}>
+      <div style={{ fontSize: 14, fontWeight: 600, color: cores.textoFraco }}>
         NF {numeroNF}{totalNFs && totalNFs > 0 ? ` de ${totalNFs}` : ''}
       </div>
       {onDesfazerUltima && numeroNF > 1 && (
@@ -336,11 +332,11 @@ export function InputEnderecoNF({
           aria-label="desfazer ultima NF"
           style={{
             background: 'transparent',
-            border: '1px solid #cbd5e1',
+            border: `1px solid ${cores.bordaForte}`,
             borderRadius: 6,
             padding: '4px 10px',
             fontSize: 12,
-            color: '#64748b',
+            color: cores.textoFraco,
             cursor: 'pointer',
           }}
         >
@@ -372,12 +368,12 @@ export function InputEnderecoNF({
           />
           <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco} />
         </div>
-        <div style={{ fontSize: 13, color: '#64748b', marginTop: 12, textAlign: 'center' }}>
+        <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 12, textAlign: 'center' }}>
           Ou fale: "Rua Augusta 1500 São Paulo"
         </div>
         
-        {buscandoEndereco && <div style={{ marginTop: 12, color: '#2563eb', textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}
-        {loading && <div style={{ marginTop: 12, color: '#64748b', textAlign: 'center' }}>Consultando CEP…</div>}
+        {buscandoEndereco && <div style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}
+        {loading && <div style={{ marginTop: 12, color: cores.textoFraco, textAlign: 'center' }}>Consultando CEP…</div>}
         {erro && <div role="alert" style={erroStyle}>{erro}</div>}
         {onCancelar && (
           <button type="button" onClick={onCancelar} style={botaoSecundarioStyle}>
@@ -422,7 +418,7 @@ export function InputEnderecoNF({
         <div style={enderecoBoxStyle}>
           📍 <strong>{endereco.logradouro || '(sem nome de rua)'}{numero.trim() ? `, ${numero.trim()}` : ''}</strong>
           <br />
-          <span style={{ fontSize: 14, color: '#475569' }}>
+          <span style={{ fontSize: 14, color: cores.textoMedio }}>
             {endereco.bairro && `${endereco.bairro}, `}{endereco.cidade}/{endereco.uf}
             {cep && (
               <>
@@ -457,7 +453,7 @@ export function InputEnderecoNF({
         <button type="button" onClick={handleVoltarParaCep} style={botaoSecundarioStyle}>
           ← Voltar (trocar endereco)
         </button>
-        <button type="button" onClick={handleCancelarNota} style={{ ...botaoSecundarioStyle, color: '#dc2626' }}>
+        <button type="button" onClick={handleCancelarNota} style={{ ...botaoSecundarioStyle, color: cores.vermelho }}>
           ❌ Cancelar esta NF
         </button>
       </div>
@@ -511,7 +507,7 @@ function FormEnderecoManual({ cepInicial, onPreencher, onVoltar }: FormManualPro
 
   return (
     <div>
-      <div style={{ fontSize: 13, color: '#64748b', marginBottom: 12 }}>
+      <div style={{ fontSize: 13, color: cores.textoFraco, marginBottom: 12 }}>
         CEP: <strong>{cepInicial}</strong>
       </div>
       <label style={labelStyle}>Logradouro</label>
@@ -555,7 +551,7 @@ const labelStyle: React.CSSProperties = {
   display: 'block',
   fontSize: 13,
   fontWeight: 600,
-  color: '#334155',
+  color: cores.textoForte,
   marginTop: 12,
   marginBottom: 4,
 };
@@ -564,14 +560,14 @@ const inputStyle: React.CSSProperties = {
   width: '100%',
   padding: '14px 12px',
   fontSize: 18,
-  border: '1px solid #cbd5e1',
+  border: `1px solid ${cores.bordaForte}`,
   borderRadius: 8,
   boxSizing: 'border-box',
 };
 
 const enderecoBoxStyle: React.CSSProperties = {
   padding: 12,
-  background: '#f1f5f9',
+  background: cores.divisoria,
   borderRadius: 8,
   marginBottom: 16,
   fontSize: 15,
@@ -582,7 +578,7 @@ const botaoPrimarioStyle: React.CSSProperties = {
   padding: '14px',
   fontSize: 16,
   fontWeight: 600,
-  background: '#2563eb',
+  background: cores.azul,
   color: '#fff',
   border: 'none',
   borderRadius: 8,
@@ -595,7 +591,7 @@ const botaoSecundarioStyle: React.CSSProperties = {
   padding: '12px',
   fontSize: 14,
   background: 'transparent',
-  color: '#475569',
+  color: cores.textoMedio,
   border: 'none',
   cursor: 'pointer',
   marginTop: 8,
@@ -604,8 +600,8 @@ const botaoSecundarioStyle: React.CSSProperties = {
 const erroStyle: React.CSSProperties = {
   marginTop: 12,
   padding: 10,
-  background: '#fef2f2',
-  color: '#991b1b',
+  background: cores.fundoVermelho,
+  color: cores.vermelhoTexto,
   borderRadius: 6,
   fontSize: 14,
 };
@@ -655,8 +651,8 @@ function BadgeValidacao({
     },
     carregando: {
       icone: '⏳',
-      bg: '#f1f5f9',
-      border: '#cbd5e1',
+      bg: cores.divisoria,
+      border: cores.bordaForte,
       cor: '#475569',
       label: 'Validando endereco...',
     },

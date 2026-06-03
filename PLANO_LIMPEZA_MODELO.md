@@ -101,7 +101,7 @@ Estas decisões NÃO devem ser questionadas pela IA executora — já estão fec
 ## ETAPA 2 — Refactor do código
 
 ### 2.1. Regenerar tipos do Supabase
-- [ ] `npx supabase gen types typescript --project-id <id> --schema public > src/lib/database.types.ts`
+- [ ] `npx supabase gen types typescript --project-id <id> --schema public > src/types/database.types.ts`
 - [ ] Conferir que `pedidos`, `entregas`, `pedido_id` aparecem nos tipos
 
 ### 2.2. Schemas Zod (`src/lib/schemas/`)

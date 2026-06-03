@@ -11,6 +11,7 @@
  */
 
 import type { Parada } from '@/lib/routing/types';
+import { cores } from '@/lib/mobile/ui';
 
 export type ModoTijolinho = 'ordenar' | 'detalhes';
 
@@ -57,10 +58,10 @@ export function Tijolinho({
 
   const concluida = Boolean(parada.concluida_em);
   const corNumero = concluida
-    ? '#16a34a' // verde — entregue
+    ? cores.verde // verde — entregue
     : parada.fixada
-      ? '#dc2626' // vermelho — fixada
-      : '#2563eb'; // azul — pendente normal
+      ? cores.vermelho // vermelho — fixada
+      : cores.azul; // azul — pendente normal
 
   const numeroBox = (
     <div
@@ -70,7 +71,7 @@ export function Tijolinho({
         height: 34,
         flexShrink: 0,
         background: corNumero,
-        color: '#fff',
+        color: cores.branco,
         borderRadius: 6,
         display: 'flex',
         alignItems: 'center',
@@ -92,8 +93,8 @@ export function Tijolinho({
           alignItems: 'center',
           gap: 10,
           padding: 10,
-          background: corBairro ?? '#fff',
-          border: destacado ? '2px solid #f97316' : '1px solid #e2e8f0',
+          background: corBairro ?? cores.branco,
+          border: destacado ? `2px solid ${cores.laranja}` : `1px solid ${cores.borda}`,
           borderRadius: 8,
           marginBottom: 6,
           boxShadow: destacado ? '0 0 0 3px rgba(249,115,22,0.2)' : undefined,
@@ -124,15 +125,15 @@ export function Tijolinho({
               gap: 8,
               marginTop: 2,
               fontSize: 11,
-              color: '#64748b',
+              color: cores.textoFraco,
               flexWrap: 'wrap',
             }}
           >
-            {concluida && <span style={{ color: '#16a34a', fontWeight: 600 }}>✓ Entregue</span>}
+            {concluida && <span style={{ color: cores.verde, fontWeight: 600 }}>✓ Entregue</span>}
             {typeof distanciaAnteriorKm === 'number' && distanciaAnteriorKm > 0 && (
               <span>📏 {distanciaAnteriorKm.toFixed(1)} km</span>
             )}
-            {parada.fixada && <span style={{ color: '#dc2626' }}>🔒 Fixada</span>}
+            {parada.fixada && <span style={{ color: cores.vermelho }}>🔒 Fixada</span>}
           </div>
         </div>
         {/* Handle so se o tijolinho e arrastavel (nao fixada nem concluida) */}
@@ -152,8 +153,8 @@ export function Tijolinho({
         display: 'flex',
         gap: 10,
         padding: 12,
-        background: '#fff',
-        border: '1px solid #e2e8f0',
+        background: cores.branco,
+        border: `1px solid ${cores.borda}`,
         borderRadius: 8,
         marginBottom: 6,
         cursor: onClickDetalhes ? 'pointer' : 'default',
@@ -166,17 +167,17 @@ export function Tijolinho({
       <div style={{ flex: 1, minWidth: 0, overflow: 'hidden' }}>
         <div style={{ fontWeight: 600, fontSize: 15, wordBreak: 'break-word' }}>📍 {enderecoCompleto}</div>
         {parada.janela_horario && parada.janela_horario.length > 0 && (
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: cores.textoMedio, marginTop: 4 }}>
             ⏰ {parada.janela_horario.map((j) => `${j[0]}–${j[1]}`).join(' / ')}
           </div>
         )}
         {parada.observacao && (
-          <div style={{ fontSize: 13, color: '#475569', marginTop: 4 }}>
+          <div style={{ fontSize: 13, color: cores.textoMedio, marginTop: 4 }}>
             💬 {parada.observacao}
           </div>
         )}
         {parada.fixada && (
-          <div style={{ fontSize: 12, color: '#dc2626', marginTop: 4, fontWeight: 600 }}>
+          <div style={{ fontSize: 12, color: cores.vermelho, marginTop: 4, fontWeight: 600 }}>
             🔒 Fixada nesta posicao
           </div>
         )}

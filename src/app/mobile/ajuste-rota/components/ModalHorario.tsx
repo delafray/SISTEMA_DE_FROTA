@@ -13,6 +13,7 @@
 
 import { useState } from 'react';
 import type { Parada } from '@/lib/routing/types';
+import { cores } from '@/lib/mobile/ui';
 
 export interface ParadaEditavel {
   fixada: boolean;
@@ -84,7 +85,7 @@ export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps):
         <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
           Parada {parada.ordem}
         </div>
-        <div style={{ fontSize: 13, color: '#64748b', marginBottom: 16 }}>
+        <div style={{ fontSize: 13, color: cores.textoFraco, marginBottom: 16 }}>
           {parada.endereco.logradouro || '(sem nome)'} — {parada.endereco.cidade}/{parada.endereco.uf}
         </div>
 
@@ -110,8 +111,8 @@ export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps):
                     aria-pressed={presetSel === p}
                     style={{
                       ...presetBtnStyle,
-                      background: presetSel === p ? '#2563eb' : '#f1f5f9',
-                      color: presetSel === p ? '#fff' : '#475569',
+                      background: presetSel === p ? cores.azul : cores.divisoria,
+                      color: presetSel === p ? cores.branco : cores.textoMedio,
                     }}
                   >
                     {PRESETS[p].label}
@@ -140,14 +141,14 @@ export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps):
               )}
 
               {presetSel !== 'custom' && (
-                <div style={{ marginTop: 8, fontSize: 13, color: '#64748b' }}>
+                <div style={{ marginTop: 8, fontSize: 13, color: cores.textoFraco }}>
                   Janela: <strong>{inicio} – {fim}</strong>
                 </div>
               )}
             </>
           )}
           {temJanela && !horarioValido && (
-            <div role="alert" style={{ marginTop: 8, color: '#dc2626', fontSize: 13 }}>
+            <div role="alert" style={{ marginTop: 8, color: cores.vermelho, fontSize: 13 }}>
               Horario fim precisa ser maior que inicio.
             </div>
           )}
@@ -177,7 +178,7 @@ export function ModalHorario({ parada, onSalvar, onFechar }: ModalHorarioProps):
             placeholder="ex: porta lateral, subir escada, tocar buzina"
             rows={2}
             aria-label="observacao"
-            style={{ width: '100%', padding: 8, fontSize: 14, border: '1px solid #cbd5e1', borderRadius: 6, boxSizing: 'border-box' }}
+            style={{ width: '100%', padding: 8, fontSize: 14, border: `1px solid ${cores.bordaForte}`, borderRadius: 6, boxSizing: 'border-box' }}
           />
         </div>
 
@@ -214,7 +215,7 @@ const overlayStyle: React.CSSProperties = {
 };
 
 const modalStyle: React.CSSProperties = {
-  background: '#fff',
+  background: cores.branco,
   borderRadius: 12,
   padding: 20,
   width: '100%',
@@ -238,7 +239,7 @@ const labelCheckStyle: React.CSSProperties = {
 const inputTimeStyle: React.CSSProperties = {
   padding: '8px 10px',
   fontSize: 15,
-  border: '1px solid #cbd5e1',
+  border: `1px solid ${cores.bordaForte}`,
   borderRadius: 6,
 };
 
@@ -256,8 +257,8 @@ const botaoPrimarioStyle: React.CSSProperties = {
   padding: '12px',
   fontSize: 15,
   fontWeight: 600,
-  background: '#2563eb',
-  color: '#fff',
+  background: cores.azul,
+  color: cores.branco,
   border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
@@ -267,8 +268,8 @@ const botaoSecundarioStyle: React.CSSProperties = {
   flex: 1,
   padding: '12px',
   fontSize: 15,
-  background: '#f1f5f9',
-  color: '#475569',
+  background: cores.divisoria,
+  color: cores.textoMedio,
   border: 'none',
   borderRadius: 8,
   cursor: 'pointer',
