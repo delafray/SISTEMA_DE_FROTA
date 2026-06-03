@@ -39,7 +39,7 @@ afterEach(() => {
 });
 
 describe('InputEnderecoNF — fluxo CEP', () => {
-  it('renderiza com cabecalho "NF X de Y" quando totalNFs e fornecido', () => {
+  it('renderiza campo CEP na etapa inicial (sem cabeçalho NF X acima)', () => {
     render(
       <InputEnderecoNF
         numeroNF={24}
@@ -48,23 +48,24 @@ describe('InputEnderecoNF — fluxo CEP', () => {
       />
     );
 
-    expect(screen.getByText(/NF 24 de 70/)).toBeDefined();
+    // O cabeçalho "NF X" foi removido da etapa CEP (fica só no Header global da página)
+    expect(screen.queryByText(/NF 24/)).toBeNull();
     expect(screen.getByLabelText(/CEP/i)).toBeDefined();
   });
 
-  it('renderiza so "NF X" quando totalNFs e omitido (motorista nao sabe o total)', () => {
+  it('não exibe cabeçalho NF na etapa CEP quando totalNFs e omitido', () => {
     render(<InputEnderecoNF numeroNF={3} onConfirmar={vi.fn()} />);
 
-    const header = screen.getByText(/^NF 3$/);
-    expect(header).toBeDefined();
-    expect(screen.queryByText(/de \d/)).toBeNull();
+    // Cabeçalho removido da etapa CEP — campo CEP deve estar visível
+    expect(screen.queryByText(/NF 3/)).toBeNull();
+    expect(screen.getByLabelText(/CEP/i)).toBeDefined();
   });
 
-  it('renderiza so "NF X" quando totalNFs=0 (mesmo efeito de omitido)', () => {
+  it('não exibe cabeçalho NF na etapa CEP quando totalNFs=0', () => {
     render(<InputEnderecoNF numeroNF={3} totalNFs={0} onConfirmar={vi.fn()} />);
 
-    expect(screen.getByText(/^NF 3$/)).toBeDefined();
-    expect(screen.queryByText(/de \d/)).toBeNull();
+    expect(screen.queryByText(/NF 3/)).toBeNull();
+    expect(screen.getByLabelText(/CEP/i)).toBeDefined();
   });
 
   it('input de CEP abre teclado numerico no mobile (type=tel + inputMode=numeric + pattern)', () => {

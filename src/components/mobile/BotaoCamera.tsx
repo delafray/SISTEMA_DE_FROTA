@@ -12,6 +12,8 @@ interface BotaoCameraProps {
   /** Reporta erro de leitura pro pai exibir na área de status. */
   onErro?: (msg: string) => void;
   disabled?: boolean;
+  /** Tamanho do botão circular em px. Padrão: 48. */
+  tamanho?: number;
 }
 
 /**
@@ -19,7 +21,7 @@ interface BotaoCameraProps {
  * roda OCR (Tesseract, offline) na foto da nota e devolve o texto pro pai.
  * Mantém a foto fora de qualquer upload: tudo roda no aparelho.
  */
-export function BotaoCamera({ onTexto, onLendoChange, onErro, disabled }: BotaoCameraProps) {
+export function BotaoCamera({ onTexto, onLendoChange, onErro, disabled, tamanho = 48 }: BotaoCameraProps) {
   const inputRef = useRef<HTMLInputElement | null>(null);
   const [lendo, setLendo] = useState(false);
 
@@ -63,8 +65,8 @@ export function BotaoCamera({ onTexto, onLendoChange, onErro, disabled }: BotaoC
         aria-label={lendo ? 'Lendo a nota' : 'Ler nota com a câmera'}
         data-testid="btn-ler-nota"
         style={{
-          width: 48,
-          height: 48,
+          width: tamanho,
+          height: tamanho,
           borderRadius: '50%',
           border: 'none',
           background: lendo ? '#dbeafe' : cores.divisoria,
@@ -72,10 +74,11 @@ export function BotaoCamera({ onTexto, onLendoChange, onErro, disabled }: BotaoC
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
-          fontSize: 22,
+          fontSize: Math.round(tamanho * 0.46),
           cursor: disabled || lendo ? 'not-allowed' : 'pointer',
           opacity: disabled ? 0.5 : 1,
           transition: 'all 0.2s',
+          flexShrink: 0,
         }}
       >
         {lendo ? '⏳' : '📷'}

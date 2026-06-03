@@ -29,7 +29,7 @@ export function Header({
   const labelFase: Record<Fase, string> = {
     carregando: 'Carregando',
     inicio: 'Início',
-    captura: 'Capturando NFs',
+    captura: 'Nova rota',
     otimizando: 'Otimizando',
     em_rota: 'Em rota',
   };

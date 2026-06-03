@@ -7,9 +7,11 @@ import { cores } from '@/lib/mobile/ui';
 interface BotaoMicrofoneProps {
   onTranscricao: (texto: string) => void;
   disabled?: boolean;
+  /** Tamanho do botão circular em px. Padrão: 48. */
+  tamanho?: number;
 }
 
-export function BotaoMicrofone({ onTranscricao, disabled }: BotaoMicrofoneProps) {
+export function BotaoMicrofone({ onTranscricao, disabled, tamanho = 48 }: BotaoMicrofoneProps) {
   const { transcript, listening, supported, start, stop, error } = useSpeechToText();
 
   // Quando a escuta terminar e houver uma transcrição, passamos para o pai
@@ -45,8 +47,8 @@ export function BotaoMicrofone({ onTranscricao, disabled }: BotaoMicrofoneProps)
       disabled={disabled}
       aria-label={listening ? "Parar gravação" : "Falar endereço"}
       style={{
-        width: 48,
-        height: 48,
+        width: tamanho,
+        height: tamanho,
         borderRadius: '50%',
         border: 'none',
         background: listening ? '#fee2e2' : cores.divisoria,
@@ -54,13 +56,14 @@ export function BotaoMicrofone({ onTranscricao, disabled }: BotaoMicrofoneProps)
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        fontSize: 24,
+        fontSize: Math.round(tamanho * 0.5),
         cursor: disabled ? 'not-allowed' : 'pointer',
         opacity: disabled ? 0.5 : 1,
         transition: 'all 0.2s',
         boxShadow: listening ? '0 0 0 4px rgba(239, 68, 68, 0.2)' : 'none',
         animation: listening ? 'pulse 1.5s infinite' : 'none',
-        position: 'relative'
+        position: 'relative',
+        flexShrink: 0,
       }}
     >
       {listening ? '🔴' : '🎤'}

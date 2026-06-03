@@ -444,9 +444,14 @@ export function InputEnderecoNF({
   if (etapa === 'cep') {
     return (
       <div style={containerStyle}>
-        {cabecalho}
-        <label style={labelStyle} htmlFor="campo-cep">CEP</label>
-        <div style={{ display: 'flex', gap: 12, alignItems: 'center' }}>
+        {/* Linha única: label "CEP" + input + botão mic + botão câmera */}
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
+          <label
+            htmlFor="campo-cep"
+            style={{ fontSize: 13, fontWeight: 700, color: cores.textoForte, whiteSpace: 'nowrap', flexShrink: 0 }}
+          >
+            CEP
+          </label>
           <input
             id="campo-cep"
             type="tel"
@@ -458,18 +463,19 @@ export function InputEnderecoNF({
             placeholder="00000-000"
             maxLength={9}
             autoFocus
-            style={{ ...inputStyle, flex: 1 }}
+            style={{ ...inputStyle, flex: 1, minWidth: 0 }}
             aria-label="CEP"
           />
-          <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco || ocrLendo} />
+          <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco || ocrLendo} tamanho={40} />
           <BotaoCamera
             onTexto={handleOcrTexto}
             onLendoChange={setOcrLendo}
             onErro={(m) => setOcrDica(m)}
             disabled={loading || buscandoEndereco || ocrLendo}
+            tamanho={40}
           />
         </div>
-        <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 12, textAlign: 'center' }}>
+        <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 8, textAlign: 'center' }}>
           Fale 🎤 &quot;Rua Augusta 1500&quot; ou fotografe 📷 a nota
         </div>
 
