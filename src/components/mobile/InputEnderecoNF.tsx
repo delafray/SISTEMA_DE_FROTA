@@ -443,7 +443,7 @@ export function InputEnderecoNF({
 
   if (etapa === 'cep') {
     return (
-      <div style={containerStyle}>
+      <div style={{ ...containerStyle, paddingTop: 6 }}>
         {/* Linha única: label "CEP" + input + botão mic + botão câmera */}
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 4 }}>
           <label
@@ -475,9 +475,7 @@ export function InputEnderecoNF({
             tamanho={40}
           />
         </div>
-        <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 8, textAlign: 'center' }}>
-          Fale 🎤 &quot;Rua Augusta 1500&quot; ou fotografe 📷 a nota
-        </div>
+
 
         {ocrLendo && <div role="status" data-testid="ocr-lendo" style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>📷 Lendo a nota… aguarde</div>}
         {ocrParcial?.cep && !ocrLendo && (
