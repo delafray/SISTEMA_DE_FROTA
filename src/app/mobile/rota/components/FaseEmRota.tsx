@@ -38,9 +38,6 @@ export function FaseEmRota({
   onEncerrar: () => void;
   posicaoAtual: { lat: number; lng: number } | null;
 }) {
-  const concluidas = paradas.filter((p) => p.concluida_em).length;
-  const total = paradas.length;
-
   // Proxima parada = primeira nao concluida
   const proximaParada = paradas.find((p) => !p.concluida_em) ?? null;
 
