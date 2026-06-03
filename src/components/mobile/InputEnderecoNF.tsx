@@ -29,7 +29,7 @@ import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import { BotaoMicrofone } from './BotaoMicrofone';
 import { BotaoCamera } from './BotaoCamera';
-import { extrairEnderecoDeOCR } from '@/lib/ocr/extrairEnderecoDeOCR';
+import { extrairEnderecoDeOCR, type EnderecoOCR } from '@/lib/ocr/extrairEnderecoDeOCR';
 import { encerrarOcr, type ResultadoOCR } from '@/lib/ocr/lerImagem';
 import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
 import { extrairNumeroDeTranscricao } from '@/lib/cep/extrairNumeroPorVoz';
@@ -62,6 +62,9 @@ export interface InputEnderecoNFProps {
 type Etapa = 'cep' | 'confirmar' | 'endereco_manual' | 'escolha_endereco';
 
 // ─── HELPERS ────────────────────────────────────────────────────────
+
+/** Máximo de fotos acumuladas por NF antes de seguir pro preenchimento manual do número. */
+const MAX_FOTOS_OCR = 3;
 
 function normalizar(cep: string): string {
   return cep.replace(/\D/g, '');
@@ -103,8 +106,22 @@ export function InputEnderecoNF({
   // OCR (foto da nota): estado de leitura + dica de reenquadramento/conferencia.
   const [ocrLendo, setOcrLendo] = useState(false);
   const [ocrDica, setOcrDica] = useState<string | null>(null);
+  // Acúmulo de fotos: o motorista pode tirar até MAX_FOTOS_OCR fotos da MESMA NF
+  // (ex.: 1ª pega o CEP, 2ª um close do número). O texto de cada foto é somado
+  // e re-extraído. ocrParcial guarda o resultado quando achou CEP mas faltou número
+  // — aí a tela oferece "tirar mais uma foto" ou "continuar e digitar".
+  const [ocrParcial, setOcrParcial] = useState<EnderecoOCR | null>(null);
+  const [ocrFotos, setOcrFotos] = useState(0);
+  const ocrTextosRef = useRef<string[]>([]);
 
   const numeroRef = useRef<HTMLInputElement | null>(null);
+
+  /** Zera o acúmulo de fotos/textos do OCR (ao confirmar, cancelar, voltar ou digitar CEP). */
+  const resetarOcr = useCallback(() => {
+    ocrTextosRef.current = [];
+    setOcrFotos(0);
+    setOcrParcial(null);
+  }, []);
 
   // Libera o worker de OCR (WASM + dicionário em memória) ao sair da captura.
   useEffect(() => {
@@ -295,35 +312,70 @@ export function InputEnderecoNF({
     }
   }
 
-  // OCR: recebe o texto da foto, extrai endereço e preenche o fluxo existente.
-  // CEP achado → setCep dispara o ViaCEP (mesmo caminho do CEP digitado).
-  // Sem CEP → orienta reenquadrar no bloco do destinatário (decisão de UX do dono).
+  // OCR: recebe o texto de UMA foto e SOMA ao texto das fotos anteriores da mesma
+  // NF (até MAX_FOTOS_OCR). Re-extrai do texto acumulado a cada foto:
+  //  - CEP + número achados (ou esgotou as fotos) → setCep dispara o ViaCEP → 'confirmar'.
+  //  - CEP achado, falta número e ainda há fotos → mostra cartão parcial: o motorista
+  //    tira um close do número (📷 continua na tela) ou toca "Continuar" e digita.
+  //  - Sem CEP → orienta reenquadrar no bloco do destinatário e fotografar de novo.
   const handleOcrTexto = useCallback((resultado: ResultadoOCR) => {
     setErro(null);
     setOcrDica(null);
-    const ext = extrairEnderecoDeOCR(resultado.texto);
+
+    const textos = [...ocrTextosRef.current, resultado.texto];
+    ocrTextosRef.current = textos;
+    setOcrFotos(textos.length);
+
+    const ext = extrairEnderecoDeOCR(textos.join('\n'));
+    const aviso =
+      resultado.confianca && resultado.confianca < 60
+        ? 'Leitura com baixa qualidade — confira o endereço antes de confirmar.'
+        : ext.cepsEncontrados.length > 1
+          ? 'A nota tinha mais de um CEP — usei o do destinatário. Confira o endereço.'
+          : null;
 
     if (ext.cep) {
-      if (ext.numero) setNumero(ext.numero); // pré-preenche o número (driver confirma)
-      setCep(ext.cep);                       // dispara o useEffect do ViaCEP → 'confirmar'
-      if (resultado.confianca && resultado.confianca < 60) {
-        setOcrDica('Leitura com baixa qualidade — confira o endereço antes de confirmar.');
-      } else if (ext.cepsEncontrados.length > 1) {
-        setOcrDica('A nota tinha mais de um CEP — usei o do destinatário. Confira o endereço.');
+      // Achou número OU esgotou as fotos → avança. Número vazio = motorista digita.
+      if (ext.numero || textos.length >= MAX_FOTOS_OCR) {
+        if (ext.numero) setNumero(ext.numero);
+        if (aviso) setOcrDica(aviso);
+        resetarOcr();
+        setCep(ext.cep); // dispara o useEffect do ViaCEP → 'confirmar'
+        return;
       }
+      // CEP lido, falta o número e ainda há fotos disponíveis → oferece nova foto.
+      setOcrParcial(ext);
       return;
     }
-    // Sem CEP: aceita a foto inteira, mas pede pra aproximar do bloco de endereço.
-    setOcrDica(
-      'Não achei o CEP na foto. Aproxime a câmera do bloco do DESTINATÁRIO (endereço de entrega) e tente de novo — ou digite/fale o CEP.'
-    );
-  }, []);
+
+    // Sem CEP.
+    setOcrParcial(null);
+    if (textos.length >= MAX_FOTOS_OCR) {
+      setOcrDica('Não consegui ler o CEP em 3 fotos. Digite ou fale o CEP.');
+    } else {
+      setOcrDica(
+        `Não achei o CEP. Aproxime a câmera do bloco do DESTINATÁRIO (endereço de entrega) e fotografe de novo (foto ${textos.length + 1} de ${MAX_FOTOS_OCR}) — ou digite/fale o CEP.`
+      );
+    }
+  }, [resetarOcr]);
+
+  // "Continuar" no cartão parcial: segue pro endereço com o CEP lido e deixa o
+  // motorista digitar o número (campo já focado na tela de confirmar).
+  const handleContinuarComOcr = useCallback(() => {
+    if (!ocrTextosRef.current.length) return;
+    const ext = extrairEnderecoDeOCR(ocrTextosRef.current.join('\n'));
+    if (!ext.cep) return;
+    if (ext.numero) setNumero(ext.numero);
+    resetarOcr();
+    setCep(ext.cep); // dispara o useEffect do ViaCEP → 'confirmar'
+  }, [resetarOcr]);
 
   const handleCepChange = useCallback((valor: string) => {
     setCep(normalizar(valor));
     setErro(null);
     setOcrDica(null);
-  }, []);
+    resetarOcr();
+  }, [resetarOcr]);
 
   const handleConfirmar = useCallback(async () => {
     // CEP e opcional: ruas/avenidas longas nao tem 1 CEP unico (ViaCEP marcou
@@ -338,7 +390,8 @@ export function InputEnderecoNF({
     setEndereco(null);
     setEtapa('cep');
     setErro(null);
-  }, [cep, numero, endereco, onConfirmar]);
+    resetarOcr();
+  }, [cep, numero, endereco, onConfirmar, resetarOcr]);
 
   const handleVoltarParaCep = useCallback(() => {
     setCep('');
@@ -347,7 +400,8 @@ export function InputEnderecoNF({
     setValidacao(null);
     setErro(null);
     setEtapa('cep');
-  }, []);
+    resetarOcr();
+  }, [resetarOcr]);
 
   const handleCancelarNota = useCallback(() => {
     setCep('');
@@ -355,8 +409,9 @@ export function InputEnderecoNF({
     setEndereco(null);
     setEtapa('cep');
     setErro(null);
+    resetarOcr();
     onCancelar?.();
-  }, [onCancelar]);
+  }, [onCancelar, resetarOcr]);
 
   // ─── RENDER ────────────────────────────────────────────────────────
 
@@ -419,6 +474,24 @@ export function InputEnderecoNF({
         </div>
 
         {ocrLendo && <div role="status" data-testid="ocr-lendo" style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>📷 Lendo a nota… aguarde</div>}
+        {ocrParcial?.cep && !ocrLendo && (
+          <div role="status" data-testid="ocr-parcial" style={ocrParcialStyle}>
+            <div style={{ fontWeight: 600, marginBottom: 6 }}>
+              ✓ CEP {formatarCEP(ocrParcial.cep)} lido — faltou o número.
+            </div>
+            <div style={{ marginBottom: 10 }}>
+              Toque 📷 e tire um close do número <strong>com o rótulo</strong> (ex.: Nº 123) — foto {ocrFotos + 1} de {MAX_FOTOS_OCR} — ou siga e digite.
+            </div>
+            <button
+              type="button"
+              onClick={handleContinuarComOcr}
+              data-testid="ocr-continuar"
+              style={{ ...botaoPrimarioStyle, marginTop: 0 }}
+            >
+              → Continuar (digito o número)
+            </button>
+          </div>
+        )}
         {ocrDica && <div role="status" data-testid="ocr-dica" style={dicaOcrStyle}>{ocrDica}</div>}
         {buscandoEndereco && <div style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}
         {loading && <div style={{ marginTop: 12, color: cores.textoFraco, textAlign: 'center' }}>Consultando CEP…</div>}
@@ -652,6 +725,18 @@ const erroStyle: React.CSSProperties = {
   color: cores.vermelhoTexto,
   borderRadius: 6,
   fontSize: 14,
+};
+
+// Cartão parcial do OCR: CEP lido mas número faltando — tom verde, oferece nova foto.
+const ocrParcialStyle: React.CSSProperties = {
+  marginTop: 12,
+  padding: 12,
+  background: '#f0fdf4',
+  border: '1px solid #86efac',
+  color: '#166534',
+  borderRadius: 8,
+  fontSize: 14,
+  lineHeight: 1.5,
 };
 
 // Dica do OCR (reenquadrar / conferir) — informativa, tom âmbar, não bloqueia.

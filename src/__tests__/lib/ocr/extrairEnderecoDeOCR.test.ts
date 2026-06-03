@@ -91,6 +91,33 @@ describe('extrairEnderecoDeOCR — número da casa', () => {
   });
 });
 
+describe('extrairEnderecoDeOCR — multi-foto (textos somados)', () => {
+  it('número da 2ª foto (close-up) é pego ao somar com o texto da 1ª', () => {
+    const foto1 = 'DESTINATARIO / REMETENTE\nRUA DAS PALMEIRAS\nCEP 01310-100  SAO PAULO SP';
+    const foto2 = 'Nº 742'; // close-up só do número
+    const r = extrairEnderecoDeOCR([foto1, foto2].join('\n'));
+    expect(r.cep).toBe('01310100');
+    expect(r.numero).toBe('742');
+  });
+
+  it('1ª foto sem CEP + 2ª foto com CEP → acha o CEP no texto somado', () => {
+    const r = extrairEnderecoDeOCR(['RUA SEM CEP AQUI', 'DESTINATARIO CEP 30140-071'].join('\n'));
+    expect(r.cep).toBe('30140071');
+  });
+});
+
+describe('extrairEnderecoDeOCR — número por rótulo CASA', () => {
+  it('reconhece "CASA 45" como número', () => {
+    const r = extrairEnderecoDeOCR('DESTINATARIO\nRUA A\nCASA 45\nCEP 01310-100');
+    expect(r.numero).toBe('45');
+  });
+
+  it('abreviação "No 88" também funciona', () => {
+    const r = extrairEnderecoDeOCR('DESTINATARIO\nRUA B\nNo 88\nCEP 30140-071');
+    expect(r.numero).toBe('88');
+  });
+});
+
 describe('extrairEnderecoDeOCR — robustez', () => {
   it('string vazia / inválida → tudo null/vazio', () => {
     for (const v of ['', '   ', null as unknown as string, undefined as unknown as string]) {

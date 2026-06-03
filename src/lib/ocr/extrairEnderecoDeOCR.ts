@@ -83,12 +83,15 @@ function numeroDaLinha(linha: string): string | null {
   return null;
 }
 
-/** Procura número por rótulo explícito em todo o texto ("Nº 123", "NUMERO: 12"). */
+/** Procura número por rótulo explícito em todo o texto ("Nº 123", "NUMERO: 12", "CASA 45"). */
 function numeroPorRotulo(texto: string): string | null {
   const porN = /\bN[º°O]\.?\s*[:\-]?\s*(\d{1,6})(?!\d)/i.exec(texto);
   if (porN) return porN[1];
   const porPalavra = /N[UÚ]MERO\.?\s*[:\-]?\s*(\d{1,6})(?!\d)/i.exec(texto);
   if (porPalavra) return porPalavra[1];
+  // "CASA 45" — comum em close-up do bloco de entrega (foto extra do motorista).
+  const porCasa = /\bCASA\s*[:\-]?\s*(\d{1,6})(?!\d)/i.exec(texto);
+  if (porCasa) return porCasa[1];
   return null;
 }
 
