@@ -493,7 +493,6 @@ export function InputEnderecoNF({
             onChange={(e) => handleCepChange(e.target.value)}
             placeholder="00000-000"
             maxLength={9}
-            autoFocus
             style={{ ...inputStyle, flex: 1, minWidth: 0 }}
             aria-label="CEP"
           />
