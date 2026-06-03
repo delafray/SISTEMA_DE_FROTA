@@ -36,6 +36,7 @@ export function classificarRequisicao(req: RequisicaoSW): EstrategiaSW {
   if (
     req.pathname.startsWith('/_next/static/') ||
     req.pathname.startsWith('/icons/') ||
+    req.pathname.startsWith('/tesseract/') || // motor + dicionario OCR (offline)
     req.pathname === '/leaflet.css' ||
     req.pathname === '/manifest.webmanifest'
   ) {

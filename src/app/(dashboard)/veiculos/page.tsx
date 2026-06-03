@@ -8,6 +8,7 @@ import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { ReportPdfButton } from "@/components/ui/ReportPdfButton";
+import jsPDF from "jspdf";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type Veiculo = {
@@ -90,9 +91,9 @@ export default function VeiculosPage() {
     </div>
   );
 
-  const buildPdf = (doc: any) => {
+  const buildPdf = (doc: jsPDF) => {
     // 1. Column configuration (total width = 269mm)
-    const columns = [
+    const columns: { title: string; width: number; align?: "left" | "right" | "center" }[] = [
       { title: "Placa", width: 25 },
       { title: "Apelido", width: 40 },
       { title: "Marca / Modelo", width: 60 },
@@ -104,7 +105,7 @@ export default function VeiculosPage() {
     ];
 
     // 2. Page header and footer drawing helpers
-    const drawHeader = (pageNumber: number) => {
+    const drawHeader = (_pageNumber: number) => {
       doc.setFont("helvetica", "bold");
       doc.setFontSize(14);
       doc.setTextColor(30, 41, 59); // Slate-800
@@ -195,7 +196,7 @@ export default function VeiculosPage() {
       const km = v.km_atual ? v.km_atual.toLocaleString("pt-BR") : "—";
       const status = v.ativo ? "Ativo" : "Inativo";
 
-      const rowData = [
+      const rowData: { text: string; width: number; bold?: boolean; align?: "left" | "right" | "center" }[] = [
         { text: v.placa, width: 25, bold: true },
         { text: apelido, width: 40 },
         { text: modelo, width: 60 },

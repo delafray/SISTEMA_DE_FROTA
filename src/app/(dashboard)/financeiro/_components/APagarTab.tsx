@@ -3,7 +3,7 @@ import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import {
   Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert,
-  useTableSort, inputStyle, ActionBtn,
+  useTableSort, inputStyle,
 } from "@/components/ui/ds";
 import { coletarEventos, type EventoFinanceiro, CAT_LABEL, CAT_COR } from "@/lib/financeiro/coletor";
 import { MobileCard, MobileList } from "@/components/mobile";
@@ -64,6 +64,7 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando empresaId/periodo mudam; incluir `carregar` (não memoizado) causaria loop
   }, [empresaId, periodo]);
 
   const filtrados = useMemo(() => {

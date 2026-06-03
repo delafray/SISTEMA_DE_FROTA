@@ -13,7 +13,6 @@ export function Header({
   fase,
   online,
   numCapturadas,
-  numParadas,
   statsDinamicos,
   usoGoogle,
 }: {

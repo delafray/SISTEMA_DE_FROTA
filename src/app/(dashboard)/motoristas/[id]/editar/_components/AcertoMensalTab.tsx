@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FormSection, Btn, Alert, inputStyle, selectStyle } from "@/components/ui/ds";
-import { format, startOfMonth, endOfMonth, addMonths, subMonths } from "date-fns";
+import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const fmtMoeda = (v: number) => "R$ " + (v || 0).toFixed(2).replace(".", ",");

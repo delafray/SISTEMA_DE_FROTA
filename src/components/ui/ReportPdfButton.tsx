@@ -1,8 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState } from "react";
 import jsPDF from "jspdf";
 import { Btn } from "@/components/ui/ds";
+
+/** Subconjunto da Web Share API (nem sempre presente no `lib.dom`). */
+interface NavigatorWithShare {
+  share?: (data: { title?: string; text?: string; url?: string; files?: File[] }) => Promise<void>;
+  canShare?: (data: { files?: File[] }) => boolean;
+}
 
 interface ReportPdfButtonProps {
   title: string;
@@ -30,23 +36,6 @@ export function ReportPdfButton({
   const [isGenerating, setIsGenerating] = useState(false);
   const [showModal, setShowModal] = useState(false);
   const [pdfBlob, setPdfBlob] = useState<Blob | null>(null);
-  const [canShare, setCanShare] = useState(false);
-
-  // Check if browser/device supports Web Share API for PDF files
-  useEffect(() => {
-    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
-    if (nav && nav.share && nav.canShare) {
-      try {
-        const dummyFile = new File([new Blob([])], "test.pdf", { type: "application/pdf" });
-        if (nav.canShare({ files: [dummyFile] })) {
-          // eslint-disable-next-line react-hooks/set-state-in-effect
-          setCanShare(true);
-        }
-      } catch (e) {
-        console.warn("Navegador não suporta compartilhamento de arquivos PDF:", e);
-      }
-    }
-  }, []);
 
   const handleGenerate = async () => {
     try {
@@ -100,7 +89,7 @@ export function ReportPdfButton({
   const handleShare = async () => {
     if (!pdfBlob) return;
     
-    const nav = typeof navigator !== "undefined" ? (navigator as any) : null;
+    const nav = typeof navigator !== "undefined" ? (navigator as unknown as NavigatorWithShare) : null;
     const pdfFile = new File([pdfBlob], fileName, { type: "application/pdf" });
 
     if (nav && nav.share && nav.canShare && nav.canShare({ files: [pdfFile] })) {

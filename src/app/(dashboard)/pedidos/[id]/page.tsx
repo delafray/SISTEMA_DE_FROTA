@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, FormSection, Btn, Badge,
@@ -73,7 +73,6 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
-  const router = useRouter();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
@@ -137,7 +136,6 @@ export default function PedidoDetalhePage() {
       setLoading(false);
     };
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
   const changeStatus = async (novoStatus: string) => {

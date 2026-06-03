@@ -73,7 +73,6 @@ export default function UsuariosPage() {
       m.set(u.usuario_id, normalizar([nome, getLogin(u), u.role].join(" ")));
     }
     return m;
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [todos]);
 
   const filtrados = useMemo(() => {

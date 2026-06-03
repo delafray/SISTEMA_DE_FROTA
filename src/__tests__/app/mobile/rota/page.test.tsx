@@ -693,8 +693,8 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     await waitFor(() => expect(limparFila).toHaveBeenCalledWith('mot-1'));
     // Chamou o limpar do banco
     const clearCall = fetchSpy.mock.calls.find((c) => {
-      const u = typeof c[0] === 'string' ? c[0] : c[0].url;
-      const init = c[1] as RequestInit | undefined;
+      const [reqUrl, init] = c as unknown as [string | Request, RequestInit | undefined];
+      const u = typeof reqUrl === 'string' ? reqUrl : reqUrl.url;
       return u.includes('/api/routing/notas/limpar') && init?.method === 'POST';
     });
     expect(clearCall).toBeDefined();

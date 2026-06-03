@@ -1,8 +1,5 @@
 "use client";
-import { VEICULO_TIPOS, VEICULO_CATEGORIAS, VEICULO_COMBUSTIVEIS } from "@/lib/schemas/veiculo";
-
 import { useState } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";

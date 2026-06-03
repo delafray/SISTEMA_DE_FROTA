@@ -191,6 +191,22 @@ async function salvarKm(
     return;
   }
 
+  // Metadados da IA só valem quando o KM veio de uma leitura por FOTO confirmada
+  // (origem 'ia_confirmado'). No fluxo 'manual' o motorista DIGITOU o valor —
+  // mesmo que o contexto ainda guarde a leitura da IA que ele rejeitou, NÃO a
+  // anexamos: senão um KM digitado à mão ficaria gravado com a confiança/raw de
+  // uma leitura descartada, sujando a auditoria. Também preenche a coluna
+  // dedicada `ia_confianca` (antes a confiança só ia no JSON de `ia_raw_response`).
+  const veioDaIa = origem === 'ia_confirmado';
+  const iaConfianca =
+    veioDaIa && typeof sessao.contexto.km_confianca === 'number'
+      ? sessao.contexto.km_confianca
+      : null;
+  const iaRawResponse =
+    veioDaIa && sessao.contexto.km_lido
+      ? JSON.stringify({ km_lido: sessao.contexto.km_lido, confianca: sessao.contexto.km_confianca })
+      : null;
+
   // Inserir km_log (o trigger propaga para veiculos.km_atual)
   // tipo='checkpoint': constraint do banco aceita apenas
   // inicial/final/checkpoint/abastecimento/manutencao/pausa.
@@ -204,9 +220,8 @@ async function salvarKm(
     confirmado: true,
     correcao: false,
     foto_urls: sessao.contexto.foto_url ? [sessao.contexto.foto_url as string] : null,
-    ia_raw_response: sessao.contexto.km_lido
-      ? JSON.stringify({ km_lido: sessao.contexto.km_lido, confianca: sessao.contexto.km_confianca })
-      : null,
+    ia_confianca: iaConfianca,
+    ia_raw_response: iaRawResponse,
   });
 
   if (error) {

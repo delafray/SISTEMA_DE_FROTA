@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { PageHeader, Btn } from "@/components/ui/ds";
+import { PageHeader } from "@/components/ui/ds";
 
 const PAGES = [
   { label: "Início / Viagens",  path: "/motorista" },

@@ -1,7 +1,6 @@
 "use client";
 
 import { useActionState, useState, useEffect } from "react";
-import Link from "next/link";
 import { criarUsuarioAction } from "./actions";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";

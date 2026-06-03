@@ -1,4 +1,9 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import type {
+  SpeechRecognitionLike,
+  SpeechRecognitionEventLike,
+  SpeechRecognitionErrorEventLike,
+} from '@/types/speech';
 
 interface UseSpeechToTextReturn {
   transcript: string;
@@ -16,13 +21,13 @@ export function useSpeechToText(): UseSpeechToTextReturn {
   const [supported, setSupported] = useState(true); // Assumimos true até verificar no mount
 
   // Usa useRef para guardar a instância para não recriar a cada render e permitir cleanup
-  const recognitionRef = useRef<any>(null);
+  const recognitionRef = useRef<SpeechRecognitionLike | null>(null);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     // Acessa as implementações do browser
-    const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
       // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -43,7 +48,7 @@ export function useSpeechToText(): UseSpeechToTextReturn {
       setError(null);
     };
 
-    recognition.onresult = (event: any) => {
+    recognition.onresult = (event: SpeechRecognitionEventLike) => {
       let currentTranscript = '';
       for (let i = event.resultIndex; i < event.results.length; ++i) {
         currentTranscript += event.results[i][0].transcript;
@@ -51,7 +56,7 @@ export function useSpeechToText(): UseSpeechToTextReturn {
       setTranscript(currentTranscript);
     };
 
-    recognition.onerror = (event: any) => {
+    recognition.onerror = (event: SpeechRecognitionErrorEventLike) => {
       setError(event.error);
       setListening(false);
     };
@@ -76,7 +81,7 @@ export function useSpeechToText(): UseSpeechToTextReturn {
         recognitionRef.current.start();
         setTranscript('');
         setError(null);
-      } catch (err) {
+      } catch {
         // Se já estiver escutando, o start() lança erro "recognition has already started". Ignoramos.
       }
     }

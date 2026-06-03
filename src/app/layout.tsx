@@ -42,6 +42,7 @@ export default function RootLayout({
       <head>
         <link rel="apple-touch-icon" href="/icons/icon-192x192.png" />
         <link rel="icon" type="image/png" sizes="32x32" href="/icons/icon-96x96.png" />
+        {/* eslint-disable-next-line @next/next/no-css-tags -- leaflet.css é servido de /public e cacheado pelo SW para uso offline; o import normal de CSS não cobre esse caso */}
         <link rel="stylesheet" href="/leaflet.css" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />

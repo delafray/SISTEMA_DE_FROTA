@@ -110,7 +110,7 @@ describe('GET /api/routing/rota/[id]', () => {
 });
 
 describe('PATCH /api/routing/rota/[id]', () => {
-  function makePatchReq(body: any) {
+  function makePatchReq(body: unknown) {
     return new NextRequest('http://localhost/api/routing/rota/rota-1', {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
@@ -120,7 +120,7 @@ describe('PATCH /api/routing/rota/[id]', () => {
 
   it('200 e atualiza status no Supabase', async () => {
     supabaseFromMock.mockImplementation(() => ({
-      update: (fields: any) => {
+      update: (fields: Record<string, unknown>) => {
         expect(fields.status).toBe('concluida');
         return {
           eq: (col: string, val: string) => {

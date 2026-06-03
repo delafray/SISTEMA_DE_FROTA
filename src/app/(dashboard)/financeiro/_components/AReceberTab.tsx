@@ -66,6 +66,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     carregar();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando empresaId muda; incluir `carregar` (não memoizado) causaria loop
   }, [empresaId]);
 
   const hoje_ = hoje();

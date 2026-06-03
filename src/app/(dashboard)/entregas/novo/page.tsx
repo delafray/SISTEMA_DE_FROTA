@@ -61,6 +61,7 @@ export default function NovoPedidoPage() {
       setMotoristas(m.data ?? []);
     };
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- roda só no mount; `supabase` é client estável (createClient)
   }, []);
 
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>

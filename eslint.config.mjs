@@ -10,6 +10,16 @@ const eslintConfig = defineConfig([
       // Há ~30 ocorrências de `any` no projeto, principalmente em queries
       // do Supabase tipadas só parcialmente. Manter como aviso até refatorar.
       "@typescript-eslint/no-explicit-any": "warn",
+      // Convenção do projeto: prefixo `_` = "intencionalmente não usado"
+      // (args de callback exigidos pela assinatura, erros de catch ignorados, etc.).
+      "@typescript-eslint/no-unused-vars": [
+        "warn",
+        {
+          argsIgnorePattern: "^_",
+          varsIgnorePattern: "^_",
+          caughtErrorsIgnorePattern: "^_",
+        },
+      ],
     },
   },
   // Override default ignores of eslint-config-next.
@@ -23,6 +33,8 @@ const eslintConfig = defineConfig([
     "RBARROS-Galeria-Repositorio-SISTEMARB/**",
     // Worktrees de agentes Claude.
     ".claude/**",
+    // Arquivos minificados de terceiros (Tesseract WASM) — não lintados.
+    "public/tesseract/**",
   ]),
 ]);
 

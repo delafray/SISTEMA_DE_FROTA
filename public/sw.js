@@ -69,6 +69,7 @@ function classificar(url, method, mode) {
   if (
     url.pathname.startsWith('/_next/static/') ||
     url.pathname.startsWith('/icons/') ||
+    url.pathname.startsWith('/tesseract/') || // motor + dicionario OCR (offline)
     url.pathname === '/leaflet.css' ||
     url.pathname === '/manifest.webmanifest'
   ) {
@@ -107,7 +108,7 @@ async function networkFirstNav(req) {
     const res = await fetch(req);
     if (res && res.ok) cache.put(req, res.clone());
     return res;
-  } catch (e) {
+  } catch {
     // Offline REAL (fetch rejeitou) — serve o cache desta navegacao, ou um shell
     // pre-cacheado (qualquer rota interna abre num shell util em vez do erro).
     let hit =

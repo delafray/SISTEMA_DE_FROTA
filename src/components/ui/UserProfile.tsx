@@ -2,12 +2,10 @@
 
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useRouter } from "next/navigation";
 
 export function UserProfile() {
   const [nome, setNome]       = useState("");
   const [empresa, setEmpresa] = useState("");
-  const router = useRouter();
   const supabase = createClient();
 
   useEffect(() => {
@@ -28,11 +26,6 @@ export function UserProfile() {
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const handleLogout = async () => {
-    await supabase.auth.signOut();
-    router.push("/login");
-  };
 
   if (!nome) return null;
 

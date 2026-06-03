@@ -124,7 +124,7 @@ function mockSessao(estado: string, contexto: Record<string, unknown> = {}) {
 /**
  * Builder de Supabase: lista de veículos da empresa.
  */
-function supabaseComVeiculos() {
+function _supabaseComVeiculos() {
   supabaseFromMock.mockReturnValue({
     select: () => ({
       eq: () => ({
@@ -173,7 +173,7 @@ function supabaseSelecionandoVeiculo() {
  *   - .from('fretes').select().eq().eq().maybeSingle() → null (sem frete ativo)
  *   - .from('km_logs').insert() → { error: null }
  */
-function supabaseSalvandoKm(insertError: { message: string } | null = null) {
+function _supabaseSalvandoKm(insertError: { message: string } | null = null) {
   supabaseFromMock.mockImplementation((tabela: string) => {
     if (tabela === 'fretes') {
       return {

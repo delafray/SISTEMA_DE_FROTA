@@ -28,6 +28,9 @@ import type { EnderecoCEP } from '@/lib/cep/types';
 import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import { BotaoMicrofone } from './BotaoMicrofone';
+import { BotaoCamera } from './BotaoCamera';
+import { extrairEnderecoDeOCR } from '@/lib/ocr/extrairEnderecoDeOCR';
+import { encerrarOcr, type ResultadoOCR } from '@/lib/ocr/lerImagem';
 import { extrairCepDeTranscricao } from '@/lib/cep/extrairCepPorVoz';
 import { extrairNumeroDeTranscricao } from '@/lib/cep/extrairNumeroPorVoz';
 import { ListaOpcoesEndereco } from './ListaOpcoesEndereco';
@@ -97,8 +100,18 @@ export function InputEnderecoNF({
   // Texto bruto que o motorista falou — guardado pra extrair o numero da casa
   // na hora que ele escolher a opcao (Nominatim raramente devolve house_number).
   const [textoFala, setTextoFala] = useState<string>('');
+  // OCR (foto da nota): estado de leitura + dica de reenquadramento/conferencia.
+  const [ocrLendo, setOcrLendo] = useState(false);
+  const [ocrDica, setOcrDica] = useState<string | null>(null);
 
   const numeroRef = useRef<HTMLInputElement | null>(null);
+
+  // Libera o worker de OCR (WASM + dicionário em memória) ao sair da captura.
+  useEffect(() => {
+    return () => {
+      void encerrarOcr();
+    };
+  }, []);
 
   // Quando CEP atinge 8 digitos, dispara ViaCEP automaticamente.
   useEffect(() => {
@@ -282,9 +295,34 @@ export function InputEnderecoNF({
     }
   }
 
+  // OCR: recebe o texto da foto, extrai endereço e preenche o fluxo existente.
+  // CEP achado → setCep dispara o ViaCEP (mesmo caminho do CEP digitado).
+  // Sem CEP → orienta reenquadrar no bloco do destinatário (decisão de UX do dono).
+  const handleOcrTexto = useCallback((resultado: ResultadoOCR) => {
+    setErro(null);
+    setOcrDica(null);
+    const ext = extrairEnderecoDeOCR(resultado.texto);
+
+    if (ext.cep) {
+      if (ext.numero) setNumero(ext.numero); // pré-preenche o número (driver confirma)
+      setCep(ext.cep);                       // dispara o useEffect do ViaCEP → 'confirmar'
+      if (resultado.confianca && resultado.confianca < 60) {
+        setOcrDica('Leitura com baixa qualidade — confira o endereço antes de confirmar.');
+      } else if (ext.cepsEncontrados.length > 1) {
+        setOcrDica('A nota tinha mais de um CEP — usei o do destinatário. Confira o endereço.');
+      }
+      return;
+    }
+    // Sem CEP: aceita a foto inteira, mas pede pra aproximar do bloco de endereço.
+    setOcrDica(
+      'Não achei o CEP na foto. Aproxime a câmera do bloco do DESTINATÁRIO (endereço de entrega) e tente de novo — ou digite/fale o CEP.'
+    );
+  }, []);
+
   const handleCepChange = useCallback((valor: string) => {
     setCep(normalizar(valor));
     setErro(null);
+    setOcrDica(null);
   }, []);
 
   const handleConfirmar = useCallback(async () => {
@@ -368,12 +406,20 @@ export function InputEnderecoNF({
             style={{ ...inputStyle, flex: 1 }}
             aria-label="CEP"
           />
-          <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco} />
+          <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco || ocrLendo} />
+          <BotaoCamera
+            onTexto={handleOcrTexto}
+            onLendoChange={setOcrLendo}
+            onErro={(m) => setOcrDica(m)}
+            disabled={loading || buscandoEndereco || ocrLendo}
+          />
         </div>
         <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 12, textAlign: 'center' }}>
-          Ou fale: &quot;Rua Augusta 1500 São Paulo&quot;
+          Fale 🎤 &quot;Rua Augusta 1500&quot; ou fotografe 📷 a nota
         </div>
-        
+
+        {ocrLendo && <div role="status" data-testid="ocr-lendo" style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>📷 Lendo a nota… aguarde</div>}
+        {ocrDica && <div role="status" data-testid="ocr-dica" style={dicaOcrStyle}>{ocrDica}</div>}
         {buscandoEndereco && <div style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}
         {loading && <div style={{ marginTop: 12, color: cores.textoFraco, textAlign: 'center' }}>Consultando CEP…</div>}
         {erro && <div role="alert" style={erroStyle}>{erro}</div>}
@@ -606,6 +652,17 @@ const erroStyle: React.CSSProperties = {
   color: cores.vermelhoTexto,
   borderRadius: 6,
   fontSize: 14,
+};
+
+// Dica do OCR (reenquadrar / conferir) — informativa, tom âmbar, não bloqueia.
+const dicaOcrStyle: React.CSSProperties = {
+  marginTop: 12,
+  padding: 10,
+  background: cores.fundoAmbar,
+  color: cores.textoAmbar,
+  borderRadius: 6,
+  fontSize: 13,
+  lineHeight: 1.5,
 };
 
 // ─── BADGE DE VALIDACAO ────────────────────────────────────────────

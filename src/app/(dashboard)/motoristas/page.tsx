@@ -82,7 +82,7 @@ export default function MotoristasPage() {
     </div>
   );
 
-  // eslint-disable-next-line react-hooks/purity -- Date.now() é a fonte do "agora" para cálculo de dias até CNH vencer
+  // eslint-disable-next-line react-hooks/purity, react-hooks/exhaustive-deps -- Date.now() é a fonte do "agora" p/ dias até CNH vencer; `todos` na dep recomputa o "agora" a cada recarga da lista (intencional)
   const agora = useMemo(() => Date.now(), [todos]);
 
   return (

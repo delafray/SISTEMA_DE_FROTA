@@ -40,7 +40,6 @@ describe('ListaOpcoesEndereco', () => {
   });
 
   it('exibe distancia quando fornecida', () => {
-    const user = userEvent.setup();
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua A, SP'), distanciaKm: 2.3 }]}

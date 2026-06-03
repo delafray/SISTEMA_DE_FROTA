@@ -7,13 +7,6 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 // ─── Mock do Supabase ─────────────────────────────────────────────────
 
 const mockFrom = vi.fn();
-const mockSelect = vi.fn();
-const mockEq = vi.fn();
-const mockOrder = vi.fn();
-const mockLimit = vi.fn();
-const mockMaybeSingle = vi.fn();
-const mockIn = vi.fn();
-const mockInsert = vi.fn();
 
 vi.mock('@supabase/supabase-js', () => ({
   createClient: () => ({

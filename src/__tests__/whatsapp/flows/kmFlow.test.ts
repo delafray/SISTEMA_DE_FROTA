@@ -229,6 +229,50 @@ describe("kmFlow — aguardando_confirmacao_km", () => {
     );
   });
 
+  it("ao confirmar leitura da IA, persiste ia_confianca e ia_raw_response (origem ia_confirmado)", async () => {
+    const sessao = makeSessao({
+      estado: "aguardando_confirmacao_km",
+      contexto: {
+        veiculo_id: "veiculo-1",
+        km_lido: 125430,
+        km_confianca: 95,
+        foto_url: "https://meta.media/painel.jpg",
+      },
+    });
+    const msg = makeMsg({ tipo: "botao", botaoId: "km_confirmar" });
+
+    await processarKmFlow(msg, sessao);
+
+    expect(supabaseInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        km_lido: 125430,
+        ia_confianca: 95,
+        ia_raw_response: JSON.stringify({ km_lido: 125430, confianca: 95 }),
+        foto_urls: ["https://meta.media/painel.jpg"],
+      })
+    );
+  });
+
+  it("correção numérica via texto NÃO herda metadados da IA do contexto (origem manual)", async () => {
+    // O motorista rejeitou a leitura da IA (125430/95% ainda no contexto) e digitou
+    // outro valor — o registro manual não pode carregar a confiança/raw descartados.
+    const sessao = makeSessao({
+      estado: "aguardando_confirmacao_km",
+      contexto: { veiculo_id: "veiculo-1", km_lido: 125430, km_confianca: 95 },
+    });
+    const msg = makeMsg({ tipo: "texto", texto: "125500" });
+
+    await processarKmFlow(msg, sessao);
+
+    expect(supabaseInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        km_lido: 125500,
+        ia_confianca: null,
+        ia_raw_response: null,
+      })
+    );
+  });
+
   it("muda estado para manual quando usuário clica em corrigir", async () => {
     const sessao = makeSessao({
       estado: "aguardando_confirmacao_km",
@@ -282,6 +326,31 @@ describe("kmFlow — aguardando_km_manual", () => {
 
     expect(supabaseInsertMock).toHaveBeenCalledWith(
       expect.objectContaining({ km_lido: 125430 })
+    );
+  });
+
+  it("digitação manual NÃO grava metadados de IA mesmo com leitura rejeitada no contexto", async () => {
+    // Cenário do bug: IA leu 999999 (40%), motorista descartou e digitou 125430.
+    // O km_log manual deve sair com ia_confianca/ia_raw_response nulos.
+    const sessao = makeSessao({
+      estado: "aguardando_km_manual",
+      contexto: {
+        veiculo_id: "veiculo-1",
+        km_lido: 999999,
+        km_confianca: 40,
+        foto_url: "https://meta.media/painel.jpg",
+      },
+    });
+    const msg = makeMsg({ tipo: "texto", texto: "125430" });
+
+    await processarKmFlow(msg, sessao);
+
+    expect(supabaseInsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({
+        km_lido: 125430,
+        ia_confianca: null,
+        ia_raw_response: null,
+      })
     );
   });
 

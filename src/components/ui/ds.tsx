@@ -256,12 +256,12 @@ export function useTableSort<T>(
   const sortedData = React.useMemo(() => {
     if (!sortKey) return data;
 
-    return [...data].sort((a: any, b: any) => {
-      const getValue = (obj: any, path: string) => {
+    return [...data].sort((a, b) => {
+      const getValue = (obj: unknown, path: string): unknown => {
         if (!obj) return "";
-        return path.split(".").reduce((acc, part) => {
+        return path.split(".").reduce<unknown>((acc, part) => {
           if (acc && typeof acc === "object" && part in acc) {
-            return acc[part];
+            return (acc as Record<string, unknown>)[part];
           }
           return acc;
         }, obj);

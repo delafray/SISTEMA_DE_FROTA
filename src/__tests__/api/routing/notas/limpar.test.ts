@@ -15,7 +15,7 @@ vi.mock('@supabase/supabase-js', () => ({
 
 import { POST } from '@/app/api/routing/notas/limpar/route';
 
-function makeReq(body: any) {
+function makeReq(body: unknown) {
   return new NextRequest('http://localhost/api/routing/notas/limpar', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
