@@ -1,11 +1,15 @@
 'use client';
 
+import { useState } from 'react';
 import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { cores } from '@/lib/mobile/ui';
 
 interface ListaOpcoesEnderecoProps {
   opcoes: (ResultadoGeocoding & { distanciaKm?: number })[];
+  /** Abre a tela de confirmar para edição completa (fluxo antigo). */
   onSelecionar: (opcao: ResultadoGeocoding) => void;
+  /** Salva direto sem abrir tela de confirmar (número já foi extraído da fala). */
+  onSalvar: (opcao: ResultadoGeocoding) => void;
   onNenhumDesses: () => void;
   /** Numero da casa extraido da fala (ex: "Afonso Pena 341" → "341"). Usado
    *  como fallback no card quando o Nominatim nao devolve house_number, pra o
@@ -27,18 +31,11 @@ function formatarCep(cep?: string): string | null {
   return `${d.slice(0, 5)}-${d.slice(5)}`;
 }
 
-/**
- * Extrai um label curto do endereço normalizado do Nominatim.
- * "Rua Augusta, 1500, Vila Buarque, São Paulo, SP, Brasil" → "Rua Augusta, 1500"
- * "Rua das Flores, 10, Centro, Campinas, SP, Brasil"       → "Rua das Flores, 10"
- */
 function extrairLabelCurto(enderecoNormalizado: string): string {
   const partes = enderecoNormalizado.split(',').map((p) => p.trim());
-  // Remove "Brasil" e UF do final
   const filtradas = partes.filter(
     (p) => p.toLowerCase() !== 'brasil' && !/^\d{5}-?\d{3}$/.test(p)
   );
-  // Retorna as primeiras 2-3 partes como label e o restante como sublabel
   return filtradas.slice(0, 2).join(', ');
 }
 
@@ -53,9 +50,12 @@ function extrairSublabel(enderecoNormalizado: string): string {
 export function ListaOpcoesEndereco({
   opcoes,
   onSelecionar,
+  onSalvar,
   onNenhumDesses,
   numeroFala,
 }: ListaOpcoesEnderecoProps): React.ReactElement {
+  const [selecionado, setSelecionado] = useState<number | null>(null);
+
   return (
     <div style={{ padding: '0 0 8px' }}>
       <div style={{ fontSize: 14, fontWeight: 700, color: cores.azulTexto, marginBottom: 12, display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -69,71 +69,119 @@ export function ListaOpcoesEndereco({
         data-testid="lista-opcoes-endereco"
       >
         {opcoes.map((opcao, idx) => {
-          // Numero a exibir: o do Nominatim (raro no BR) ou o que o motorista
-          // falou. Assim o card ja mostra "Afonso Pena, 341" e ele confirma de
-          // uma vez, sem a tela separada de digitar o numero.
           const numeroExibido = opcao.numero ?? numeroFala;
           const cepFmt = formatarCep(opcao.cep);
-          // CEP validado (1 unico) → mostra. Varios CEPs → avisa sem chutar.
-          // Nenhum → nao mostra nada (nunca o postcode cru do Nominatim).
           const cepSegmento = cepFmt
             ? `CEP ${cepFmt}`
             : opcao.cepMultiplos
               ? 'vários CEPs nesta rua'
               : null;
+          const estaSelecionado = selecionado === idx;
+
           return (
-          <li key={`${opcao.lat}-${opcao.lng}-${idx}`}>
-            <button
-              type="button"
-              data-testid={`opcao-endereco-${idx}`}
-              onClick={() => onSelecionar(opcao)}
-              style={{
-                width: '100%',
-                textAlign: 'left',
-                padding: '12px 14px',
-                borderRadius: 10,
-                border: `1px solid ${cores.bordaAzul}`,
-                background: cores.fundoAzul,
-                cursor: 'pointer',
-                transition: 'all 0.15s',
-              }}
-            >
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  {/* Linha 1: logradouro + numero (numero falado como fallback) */}
-                  <div style={{ fontWeight: 700, fontSize: 14, color: '#1e3a8a', wordBreak: 'break-word' }}>
-                    {opcao.logradouro
-                      ? `${opcao.logradouro}${numeroExibido ? `, ${numeroExibido}` : ''}`
-                      : extrairLabelCurto(opcao.endereco_normalizado)}
-                  </div>
-                  {/* Linha 2: CEP · bairro · cidade/UF (info pra desambiguar) */}
-                  {(cepSegmento || opcao.bairro || opcao.cidade) ? (
-                    <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
-                      {cepSegmento && (
-                        <span style={cepFmt ? undefined : { fontStyle: 'italic', color: cores.textoSuave }}>
-                          {cepSegmento}
-                        </span>
-                      )}
-                      {cepSegmento && (opcao.bairro || opcao.cidade || opcao.uf) ? ' · ' : ''}
-                      {opcao.bairro && <strong>{opcao.bairro}</strong>}
-                      {opcao.bairro && (opcao.cidade || opcao.uf) ? ' · ' : ''}
-                      {opcao.cidade}
-                      {opcao.cidade && opcao.uf ? `/${opcao.uf}` : opcao.uf ?? ''}
+            <li key={`${opcao.lat}-${opcao.lng}-${idx}`}>
+              {/* Barra "Salvar | Editar" — aparece acima do card selecionado */}
+              {estaSelecionado && (
+                <div style={{
+                  display: 'flex',
+                  gap: 8,
+                  marginBottom: 6,
+                }}>
+                  <button
+                    type="button"
+                    data-testid={`btn-salvar-${idx}`}
+                    onClick={() => onSalvar(opcao)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: '#16a34a',
+                      color: '#fff',
+                      border: 'none',
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ✅ Salvar
+                  </button>
+                  <button
+                    type="button"
+                    data-testid={`btn-editar-${idx}`}
+                    onClick={() => onSelecionar(opcao)}
+                    style={{
+                      flex: 1,
+                      padding: '10px',
+                      background: cores.divisoria,
+                      color: cores.textoMedio,
+                      border: `1px solid ${cores.bordaForte}`,
+                      borderRadius: 8,
+                      fontSize: 14,
+                      fontWeight: 700,
+                      cursor: 'pointer',
+                      whiteSpace: 'nowrap',
+                    }}
+                  >
+                    ✏️ Editar
+                  </button>
+                </div>
+              )}
+
+              {/* Card do endereço */}
+              <button
+                type="button"
+                data-testid={`opcao-endereco-${idx}`}
+                onClick={() => setSelecionado(estaSelecionado ? null : idx)}
+                style={{
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '12px 14px',
+                  borderRadius: 10,
+                  border: estaSelecionado
+                    ? `2px solid #16a34a`
+                    : `1px solid ${cores.bordaAzul}`,
+                  background: estaSelecionado ? '#f0fdf4' : cores.fundoAzul,
+                  cursor: 'pointer',
+                  transition: 'all 0.15s',
+                }}
+              >
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    {/* Linha 1: logradouro + numero */}
+                    <div style={{ fontWeight: 700, fontSize: 14, color: estaSelecionado ? '#166534' : '#1e3a8a', wordBreak: 'break-word' }}>
+                      {opcao.logradouro
+                        ? `${opcao.logradouro}${numeroExibido ? `, ${numeroExibido}` : ''}`
+                        : extrairLabelCurto(opcao.endereco_normalizado)}
                     </div>
-                  ) : extrairSublabel(opcao.endereco_normalizado) && (
-                    <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
-                      {extrairSublabel(opcao.endereco_normalizado)}
+                    {/* Linha 2: CEP · bairro · cidade/UF */}
+                    {(cepSegmento || opcao.bairro || opcao.cidade) ? (
+                      <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
+                        {cepSegmento && (
+                          <span style={cepFmt ? undefined : { fontStyle: 'italic', color: cores.textoSuave }}>
+                            {cepSegmento}
+                          </span>
+                        )}
+                        {cepSegmento && (opcao.bairro || opcao.cidade || opcao.uf) ? ' · ' : ''}
+                        {opcao.bairro && <strong>{opcao.bairro}</strong>}
+                        {opcao.bairro && (opcao.cidade || opcao.uf) ? ' · ' : ''}
+                        {opcao.cidade}
+                        {opcao.cidade && opcao.uf ? `/${opcao.uf}` : opcao.uf ?? ''}
+                      </div>
+                    ) : extrairSublabel(opcao.endereco_normalizado) && (
+                      <div style={{ fontSize: 12, color: cores.textoMedio, marginTop: 2, wordBreak: 'break-word' }}>
+                        {extrairSublabel(opcao.endereco_normalizado)}
+                      </div>
+                    )}
+                  </div>
+                  {opcao.distanciaKm !== undefined && (
+                    <div style={{ fontSize: 12, color: cores.textoFraco, whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2 }}>
+                      📍 {formatarDistancia(opcao.distanciaKm)}
                     </div>
                   )}
                 </div>
-                {opcao.distanciaKm !== undefined && (
-                  <div style={{ fontSize: 12, color: cores.textoFraco, whiteSpace: 'nowrap', flexShrink: 0, marginTop: 2 }}>
-                    📍 {formatarDistancia(opcao.distanciaKm)}
-                  </div>
-                )}
-              </div>
-            </button>
-          </li>
+              </button>
+            </li>
           );
         })}
       </ul>

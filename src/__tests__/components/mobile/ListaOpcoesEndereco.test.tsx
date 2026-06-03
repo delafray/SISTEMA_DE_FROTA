@@ -12,6 +12,12 @@ function opcao(endereco: string, lat = -23.55, lng = -46.63): ResultadoGeocoding
   return { lat, lng, endereco_normalizado: endereco };
 }
 
+const defaultProps = {
+  onSelecionar: vi.fn(),
+  onSalvar: vi.fn(),
+  onNenhumDesses: vi.fn(),
+};
+
 describe('ListaOpcoesEndereco', () => {
   it('renderiza todas as opções', () => {
     render(
@@ -20,8 +26,7 @@ describe('ListaOpcoesEndereco', () => {
           opcao('Rua Augusta, 1500, São Paulo, SP, Brasil'),
           opcao('Rua Augusta, 200, Campinas, SP, Brasil', -22.9, -47.06),
         ]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByTestId('opcao-endereco-0')).toBeDefined();
@@ -32,8 +37,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[opcao('Rua A, SP')]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByText(/Qual endereço é o certo/i)).toBeDefined();
@@ -43,14 +47,38 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua A, SP'), distanciaKm: 2.3 }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByText(/2,3 km/)).toBeDefined();
   });
 
-  it('chama onSelecionar com o endereço correto ao clicar', async () => {
+  it('primeiro clique seleciona card e mostra botoes Salvar/Editar', async () => {
+    const user = userEvent.setup();
+    const onSelecionar = vi.fn();
+    const onSalvar = vi.fn();
+    const op1 = opcao('Rua A, São Paulo, SP, Brasil');
+    const op2 = opcao('Rua A, Campinas, SP, Brasil', -22.9, -47.06);
+
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[op1, op2]}
+        onSelecionar={onSelecionar}
+        onSalvar={onSalvar}
+        onNenhumDesses={vi.fn()}
+      />
+    );
+
+    // Primeiro clique: seleciona — NÃO chama onSelecionar ainda
+    await user.click(screen.getByTestId('opcao-endereco-1'));
+    expect(onSelecionar).not.toHaveBeenCalled();
+
+    // Botões Salvar e Editar aparecem
+    expect(screen.getByTestId('btn-salvar-1')).toBeDefined();
+    expect(screen.getByTestId('btn-editar-1')).toBeDefined();
+  });
+
+  it('botao Editar chama onSelecionar com o endereço correto', async () => {
     const onSelecionar = vi.fn();
     const user = userEvent.setup();
     const op1 = opcao('Rua A, São Paulo, SP, Brasil');
@@ -60,12 +88,34 @@ describe('ListaOpcoesEndereco', () => {
       <ListaOpcoesEndereco
         opcoes={[op1, op2]}
         onSelecionar={onSelecionar}
+        onSalvar={vi.fn()}
         onNenhumDesses={vi.fn()}
       />
     );
 
     await user.click(screen.getByTestId('opcao-endereco-1'));
+    await user.click(screen.getByTestId('btn-editar-1'));
     expect(onSelecionar).toHaveBeenCalledWith(op2);
+  });
+
+  it('botao Salvar chama onSalvar com o endereço correto', async () => {
+    const onSalvar = vi.fn();
+    const user = userEvent.setup();
+    const op1 = opcao('Rua A, São Paulo, SP, Brasil');
+    const op2 = opcao('Rua A, Campinas, SP, Brasil', -22.9, -47.06);
+
+    render(
+      <ListaOpcoesEndereco
+        opcoes={[op1, op2]}
+        onSelecionar={vi.fn()}
+        onSalvar={onSalvar}
+        onNenhumDesses={vi.fn()}
+      />
+    );
+
+    await user.click(screen.getByTestId('opcao-endereco-0'));
+    await user.click(screen.getByTestId('btn-salvar-0'));
+    expect(onSalvar).toHaveBeenCalledWith(op1);
   });
 
   it('exibe botão "Nenhum desses" e chama onNenhumDesses ao clicar', async () => {
@@ -75,7 +125,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[opcao('Rua A, SP')]}
-        onSelecionar={vi.fn()}
+        {...defaultProps}
         onNenhumDesses={onNenhumDesses}
       />
     );
@@ -90,8 +140,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[opcao('Rua A, SP')]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByRole('list', { name: /Opções de endereço/i })).toBeDefined();
@@ -101,8 +150,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua A, SP'), distanciaKm: 0.35 }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByText(/350 m/)).toBeDefined();
@@ -114,8 +162,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena' }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
         numeroFala="341"
       />
     );
@@ -126,8 +173,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua X'), logradouro: 'Rua X', numero: '1500' }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
         numeroFala="341"
       />
     );
@@ -138,8 +184,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena', cidade: 'Belo Horizonte', uf: 'MG', cep: '30130110' }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
         numeroFala="341"
       />
     );
@@ -150,8 +195,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Av. Afonso Pena, BH'), logradouro: 'Avenida Afonso Pena', cidade: 'Belo Horizonte', uf: 'MG', cepMultiplos: true }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
         numeroFala="342"
       />
     );
@@ -164,12 +208,9 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua Y'), logradouro: 'Rua Y', cidade: 'Contagem', uf: 'MG' }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
-    // O botao "Nenhum desses — digitar o CEP" contem "CEP"; aqui checamos que
-    // NAO ha a linha de CEP do card (CEP seguido de digitos).
     expect(screen.queryByText(/CEP \d{5}-\d{3}/)).toBeNull();
   });
 
@@ -177,8 +218,7 @@ describe('ListaOpcoesEndereco', () => {
     render(
       <ListaOpcoesEndereco
         opcoes={[{ ...opcao('Rua Z'), logradouro: 'Rua Z' }]}
-        onSelecionar={vi.fn()}
-        onNenhumDesses={vi.fn()}
+        {...defaultProps}
       />
     );
     expect(screen.getByText('Rua Z')).toBeDefined();

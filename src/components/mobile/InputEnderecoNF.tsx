@@ -312,6 +312,37 @@ export function InputEnderecoNF({
     }
   }
 
+  /** Salva direto sem abrir a tela de confirmar.
+   *  Calcula todos os valores localmente (sem depender do state React ter
+   *  propagado) e chama onConfirmar imediatamente. Usado pelo botão "Salvar"
+   *  na lista de opções quando o número já foi extraído da fala. */
+  async function salvarPorGeocodingResultado(resultado: ResultadoGeocoding, textoOriginal: string) {
+    const enderecoCalculado = {
+      logradouro: resultado.logradouro || resultado.endereco_normalizado.split(',')[0]?.trim() || '',
+      bairro: resultado.bairro ?? '',
+      cidade: resultado.cidade ?? '',
+      uf: resultado.uf ?? '',
+    };
+    const numeroCalculado = resultado.numero || extrairNumeroDeTranscricao(textoOriginal) || '';
+    const cepCalculado = (resultado.cep && /^\d{8}$/.test(resultado.cep)) ? resultado.cep : cep;
+
+    if (!enderecoCalculado.logradouro || !numeroCalculado.trim()) {
+      // Sem número → abre a tela de confirmar pra digitar (mesmo comportamento do Editar)
+      preencherPorGeocodingResultado(resultado, textoOriginal);
+      return;
+    }
+
+    vibrar(50);
+    await onConfirmar({ cep: cepCalculado, numero: numeroCalculado, endereco: enderecoCalculado });
+    // Reset pra proxima NF
+    setCep('');
+    setNumero('');
+    setEndereco(null);
+    setEtapa('cep');
+    setErro(null);
+    resetarOcr();
+  }
+
   // OCR: recebe o texto de UMA foto e SOMA ao texto das fotos anteriores da mesma
   // NF (até MAX_FOTOS_OCR). Re-extrai do texto acumulado a cada foto:
   //  - CEP + número achados (ou esgotou as fotos) → setCep dispara o ViaCEP → 'confirmar'.
@@ -516,6 +547,11 @@ export function InputEnderecoNF({
         <ListaOpcoesEndereco
           opcoes={opcoesFala}
           numeroFala={extrairNumeroDeTranscricao(textoFala) ?? undefined}
+          onSalvar={async (opcao) => {
+            await salvarPorGeocodingResultado(opcao, textoFala);
+            setOpcoesFala([]);
+            setTextoFala('');
+          }}
           onSelecionar={(opcao) => {
             preencherPorGeocodingResultado(opcao, textoFala);
             setOpcoesFala([]);
@@ -532,6 +568,7 @@ export function InputEnderecoNF({
       </div>
     );
   }
+
 
   // Tela unica de revisar+confirmar: endereco + campo de numero editavel +
   // badge de validacao + confirmar de uma vez. Pros dois caminhos (CEP e voz).
