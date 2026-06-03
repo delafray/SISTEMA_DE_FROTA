@@ -40,8 +40,6 @@ export function FaseEmRota({
 }) {
   const concluidas = paradas.filter((p) => p.concluida_em).length;
   const total = paradas.length;
-  const pct = total === 0 ? 0 : (concluidas / total) * 100;
-  const totaisStr = `${rota.distancia_total_km?.toFixed(1) ?? '?'} km · ≈${Math.round(rota.tempo_total_min ?? 0)} min`;
 
   // Proxima parada = primeira nao concluida
   const proximaParada = paradas.find((p) => !p.concluida_em) ?? null;
@@ -95,30 +93,6 @@ export function FaseEmRota({
 
   return (
     <div>
-      {/* Progress bar visual */}
-      <div style={{ marginBottom: 8 }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569', marginBottom: 4 }}>
-          <span>{concluidas}/{total} paradas entregues</span>
-          <span>{totaisStr}</span>
-        </div>
-        <div
-          role="progressbar"
-          aria-valuenow={concluidas}
-          aria-valuemax={total}
-          aria-valuemin={0}
-          style={{ width: '100%', height: 8, background: '#e2e8f0', borderRadius: 4, overflow: 'hidden' }}
-        >
-          <div
-            data-testid="progress-bar"
-            style={{
-              width: `${pct}%`,
-              height: '100%',
-              background: 'linear-gradient(90deg, #16a34a, #22c55e)',
-              transition: 'width 300ms',
-            }}
-          />
-        </div>
-      </div>
 
       {/* Mapa interativo — tap pino abre bottom sheet */}
       <MapaRota

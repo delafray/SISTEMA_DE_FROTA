@@ -13,6 +13,8 @@ export function Header({
   fase,
   online,
   numCapturadas,
+  numParadas,
+  numConcluidas,
   statsDinamicos,
   usoGoogle,
 }: {
@@ -20,6 +22,7 @@ export function Header({
   online: boolean;
   numCapturadas: number;
   numParadas: number;
+  numConcluidas: number;
   statsDinamicos?: { proxKm: number; proxMin: number; faltamKm: number; faltamMin: number } | null;
   usoGoogle?: { total: number; limite: number } | null;
 }) {
@@ -35,7 +38,7 @@ export function Header({
   return (
     <header style={headerStyle}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <strong style={{ fontSize: 18 }}>🚛 Rota — {labelFase[fase]}</strong>
+        <strong style={{ fontSize: 16 }}>Rota — {labelFase[fase]}</strong>
         <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
           <span
             data-testid="build-sha"
@@ -66,9 +69,23 @@ export function Header({
         </div>
       )}
       {fase === 'em_rota' && statsDinamicos && (
-        <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: 13, color: '#475569', marginTop: 8, borderTop: '1px solid #f1f5f9', paddingTop: 8 }}>
-          <span>Prox. {statsDinamicos.proxKm.toFixed(1)}km ≈{statsDinamicos.proxMin}min</span>
-          <span>Soma total: {statsDinamicos.faltamKm.toFixed(1)}km ≈{statsDinamicos.faltamMin}min</span>
+        <div style={{ marginTop: 6, borderTop: '1px solid #f1f5f9', paddingTop: 6, display: 'flex', flexDirection: 'column', gap: 2 }}>
+          {/* Linha 1: Próxima parada */}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12, color: '#475569' }}>
+            <span style={{ fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>Próx.</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{statsDinamicos.proxKm.toFixed(1)} km</span>
+            <span style={{ color: '#94a3b8' }}>·</span>
+            <span style={{ whiteSpace: 'nowrap' }}>≈{statsDinamicos.proxMin} min</span>
+          </div>
+          {/* Linha 2: Soma total + paradas */}
+          <div style={{ display: 'flex', alignItems: 'baseline', gap: 6, fontSize: 12, color: '#475569' }}>
+            <span style={{ fontWeight: 600, color: '#334155', whiteSpace: 'nowrap' }}>Total</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{statsDinamicos.faltamKm.toFixed(1)} km</span>
+            <span style={{ color: '#94a3b8' }}>·</span>
+            <span style={{ whiteSpace: 'nowrap' }}>≈{statsDinamicos.faltamMin} min</span>
+            <span style={{ color: '#94a3b8', margin: '0 2px' }}>—</span>
+            <span style={{ whiteSpace: 'nowrap' }}>{numConcluidas}/{numParadas} entregues</span>
+          </div>
         </div>
       )}
     </header>

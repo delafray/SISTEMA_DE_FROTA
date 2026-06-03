@@ -702,7 +702,8 @@ function RotaContent(): React.ReactElement {
 
   return (
     <div style={containerStyle}>
-      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} statsDinamicos={statsDinamicos} usoGoogle={usoGoogle} />
+      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} numConcluidas={paradas.filter(p => p.concluida_em).length} statsDinamicos={statsDinamicos} usoGoogle={usoGoogle} />
+
 
       {toast && (
         <div
