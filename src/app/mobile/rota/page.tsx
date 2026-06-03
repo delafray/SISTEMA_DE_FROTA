@@ -91,6 +91,15 @@ function RotaContent(): React.ReactElement {
     lockOrientacaoRetrato();
   }, []);
 
+  // Persiste a fase no localStorage pra restaurar apos refresh/crash.
+  // As NFs ficam seguras no IndexedDB (Dexie), mas o estado React se perde.
+  // Este flag permite restaurar instantaneamente pra 'captura' sem API call.
+  useEffect(() => {
+    if (fase !== 'carregando') {
+      try { localStorage.setItem('frota_fase', fase); } catch { /* ignore */ }
+    }
+  }, [fase]);
+
   // Contador de uso do Google — refaz a leitura a cada NF capturada, pro
   // motorista ver se a busca subiu o contador (API) ou nao (cache).
   useEffect(() => {
@@ -134,6 +143,28 @@ function RotaContent(): React.ReactElement {
       return;
     }
     (async () => {
+      // FAST PATH: restaura captura se havia notas em progresso.
+      // Roda ANTES de qualquer fetch — funciona offline e é instantâneo.
+      // Garante que refresh, crash, ou troca de versão não perde o trabalho.
+      // Exceção: deep-link ?abrir=<id> tem prioridade (veio do dashboard).
+      if (!abrirId) {
+        try {
+          const faseSalva = localStorage.getItem('frota_fase');
+          if (faseSalva === 'captura') {
+            const notasLocais = await listarTodas(motoristaId);
+            if (notasLocais.length > 0) {
+              setNotas(notasLocais);
+              const pendentes = notasLocais.filter((n) => n.status_sync === 'pendente').length;
+              if (pendentes > 0) {
+                void sincronizarFila();
+              }
+              setFase('captura');
+              return;
+            }
+          }
+        } catch { /* localStorage indisponível */ }
+      }
+
       try {
         // 1. Busca ultimas rotas (historico para tela de inicio)
         const res = await fetch(
@@ -187,6 +218,20 @@ function RotaContent(): React.ReactElement {
         // 3. Nada pendente — fase inicial com historico
         setFase('inicio');
       } catch (err) {
+        // Offline: tenta restaurar captura local antes de buscar cache de rota.
+        // Se o motorista estava capturando e atualizou sem internet, as NFs
+        // estao no IndexedDB — restaura direto pra 'captura'.
+        try {
+          const notasLocaisOffline = await listarTodas(motoristaId);
+          if (notasLocaisOffline.length > 0) {
+            setNotas(notasLocaisOffline);
+            setToast('📴 Sem internet — suas notas estão seguras no aparelho.');
+            setTimeout(() => setToast(null), 5000);
+            setFase('captura');
+            return;
+          }
+        } catch { /* Dexie error — segue pro fallback */ }
+
         // Offline / erro de rede: tenta retomar a rota guardada localmente pra o
         // motorista seguir navegando e exportando pro Google Maps sem internet.
         // Com deep-link, prioriza a rota pedida; senao, a ultima salva.
@@ -533,6 +578,10 @@ function RotaContent(): React.ReactElement {
       const rotaData = await fetchRota(data.rota_id);
       setRota(rotaData.rota);
       setParadas(rotaData.paradas);
+      // Limpa notas capturadas da fila local — foram consumidas pela otimização.
+      // Sem isso, um refresh posterior restauraria falsamente a fase 'captura'.
+      if (motoristaId) await limparFila(motoristaId);
+      setNotas([]);
       setFase('em_rota');
     } catch (err) {
       setErro(`Erro: ${(err as Error).message}`);
@@ -643,6 +692,8 @@ function RotaContent(): React.ReactElement {
     }
     setRota(null);
     setParadas([]);
+    // Limpa notas da fila local pra nao restaurar falsamente 'captura' no proximo refresh.
+    if (motoristaId) await limparFila(motoristaId);
     setNotas([]);
     // Atualiza o historico ao encerrar pra refletir mudancas de status
     try {

@@ -111,6 +111,7 @@ function setupFetch(handlers: Array<{ match: (url: string) => boolean; res: Resp
 beforeEach(() => {
   vi.clearAllMocks();
   vi.unstubAllGlobals();
+  try { localStorage.clear(); } catch { /* jsdom */ }
   if (typeof crypto !== 'undefined' && typeof crypto.randomUUID !== 'function') {
     Object.defineProperty(crypto, 'randomUUID', {
       value: () => 'uuid-' + Math.random().toString(36).slice(2, 14),
