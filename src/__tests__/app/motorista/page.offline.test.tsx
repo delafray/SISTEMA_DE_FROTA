@@ -22,7 +22,10 @@ vi.mock('@/lib/offline/authOffline', () => ({
   ROLES_OPERACAO: ['motorista', 'admin', 'gestor'],
 }));
 vi.mock('@/lib/offline/sessao', () => ({ limparSessaoLocal: vi.fn().mockResolvedValue(undefined) }));
-vi.mock('@/lib/offline/rotaCache', () => ({ limparRotasAtivas: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('@/lib/offline/rotaCache', () => ({
+  limparRotasAtivas: vi.fn().mockResolvedValue(undefined),
+  listarRotasCacheadas: vi.fn().mockResolvedValue([]),
+}));
 
 import MotoristaPage from '@/app/(motorista)/motorista/page';
 

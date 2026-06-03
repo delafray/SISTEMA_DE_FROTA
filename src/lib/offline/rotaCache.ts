@@ -55,6 +55,19 @@ export async function lerUltimaRotaAtiva(motoristaId?: string): Promise<RotaCach
   return todas[0];
 }
 
+/**
+ * Lista TODAS as rotas cacheadas (opcionalmente do motorista), mais recente
+ * primeiro — usada pra montar a lista de rotas na tela inicial quando offline.
+ */
+export async function listarRotasCacheadas(motoristaId?: string): Promise<RotaCacheada[]> {
+  if (!disponivel()) return [];
+  const db = getDB();
+  const todas = motoristaId
+    ? await db.rota_ativa.where('motorista_id').equals(motoristaId).toArray()
+    : await db.rota_ativa.toArray();
+  return todas.sort((a, b) => b.salvo_em.localeCompare(a.salvo_em));
+}
+
 /** Remove o snapshot de uma rota (ex.: rota encerrada). */
 export async function limparRotaAtiva(rotaId: string): Promise<void> {
   if (!disponivel()) return;

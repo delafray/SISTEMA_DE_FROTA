@@ -402,6 +402,21 @@ describe('RotaPage — fase em_rota', () => {
     expect(p3.compareDocumentPosition(p2) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it('deep-link ?abrir=<id> abre a rota direto na fase em_rota (pula o historico)', async () => {
+    setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1', abrir: 'r1' });
+    (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+
+    vi.stubGlobal('fetch', buildFetchComRota('r1', [
+      { id: 'p1', rota_id: 'r1', nota_id: 'n1', ordem: 1, endereco: { logradouro: 'A', bairro: '', cidade: 'SP', uf: 'SP' }, latitude: -23.5, longitude: -46.6, fixada: false, janela_horario: null, tempo_descarga_min: 5, observacao: null, concluida_em: null },
+    ]));
+
+    render(<RotaPage />);
+
+    // Vai direto pra em_rota (mapa aparece) sem clicar no historico
+    await waitFor(() => screen.getByTestId('mapa-rota'));
+    expect(screen.queryByTestId('rota-historico-r1')).toBeNull();
+  });
+
   it('clicar Encerrar volta pra fase inicio e conclui a rota no banco', async () => {
     setParams({ motorista_id: 'mot-1', empresa_id: 'emp-1' });
     (listarTodas as ReturnType<typeof vi.fn>).mockResolvedValue([]);

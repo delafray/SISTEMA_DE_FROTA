@@ -76,6 +76,9 @@ function RotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
+  // Deep-link opcional: ?abrir=<rotaId> abre direto essa rota (veio da lista de
+  // rotas na tela do motorista), pulando a tela de historico.
+  const abrirId = searchParams.get('abrir') ?? '';
   // Total opcional via ?total=N. Se nao vier, header mostra so "NF X" (motorista
   // nao precisa saber/declarar o total — pode ser 5 ou 70).
   const totalParam = Number(searchParams.get('total'));
@@ -159,6 +162,19 @@ function RotaContent(): React.ReactElement {
         const todasRotas: RotaOtimizada[] = data.rotas ?? [];
         setRotasHistorico(todasRotas);
 
+        // Deep-link ?abrir=<rotaId>: abre direto essa rota (veio da lista da
+        // tela do motorista). Se nao achar (404), cai pro fluxo normal abaixo.
+        if (abrirId) {
+          const rotaRes = await fetch(`/api/routing/rota/${abrirId}`);
+          if (rotaRes.ok) {
+            const rotaData = (await rotaRes.json()) as RotaResponse;
+            setRota(rotaData.rota);
+            setParadas(rotaData.paradas);
+            setFase('em_rota');
+            return;
+          }
+        }
+
         // Verifica se ha rota em andamento automaticamente carregavel
         const rotaEmAndamento = todasRotas.find((r) =>
           ['otimizada', 'em_andamento'].includes(r.status)
@@ -189,9 +205,12 @@ function RotaContent(): React.ReactElement {
         // 3. Nada pendente — fase inicial com historico
         setFase('inicio');
       } catch (err) {
-        // Offline / erro de rede: tenta retomar a ultima rota guardada localmente
-        // pra o motorista seguir navegando e exportando pro Google Maps sem internet.
-        const cache = await lerUltimaRotaAtiva(motoristaId);
+        // Offline / erro de rede: tenta retomar a rota guardada localmente pra o
+        // motorista seguir navegando e exportando pro Google Maps sem internet.
+        // Com deep-link, prioriza a rota pedida; senao, a ultima salva.
+        const cache =
+          (abrirId ? await lerRotaAtiva(abrirId) : null) ??
+          (await lerUltimaRotaAtiva(motoristaId));
         if (cache) {
           setRota(cache.rota);
           setParadas(cache.paradas);
@@ -205,7 +224,7 @@ function RotaContent(): React.ReactElement {
         setFase('inicio');
       }
     })();
-  }, [motoristaId, empresaId]);
+  }, [motoristaId, empresaId, abrirId]);
 
   // ─── Persiste a rota ativa localmente (IndexedDB) ──────────────────
   // Sempre que a rota entra/atualiza na fase em_rota, guarda um snapshot pra o

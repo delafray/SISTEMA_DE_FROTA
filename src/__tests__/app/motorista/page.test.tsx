@@ -1,9 +1,10 @@
 /**
- * Testes da página /motorista — foco no botão "Rota do dia".
+ * Testes da página /motorista — tela enxuta: botão "Rota do dia" + lista de rotas.
  *
  * Verifica:
- *  - Botão aparece com link correto quando motorista tem vínculo
+ *  - Botão Rota do dia aparece com link correto quando motorista tem vínculo
  *  - Fallback desabilitado quando sem vínculo
+ *  - Lista de rotas (concluídas ou não) renderiza com status e link de abrir
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -67,10 +68,20 @@ function setupSupabaseSemVinculo(empresaId = 'emp-uuid-1') {
     .mockResolvedValueOnce({ data: { empresa_id: empresaId, role: 'motorista' } });
 }
 
+/** Stub do fetch de /api/routing/rotas com a lista informada. */
+function stubFetchRotas(rotas: unknown[]) {
+  vi.stubGlobal(
+    'fetch',
+    vi.fn(async () => ({ ok: true, status: 200, json: async () => ({ rotas }) }) as unknown as Response)
+  );
+}
+
 // ─── TESTES ─────────────────────────────────────────────────────────
 
 beforeEach(() => {
   vi.clearAllMocks();
+  vi.unstubAllGlobals();
+  stubFetchRotas([]); // default: sem rotas (cada teste pode re-stubar)
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -115,5 +126,44 @@ describe('Motorista page — Rota do dia', () => {
     expect(screen.queryByTestId('btn-rota-do-dia')).toBeNull();
     // Ao menos um elemento menciona "solicite ao gestor" (aviso ou fallback do card)
     expect(screen.getAllByText(/solicite ao gestor/i).length).toBeGreaterThan(0);
+  });
+
+  it('mostra o botão discreto de registrar abastecimento', async () => {
+    setupSupabaseComVinculo('mot-111', 'emp-222');
+    render(<MotoristaPage />);
+    const btn = await waitFor(() => screen.getByTestId('btn-abastecimento'));
+    expect(btn.getAttribute('href')).toContain('/motorista/abastecimentos/novo');
+  });
+});
+
+describe('Motorista page — lista de rotas', () => {
+  it('lista rotas (concluídas ou não) com status e link de abrir a rota', async () => {
+    setupSupabaseComVinculo('mot-1', 'emp-1');
+    stubFetchRotas([
+      { id: 'rota-A', data: '2026-06-02', status: 'em_andamento', distancia_total_km: 12.3, tempo_total_min: 45, qtd_paradas: 4 },
+      { id: 'rota-B', data: '2026-06-01', status: 'concluida', distancia_total_km: 8, tempo_total_min: 30, qtd_paradas: 2 },
+    ]);
+
+    render(<MotoristaPage />);
+
+    const itemA = await waitFor(() => screen.getByTestId('rota-item-rota-A'));
+    // Link abre a rota especifica via deep-link ?abrir=
+    expect((itemA as HTMLAnchorElement).href).toContain('/mobile/rota');
+    expect((itemA as HTMLAnchorElement).href).toContain('abrir=rota-A');
+    expect((itemA as HTMLAnchorElement).href).toContain('motorista_id=mot-1');
+
+    // Status legível pra cada rota
+    expect(screen.getByText('Em andamento')).toBeTruthy();
+    expect(screen.getByText('Concluída')).toBeTruthy();
+    // Distância/tempo aparece
+    expect(screen.getByText(/12\.3 km/)).toBeTruthy();
+  });
+
+  it('mostra estado vazio quando não há rotas', async () => {
+    setupSupabaseComVinculo('mot-1', 'emp-1');
+    stubFetchRotas([]);
+    render(<MotoristaPage />);
+    await waitFor(() => screen.getByText(/Nenhuma rota ainda/i));
+    expect(screen.queryByTestId('rota-item-rota-A')).toBeNull();
   });
 });
