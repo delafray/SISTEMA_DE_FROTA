@@ -63,6 +63,7 @@ export const btnLinkStyle: CSSProperties = {
   textDecoration: 'none',
   fontSize: 13,
   fontWeight: 600,
+  whiteSpace: 'nowrap',
 };
 
 export const btnEncerrarStyle: CSSProperties = {
@@ -75,6 +76,7 @@ export const btnEncerrarStyle: CSSProperties = {
   fontSize: 13,
   fontWeight: 600,
   cursor: 'pointer',
+  whiteSpace: 'nowrap',
 };
 
 export function paradaItemStyle(concluida: boolean, destacada = false): CSSProperties {
