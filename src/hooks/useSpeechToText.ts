@@ -25,6 +25,7 @@ export function useSpeechToText(): UseSpeechToTextReturn {
     const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
 
     if (!SpeechRecognition) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setSupported(false);
       return;
     }

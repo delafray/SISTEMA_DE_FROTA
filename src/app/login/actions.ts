@@ -11,7 +11,7 @@ export async function login(formData: FormData) {
   const password = formData.get('password') as string
 
   // Normaliza o nome: tira espaços, minúsculas, tira acentos
-  let email = username
+  const email = username
     .trim()
     .toLowerCase()
     .normalize("NFD")

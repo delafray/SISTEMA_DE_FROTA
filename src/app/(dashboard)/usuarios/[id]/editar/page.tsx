@@ -154,7 +154,7 @@ export default function EditarUsuarioPage() {
               padding: "16px", background: "#f0fdf4", border: "1px solid #bbf7d0",
               borderRadius: "8px", fontSize: "13px", color: "#166534",
             }}>
-              💡 Preencha o campo "Nova Senha" apenas se desejar redefinir a senha do usuário. O login é gerado automaticamente a partir do nome completo.
+              💡 Preencha o campo &quot;Nova Senha&quot; apenas se desejar redefinir a senha do usuário. O login é gerado automaticamente a partir do nome completo.
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>

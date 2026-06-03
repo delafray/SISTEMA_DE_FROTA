@@ -64,6 +64,7 @@ function CapturaNotasContent(): React.ReactElement {
   useEffect(() => {
     if (!motoristaId) return;
 
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     void recarregar();
     const stopWorker = iniciarSyncWorker(SYNC_INTERVAL_MS);
     const stopDetector = iniciarOnlineDetector();

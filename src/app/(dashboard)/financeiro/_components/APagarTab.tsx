@@ -60,7 +60,11 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
     setLoading(false);
   };
 
-  useEffect(() => { setLoading(true); carregar(); }, [empresaId, periodo]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLoading(true);
+    carregar();
+  }, [empresaId, periodo]);
 
   const filtrados = useMemo(() => {
     return eventos.filter(ev => {

@@ -41,6 +41,7 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
 
   useEffect(() => {
     const v = typeof window !== "undefined" ? window.localStorage.getItem(lsKey) : null;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     if (v) setSaldoBanco(parseFloat(v) || 0);
   }, [lsKey]);
 
@@ -66,6 +67,7 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     carregar();
   // eslint-disable-next-line react-hooks/exhaustive-deps

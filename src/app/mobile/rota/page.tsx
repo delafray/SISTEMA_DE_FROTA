@@ -78,10 +78,11 @@ function RotaContent(): React.ReactElement {
   // Modal de confirmacao ao apertar Voltar no meio da captura (evita descartar
   // 5-10 NFs sem querer). Ver handlePopState abaixo.
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
-  // Ref pra o handlePopState ler a contagem atual de notas sem precisar re-registrar
-  // o listener a cada nota capturada (o efeito do popstate depende so de `fase`).
   const notasRef = useRef<NotaNaFila[]>(notas);
-  notasRef.current = notas;
+
+  useEffect(() => {
+    notasRef.current = notas;
+  }, [notas]);
 
   // Trava em retrato ao montar
   useEffect(() => {
@@ -126,6 +127,7 @@ function RotaContent(): React.ReactElement {
 
   useEffect(() => {
     if (!motoristaId || !empresaId) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setFase('inicio');
       return;
     }
@@ -253,6 +255,7 @@ function RotaContent(): React.ReactElement {
 
     const stopWorker = iniciarSyncWorker(5000);
     const stopDetector = iniciarOnlineDetector();
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setOnline(estaOnline());
 
     const handleOnline = () => setOnline(true);
@@ -621,20 +624,6 @@ function RotaContent(): React.ReactElement {
     setFase('inicio');
   }, [empresaId, motoristaId, rota]);
 
-  // ─── Validacao de params ──────────────────────────────────────────
-
-  if (!motoristaId || !empresaId) {
-    return (
-      <div style={containerStyle}>
-        <div role="alert" style={erroStyle}>
-          ⚠️ <strong>Parametros faltando.</strong>
-          <br />
-          URL precisa ter <code>?motorista_id=...&empresa_id=...</code>.
-        </div>
-      </div>
-    );
-  }
-
   // ─── Calculo dinamico de distancias ────────────────────────────────
   const statsDinamicos = useMemo(() => {
     if (fase !== 'em_rota' || !posicaoAtual || paradas.length === 0) return null;
@@ -662,6 +651,19 @@ function RotaContent(): React.ReactElement {
       faltamMin: Math.round(distFaltam * minPerKm),
     };
   }, [fase, posicaoAtual, paradas]);
+
+  // ─── Validacao de params ──────────────────────────────────────────
+  if (!motoristaId || !empresaId) {
+    return (
+      <div style={containerStyle}>
+        <div role="alert" style={erroStyle}>
+          ⚠️ <strong>Parametros faltando.</strong>
+          <br />
+          URL precisa ter <code>?motorista_id=...&empresa_id=...</code>.
+        </div>
+      </div>
+    );
+  }
 
   // ─── Renderizacao por fase ─────────────────────────────────────────
 

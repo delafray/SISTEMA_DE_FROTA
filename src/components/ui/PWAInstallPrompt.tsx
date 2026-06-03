@@ -21,6 +21,7 @@ export function PWAInstallPrompt() {
 
     // Detectar iOS
     const ios = /iPad|iPhone|iPod/.test(navigator.userAgent) && !(window as unknown as { MSStream?: unknown }).MSStream
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setIsIOS(ios)
 
     // Detectar se já está instalado

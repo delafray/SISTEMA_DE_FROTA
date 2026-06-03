@@ -106,6 +106,7 @@ export function InputEnderecoNF({
     if (cep.length !== 8) return;
 
     let cancelado = false;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setLoading(true);
     setErro(null);
 
@@ -146,6 +147,7 @@ export function InputEnderecoNF({
   // dispararia uma chamada ao Overpass a cada tecla. Nunca bloqueia o fluxo.
   useEffect(() => {
     if (etapa !== 'confirmar' || !endereco || !numero.trim() || !cep) {
+      // eslint-disable-next-line react-hooks/set-state-in-effect
       setValidacao(null);
       return;
     }
@@ -369,7 +371,7 @@ export function InputEnderecoNF({
           <BotaoMicrofone onTranscricao={handleTranscricao} disabled={loading || buscandoEndereco} />
         </div>
         <div style={{ fontSize: 13, color: cores.textoFraco, marginTop: 12, textAlign: 'center' }}>
-          Ou fale: "Rua Augusta 1500 São Paulo"
+          Ou fale: &quot;Rua Augusta 1500 São Paulo&quot;
         </div>
         
         {buscandoEndereco && <div style={{ marginTop: 12, color: cores.azul, textAlign: 'center', fontWeight: 600 }}>🔍 Buscando endereço...</div>}

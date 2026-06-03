@@ -154,6 +154,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
   };
 
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     loadData();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refDate, motoristaId]);
@@ -386,7 +387,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
             </div>
             {totais.valorDiaria === 0 && (
               <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
-                Valor da diária não cadastrado. Defina em "Remuneração" para calcular automaticamente.
+                Valor da diária não cadastrado. Defina em &quot;Remuneração&quot; para calcular automaticamente.
               </p>
             )}
           </FormSection>

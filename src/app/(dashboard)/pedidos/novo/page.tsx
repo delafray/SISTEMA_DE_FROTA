@@ -65,40 +65,6 @@ export default function NovoPedidoPage() {
     observacoes: "",
   });
 
-  useEffect(() => {
-    const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) return;
-      setEmpresaId(ue.empresa_id);
-
-      const [motRes, veicRes, entRes] = await Promise.all([
-        supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
-        supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("entregas")
-          .select("id,origem,destino,data_coleta_prevista,data_entrega_prevista,status,clientes(nome_fantasia)")
-          .eq("empresa_id", ue.empresa_id)
-          .is("pedido_id", null)
-          .in("status", ["agendado"])
-          .order("data_coleta_prevista", { ascending: true }),
-      ]);
-
-      const veicsList = veicRes.data ?? [];
-      setMotoristas(motRes.data ?? []);
-      setVeiculos(veicsList);
-      setEntregasDisp((entRes.data ?? []) as unknown as EntregaDisp[]);
-
-      // Carrega o status operacional de todos os veículos de uma vez
-      if (veicsList.length > 0) {
-        await carregarStatusVeiculos(veicsList.map(v => v.id), ue.empresa_id);
-      }
-    };
-    load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
   // Carrega status de todos os veículos em paralelo (pedido ativo + manutenção ativa)
   const carregarStatusVeiculos = async (veicIds: string[], _empId: string) => {
     const [pedRes, manutRes] = await Promise.all([
@@ -138,6 +104,40 @@ export default function NovoPedidoPage() {
 
     setStatusVeiculos(mapa);
   };
+
+  useEffect(() => {
+    const load = async () => {
+      const { data: auth } = await supabase.auth.getUser();
+      if (!auth.user) { router.push("/login"); return; }
+      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
+        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+      if (!ue?.empresa_id) return;
+      setEmpresaId(ue.empresa_id);
+
+      const [motRes, veicRes, entRes] = await Promise.all([
+        supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
+        supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
+        supabase.from("entregas")
+          .select("id,origem,destino,data_coleta_prevista,data_entrega_prevista,status,clientes(nome_fantasia)")
+          .eq("empresa_id", ue.empresa_id)
+          .is("pedido_id", null)
+          .in("status", ["agendado"])
+          .order("data_coleta_prevista", { ascending: true }),
+      ]);
+
+      const veicsList = veicRes.data ?? [];
+      setMotoristas(motRes.data ?? []);
+      setVeiculos(veicsList);
+      setEntregasDisp((entRes.data ?? []) as unknown as EntregaDisp[]);
+
+      // Carrega o status operacional de todos os veículos de uma vez
+      if (veicsList.length > 0) {
+        await carregarStatusVeiculos(veicsList.map(v => v.id), ue.empresa_id);
+      }
+    };
+    load();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Workflow Handlers
 

@@ -21,6 +21,8 @@ const eslintConfig = defineConfig([
     "next-env.d.ts",
     // Sub-repositório aninhado — projeto separado, com lint próprio.
     "RBARROS-Galeria-Repositorio-SISTEMARB/**",
+    // Worktrees de agentes Claude.
+    ".claude/**",
   ]),
 ]);
 

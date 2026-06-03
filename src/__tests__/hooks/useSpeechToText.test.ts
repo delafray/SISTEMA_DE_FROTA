@@ -71,6 +71,7 @@ describe('useSpeechToText', () => {
     class ConstructorMock extends MockSpeechRecognition {
       constructor() {
         super();
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         mockInstance = this;
       }
     }
@@ -103,6 +104,7 @@ describe('useSpeechToText', () => {
     class ConstructorMock extends MockSpeechRecognition {
       constructor() {
         super();
+        // eslint-disable-next-line @typescript-eslint/no-this-alias
         mockInstance = this;
       }
     }

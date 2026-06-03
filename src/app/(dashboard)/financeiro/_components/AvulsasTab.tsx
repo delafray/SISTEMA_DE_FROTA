@@ -87,7 +87,10 @@ export default function AvulsasTab({ empresaId }: { empresaId: string }) {
     setLoading(false);
   }, [empresaId, supabase]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregar();
+  }, [carregar]);
 
   const filtradas = despesas
     .filter(d => filtroCategoria === "todas" || d.categoria === filtroCategoria)

@@ -83,7 +83,10 @@ export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
     setLoading(false);
   }, [empresaId, supabase]);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregar();
+  }, [carregar]);
 
   const filtradas = recorrencias.filter(r => {
     if (filtroAtivo === "ativas") return r.ativo;

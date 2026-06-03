@@ -124,6 +124,7 @@ function AjusteRotaContent(): React.ReactElement {
   // Load inicial
   useEffect(() => {
     if (!rotaId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCarregando(true);
     fetchRota(rotaId)
       .then((data) => {

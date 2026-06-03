@@ -63,7 +63,10 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
     setLoading(false);
   };
 
-  useEffect(() => { carregar(); }, [empresaId]);
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregar();
+  }, [empresaId]);
 
   const hoje_ = hoje();
   const filtrados = useMemo(() => {

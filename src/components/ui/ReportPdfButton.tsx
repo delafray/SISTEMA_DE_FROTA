@@ -39,6 +39,7 @@ export function ReportPdfButton({
       try {
         const dummyFile = new File([new Blob([])], "test.pdf", { type: "application/pdf" });
         if (nav.canShare({ files: [dummyFile] })) {
+          // eslint-disable-next-line react-hooks/set-state-in-effect
           setCanShare(true);
         }
       } catch (e) {
