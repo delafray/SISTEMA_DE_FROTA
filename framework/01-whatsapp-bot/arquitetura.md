@@ -11,7 +11,7 @@
 
 | Componente | Tecnologia | Onde roda |
 |---|---|---|
-| Gateway WhatsApp | Evolution API v2.3.0 (Baileys) | Railway (Docker) |
+| Gateway WhatsApp | Evolution API v2.3.0 (Baileys) | Oracle Cloud VM — `129.80.27.159:8080` (Docker, co-locado com OSRM/VROOM) |
 | Backend | Next.js (API Routes) | Vercel (região `iad1`) |
 | Banco de dados | PostgreSQL | Supabase |
 | IA conversacional | Gemini 2.5 Flash (`thinkingBudget: 0`) | Google AI Studio |
@@ -25,21 +25,26 @@
 
 ```
 1. Motorista envia mensagem no WhatsApp
-2. WhatsApp → Evolution API (Railway) → POST /api/whatsapp/webhook (Vercel)
-3. security.ts → valida apikey do webhook
+2. WhatsApp → Evolution API (Oracle VM :8080) → POST /api/whatsapp/webhook (Vercel)
+3. security.ts → valida apikey do webhook (header 'apikey' = EVOLUTION_WEBHOOK_SECRET)
 4. messageParser.ts → extrai tipo, telefone, conteúdo
 5. auth.ts → identifica: motorista, gestor ou desconhecido
 6. fastPath.ts → regex: "oi", "menu", "tchau" → resposta <1ms, sem IA
-7. sessionManager.ts → carrega estado da sessão (Supabase)
-8. geminiBot.ts → orquestra Gemini:
+7. sessionManager.ts → carrega estado da sessão (Supabase, RPC atômica)
+8. messageRouter.ts → roteamento por estado:
+   a. Se motorista OCIOSO (estado='novo'/'aguardando_acao') E GEMINI_MODE=true → vai ao Gemini
+   b. Se fluxo ativo (estado='aguardando_*') → vai ao flow determinístico (abastecimento/km/avaria/etc)
+9. geminiBot.ts → orquestra Gemini (só para motoristas ociosos):
    a. Se áudio → Deepgram transcreve
    b. Se foto → OpenAI classifica
    c. Monta contexto + histórico + system prompt
    d. Envia pro Gemini → Gemini pode chamar tools
    e. Se tool: executarTool() → query Supabase → resultado → Gemini
    f. Gemini formula resposta em português
-9. messageSender.ts → envia resposta → Evolution API → WhatsApp
+10. messageSender.ts → envia resposta → Evolution API → WhatsApp
 ```
+
+> ⚠️ **GEMINI_MODE**: a IA só intercepta quando o motorista está **OCIOSO** (`estado === 'novo' || 'aguardando_acao'`). Com fluxo ativo (ex: `aguardando_confirmacao_abastecimento`), o texto vai pro flow determinístico — caso contrário a IA "sequestrava" a resposta e o registro nunca era salvo.
 
 ---
 
@@ -57,10 +62,11 @@ src/
     │   ├── menuHelper.ts        ← Menus numerados (fallback WhatsApp pessoal)
     │   ├── fastPath.ts          ← "oi/menu/tchau" sem chamar IA (<1ms)
     │   ├── geminiBot.ts         ← Orquestra Gemini (texto e áudio)
-    │   ├── geminiRateLimit.ts   ← Guarda de cota RPM/RPD
-    │   ├── historico.ts         ← Últimas 8 msgs por número (4 turnos)
+    │   ├── geminiRateLimit.ts   ← Guarda de cota RPM/RPD (desligada no tier pago)
+    │   ├── historico.ts         ← Últimas 8 msgs por número (4 turnos, Supabase)
+    │   ├── messageRouter.ts     ← Roteamento por estado (GEMINI_MODE + flows)
     │   ├── security.ts          ← Valida apikey do webhook
-    │   └── flows/               ← Fluxos determinísticos (fallback sem IA)
+    │   └── flows/               ← Fluxos determinísticos (abastecimento/km/avaria/despesa/etc)
     └── ai/
         ├── geminiClient.ts      ← SDK Gemini + retry + thinkingBudget
         ├── deepgramClient.ts    ← Transcrição de áudio
@@ -106,7 +112,7 @@ Detalhes em [como-adicionar-tool.md](como-adicionar-tool.md).
 
 > `marcarComoLida` é `void` (não `await`): é uma chamada ao Evolution (timeout 3s) que não precisa bloquear a resposta. A função trata o próprio erro internamente.
 
-### Anatomia da latência (medido Jun/2026, conta paga)
+### Anatomia da latência (medido Jun/2026, conta paga, pós-migração Oracle)
 
 | Mensagem | Bot (Vercel) | Transporte | Total percebido |
 |---|---|---|---|
@@ -114,8 +120,8 @@ Detalhes em [como-adicionar-tool.md](como-adicionar-tool.md).
 | **Áudio** | ~6s | ~7s | **~13s** |
 
 - **Bot (Vercel):** medido entre `message_received` e `message_processed` nos logs. Texto = Gemini (~2,3s) + queries + envio. Áudio = + download do áudio (Evolution) + Deepgram.
-- **Transporte (~6s, CONSTANTE):** WhatsApp ↔ Evolution/Railway ↔ celular. Aparece igual no texto e no áudio → **não está no código**, está na camada não-oficial (Baileys/Meta) + Railway.
-- **Conclusão:** o código já está otimizado (~4s no texto é o piso do Gemini+tools). O gargalo restante (~6s) é **transporte**. Para reduzir: (1) checar CPU/RAM da Railway e subir o plano se estiver no talo; (2) se a Railway estiver folgada, é lag inerente do Baileys → só a **WhatsApp Cloud API oficial** resolve (projeto à parte). Ver [bugs-conhecidos.md](bugs-conhecidos.md) B28-B29.
+- **Transporte (~6s, CONSTANTE):** WhatsApp ↔ Evolution (Oracle VM) ↔ celular. Aparece igual no texto e no áudio → **não está no código**, está na camada não-oficial (Baileys/Meta).
+- **Conclusão:** o código já está otimizado (~4s no texto é o piso do Gemini+tools). O gargalo restante (~6s) é **transporte** (Baileys, não é o servidor). Para reduzir definitivamente: **WhatsApp Cloud API oficial** (projeto à parte). Ver [bugs-conhecidos.md](bugs-conhecidos.md) B28-B29.
 
 ---
 

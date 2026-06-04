@@ -14,66 +14,48 @@ API open-source que roda WhatsApp Web via Baileys. Substitui a API oficial da Me
 
 ## Pré-requisitos
 
-- Conta no Railway (railway.app → Sign Up com conta GitHub)
+- Acesso SSH à VM Oracle Cloud (chave `C:\Users\ronal\.ssh\osrm-key.pem`, IP `129.80.27.159`)
 - Vercel já com deploy feito (precisa da URL para o webhook). Ver [../03-deploy/vercel.md](../03-deploy/vercel.md)
 - Número de celular com chip **SEM WhatsApp instalado** (se tiver, excluir a conta antes: WhatsApp → Configurações → Conta → Excluir minha conta)
 
 ---
 
-## Setup passo a passo (Railway)
+## Setup passo a passo (Oracle Cloud VM)
 
-### 1. Criar projeto no Railway
-1. Acesse **railway.app** → logue com GitHub
-2. **New Project → Deploy a Docker Image**
-3. **Imagem:** `evoapicloud/evolution-api:v2.3.0`
+> ⚠️ O Railway foi cancelado. A Evolution API agora roda na **VM Oracle Cloud** (`129.80.27.159:8080`)
+> co-locada com o OSRM/VROOM. Ver [../03-deploy/migrar-railway-para-oracle.md](../03-deploy/migrar-railway-para-oracle.md) para o guia completo.
 
-> ⚠️ **NUNCA usar `atendai/evolution-api`** — repositório descontinuado, máximo v2.2.3 que tem bug do QR Code!
+### 1. Docker + docker-compose (já instalado na VM)
 
-### 2. Configurar variáveis
-Vá em **Variables** (ícone de variáveis no painel do serviço) e adicione:
-```
-AUTHENTICATION_TYPE=apikey
-AUTHENTICATION_API_KEY=sua-chave-segura-aqui    ← INVENTE uma chave forte (ex: minha-frota-2026-x7k)
-PORT=8080
-SERVER_PORT=8080
-DATABASE_ENABLED=false
-DEL_INSTANCE=false
-LOG_LEVEL=ERROR
+```bash
+ssh ubuntu@129.80.27.159  # usa C:\Users\ronal\.ssh\osrm-key.pem
+docker ps  # deve mostrar evolution-api, evolution-db, evolution-redis
 ```
 
-### 3. Ativar URL pública
-1. Clique no serviço → **Settings → Networking**
-2. Clique em **Generate Domain** (ou "Public Networking")
-3. Anote a URL gerada (ex: `https://evolution-api-production-ab12.up.railway.app`)
-
-### 4. Criar volume de persistência
-1. **Settings → Volumes → Add Volume**
-2. Mount Path: `/evolution/instances`
-3. Sem volume = QR Code precisa ser escaneado a cada restart!
-
-### 5. Aguardar deploy ficar verde (~2 minutos)
+> Se precisar subir do zero, ver [migrar-railway-para-oracle.md](../03-deploy/migrar-railway-para-oracle.md).
 
 ---
 
-## Configurar instância e webhook
+### Configurar instância e webhook
 
 > Os comandos abaixo são colados no **console do navegador** (F12 → aba Console, em qualquer site).
-> Substitua `SUA-URL-RAILWAY` e `SUA-CHAVE` pelos valores dos passos acima.
+> Substitua `SUA-URL` por `http://129.80.27.159:8080` e `SUA-CHAVE` pela `EVOLUTION_API_KEY`.
 
-### 6. Criar instância do bot
+### Criar instância do bot
 ```javascript
-fetch('https://SUA-URL-RAILWAY/instance/create', {
+fetch('http://129.80.27.159:8080/instance/create', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'apikey': 'SUA-CHAVE' },
-  body: JSON.stringify({ instanceName: 'seu-bot', integration: 'WHATSAPP-BAILEYS' })
+  body: JSON.stringify({ instanceName: 'frota-bot-novo', integration: 'WHATSAPP-BAILEYS' })
 }).then(r => r.json()).then(console.log)
 ```
 Resposta esperada: objeto com `instanceName` e `status`.
 
-### 7. Configurar webhook
+### Configurar webhook (**com header apikey — obrigatório para autenticar!**)
 ```javascript
 // ⚠️ FORMATO v2.x: dados DENTRO de { webhook: {} } — sem isso dá 400!
-fetch('https://SUA-URL-RAILWAY/webhook/set/seu-bot', {
+// ⚠️ INCLUA headers.apikey = EVOLUTION_WEBHOOK_SECRET — sem isso dá 401 no Vercel!
+fetch('http://129.80.27.159:8080/webhook/set/frota-bot-novo', {
   method: 'POST',
   headers: { 'Content-Type': 'application/json', 'apikey': 'SUA-CHAVE' },
   body: JSON.stringify({
@@ -81,7 +63,8 @@ fetch('https://SUA-URL-RAILWAY/webhook/set/seu-bot', {
       url: 'https://seu-app.vercel.app/api/whatsapp/webhook',
       enabled: true,
       events: ['MESSAGES_UPSERT', 'CONNECTION_UPDATE', 'QRCODE_UPDATED'],
-      webhookByEvents: false
+      webhookByEvents: false,
+      headers: { apikey: 'SEU-EVOLUTION_WEBHOOK_SECRET' }  // ← ESTE CAMPO É OBRIGATÓRIO!
     }
   })
 }).then(r => r.json()).then(console.log)
@@ -89,24 +72,24 @@ fetch('https://SUA-URL-RAILWAY/webhook/set/seu-bot', {
 
 > ⚠️ A URL do webhook precisa ser a da **Vercel** (deploy já feito). Se ainda não fez, veja [../03-deploy/vercel.md](../03-deploy/vercel.md) primeiro.
 
-### 8. Gerar QR Code e escanear
+### Gerar QR Code e escanear
 ```javascript
-fetch('https://SUA-URL-RAILWAY/instance/connect/seu-bot', {
+fetch('http://129.80.27.159:8080/instance/connect/frota-bot-novo', {
   headers: { 'apikey': 'SUA-CHAVE' }
 }).then(r => r.json()).then(console.log)
 ```
 
 1. A resposta traz o QR Code (base64 ou link)
 2. No celular do número do bot: **WhatsApp → Aparelhos conectados → Conectar aparelho**
-3. Escaneie o QR Code
+3. Escaneie o QR Code (expira em ~60 segundos!)
 
-### 9. Verificar conexão
+### Verificar conexão
 ```bash
-curl -H "apikey: SUA-CHAVE" https://SUA-URL-RAILWAY/instance/connectionState/seu-bot
+curl -H "apikey: SUA-CHAVE" http://129.80.27.159:8080/instance/connectionState/frota-bot-novo
 # Esperado: { "state": "open" } ✅
 ```
 
-Se vier `"close"` → repita o passo 8 (gerar QR Code de novo).
+Se vier `"close"` → repita o passo de gerar QR Code de novo.
 
 ---
 
@@ -115,13 +98,13 @@ Se vier `"close"` → repita o passo 8 (gerar QR Code de novo).
 Anote estes 4 valores e configure tanto no `.env.local` local quanto na Vercel:
 
 ```env
-EVOLUTION_API_URL=https://evolution-api-production-XXXX.up.railway.app   ← URL do passo 3
-EVOLUTION_API_KEY=sua-chave-segura-aqui                                  ← mesma do passo 2
-EVOLUTION_INSTANCE_NAME=seu-bot                                          ← nome do passo 6
-EVOLUTION_WEBHOOK_SECRET=segredo-do-webhook                              ← valor ARBITRÁRIO que você inventa
+EVOLUTION_API_URL=http://129.80.27.159:8080        ← IP da VM Oracle Cloud
+EVOLUTION_API_KEY=frota-evo-key-2026               ← AUTHENTICATION_API_KEY da Evolution
+EVOLUTION_INSTANCE_NAME=frota-bot-novo             ← nome da instância criada
+EVOLUTION_WEBHOOK_SECRET=frota-webhook-secret-2026 ← deve ser o mesmo valor em webhook.headers.apikey
 ```
 
-> **EVOLUTION_WEBHOOK_SECRET**: você inventa esse valor (ex: `wh-secret-frota-2026`). O código do webhook valida que as mensagens recebidas têm esse secret no header. Configure o **mesmo valor** na Vercel e no código.
+> **EVOLUTION_WEBHOOK_SECRET**: enviado pela Evolution como header `apikey` em cada POST ao webhook. O `security.ts` valida que esse header existe e bate com essa env. **Tem que ser o MESMO valor** no webhook (campo `headers.apikey`) e na Vercel/env.local.
 
 ---
 
@@ -141,10 +124,12 @@ EVOLUTION_WEBHOOK_SECRET=segredo-do-webhook                              ← val
 | Repo Docker `atendai/` | Usar `evoapicloud/evolution-api:v2.3.0` |
 | Evolution v2.2.3 | Atualizar — QR Code não funciona nela |
 | Webhook sem `{ webhook: {} }` | Aninhar dados em `webhook: {}` (formato v2.x) |
+| **Webhook sem `headers.apikey`** | **O Vercel devolve 401 `missing-header`. Incluir `headers: { apikey: WEBHOOK_SECRET }` no `/webhook/set`** |
 | JID com sufixo `1900` | Remover sufixo no `messageParser.ts` |
-| Sem volume no Railway | QR Code a cada restart |
+| Sem volume no Docker | QR Code a cada restart |
+| QR Code expirado (60s) | Recriar a instância e gerar novo QR imediatamente |
 | Áudio encriptado | Usar `getBase64FromMediaMessage` (ver [audio-e-transcricao.md](audio-e-transcricao.md)) |
-| URL pública não aparece | Settings → Networking → Generate Domain |
+| IP da VM sem porta 8080 | OCI Security List **E** `sudo iptables -I INPUT -p tcp --dport 8080 -j ACCEPT` |
 
 ---
 

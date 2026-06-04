@@ -28,11 +28,11 @@ R2_PUBLIC_URL=https://pub-XXXX.r2.dev
 # ── OpenAI GPT-4o ───────────────────────────────────
 OPENAI_API_KEY=sk-proj-sua-chave
 
-# ── Evolution API / WhatsApp ────────────────────────
-EVOLUTION_API_URL=https://evolution-api-XXXX.up.railway.app
-EVOLUTION_API_KEY=sua-api-key
-EVOLUTION_INSTANCE_NAME=seu-bot
-EVOLUTION_WEBHOOK_SECRET=seu-webhook-secret
+# ── Evolution API / WhatsApp ──────────────────────────────────
+EVOLUTION_API_URL=http://129.80.27.159:8080         ← IP da VM Oracle Cloud (Railway cancelado)
+EVOLUTION_API_KEY=frota-evo-key-2026                ← AUTHENTICATION_API_KEY configurado na Evolution
+EVOLUTION_INSTANCE_NAME=frota-bot-novo              ← nome da instância
+EVOLUTION_WEBHOOK_SECRET=frota-webhook-secret-2026  ← deve bater com webhook.headers.apikey
 
 # ── Sentry ──────────────────────────────────────────
 NEXT_PUBLIC_SENTRY_DSN=https://XXXX@oXXXX.ingest.us.sentry.io/XXXX
@@ -53,8 +53,8 @@ DEEPGRAM_MODEL=nova-3                                     ← modelo de transcri
 # ── Google Maps Geocoding API ───────────────────────
 GOOGLE_MAPS_API_KEY=sua-google-maps-key
 
-# ── Overpass API (validação de coordenadas) ─────────
-OVERPASS_URL=https://overpass-api.de/api/interpreter       ← gratuito, sem cadastro
+# ── Overpass API (validação de coordenadas / self-hosted na VM Oracle) ──
+OVERPASS_URL=http://129.80.27.159:12345/api/interpreter  ← Overpass self-hosted na VM Oracle (porta 12345)
 
 # ── Guarda de cota Gemini (SÓ free tier) ────────────
 # Descomente apenas se estiver no plano GRATUITO:

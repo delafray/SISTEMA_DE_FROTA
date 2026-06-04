@@ -100,6 +100,17 @@ if (!km || km <= 0) return { ok: false, codigo: 'validacao' };
 
 ---
 
+## Bot / GEMINI_MODE (B30-B31)
+
+| # | Erro | Causa | Solução |
+|---|---|---|---|
+| B30 | **Bot respondia "abastecimento em breve" ao digitar dados do cupom** | `GEMINI_MODE` interceptava TODO texto ANTES do roteamento por estado — a IA "roubava" a resposta que o `abastecimentoFlow` (estado `aguardando_confirmacao_abastecimento`) esperava. O fluxo nunca gravava o registro | `messageRouter.ts`: gate `motoristaOcioso = sessao.estado === 'novo' \|\| 'aguardando_acao'`. Gemini só intercepta se ocioso; fluxo ativo → text vai pro determinístico |
+| B31 | **System prompt dizia "operações em breve"** | Prompt de `geminiClient.ts` instrui a IA informar que abastecimento/despesa/avaria "estavam sendo configuradas" — mentira (os flows funcionam) | Trocado por orientação correta: "mande a foto do comprovante/cupom" para abastecimento/despesa; "foto/áudio/texto" para avaria. **NÃO dizer que estão indisponíveis.** |
+
+> ✅ Ambos corrigidos em 04/06/2026. Requer redeploy na Vercel.
+
+---
+
 ## Veja também
 
 - [como-consultar-tabela.md](como-consultar-tabela.md) — padrão correto de queries

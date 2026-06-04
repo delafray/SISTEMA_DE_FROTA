@@ -24,6 +24,9 @@
 | 22 | SSH |
 | 5000 | OSRM Backend |
 | 3000 | VROOM |
+| 8080 | Evolution API (WhatsApp bot) |
+
+> ⚠️ Abrir no **OCI Console (Security List) E no iptables do OS**: `sudo iptables -I INPUT -p tcp --dport 8080 -j ACCEPT` e `sudo netfilter-persistent save`.
 
 ---
 
@@ -32,7 +35,28 @@
 ```env
 OSRM_URL=http://129.80.27.159:5000
 VROOM_URL=http://129.80.27.159:3000
+EVOLUTION_API_URL=http://129.80.27.159:8080
+OVERPASS_URL=http://129.80.27.159:12345/api/interpreter
 ```
+
+## Acesso SSH
+
+```bash
+# Chave em: C:\Users\ronal\.ssh\osrm-key.pem
+ssh -i C:\Users\ronal\.ssh\osrm-key.pem ubuntu@129.80.27.159
+
+# Verificar serviços rodando:
+docker ps
+# Deve mostrar: evolution-api, osrm, vroom (+ overpass se configurado)
+
+# Logs da Evolution API:
+docker logs evolution-api --tail 50
+```
+
+## docker-compose da Evolution API
+
+Arquivo em `/home/ubuntu/evolution/docker-compose.yml` (também em `home/ubuntu/evolution/docker-compose.yml` no repositório).
+Ver [migrar-railway-para-oracle.md](migrar-railway-para-oracle.md) para o docker-compose completo.
 
 ---
 
