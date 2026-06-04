@@ -2,7 +2,7 @@
 
 > 📎 Voltar ao [INDEX de Deploy](INDEX.md) | [INDEX principal](../INDEX.md)
 >
-> Fonte: [ONBOARDING.md](../../ONBOARDING.md)
+> Este arquivo consolida o conteúdo do antigo ONBOARDING.md (deletado).
 
 ---
 

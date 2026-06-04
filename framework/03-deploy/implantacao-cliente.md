@@ -2,7 +2,7 @@
 
 > 📎 Voltar ao [INDEX de Deploy](INDEX.md) | [INDEX principal](../INDEX.md)
 >
-> Fonte: [GUIA_IMPLANTACAO_CLIENTE.md](../../GUIA_IMPLANTACAO_CLIENTE.md) (537 linhas)
+> Este arquivo consolida o conteúdo do antigo GUIA_IMPLANTACAO_CLIENTE.md (deletado).
 
 ---
 
@@ -44,7 +44,7 @@ Oracle Cloud (roteirização) fica rodando em background e pode ser feito depois
 
 ## Passo a passo detalhado
 
-Ver [GUIA_IMPLANTACAO_CLIENTE.md](../../GUIA_IMPLANTACAO_CLIENTE.md) — tem cada comando, cada tela, cada variável.
+Para detalhes de cada API, veja [../02-apis-e-chaves/todas-as-apis.md](../02-apis-e-chaves/todas-as-apis.md). Para Evolution API, veja [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md).
 
 ---
 

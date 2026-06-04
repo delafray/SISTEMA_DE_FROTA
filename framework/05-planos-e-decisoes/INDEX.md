@@ -15,4 +15,3 @@
 | [log.md](../../log.md) | 23KB | Análise consolidada + plano de ação em 6 fases |
 | [PLANO_ROTEIRIZACAO.md](../../PLANO_ROTEIRIZACAO.md) | 68KB | Plano completo de roteirização |
 | [PLANO_LIMPEZA_MODELO.md](../../PLANO_LIMPEZA_MODELO.md) | 13KB | Limpeza e refatoração do modelo |
-| [PLANO_IA_WHATSAPP.md](../../PLANO_IA_WHATSAPP.md) | 6KB | Planejamento original do bot |

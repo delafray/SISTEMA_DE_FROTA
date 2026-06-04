@@ -106,18 +106,20 @@ framework/
 
 ## Documentos legados (raiz do projeto)
 
-Estes arquivos permanecem na raiz por compatibilidade, mas o conteúdo relevante foi migrado para cá:
+Os seguintes arquivos foram **deletados** da raiz (conteúdo migrado para cá):
+- ~~WHATSAPP_BOT_SETUP.md~~ → `01-whatsapp-bot/setup-evolution.md`
+- ~~MAPA_APIS.md~~ → `02-apis-e-chaves/todas-as-apis.md`
+- ~~GUIA_IMPLANTACAO_CLIENTE.md~~ → `03-deploy/implantacao-cliente.md`
+- ~~ONBOARDING.md~~ → `03-deploy/onboarding-empresa.md`
+- ~~PLANO_IA_WHATSAPP.md~~ → `01-whatsapp-bot/arquitetura.md`
 
-| Arquivo na raiz | Migrado para |
+Estes **permanecem** na raiz (documentos de referência grandes):
+
+| Arquivo | Referenciado por |
 |---|---|
-| `WHATSAPP_BOT_SETUP.md` | `01-whatsapp-bot/setup-evolution.md` |
-| `MAPA_APIS.md` | `02-apis-e-chaves/todas-as-apis.md` |
-| `GUIA_IMPLANTACAO_CLIENTE.md` | `03-deploy/implantacao-cliente.md` |
-| `ONBOARDING.md` | `03-deploy/onboarding-empresa.md` |
-| `ORACLE_CLOUD_SETUP.md` | `03-deploy/oracle-cloud.md` |
-| `PLANO_IA_WHATSAPP.md` | `01-whatsapp-bot/arquitetura.md` |
-| `docs/BOT_FRAMEWORK.md` | `01-whatsapp-bot/arquitetura.md` + `bugs-conhecidos.md` |
-| `docs/GUIA_APIS_SETUP.md` | `02-apis-e-chaves/todas-as-apis.md` |
+| [docs/BOT_FRAMEWORK.md](../docs/BOT_FRAMEWORK.md) | `01-whatsapp-bot/arquitetura.md` |
+| [docs/GUIA_APIS_SETUP.md](../docs/GUIA_APIS_SETUP.md) | `02-apis-e-chaves/todas-as-apis.md` |
+| [ORACLE_CLOUD_SETUP.md](../ORACLE_CLOUD_SETUP.md) | `03-deploy/oracle-cloud.md` |
 
 ---
 
