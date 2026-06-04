@@ -11,6 +11,7 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
+import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
@@ -73,6 +74,9 @@ async function processarFotoKm(msg: ParsedMessage, sessao: Sessao): Promise<void
     return;
   }
 
+  // Persiste a foto no R2 (URL curta) — OCR continua usando a data URL `mediaUrl`.
+  const fotoUrl = await persistirMidiaNoR2(mediaUrl, chaveMidia('km', sessao.empresa_id));
+
   // Chamar IA
   const resultado = await lerOdometro(mediaUrl);
 
@@ -101,7 +105,7 @@ async function processarFotoKm(msg: ParsedMessage, sessao: Sessao): Promise<void
 
     await updateSession(sessao.id, {
       estado: 'aguardando_confirmacao_km',
-      contexto: { km_lido: km, km_confianca: confianca, foto_url: mediaUrl },
+      contexto: { km_lido: km, km_confianca: confianca, foto_url: fotoUrl ?? undefined },
     });
   } else {
     // Confiança baixa → pedir digitação
@@ -111,7 +115,7 @@ async function processarFotoKm(msg: ParsedMessage, sessao: Sessao): Promise<void
     );
     await updateSession(sessao.id, {
       estado: 'aguardando_km_manual',
-      contexto: { foto_url: mediaUrl },
+      contexto: { foto_url: fotoUrl ?? undefined },
     });
   }
 }

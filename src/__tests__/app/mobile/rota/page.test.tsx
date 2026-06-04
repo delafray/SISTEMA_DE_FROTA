@@ -4,7 +4,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, act } from '@testing-library/react';
+
 import userEvent from '@testing-library/user-event';
 
 // ─── MOCKS ──────────────────────────────────────────────────────────────
@@ -640,7 +641,10 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     await waitFor(() => screen.getByTestId('input-endereco'));
 
     // Simula o botao Voltar do celular
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
 
     // Em vez de cair pra tela inicial, abre o modal de confirmacao
     await waitFor(() => expect(screen.getByTestId('modal-sair-captura')).toBeDefined());
@@ -658,7 +662,10 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     render(<RotaPage />);
     await waitFor(() => screen.getByTestId('input-endereco'));
 
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
     await waitFor(() => screen.getByTestId('modal-sair-captura'));
 
     await user.click(screen.getByTestId('btn-continuar-capturando'));
@@ -685,7 +692,10 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     render(<RotaPage />);
     await waitFor(() => screen.getByTestId('input-endereco'));
 
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
     await waitFor(() => screen.getByTestId('modal-sair-captura'));
 
     await user.click(screen.getByTestId('btn-descartar-tudo'));
@@ -712,7 +722,10 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     render(<RotaPage />);
     await waitFor(() => screen.getByTestId('input-endereco'));
 
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
     await waitFor(() => screen.getByTestId('modal-sair-captura'));
 
     await user.click(screen.getByTestId('btn-salvar-sair'));
@@ -740,7 +753,10 @@ describe('RotaPage — Voltar no meio da captura (anti-descarte)', () => {
     await user.click(screen.getByTestId('btn-iniciar'));
     await waitFor(() => screen.getByTestId('input-endereco'));
 
-    window.dispatchEvent(new PopStateEvent('popstate'));
+    act(() => {
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    });
+
 
     // Nenhum modal — captura vazia nao tem o que perder
     expect(screen.queryByTestId('modal-sair-captura')).toBeNull();

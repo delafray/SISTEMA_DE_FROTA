@@ -10,6 +10,7 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
+import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuLista, enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
@@ -114,6 +115,9 @@ async function processarFotoDespesa(msg: ParsedMessage, sessao: Sessao): Promise
     return;
   }
 
+  // Persiste a foto no R2 (URL curta); o OCR continua usando a data URL `mediaUrl`.
+  const fotoUrl = await persistirMidiaNoR2(mediaUrl, chaveMidia('despesas', sessao.empresa_id));
+
   const resultado = await lerCupomGenerico(mediaUrl);
 
   if (!resultado.ok) {
@@ -139,7 +143,7 @@ async function processarFotoDespesa(msg: ParsedMessage, sessao: Sessao): Promise
   await updateSession(sessao.id, {
     estado: 'aguardando_confirmacao_despesa',
     contexto: {
-      despesa_dados: { ...dados, valor, local, descricao, foto_url: mediaUrl, ia_raw: resultado.data },
+      despesa_dados: { ...dados, valor, local, descricao, foto_url: fotoUrl, ia_raw: resultado.data },
     },
   });
 }

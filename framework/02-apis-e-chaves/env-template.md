@@ -16,9 +16,9 @@ NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 
 # ── Cloudflare R2 — storage de FOTOS do sistema (OBRIGATÓRIO) ──
-# 10GB grátis, egress zero. ⚠️ As chaves são obrigatórias, MAS o upload ainda
-# precisa ser IMPLEMENTADO no código (@aws-sdk/client-s3 instalado e não usado
-# ainda) — ver 05-planos-e-decisoes/acoes-pendentes.md.
+# 10GB grátis, egress zero. Upload JÁ IMPLEMENTADO (src/lib/storage/r2.ts, usado nos
+# fluxos km/avaria/abastecimento/despesa). SEM estas chaves, o helper faz passthrough
+# e a foto cai como base64 no Postgres (incha o banco) — por isso são obrigatórias.
 R2_ACCOUNT_ID=seu-account-id
 R2_ACCESS_KEY_ID=sua-access-key
 R2_SECRET_ACCESS_KEY=sua-secret-key

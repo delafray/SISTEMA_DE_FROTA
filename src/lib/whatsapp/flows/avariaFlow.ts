@@ -10,6 +10,7 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
+import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
@@ -51,7 +52,8 @@ async function processarMidiaAvaria(msg: ParsedMessage, sessao: Sessao): Promise
       return;
     }
 
-    fotoUrl = mediaUrl;
+    // Persiste a foto no R2 (URL curta); a análise continua usando a data URL.
+    fotoUrl = await persistirMidiaNoR2(mediaUrl, chaveMidia('avarias', sessao.empresa_id));
     resultado = await analisarAvaria({ tipo: 'foto', url: mediaUrl });
   }
   // ÁUDIO

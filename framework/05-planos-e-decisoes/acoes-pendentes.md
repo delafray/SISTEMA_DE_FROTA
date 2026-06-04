@@ -35,11 +35,11 @@
 
 ---
 
-## 🛠️ Implementação pendente
+## ✅ Implementado recentemente
 
-| # | Item | Detalhe |
+| # | Item | Status |
 |---|---|---|
-| 12 | **Implementar upload de fotos pro R2** | R2 é o storage oficial (10GB grátis), chaves obrigatórias, e o SDK `@aws-sdk/client-s3` JÁ está instalado — mas **nenhum código importa/usa ainda**. Hoje as fotos (avaria/cupom) NÃO sobem pro R2. Falta: helper de upload (S3Client → R2) + integrar nos fluxos (avaria, abastecimento/cupom, despesa) + servir via `R2_PUBLIC_URL`. Vars: `R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/PUBLIC_URL`. |
+| 12 | **Upload de fotos pro R2** | ✅ **Feito** (`src/lib/storage/r2.ts`, integrado em km/avaria/abastecimento/despesa). Guarda no Postgres só a URL curta do R2; passthrough se R2 não configurado. **Falta só você:** criar bucket+chaves no Cloudflare, setar `R2_*` na Vercel/.env.local e deployar. Sem as chaves, foto vira base64 no banco (incha). |
 
 ---
 

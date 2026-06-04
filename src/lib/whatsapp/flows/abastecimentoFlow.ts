@@ -10,6 +10,7 @@
 
 import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
 import { getMediaUrl } from '@/lib/whatsapp/messageParser';
+import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
 import { updateSession, resetToMenu, type Sessao } from '@/lib/whatsapp/sessionManager';
@@ -51,6 +52,9 @@ async function processarFotoAbastecimento(msg: ParsedMessage, sessao: Sessao): P
     return;
   }
 
+  // Persiste a foto no R2 (URL curta); o OCR continua usando a data URL `mediaUrl`.
+  const fotoUrl = await persistirMidiaNoR2(mediaUrl, chaveMidia('abastecimentos', sessao.empresa_id));
+
   const resultado = await lerCupomAbastecimento(mediaUrl);
 
   if (!resultado.ok) {
@@ -60,7 +64,7 @@ async function processarFotoAbastecimento(msg: ParsedMessage, sessao: Sessao): P
       'Não consegui ler o comprovante. 😕\nDigite os dados assim:\n*Litros, Valor Total, Nome do Posto*\n(ex: 45.3, 387.50, Shell Anhanguera)'
     );
     await updateSession(sessao.id, {
-      contexto: { foto_url: mediaUrl },
+      contexto: { foto_url: fotoUrl ?? undefined },
     });
     return;
   }
@@ -86,7 +90,7 @@ async function processarFotoAbastecimento(msg: ParsedMessage, sessao: Sessao): P
         valor_total,
         valor_litro,
         posto,
-        foto_url: mediaUrl,
+        foto_url: fotoUrl,
         ia_raw: resultado.data,
       },
     },
