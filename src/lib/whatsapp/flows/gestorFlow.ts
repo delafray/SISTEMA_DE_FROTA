@@ -17,6 +17,11 @@ const log = createLogger('gestorFlow');
 
 const INTENT_CONFIANCA_MINIMA = 55;
 
+// Palavras que disparam registro de lembrete — sem IA, detecção por prefixo
+// Exemplos válidos: "lembrete: fechei contrato", "anote que recebi pagamento",
+//                   "registro, viagem cancelada", "guarda esse dado"
+const LEMBRETE_REGEX = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]+(.*)/i;
+
 type IdentityGestor = Extract<UserIdentity, { tipo: 'gestor' | 'master' }>;
 
 function getSupabase() {
@@ -36,15 +41,19 @@ export async function processarGestorFlow(
   msg: ParsedMessage,
   identity: IdentityGestor
 ): Promise<void> {
-  // Fast-path: "lembrete: <texto>" — sem IA, detecção por prefixo
+  // Fast-path: qualquer palavra de anotação seguida do conteúdo — sem IA
+  // Aceita: lembrete, registro, anote, anotar, guarda, guarde, salva, salve, nota, anota
   if (msg.tipo === 'texto' && msg.texto) {
-    const match = msg.texto.match(/^lembrete[:\s]+(.+)/i);
-    if (match) {
-      await processarLembrete(msg, identity, match[1].trim());
-      return;
+    const matchLembrete = msg.texto.match(LEMBRETE_REGEX);
+    if (matchLembrete) {
+      const conteudo = matchLembrete[2].trim();
+      if (conteudo) {
+        await processarLembrete(msg, identity, conteudo);
+        return;
+      }
     }
     // Confirmação de lembrete pendente no contexto da conversa
-    if (/^(sim|anotar|salvar|confirmar|ok|s)$/i.test(msg.texto.trim())) {
+    if (/^(sim|anotar|salvar|confirmar|ok|s|isso|exato|correto)$/i.test(msg.texto.trim())) {
       await confirmarLembretePendente(msg, identity);
       return;
     }
@@ -171,6 +180,11 @@ async function enviarMenuGestor(para: string, identity: IdentityGestor): Promise
       `• "tem pendência pra aprovar?"\n` +
       `• "como está a frota?"\n` +
       `• "lucro do caminhão ABC1D23"\n\n` +
+      `📌 *Para anotar um lembrete:*\n` +
+      `• "lembrete: fechei contrato com fulano"\n` +
+      `• "anote que recebi pagamento de 5 mil"\n` +
+      `• "registro: viagem cancelada"\n` +
+      `• "guarda esse dado: ..."\n\n` +
       `É só perguntar 🤖`
   );
 }

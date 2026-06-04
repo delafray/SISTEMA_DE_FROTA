@@ -805,12 +805,14 @@ async function rotearComGemini(
     if (transcricao.ok && transcricao.data.texto) {
       const texto = transcricao.data.texto.trim();
 
-      // Gestor/master falou "lembrete: ..." → desviar pro gestorFlow, não pro Gemini
+      // Gestor/master falou palavra de anotação → desviar pro gestorFlow, não pro Gemini
+      // Mesma regex do gestorFlow: lembrete, registro, anote, anotar, guarda, salva, nota...
       if (identity.tipo !== 'motorista') {
-        const matchLembrete = texto.match(/^lembrete[:\s,]+(.+)/i);
-        if (matchLembrete) {
+        const LEMBRETE_AUDIO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]+(.*)/i;
+        const matchLembrete = texto.match(LEMBRETE_AUDIO);
+        if (matchLembrete && matchLembrete[2].trim()) {
           await processarGestorFlow(
-            { ...msg, tipo: 'texto', texto: `lembrete: ${matchLembrete[1].trim()}` },
+            { ...msg, tipo: 'texto', texto: `lembrete: ${matchLembrete[2].trim()}` },
             identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
           );
           return;

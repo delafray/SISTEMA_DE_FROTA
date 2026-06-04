@@ -9,6 +9,7 @@
 | [como-adicionar-tool.md](como-adicionar-tool.md) | **Passo a passo: criar nova tool pro Gemini** |
 | [setup-evolution.md](setup-evolution.md) | Railway, Docker, QR Code, webhook, armadilhas |
 | [audio-e-transcricao.md](audio-e-transcricao.md) | Deepgram, download de áudio, fallback |
+| [enviar-arquivos-whatsapp.md](enviar-arquivos-whatsapp.md) | Enviar arquivos sem compressão (logos, PDFs, imagens HD) via `mediatype: document` |
 | [bugs-conhecidos.md](bugs-conhecidos.md) | B1-B27, armadilhas, lições aprendidas |
 
 ## Veja também
