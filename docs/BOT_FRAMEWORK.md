@@ -2,6 +2,8 @@
 
 > **Documento de arquitetura, regras invioláveis, padrões obrigatórios e roadmap.**
 > Toda IA que tocar no código do bot **deve ler este arquivo antes** de qualquer alteração.
+>
+> 📎 **Documento irmão:** [GUIA_APIS_SETUP.md](./GUIA_APIS_SETUP.md) — como configurar cada API do zero (chaves, contas, variáveis de ambiente, armadilhas de setup).
 
 Última revisão: 2026-05-31 — Claude Opus 4.7 (Wave 2: +8 agentes, B17-B24, novas seções 3.B/4.6/5.4-5.6/8.6-8.7/9.4/10.2, roadmap §11 reescrito + §12/§13)
 Base: Wave 1 (7 agentes — 5 pesquisa + 2 auditoria) + Wave 2 (4 pesquisa documentação + 2 auditoria código + 2 síntese) + 24 bugs documentados (16 vivos em produção + 8 descobertos em auditoria).
