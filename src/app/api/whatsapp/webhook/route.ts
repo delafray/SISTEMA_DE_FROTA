@@ -17,6 +17,9 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('webhook');
 
+// Pina a função na região São Paulo — reduz latência BR (Supabase + Gemini)
+export const preferredRegion = 'gru1';
+
 // ─── POST: Receber mensagens ─────────────────────────────────────────
 
 export async function POST(request: NextRequest) {
