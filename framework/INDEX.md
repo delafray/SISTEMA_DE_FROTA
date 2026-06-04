@@ -72,8 +72,9 @@
 ### 🎨 Arquitetura e UI → [07-arquitetura-e-ui/](07-arquitetura-e-ui/canvas-interativo.md)
 
 | Quero... | Vá para |
-|---|---|
+|---|---------|
 | Implementar um Canvas visual de Arquitetura no Painel (React Flow) | [canvas-interativo.md](07-arquitetura-e-ui/canvas-interativo.md) |
+| Ver como funciona o Uptime Kuma, badge de status e portas abertas | [monitoramento-uptime-kuma.md](07-arquitetura-e-ui/monitoramento-uptime-kuma.md) |
 
 ---
 
@@ -111,7 +112,8 @@ framework/
 │   ├── INDEX.md
 │   └── politica.md
 └── 07-arquitetura-e-ui/
-    └── canvas-interativo.md
+    ├── canvas-interativo.md
+    └── monitoramento-uptime-kuma.md  ← Uptime Kuma, badge sidebar, portas Oracle
 ```
 
 ---
@@ -135,4 +137,4 @@ Estes **permanecem** na raiz (documentos de referência grandes):
 
 ---
 
-*Última atualização: 04/06/2026 — Railway cancelado, Evolution na Oracle VM; B30/B31 documentados (GEMINI_MODE + system prompt)*
+*Última atualização: 04/06/2026 — Uptime Kuma instalado na Oracle VM (porta 3001); badge de status discreto na sidebar; 6 monitores configurados (Evolution, Vercel, OSRM, VROOM, Postgres, Redis)*
