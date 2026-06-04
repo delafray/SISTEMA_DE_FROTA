@@ -78,7 +78,11 @@ async function processarMensagemAsync(msg: Awaited<ReturnType<typeof parseWebhoo
   const ctx = { msg_id: msg.messageId, from: msg.from, tipo: msg.tipo };
   try {
     log.info('message_received', ctx);
-    await marcarComoLida(msg.messageId);
+    // Marca como lida em PARALELO (fire-and-forget): é uma chamada ao Evolution
+    // que pode levar até 3s e NÃO precisa bloquear a resposta ao motorista.
+    // marcarComoLida já trata o próprio erro internamente (nunca lança), então
+    // dispensar o await é seguro — tira esse tempo do caminho crítico de toda msg.
+    void marcarComoLida(msg.messageId);
     await processarMensagem(msg);
     log.info('message_processed', ctx);
   } catch (err) {
