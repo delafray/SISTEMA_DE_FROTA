@@ -1,6 +1,8 @@
-# Railway — Evolution API
+# Railway — Evolution API  ⚠️ OBSOLETO
 
 > 📎 Voltar ao [INDEX de Deploy](INDEX.md) | [INDEX principal](../INDEX.md)
+
+> 🚫 **O Railway foi CANCELADO (04/06/2026).** A Evolution API agora roda na **VM Oracle Cloud com v2.3.7 + Postgres + Redis**. Para deploy novo, use **[migrar-railway-para-oracle.md](migrar-railway-para-oracle.md)** e o compose canônico em **[../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md)**. Esta página fica só como histórico — a config abaixo (v2.3.0, `DATABASE_ENABLED=false`) **não vale mais**.
 
 Setup detalhado: [01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md)
 

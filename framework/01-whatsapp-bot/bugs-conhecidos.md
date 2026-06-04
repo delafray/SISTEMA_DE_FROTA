@@ -16,9 +16,18 @@
 | B3 | Imagem Docker não encontrada | Repo `atendai/` descontinuado | Usar `evoapicloud/evolution-api` | ~1h |
 | B4 | `400 Bad Request` no webhook | Formato v2.x exige `{ webhook: {} }` | Aninhar dados no wrapper | ~1h |
 | B5 | Bot não respondia mensagens | JID com sufixo `1900` na v2.3.0 | Remover sufixo no parser | ~2h |
-| B6 | `SSL error: unexpected eof` | PostgreSQL Railway + SSL | `DATABASE_ENABLED=false` | ~2h |
+| B6 | `SSL error: unexpected eof` | PostgreSQL Railway + SSL | `DATABASE_ENABLED=false` **(só valia no Railway/v2.3.0 — ver B32: na v2.3.7 o DB é OBRIGATÓRIO)** | ~2h |
 | B7 | Container crash `SIGTERM` | Volume com permissão quebrada | Recriar volume | ~1h |
 | B8 | Áudio do Deepgram vazio | URL WhatsApp CDN é encriptada | Usar `getBase64FromMediaMessage` | ~2h |
+
+### Evolution API v2.3.7 — migração e LID (B32-B35)
+
+| # | Erro | Causa | Solução | Horas |
+|---|---|---|---|---|
+| B32 | **Loop de retry de migrations / crash no boot** | Na v2.3.7 `DATABASE_ENABLED=false` não é suportado; com `DATABASE_PROVIDER: postgresql` ele exige o Postgres no ar e fica em loop de migrations Prisma | **`DATABASE_ENABLED=true` + Postgres + Redis** (stack completo). Ver compose canônico em [setup-evolution.md](setup-evolution.md) | ~3h |
+| B33 | **`PUT/POST /webhook/set/{instance}` retorna 404** | Endpoint mudou na v2.3.7 | Passar o webhook **dentro do payload do `POST /instance/create`** (campo `webhook: {...}`) | ~1h |
+| B34 | **Mensagens somem intermitente ("uma sim, uma não"), antes do webhook** | Sessões Signal/Baileys corrompidas persistidas + formato novo `@lid` do WhatsApp na v2.3.0. `Bad MAC`/`failed to decrypt` no log são **ruído de fundo**, NÃO a causa | **Reinstalação limpa na v2.3.7**: apagar volumes `instances`+`pgdata`+`redis` (zera sessões) e reparear QR do zero | ~6h |
+| B35 | Logs `[Validate] [object]` repetidos | `readMessages[0] requires property "remoteJid"` — relativo a read receipts | **Inofensivo.** Não afeta o recebimento de mensagens. Ignorar | — |
 
 ---
 

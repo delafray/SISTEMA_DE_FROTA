@@ -29,10 +29,10 @@ R2_PUBLIC_URL=https://pub-XXXX.r2.dev
 OPENAI_API_KEY=sk-proj-sua-chave
 
 # ── Evolution API / WhatsApp ──────────────────────────────────
-EVOLUTION_API_URL=http://129.80.27.159:8080         ← IP da VM Oracle Cloud (Railway cancelado)
-EVOLUTION_API_KEY=frota-evo-key-2026                ← AUTHENTICATION_API_KEY configurado na Evolution
-EVOLUTION_INSTANCE_NAME=frota-bot-novo              ← nome da instância
-EVOLUTION_WEBHOOK_SECRET=frota-webhook-secret-2026  ← deve bater com webhook.headers.apikey
+EVOLUTION_API_URL=http://IP-DA-VM:8080              ← IP da VM Oracle Cloud (Railway cancelado)
+EVOLUTION_API_KEY=sua-evolution-api-key             ← AUTHENTICATION_API_KEY configurado na Evolution
+EVOLUTION_INSTANCE_NAME=seu-bot                     ← nome da instância
+EVOLUTION_WEBHOOK_SECRET=seu-webhook-secret         ← deve bater com webhook.headers.apikey
 
 # ── Sentry ──────────────────────────────────────────
 NEXT_PUBLIC_SENTRY_DSN=https://XXXX@oXXXX.ingest.us.sentry.io/XXXX

@@ -22,7 +22,9 @@ O Always Free dá **4 OCPU / 24GB ARM no TOTAL** (somando todas as VMs). A VM#1 
 | **Co-locar na VM#1 (recomendado)** | Não gasta o teto Always Free; hop interno zero; 1 VM pra manter | Disputa RAM com Overpass (faminto) |
 | 2ª VM separada | Isola recursos | Pode estourar o teto 4/24 → deixa de ser grátis |
 
-**Evolution roda LEVE** (`DATABASE_ENABLED=false`, sem Redis — só Node+Baileys + volume). Cabe bem na VM#1 **se houver RAM livre**. Antes de tudo:
+> ⚠️ **Atualização 04/06/2026:** a config "leve" (`DATABASE_ENABLED=false`, sem Redis) descrita originalmente aqui **só valia na v2.3.0**. A versão atual em produção é a **v2.3.7, que EXIGE Postgres + Redis** (`DATABASE_ENABLED=true`). O `docker-compose` canônico está em [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md#docker-composeyml-de-produção). O texto abaixo é o histórico da migração.
+
+A Evolution v2.3.7 sobe **3 containers** (evolution-api + postgres + redis). Cabe na VM#1 **se houver RAM livre** (~1-2GB). Antes de tudo:
 
 ```bash
 ssh ubuntu@129.80.27.159   # VM#1 (OSRM), us-ashburn-1
@@ -53,35 +55,18 @@ sudo netfilter-persistent save   # persistir após reboot
 docker --version || { curl -fsSL https://get.docker.com | sh; sudo usermod -aG docker ubuntu; newgrp docker; }
 ```
 
-### 3. docker-compose — MESMA config que funciona no Railway
-> ✅ Imagem `evoapicloud/evolution-api:v2.3.0` (**NUNCA `atendai/`** — bug B2/B3).
-> ✅ `DATABASE_ENABLED=false` (igual ao Railway — evita o B6 SSL e não sobrecarrega o Supabase). **Não** precisa de Postgres nem Redis.
+### 3. docker-compose — v2.3.7 + Postgres + Redis
+> ✅ Imagem `evoapicloud/evolution-api:v2.3.7` (**NUNCA `atendai/`** — bug B2/B3).
+> ⚠️ **`DATABASE_ENABLED=true` é obrigatório na v2.3.7** (bug B32). `false` causa loop de migrations/crash. Sobe Postgres + Redis junto.
 
-`/home/ubuntu/evolution/docker-compose.yml`:
-```yaml
-services:
-  evolution-api:
-    image: evoapicloud/evolution-api:v2.3.0
-    container_name: evolution-api
-    restart: always
-    ports:
-      - "8080:8080"
-    environment:
-      AUTHENTICATION_TYPE: apikey
-      AUTHENTICATION_API_KEY: SUA_CHAVE_GLOBAL   # a MESMA do Railway (reusa o EVOLUTION_API_KEY)
-      PORT: 8080
-      SERVER_PORT: 8080
-      DATABASE_ENABLED: "false"
-      DEL_INSTANCE: "false"
-      LOG_LEVEL: ERROR
-    volumes:
-      - evolution_instances:/evolution/instances   # sem volume = QR a cada restart
+O `docker-compose.yml` completo e atual está documentado uma única vez (pra não divergir) em **[../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md#docker-composeyml-de-produção)**. Copie de lá. Resumo:
+- `evolution-api: evoapicloud/evolution-api:v2.3.7` + `DATABASE_ENABLED=true`, `DATABASE_PROVIDER=postgresql`, `CACHE_REDIS_ENABLED=true`, `depends_on` healthcheck.
+- `evolution-db: postgres:16-alpine` (volume `evolution_pgdata`).
+- `evolution-redis: redis:7-alpine` (volume `evolution_redis`).
 
-volumes:
-  evolution_instances:
-```
 ```bash
-cd /home/ubuntu/evolution && docker compose up -d && docker compose logs -f
+cd /home/ubuntu/evolution && docker compose pull && docker compose up -d && docker compose logs -f
+# aguardar as migrations Prisma rodarem 1x no Postgres limpo (sem loop)
 ```
 
 ### 4. HTTPS — recomendado (não é opcional)
@@ -101,24 +86,21 @@ Sem domínio? No mínimo **restrinja o iptables 8080 ao IP de saída do Vercel**
 
 No console do navegador (troque URL/chave/nome):
 ```javascript
-// a) criar instância (mesmo nome)
+// a) criar instância JÁ COM o webhook embutido (v2.3.7 — /webhook/set dá 404, ver B33)
 fetch('https://evo.seudominio.com/instance/create', {
   method:'POST', headers:{'Content-Type':'application/json','apikey':'SUA_CHAVE'},
-  body: JSON.stringify({ instanceName:'seu-bot', integration:'WHATSAPP-BAILEYS' })
+  body: JSON.stringify({
+    instanceName:'seu-bot', integration:'WHATSAPP-BAILEYS', qrcode:true,
+    webhook:{
+      url:'https://SEU-APP.vercel.app/api/whatsapp/webhook',
+      byEvents:false, base64:false,
+      events:['MESSAGES_UPSERT','CONNECTION_UPDATE','QRCODE_UPDATED'],
+      headers:{ apikey:'SEU_WEBHOOK_SECRET' }   // sem isso o Vercel dá 401
+    }
+  })
 }).then(r=>r.json()).then(console.log)
 
-// b) RECONFIGURAR webhook (formato v2.x: dados dentro de { webhook: {} })
-fetch('https://evo.seudominio.com/webhook/set/seu-bot', {
-  method:'POST', headers:{'Content-Type':'application/json','apikey':'SUA_CHAVE'},
-  body: JSON.stringify({ webhook: {
-    url:'https://SEU-APP.vercel.app/api/whatsapp/webhook',
-    enabled:true,
-    events:['MESSAGES_UPSERT','CONNECTION_UPDATE','QRCODE_UPDATED'],
-    webhookByEvents:false
-  }})
-}).then(r=>r.json()).then(console.log)
-
-// c) gerar QR e escanear
+// b) gerar QR e escanear (se não veio no create acima)
 fetch('https://evo.seudominio.com/instance/connect/seu-bot', { headers:{'apikey':'SUA_CHAVE'} }).then(r=>r.json()).then(console.log)
 ```
 Detalhes em [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md).
@@ -154,10 +136,10 @@ A Oracle **recupera instâncias Always Free ociosas**. Pra um gateway de produç
 
 - [ ] `free -h` confirmou RAM livre antes de co-locar
 - [ ] Porta 8080/443 aberta no **OCI Security List E no iptables do OS**
-- [ ] Imagem `evoapicloud/evolution-api:v2.3.0` (não `atendai/`)
-- [ ] `DATABASE_ENABLED=false` (sem Postgres/Redis)
+- [ ] Imagem `evoapicloud/evolution-api:v2.3.7` (não `atendai/`)
+- [ ] `DATABASE_ENABLED=true` + Postgres + Redis (3 containers; B32)
 - [ ] HTTPS via Caddy + domínio (ou iptables restrito)
-- [ ] **Webhook reconfigurado** (`/webhook/set/`) apontando pro Vercel
+- [ ] **Webhook embutido no `POST /instance/create`** apontando pro Vercel (não `/webhook/set` — B33)
 - [ ] 4 env vars atualizadas na Vercel + **redeploy**
 - [ ] `connectionState` = `open` e bot respondeu ANTES de desligar o Railway
 - [ ] Railway desligado só após validar (sem número duplicado)
@@ -174,4 +156,4 @@ A Oracle **recupera instâncias Always Free ociosas**. Pra um gateway de produç
 
 ---
 
-*Atualizado: 04/06/2026 — corrigido p/ usar a imagem/config que funciona (evoapicloud v2.3.0, DATABASE_ENABLED=false), co-locação na VM#1, webhook obrigatório, HTTPS, iptables do OS, PAYG e região us-ashburn-1.*
+*Atualizado: 04/06/2026 — Evolution migrada para **v2.3.7 + Postgres + Redis** (`DATABASE_ENABLED=true`, B32); webhook embutido no `/instance/create` (B33); reinstalação limpa resolveu a intermitência de `@lid` (B34). Compose canônico em setup-evolution.md.*

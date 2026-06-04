@@ -23,7 +23,7 @@
 
 1. **Supabase** → criar projeto, copiar 3 chaves, executar migrations
 2. **Cloudflare R2** → criar bucket, criar API token, anotar 5 variáveis
-3. **Railway + Evolution API** → deploy `evoapicloud/evolution-api:v2.3.0`, vars, volume
+3. **VM Oracle + Evolution API** → deploy `evoapicloud/evolution-api:v2.3.7` + Postgres + Redis (`DATABASE_ENABLED=true`), vars, volumes. Ver [oracle-cloud.md](oracle-cloud.md) + [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md). *(Railway foi descontinuado.)*
 4. **GitHub + Vercel** → fork repo, conectar Vercel, TODAS env vars, região `iad1`
 5. **OpenAI** → criar conta, API key, adicionar crédito
 6. **Gemini** → aistudio.google.com/app/apikey → criar chave

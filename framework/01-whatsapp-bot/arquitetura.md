@@ -11,7 +11,7 @@
 
 | Componente | Tecnologia | Onde roda |
 |---|---|---|
-| Gateway WhatsApp | Evolution API v2.3.0 (Baileys) | Oracle Cloud VM — `129.80.27.159:8080` (Docker, co-locado com OSRM/VROOM) |
+| Gateway WhatsApp | Evolution API v2.3.7 (Baileys) + Postgres + Redis | Oracle Cloud VM — `129.80.27.159:8080` (Docker, co-locado com OSRM/VROOM) |
 | Backend | Next.js (API Routes) | Vercel (região `iad1`) |
 | Banco de dados | PostgreSQL | Supabase |
 | IA conversacional | Gemini 2.5 Flash (`thinkingBudget: 0`) | Google AI Studio |
