@@ -4,18 +4,24 @@
 > Anotadas conforme apareceram durante a execução do `PLANO_ROTEIRIZACAO.md`.
 > Atualize com `✅` quando fizer.
 
-## 🔴 Bloqueadores futuros (precisará antes do MVP rodar em produção)
+## 🔴 Débito Técnico Crítico (Refatoração Urgente)
 
-### 1. ⬜ Resolver credenciais Git no Windows
-**Por quê:** o Git Credential Manager está com a conta errada (`SistemaDeFotosRbarros`) cacheada. Pushes pra `delafray/SISTEMA_DE_FROTA` estão falhando com 403.
+### 1. ⬜ Quebrar os Arquivos Monolíticos (30KB+)
+**Por quê:** Arquivos gigantes atingiram um nível de acoplamento perigoso. Se continuarem crescendo, qualquer nova feature vai quebrar o código existente por excesso de re-renderização e mistura de regras.
+**O que fazer:**
+- **Frontend (Telas Mobile):** A tela `src/app/mobile/rota/page.tsx` (36KB) precisa ter o GPS e State Machine extraídos para Custom Hooks. O arquivo `InputEnderecoNF.tsx` (31KB) deve ter o OCR e Voz separados em pequenos componentes.
+- **Frontend (Dashboard Web):** As tabelas `AcertoMensalTab.tsx` e `ManutencoesTab.tsx` (~29KB) precisam ter os forms/modais e chamadas Supabase separados da interface visual da tabela.
+- **Backend:** Dividir o "God Object" `messageRouter.ts` em roteadores de domínio (ex: `entregasRouter.ts`, `avariasRouter.ts`) para manter o princípio de Responsabilidade Única.
+**Impacto:** Facilidade extrema de manutenção, fim dos travamentos de interface, testes mais rápidos e prevenção do "efeito dominó".
 
-**Como:**
-1. Abra **Painel de Controle → Gerenciador de Credenciais** (ou `control /name Microsoft.CredentialManager`)
-2. Em **Credenciais do Windows**, procure `git:https://github.com`
-3. **Remova** essa entrada
-4. Próximo `git push` vai prompt fresh — escolha conta `delafray`
+### 2. ⬜ Cobrir os "Flows" do Bot com Testes (Pré-requisito do item 1)
+**Por quê:** O arquivo `TESTING.md` mostra que quase todos os fluxos de negócios do WhatsApp (`AbastecimentoFlow`, `DespesaFlow`, `ViagemFlow`, etc.) estão com cobertura **ZERO**. Se você tentar refatorar o `messageRouter.ts` sem ter testes cobrindo os fluxos, a chance de quebrar as conversas do bot é de 100%.
+**O que fazer:** Escrever testes unitários em `src/__tests__/whatsapp/flows/` simulando as mensagens do usuário e garantindo as transições de estado, conforme manda a política de testes do projeto.
+**Impacto:** Segurança absoluta para mexer no código do bot. Você poderá refatorar sem medo, pois se algo quebrar, o `npm test` vai gritar na hora.
 
-**Impacto enquanto não resolver:** commits locais funcionam, mas o remote não recebe o trabalho — outra IA continuando sem o repo atualizado ficaria perdida.
+---
+
+## 🟡 Configurações de Ambiente Pendentes
 
 ### 2. ⬜ Adicionar env vars ao `.env.local`
 **Por quê:** `.env*` está no `.gitignore` (correto pra segurança), então eu não consigo editar.
@@ -26,26 +32,12 @@
 VIACEP_URL=https://viacep.com.br/ws
 NOMINATIM_URL=https://nominatim.openstreetmap.org
 
-# Preencher DEPOIS de provisionar Oracle (item 3 abaixo)
-OSRM_URL=
-VROOM_URL=
-```
-
-### 3. ✅ Provisionar Oracle Cloud VM + subir OSRM + VROOM **(✅ feito 2026-05-29)**
-**Status:** VM em produção (`129.80.27.159`, US-ASHBURN-AD-2, 4 OCPU/24GB/146GB ARM). OSRM + VROOM via systemd, iptables aberto, keep-alive cron 4h. Auditado (HTTP 200, latência <500ms, SP→Campinas 93.2km). Detalhes: `relatorio_status.md` na VM e Etapa 2 do plano.
-
----
-
-### 3b. ⬜ Adicionar OSRM_URL e VROOM_URL no `.env.local` **(novo passo — 30 segundos)**
-Adicione ao seu `C:\Users\ronal\Documents\Antigravity\SISTEMA_DE_FROTA\.env.local`:
-```env
+# Roteirização OSRM/VROOM
 OSRM_URL=http://129.80.27.159:5000
 VROOM_URL=http://129.80.27.159:3000
 ```
 
-Aí o passo 6 do MVP (`/api/routing/otimizar`) começa a funcionar em produção.
 
----
 
 ### 3c. ⬜ Rotacionar chave SSH `osrm-key.pem` (você expôs no chat — fazer quando puder)
 **Por quê:** a chave privada foi colada num chat — tecnicamente está "comprometida". Pra teste/MVP tudo bem, mas antes de produção real:

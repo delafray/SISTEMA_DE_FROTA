@@ -20,6 +20,7 @@
     "@sentry/nextjs": "^10.53.1",
     "@supabase/ssr": "^0.10.3",
     "@supabase/supabase-js": "^2.106.0",
+    "@xyflow/react": "^12.11.0",
     "date-fns": "^4.2.1",
     "dexie": "^4.4.3",
     "file-saver": "^2.0.5",
