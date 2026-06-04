@@ -102,11 +102,15 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     return;
   }
 
-  // ── GEMINI MODE: IA responde a TUDO desde o primeiro contato ────────
-  // Todos os textos e audios vao direto para o Gemini Flash.
-  // Os fluxos rigidos de menu foram desativados.
-  // Para reverter ao bot antigo: altere GEMINI_MODE para false.
-  if (GEMINI_MODE) {
+  // ── GEMINI MODE: IA responde quando o motorista está OCIOSO ─────────
+  // A IA só intercepta texto/audio quando NÃO há fluxo determinístico ativo
+  // esperando resposta (estado 'novo' ou 'aguardando_acao'/menu). Se um fluxo
+  // está em andamento (aguardando_*_km/abastecimento/despesa/avaria/etc.), o texto
+  // do motorista (ex.: dados manuais do cupom) PRECISA ir pro fluxo — senão a IA
+  // sequestrava a resposta e o registro nunca era salvo.
+  // Para reverter ao bot antigo (sem IA): altere GEMINI_MODE para false.
+  const motoristaOcioso = sessao.estado === 'novo' || sessao.estado === 'aguardando_acao';
+  if (GEMINI_MODE && motoristaOcioso) {
     const isTexto = msgResolvida.tipo === 'texto' && !!msgResolvida.texto;
     const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
 

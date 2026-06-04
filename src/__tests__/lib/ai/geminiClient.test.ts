@@ -68,6 +68,19 @@ describe('chatGemini — config de latência', () => {
     expect(params.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
     expect(params.generationConfig?.maxOutputTokens).toBeGreaterThan(0);
   });
+
+  it('system prompt NÃO diz "em breve" e orienta mandar a foto do comprovante', async () => {
+    mocks.transcrever.mockResolvedValue({ ok: true, texto: 'oi' });
+    mocks.sendMessage.mockResolvedValue({ response: { text: () => 'ok' } });
+
+    await chatGeminiComAudio('https://audio', []);
+
+    const params = mocks.getGenerativeModel.mock.calls[0][0] as { systemInstruction?: string };
+    const prompt = params.systemInstruction ?? '';
+    expect(prompt).not.toMatch(/em breve/i);
+    expect(prompt).toMatch(/foto/i);
+    expect(prompt).toMatch(/comprovante|cupom/i);
+  });
 });
 
 describe('chatGeminiComAudio — pipeline Deepgram → Gemini', () => {

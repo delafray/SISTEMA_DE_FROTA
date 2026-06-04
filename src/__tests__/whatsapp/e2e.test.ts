@@ -274,16 +274,16 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
   // ─── 3. Seleção de veículo inválida ───────────────────────────────────
 
-  it('3) texto em aguardando_veiculo → Gemini responde (GEMINI_MODE universal)', async () => {
+  it('3) texto em aguardando_veiculo → NÃO vai pro Gemini; pede selecionar da lista', async () => {
     mockSessao('aguardando_veiculo');
 
     await processarMensagem(makeMsg({ texto: 'não sei qual' }));
 
-    // Com GEMINI_MODE universal, texto em qualquer estado vai para o Gemini.
+    // Fluxo ativo (selecionar veículo) tem prioridade sobre a IA — Gemini NÃO é chamado.
+    expect(processarComGemini).not.toHaveBeenCalled();
     expect(enviarTexto).toHaveBeenCalledOnce();
-    const [para, txt] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(para).toBe('5531999');
-    expect(txt).toBe('Resposta simulada do Gemini');
+    const [, txt] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(txt).toMatch(/selecione um caminhão/i);
   });
 
   // ─── 4. Menu "Informar KM" ────────────────────────────────────────────
@@ -464,13 +464,25 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
 
     await processarMensagem(makeMsg({ tipo: 'texto', texto: '185000' }));
 
-    // Com GEMINI_MODE universal, texto em aguardando_km_manual vai para o Gemini,
-    // nao para o kmFlow. O kmFlow e chamado apenas via selecao de acao via lista/botao.
-    expect(enviarTexto).toHaveBeenCalledOnce();
-    const [, resposta] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
-    expect(resposta).toBe('Resposta simulada do Gemini');
-    // kmLogs nao e gravado (kmFlow nao foi chamado)
-    expect(resetToMenu).not.toHaveBeenCalled();
+    // Fluxo ativo (km manual) tem PRIORIDADE: o texto vai pro kmFlow, NÃO pro Gemini.
+    expect(processarComGemini).not.toHaveBeenCalled();
+    expect(kmLogsInsert).not.toBeNull();
+    expect(kmLogsInsert!).toHaveBeenCalled();
+    expect(resetToMenu).toHaveBeenCalledWith('sess-1');
+  });
+
+  // ─── 9b. Regressão: texto durante fluxo ativo NÃO é sequestrado pela IA ──
+
+  it('9b) texto em fluxo ativo (abastecimento) NÃO vai pro Gemini — vai pro fluxo', async () => {
+    mockSessao('aguardando_foto_abastecimento', { veiculo_id: 'v-1', veiculo_placa: 'ABC1D23' });
+
+    await processarMensagem(makeMsg({ tipo: 'texto', texto: 'aqui estao os dados' }));
+
+    // O fluxo de abastecimento tem prioridade — Gemini NÃO é chamado.
+    expect(processarComGemini).not.toHaveBeenCalled();
+    // E o fluxo respondeu (pediu a foto do comprovante).
+    const txt = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0]?.[1] ?? '';
+    expect(txt).toMatch(/foto do comprovante/i);
   });
 
   // ─── 10. Saudação reseta fluxo ────────────────────────────────────────
