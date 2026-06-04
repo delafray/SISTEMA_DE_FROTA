@@ -11,9 +11,9 @@
 | # | Ação | Status |
 |---|---|---|
 | 1 | Resolver credenciais Git (conta errada cacheada) | ⬜ |
-| 2 | Adicionar env vars VIACEP/NOMINATIM no .env.local | ⬜ |
+| 2 | Adicionar env vars VIACEP/NOMINATIM no .env.local | ✅ (usam default público, não precisa setar) |
 | 3 | VM Oracle provisionada | ✅ |
-| 3b | Adicionar OSRM_URL e VROOM_URL no .env.local | ⬜ |
+| 3b | Adicionar OSRM_URL e VROOM_URL no .env.local | ✅ (já configurados) |
 | 3c | Rotacionar chave SSH (exposta em chat) | ⬜ |
 
 ---
