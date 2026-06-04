@@ -24,15 +24,18 @@ const MODOS_GEMINI = ['gemini_texto', 'gemini_audio'];
 export type ResultadoCota = { ok: true } | { ok: false; motivo: 'rpm' | 'rpd' };
 
 /**
- * Lê os limites do ambiente a cada chamada (testável via stubEnv).
- * DEFAULTS = tier PAGO (altos) → a guarda vira rede de segurança e não atrapalha.
- * Se a chave for FREE tier, baixe via env (ex.: GEMINI_RPM=5, GEMINI_RPD=250).
+ * Limites configurados — ou `null` quando a guarda está DESLIGADA.
+ *
+ * Sem NENHUMA das envs (`GEMINI_RPM`/`GEMINI_RPD`) → assume tier pago/sem limite
+ * gerenciado e DESLIGA a guarda: `cotaGeminiDisponivel` retorna ok sem tocar no
+ * banco (economiza 2 queries por mensagem = menos latência). Pra LIGAR a guarda
+ * (free tier), basta setar as envs (ex.: GEMINI_RPM=5, GEMINI_RPD=250).
  */
-function limites(): { rpm: number; rpd: number } {
-  return {
-    rpm: Number(process.env.GEMINI_RPM ?? '1000'),
-    rpd: Number(process.env.GEMINI_RPD ?? '50000'),
-  };
+function limitesConfigurados(): { rpm: number; rpd: number } | null {
+  const rpmRaw = process.env.GEMINI_RPM;
+  const rpdRaw = process.env.GEMINI_RPD;
+  if (rpmRaw == null && rpdRaw == null) return null; // guarda desligada
+  return { rpm: Number(rpmRaw ?? '1000'), rpd: Number(rpdRaw ?? '50000') };
 }
 
 function getSupabase() {
@@ -53,7 +56,9 @@ function inicioDiaUTC(agora: Date): string {
  * Checa o DIA primeiro (RPD) — esse é o teto que mais aperta no free tier.
  */
 export async function cotaGeminiDisponivel(agora: Date = new Date()): Promise<ResultadoCota> {
-  const { rpm, rpd } = limites();
+  const lim = limitesConfigurados();
+  if (!lim) return { ok: true }; // guarda desligada (tier pago/sem env) → sem queries
+  const { rpm, rpd } = lim;
   try {
     const supabase = getSupabase();
     const umMinutoAtras = new Date(agora.getTime() - 60_000).toISOString();

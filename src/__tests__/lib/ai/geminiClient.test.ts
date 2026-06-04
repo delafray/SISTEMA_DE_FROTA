@@ -15,12 +15,14 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   transcrever: vi.fn(),
+  getGenerativeModel: vi.fn(),
 }));
 
 vi.mock('@google/generative-ai', () => {
   // Class mock — constructor sempre devolve a instancia, sem problemas de vi.fn() + new
   class GoogleGenerativeAI {
-    getGenerativeModel() {
+    getGenerativeModel(params: unknown) {
+      mocks.getGenerativeModel(params); // captura pra inspecionar generationConfig
       return {
         startChat: () => ({ sendMessage: mocks.sendMessage }),
       };
@@ -49,7 +51,23 @@ import { chatGeminiComAudio } from '@/lib/ai/geminiClient';
 beforeEach(() => {
   mocks.sendMessage.mockReset();
   mocks.transcrever.mockReset();
+  mocks.getGenerativeModel.mockReset();
   process.env.GEMINI_API_KEY = 'test-key';
+});
+
+describe('chatGemini — config de latência', () => {
+  it('desliga o thinking do 2.5-flash (thinkingBudget 0) e limita tokens', async () => {
+    mocks.transcrever.mockResolvedValue({ ok: true, texto: 'oi' });
+    mocks.sendMessage.mockResolvedValue({ response: { text: () => 'ok' } });
+
+    await chatGeminiComAudio('https://audio', []); // reusa chatGemini internamente
+
+    const params = mocks.getGenerativeModel.mock.calls[0][0] as {
+      generationConfig?: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
+    };
+    expect(params.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+    expect(params.generationConfig?.maxOutputTokens).toBeGreaterThan(0);
+  });
 });
 
 describe('chatGeminiComAudio — pipeline Deepgram → Gemini', () => {

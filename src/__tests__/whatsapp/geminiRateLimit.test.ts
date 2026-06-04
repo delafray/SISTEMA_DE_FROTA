@@ -36,11 +36,11 @@ function contagens(dia: number, minuto: number) {
 }
 
 describe('cotaGeminiDisponivel', () => {
-  it('defaults de tier PAGO (altos) não derrubam volume normal', async () => {
-    // Sem env: defaults 1000 RPM / 50000 RPD. 300/dia e 30/min passam fácil.
-    // (Com os defaults antigos de free tier — 250 RPD — isso seria bloqueado.)
-    contagens(300, 30);
-    expect(await cotaGeminiDisponivel()).toEqual({ ok: true });
+  it('SEM env (tier pago) → guarda desligada: retorna ok SEM consultar o banco', async () => {
+    // Nenhuma env GEMINI_RPM/RPD → não gasta as 2 queries por mensagem.
+    const r = await cotaGeminiDisponivel();
+    expect(r).toEqual({ ok: true });
+    expect(gteMock).not.toHaveBeenCalled();
   });
 
   it('estourou o DIA (RPD) → ok:false motivo rpd', async () => {
@@ -70,6 +70,7 @@ describe('cotaGeminiDisponivel', () => {
   });
 
   it('erro na contagem → FAIL-OPEN (libera, não trava o bot)', async () => {
+    vi.stubEnv('GEMINI_RPM', '15'); // guarda ligada p/ a query rodar (e falhar)
     gteMock.mockRejectedValue(new Error('db down'));
     expect(await cotaGeminiDisponivel()).toEqual({ ok: true });
   });

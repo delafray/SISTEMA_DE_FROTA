@@ -7,7 +7,7 @@
  * - Retornar sempre uma string de resposta (nunca lança exceção pro fluxo)
  */
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
 import { createLogger } from '@/lib/logger';
 import { transcreverComDeepgram } from './deepgramClient';
 import { declarations as frotaToolDeclarations, executarTool } from './tools/frotaTools';
@@ -20,6 +20,20 @@ import { prefixarComRemetente } from './contexto';
 const MAX_TOOL_ROUNDS = 5;
 
 const log = createLogger('gemini-client');
+
+/**
+ * Config de geração — principal alavanca de LATÊNCIA do bot.
+ * `thinkingBudget: 0` DESLIGA o "thinking" do gemini-2.5-flash (raciocínio interno
+ * que adiciona segundos a CADA chamada — e cada pergunta de KM faz 2+ chamadas por
+ * causa das tools). O bot é transacional (perguntas diretas + function calling),
+ * não precisa de raciocínio longo. `maxOutputTokens` evita gerações longas (msg de
+ * zap é curta). REVERSÍVEL: se o fluxo de confirmação de KM ficar confuso, suba o
+ * thinkingBudget (ex.: 512) — o campo é repassado direto ao corpo REST pelo SDK.
+ */
+const GENERATION_CONFIG: GenerationConfig & { thinkingConfig?: { thinkingBudget?: number } } = {
+  maxOutputTokens: 1024,
+  thinkingConfig: { thinkingBudget: 0 },
+};
 
 const SYSTEM_PROMPT = `Você é o assistente da Frota Delafray.
 
@@ -116,6 +130,7 @@ export async function chatGemini(
       systemInstruction: SYSTEM_PROMPT,
       // Tools so quando temos empresa_id (motorista/gestor identificado)
       tools: empresaId ? [{ functionDeclarations: frotaToolDeclarations }] : undefined,
+      generationConfig: GENERATION_CONFIG, // thinking off → latência menor
     });
 
     const history = historico.map((h) => ({
