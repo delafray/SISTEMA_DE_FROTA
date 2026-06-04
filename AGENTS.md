@@ -1,3 +1,9 @@
+<!-- BEGIN:project-knowledge-base -->
+# 📚 Documentação centralizada: `framework/INDEX.md`
+
+Antes de pesquisar o projeto, **leia [`framework/INDEX.md`](framework/INDEX.md)**. Toda a documentação está organizada lá: arquitetura do bot, como adicionar tools, APIs, deploy, testes, bugs conhecidos.
+<!-- END:project-knowledge-base -->
+
 <!-- BEGIN:nextjs-agent-rules -->
 # This is NOT the Next.js you know
 

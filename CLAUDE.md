@@ -1,7 +1,11 @@
 @AGENTS.md
 @TESTING.md
 
-# ⚠️ ANTES DE QUALQUER COISA: LEIA `TESTING.md`
+# 📚 Documentação centralizada: `framework/INDEX.md`
+
+Antes de pesquisar o projeto, **leia [`framework/INDEX.md`](framework/INDEX.md)**. Arquitetura do bot, como adicionar tools/consultas, APIs, deploy, testes, bugs — tudo organizado lá.
+
+---
 
 Política de testes obrigatória do projeto. Resumo curto:
 - Toda mudança exige teste novo/atualizado (vitest).

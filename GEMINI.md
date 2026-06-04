@@ -1,6 +1,10 @@
 # Gemini / Gemini Code Assist — Regras Obrigatórias
 
-⚠️ **LEIA `TESTING.md` ANTES DE QUALQUER ALTERAÇÃO.**
+# 📚 Documentação centralizada: `framework/INDEX.md`
+
+Antes de pesquisar o projeto, **leia [`framework/INDEX.md`](framework/INDEX.md)**. Arquitetura do bot, como adicionar tools/consultas, APIs, deploy, testes, bugs — tudo organizado lá.
+
+---
 
 ## Política de Testes (Obrigatória)
 
