@@ -31,7 +31,7 @@ const url = await getMediaUrl(messageId);
 
 ## Configuração do Deepgram
 
-- **Modelo:** `nova-2` (melhor para português BR)
+- **Modelo:** `nova-3` (24% menos erro em PT-BR vs nova-2; override via `DEEPGRAM_MODEL`)
 - **Formato:** base64 data URL (não URL direta)
 - **Bônus:** US$ 200 de crédito inicial para novas contas
 
@@ -54,7 +54,7 @@ DEEPGRAM_API_KEY=sua-chave-aqui
    → POST /chat/getBase64FromMediaMessage na Evolution API
    → retorna base64 descriptografado
 3. deepgramClient.ts envia base64 pro Deepgram
-   → modelo nova-2, language pt-BR
+   → modelo nova-3, language pt-BR
    → retorna texto transcrito + confiança
 4. geminiBot.ts envia texto transcrito pro Gemini como mensagem do usuário
 ```

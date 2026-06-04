@@ -23,6 +23,7 @@
 | # | Decisão | Impacto |
 |---|---|---|
 | 4 | Aquecimento do chip WhatsApp + alertas proativos | Risco de banimento |
+| 11 | **Latência ~10-13s: o gargalo é o transporte (~6s), não o código** (ver bugs B29). Decidir: (a) subir o plano da Railway se CPU/RAM estiverem no talo, ou (b) migrar pra WhatsApp Cloud API oficial (mais rápida/estável, custo por conversa). | Tempo de resposta do bot |
 
 ---
 
@@ -31,6 +32,14 @@
 | # | Teste | Quando |
 |---|---|---|
 | 5 | Smoke test E2E captura de notas | Após `npm test` verde |
+
+---
+
+## 🛠️ Implementação pendente
+
+| # | Item | Detalhe |
+|---|---|---|
+| 12 | **Implementar upload de fotos pro R2** | R2 é o storage oficial (10GB grátis), chaves obrigatórias, e o SDK `@aws-sdk/client-s3` JÁ está instalado — mas **nenhum código importa/usa ainda**. Hoje as fotos (avaria/cupom) NÃO sobem pro R2. Falta: helper de upload (S3Client → R2) + integrar nos fluxos (avaria, abastecimento/cupom, despesa) + servir via `R2_PUBLIC_URL`. Vars: `R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET_NAME/PUBLIC_URL`. |
 
 ---
 

@@ -44,6 +44,17 @@
 
 ---
 
+## Latência — onde está o gargalo de verdade (B28-B29)
+
+| # | Sintoma | Causa | Solução |
+|---|---|---|---|
+| B28 | `await marcarComoLida` somava até 3s | "Marcar como lida" (chamada ao Evolution) estava no caminho crítico, antes de processar | `void marcarComoLida(...)` (fire-and-forget) no `webhook/route.ts` — não bloqueia a resposta |
+| B29 | **Resposta ~10-13s mesmo com o bot rápido** | O bot (Vercel) faz a parte dele em ~4s (texto) / ~6s (áudio); os outros **~6s são TRANSPORTE** (WhatsApp ↔ Evolution/Railway ↔ celular), constante p/ texto e áudio | **Não é código.** Checar CPU/RAM da Railway → subir plano se sufocado. Se folgada, é lag do Baileys/Meta (não-oficial) → só **Cloud API oficial** resolve |
+
+> ⚠️ Lição do B29: antes de otimizar código, **meça** (logs `message_received`→`message_processed` = parte do bot; cronômetro no celular = total). Se a diferença for grande, o problema é transporte, não o bot. Ver [arquitetura.md §Anatomia da latência](arquitetura.md).
+
+---
+
 ## Supabase / PostgreSQL (B14-B16)
 
 | # | Erro | Causa | Solução |

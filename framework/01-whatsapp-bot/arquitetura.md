@@ -15,7 +15,7 @@
 | Backend | Next.js (API Routes) | Vercel (região `iad1`) |
 | Banco de dados | PostgreSQL | Supabase |
 | IA conversacional | Gemini 2.5 Flash (`thinkingBudget: 0`) | Google AI Studio |
-| Transcrição de áudio | Deepgram nova-2 | Deepgram Cloud (US) |
+| Transcrição de áudio | Deepgram nova-3 | Deepgram Cloud (US) |
 | OCR de fotos | OpenAI GPT-4o Vision | OpenAI |
 | Armazenamento de fotos | Cloudflare R2 | Cloudflare |
 
@@ -101,9 +101,21 @@ Detalhes em [como-adicionar-tool.md](como-adicionar-tool.md).
 | `thinkingBudget: 0` | -3 a -8s | `geminiClient.ts` |
 | Região `iad1` (US East) | -0.8 a -1.2s | `webhook/route.ts` + `vercel.json` |
 | Guarda de cota desligada no pago | -0.1 a -0.2s | `geminiRateLimit.ts` |
+| `marcarComoLida` fire-and-forget | até -3s | `webhook/route.ts` |
 | Fast path (regex) | -6 a -12s | `fastPath.ts` |
 
-Resultado: 17s → 12s percebidos para áudio.
+> `marcarComoLida` é `void` (não `await`): é uma chamada ao Evolution (timeout 3s) que não precisa bloquear a resposta. A função trata o próprio erro internamente.
+
+### Anatomia da latência (medido Jun/2026, conta paga)
+
+| Mensagem | Bot (Vercel) | Transporte | Total percebido |
+|---|---|---|---|
+| **Texto** | ~4s | ~6s | **~10s** |
+| **Áudio** | ~6s | ~7s | **~13s** |
+
+- **Bot (Vercel):** medido entre `message_received` e `message_processed` nos logs. Texto = Gemini (~2,3s) + queries + envio. Áudio = + download do áudio (Evolution) + Deepgram.
+- **Transporte (~6s, CONSTANTE):** WhatsApp ↔ Evolution/Railway ↔ celular. Aparece igual no texto e no áudio → **não está no código**, está na camada não-oficial (Baileys/Meta) + Railway.
+- **Conclusão:** o código já está otimizado (~4s no texto é o piso do Gemini+tools). O gargalo restante (~6s) é **transporte**. Para reduzir: (1) checar CPU/RAM da Railway e subir o plano se estiver no talo; (2) se a Railway estiver folgada, é lag inerente do Baileys → só a **WhatsApp Cloud API oficial** resolve (projeto à parte). Ver [bugs-conhecidos.md](bugs-conhecidos.md) B28-B29.
 
 ---
 

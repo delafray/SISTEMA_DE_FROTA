@@ -1,166 +1,177 @@
 # Migrar Evolution API do Railway → Oracle Cloud (Free Tier)
 
-> **Quando fazer isso?** Quando o sistema tiver volume real de uso (5+ empresas, 20+ motoristas ativos).
-> O Railway Hobby ($5/mês) é suficiente durante o período de testes/MVP. Só vale migrar quando o custo começar a escalar.
-
----
+> 📎 Voltar ao [INDEX de Deploy](INDEX.md) | [INDEX principal](../INDEX.md)
 
 ## Por que migrar?
 
-| Situação | Railway | Oracle Cloud |
+Dois motivos (o segundo é o que motivou esta nota):
+
+1. **Custo:** Railway Hobby ~US$5/mês → Oracle Always Free = R$0.
+2. **Latência:** a VM Oracle do OSRM está em **`us-ashburn-1`** — a **MESMA região do Vercel (`iad1`)**. Hoje o Railway adiciona um hop extra. Colocar o Evolution lá deixa os hops **Evolution ↔ Vercel na mesma região** (~1ms) e dá **muito mais CPU/RAM** (4 OCPU/24GB ARM) que o Hobby.
+
+> ⚠️ **Importante:** parte da latência percebida (~6s) é **entrega do Meta/Baileys** (conexão não-oficial) — isso a migração **não** conserta. Ela ataca o Railway lento + o hop de rede. Antes de migrar, **cheque CPU/RAM do Railway**: se estiver no talo → migrar ajuda latência; se estiver folgado → ajuda só custo. Ver [../01-whatsapp-bot/bugs-conhecidos.md](../01-whatsapp-bot/bugs-conhecidos.md) B29.
+
+---
+
+## Decisão: mesma VM (co-locar) vs 2ª VM
+
+O Always Free dá **4 OCPU / 24GB ARM no TOTAL** (somando todas as VMs). A VM#1 (OSRM/VROOM/Overpass) já consome parte disso.
+
+| Opção | Prós | Contras |
 |---|---|---|
-| Custo | US$5/mês fixo + consumo | **Grátis para sempre** (Free Tier) |
-| Postgres | Pago por uso | Usar **Supabase** (já existe) |
-| Redis | Pago por uso | Usar **Upstash** (free até 10k req/dia) |
-| Complexidade | Simples (drag-and-drop) | Requer configuração de VM |
-| Uptime | 99.9% garantido | Depende da VM ser configurada corretamente |
+| **Co-locar na VM#1 (recomendado)** | Não gasta o teto Always Free; hop interno zero; 1 VM pra manter | Disputa RAM com Overpass (faminto) |
+| 2ª VM separada | Isola recursos | Pode estourar o teto 4/24 → deixa de ser grátis |
 
----
-
-## Arquitetura alvo após migração
-
-```
-WhatsApp ←→ Evolution API (Oracle Cloud VM #2 - gratuita)
-                ↓
-          Supabase (Postgres) ← já existe
-          Upstash (Redis)     ← novo, free tier
-```
-
-A VM do OSRM/VROOM continua separada (VM #1). A Oracle oferece **2 VMs ARM gratuitas** (4 OCPUs + 24GB RAM compartilhados).
-
----
-
-## Passo a Passo
-
-### 1. Criar a segunda VM na Oracle Cloud
-
-1. Acesse `cloud.oracle.com` → **Compute > Instances > Create Instance**
-2. Selecione:
-   - **Shape:** `VM.Standard.A1.Flex` (ARM, gratuito)
-   - **OCPUs:** 2 | **RAM:** 12 GB
-   - **OS:** Ubuntu 22.04
-   - **Chave SSH:** mesma chave usada na VM do OSRM (ou crie uma nova)
-3. Abra as portas no Security Group:
-   - `8080` (Evolution API HTTP)
-   - `22` (SSH)
-
-### 2. Configurar Redis no Upstash
-
-1. Acesse `upstash.com` → criar conta → **Create Database**
-2. Selecione **Redis** → região mais próxima (ex: `us-east-1`)
-3. Copie a **REDIS_URL** (formato: `redis://default:senha@host:porta`)
-4. O free tier suporta **10.000 comandos/dia** — suficiente para a Evolution API em produção normal
-
-### 3. Instalar Docker na nova VM
+**Evolution roda LEVE** (`DATABASE_ENABLED=false`, sem Redis — só Node+Baileys + volume). Cabe bem na VM#1 **se houver RAM livre**. Antes de tudo:
 
 ```bash
-ssh ubuntu@<IP-DA-VM>
-
-# Instalar Docker
-curl -fsSL https://get.docker.com | sh
-sudo usermod -aG docker ubuntu
-newgrp docker
+ssh ubuntu@129.80.27.159   # VM#1 (OSRM), us-ashburn-1
+free -h          # RAM livre — precisa de ~1-2GB livres pro Evolution
+docker ps        # ver o que já roda (osrm, vroom, overpass)
+df -h            # disco livre
 ```
 
-### 4. Fazer deploy da Evolution API com Docker Compose
+Se sobrar RAM → co-loca (segue abaixo). Se o Overpass estiver comendo quase tudo → crie a 2ª VM (mesmos passos, mas **confirme que cabe no teto 4/24**).
 
-Crie o arquivo `/home/ubuntu/evolution/docker-compose.yml`:
+---
 
+## Passo a passo (co-locando na VM#1)
+
+### 1. Abrir a porta — NOS DOIS lugares
+Oracle Ubuntu tem **iptables restritivo por padrão**; abrir só no painel não basta.
+
+1. **OCI Console** → Networking → VCN → Security List → Ingress: liberar TCP **8080** (e **443** se usar HTTPS/domínio).
+2. **No OS (na VM):**
+```bash
+sudo iptables -I INPUT -p tcp --dport 8080 -j ACCEPT
+sudo iptables -I INPUT -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save   # persistir após reboot
+```
+
+### 2. Docker (provavelmente já instalado p/ o OSRM)
+```bash
+docker --version || { curl -fsSL https://get.docker.com | sh; sudo usermod -aG docker ubuntu; newgrp docker; }
+```
+
+### 3. docker-compose — MESMA config que funciona no Railway
+> ✅ Imagem `evoapicloud/evolution-api:v2.3.0` (**NUNCA `atendai/`** — bug B2/B3).
+> ✅ `DATABASE_ENABLED=false` (igual ao Railway — evita o B6 SSL e não sobrecarrega o Supabase). **Não** precisa de Postgres nem Redis.
+
+`/home/ubuntu/evolution/docker-compose.yml`:
 ```yaml
-version: '3.9'
-
 services:
   evolution-api:
-    image: atendai/evolution-api:latest
+    image: evoapicloud/evolution-api:v2.3.0
     container_name: evolution-api
     restart: always
     ports:
       - "8080:8080"
     environment:
-      # --- Servidor ---
-      SERVER_URL: https://evo.seu-dominio.com  # ou http://IP:8080
-
-      # --- Banco de Dados (Supabase) ---
-      DATABASE_ENABLED: "true"
-      DATABASE_PROVIDER: postgresql
-      DATABASE_CONNECTION_URI: postgresql://postgres:[SENHA]@db.[PROJETO].supabase.co:5432/postgres
-
-      # --- Redis (Upstash) ---
-      CACHE_REDIS_ENABLED: "true"
-      CACHE_REDIS_URI: redis://default:[SENHA]@[HOST].upstash.io:[PORTA]
-      CACHE_REDIS_PREFIX_KEY: evolution
-
-      # --- Autenticação ---
       AUTHENTICATION_TYPE: apikey
-      AUTHENTICATION_API_KEY: [SUA_CHAVE_GLOBAL]
-
-      # --- Storage de instâncias ---
-      STORE_MESSAGES: "true"
-      STORE_MESSAGE_UP: "true"
-      STORE_CONTACTS: "true"
-      STORE_CHATS: "true"
+      AUTHENTICATION_API_KEY: SUA_CHAVE_GLOBAL   # a MESMA do Railway (reusa o EVOLUTION_API_KEY)
+      PORT: 8080
+      SERVER_PORT: 8080
+      DATABASE_ENABLED: "false"
+      DEL_INSTANCE: "false"
+      LOG_LEVEL: ERROR
     volumes:
-      - evolution_instances:/evolution/instances
+      - evolution_instances:/evolution/instances   # sem volume = QR a cada restart
 
 volumes:
   evolution_instances:
 ```
-
-### 5. Subir o serviço
-
 ```bash
-cd /home/ubuntu/evolution
-docker compose up -d
-
-# Verificar se está rodando
-docker compose logs -f
+cd /home/ubuntu/evolution && docker compose up -d && docker compose logs -f
 ```
 
-### 6. Atualizar as variáveis de ambiente no projeto (Vercel)
-
-No painel da Vercel, atualize:
+### 4. HTTPS — recomendado (não é opcional)
+Expor em `http://IP:8080` puro **vaza a apikey** e deixa o `/manager` aberto. Use **Caddy** (Let's Encrypt automático) com um subdomínio (ex.: `evo.seudominio.com` apontando pro IP da VM):
+```bash
+sudo apt install -y caddy
+# /etc/caddy/Caddyfile:
+#   evo.seudominio.com {
+#     reverse_proxy localhost:8080
+#   }
+sudo systemctl restart caddy
 ```
-EVOLUTION_API_URL=http://<IP-DA-ORACLE-VM>:8080
-EVOLUTION_API_KEY=<SUA_CHAVE_GLOBAL>
+Sem domínio? No mínimo **restrinja o iptables 8080 ao IP de saída do Vercel** e troque a apikey por uma forte. Mas o ideal é HTTPS+domínio.
+
+### 5. Recriar instância + **RECONFIGURAR O WEBHOOK** (passo crítico!)
+> ⚠️ Sem refazer o webhook, o bot fica **MUDO** (não recebe mensagem). Use o **mesmo nome de instância** de antes (`EVOLUTION_INSTANCE_NAME`).
+
+No console do navegador (troque URL/chave/nome):
+```javascript
+// a) criar instância (mesmo nome)
+fetch('https://evo.seudominio.com/instance/create', {
+  method:'POST', headers:{'Content-Type':'application/json','apikey':'SUA_CHAVE'},
+  body: JSON.stringify({ instanceName:'seu-bot', integration:'WHATSAPP-BAILEYS' })
+}).then(r=>r.json()).then(console.log)
+
+// b) RECONFIGURAR webhook (formato v2.x: dados dentro de { webhook: {} })
+fetch('https://evo.seudominio.com/webhook/set/seu-bot', {
+  method:'POST', headers:{'Content-Type':'application/json','apikey':'SUA_CHAVE'},
+  body: JSON.stringify({ webhook: {
+    url:'https://SEU-APP.vercel.app/api/whatsapp/webhook',
+    enabled:true,
+    events:['MESSAGES_UPSERT','CONNECTION_UPDATE','QRCODE_UPDATED'],
+    webhookByEvents:false
+  }})
+}).then(r=>r.json()).then(console.log)
+
+// c) gerar QR e escanear
+fetch('https://evo.seudominio.com/instance/connect/seu-bot', { headers:{'apikey':'SUA_CHAVE'} }).then(r=>r.json()).then(console.log)
 ```
+Detalhes em [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md).
 
-> **Opcional:** Configure um domínio com Nginx + SSL para a URL ficar mais limpa (`https://evo.seu-dominio.com`).
+### 6. Atualizar as env vars na Vercel (as 4) + redeploy
+```
+EVOLUTION_API_URL=https://evo.seudominio.com   (ou http://IP:8080)
+EVOLUTION_API_KEY=<a mesma chave>
+EVOLUTION_INSTANCE_NAME=seu-bot
+EVOLUTION_WEBHOOK_SECRET=<o mesmo de antes>
+```
+> **SEMPRE redeploy** após mudar env na Vercel (bug B12).
 
-### 7. Reconectar o WhatsApp
+### 7. Validar ANTES de mexer no Railway
+- `GET /instance/connectionState/seu-bot` → `"state":"open"`
+- Manda um "oi" no zap → bot responde.
+- Logs do Vercel: `message_processed` sem erro.
 
-1. Acesse `http://<IP>:8080/manager` (painel visual)
-2. Crie a instância com o mesmo nome de antes
-3. Faça o scan do QR Code no celular do motorista/gestor
-
-### 8. Desligar os serviços no Railway
-
-Após confirmar que tudo funciona:
-1. Railway → seu projeto → `evolution-api` → **Settings > Delete Service**
-2. Repita para `Postgres` e `Redis`
-3. Projeto ficará vazio → pode deletar o projeto
+### 8. Só então desligar o Railway
+> ⚠️ **NUNCA rode Railway + Oracle com o MESMO número ao mesmo tempo** — duas conexões Baileys no mesmo número = conflito e risco de **ban**. Re-parear o QR na VM **já derruba** a sessão do Railway; confirme que a VM está `open` e só depois delete o serviço no Railway.
 
 ---
 
-## Checklist de Validação
+## Confiabilidade (Always Free)
 
-- [ ] Evolution API respondendo em `http://<IP>:8080`
-- [ ] Instância do WhatsApp reconectada (status "open")
-- [ ] Mensagem de teste enviada e recebida pelo bot
-- [ ] Logs sem erros de conexão com Supabase ou Redis
-- [ ] Variáveis na Vercel atualizadas e redeploy feito
+A Oracle **recupera instâncias Always Free ociosas**. Pra um gateway de produção:
+- Rodando 24/7 (OSRM + Evolution) a VM fica ativa → menor risco.
+- **Recomendado:** fazer upgrade pra **Pay-As-You-Go** — mantém o Always Free, só adiciona cartão, e **tira o risco de recuperação**. Em uso dentro do free tier você paga ~R$0.
 
 ---
 
-## Custo final após migração
+## Checklist de validação
+
+- [ ] `free -h` confirmou RAM livre antes de co-locar
+- [ ] Porta 8080/443 aberta no **OCI Security List E no iptables do OS**
+- [ ] Imagem `evoapicloud/evolution-api:v2.3.0` (não `atendai/`)
+- [ ] `DATABASE_ENABLED=false` (sem Postgres/Redis)
+- [ ] HTTPS via Caddy + domínio (ou iptables restrito)
+- [ ] **Webhook reconfigurado** (`/webhook/set/`) apontando pro Vercel
+- [ ] 4 env vars atualizadas na Vercel + **redeploy**
+- [ ] `connectionState` = `open` e bot respondeu ANTES de desligar o Railway
+- [ ] Railway desligado só após validar (sem número duplicado)
+
+---
+
+## Custo final
 
 | Serviço | Custo |
 |---|---|
-| Oracle Cloud VM (Evolution API) | **Grátis** |
-| Upstash Redis | **Grátis** (até 10k req/dia) |
-| Supabase (Postgres) | **Grátis** (já usado) |
+| Oracle Cloud VM (co-locado com OSRM) | **Grátis** (Always Free; PAYG ~R$0) |
 | Railway | **$0** (cancelado) |
-| **Total mensal** | **R$ 0,00** |
+| **Total** | **R$ 0,00** |
 
 ---
 
-*Documentado em: 04/06/2026*
+*Atualizado: 04/06/2026 — corrigido p/ usar a imagem/config que funciona (evoapicloud v2.3.0, DATABASE_ENABLED=false), co-locação na VM#1, webhook obrigatório, HTTPS, iptables do OS, PAYG e região us-ashburn-1.*

@@ -15,7 +15,10 @@ NEXT_PUBLIC_SUPABASE_URL=https://SEU-PROJETO.supabase.co
 NEXT_PUBLIC_SUPABASE_ANON_KEY=sua-anon-key
 SUPABASE_SERVICE_ROLE_KEY=sua-service-role-key
 
-# ── Cloudflare R2 ───────────────────────────────────
+# ── Cloudflare R2 — storage de FOTOS do sistema (OBRIGATÓRIO) ──
+# 10GB grátis, egress zero. ⚠️ As chaves são obrigatórias, MAS o upload ainda
+# precisa ser IMPLEMENTADO no código (@aws-sdk/client-s3 instalado e não usado
+# ainda) — ver 05-planos-e-decisoes/acoes-pendentes.md.
 R2_ACCOUNT_ID=seu-account-id
 R2_ACCESS_KEY_ID=sua-access-key
 R2_SECRET_ACCESS_KEY=sua-secret-key
@@ -33,7 +36,8 @@ EVOLUTION_WEBHOOK_SECRET=seu-webhook-secret
 
 # ── Sentry ──────────────────────────────────────────
 NEXT_PUBLIC_SENTRY_DSN=https://XXXX@oXXXX.ingest.us.sentry.io/XXXX
-SENTRY_AUTH_TOKEN=sntrys_seu-token
+# SENTRY_DSN=                                              ← opcional; server/edge leem SENTRY_DSN ?? NEXT_PUBLIC_SENTRY_DSN
+SENTRY_AUTH_TOKEN=sntrys_seu-token                         ← usado no build (upload de source maps)
 
 # ── Roteirização OSRM + VROOM ──────────────────────
 OSRM_URL=http://IP-DA-VM:5000
@@ -44,7 +48,7 @@ GEMINI_API_KEY=sua-gemini-key
 
 # ── Deepgram API (Speech-to-Text) ───────────────────
 DEEPGRAM_API_KEY=sua-deepgram-key
-DEEPGRAM_MODEL=nova-2                                     ← modelo de transcrição (padrão: nova-2)
+DEEPGRAM_MODEL=nova-3                                     ← modelo de transcrição (padrão: nova-3)
 
 # ── Google Maps Geocoding API ───────────────────────
 GOOGLE_MAPS_API_KEY=sua-google-maps-key
