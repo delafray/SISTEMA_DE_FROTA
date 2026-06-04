@@ -5,8 +5,9 @@
 >
 > 📎 **Documento irmão:** [GUIA_APIS_SETUP.md](./GUIA_APIS_SETUP.md) — como configurar cada API do zero (chaves, contas, variáveis de ambiente, armadilhas de setup).
 
-Última revisão: 2026-05-31 — Claude Opus 4.7 (Wave 2: +8 agentes, B17-B24, novas seções 3.B/4.6/5.4-5.6/8.6-8.7/9.4/10.2, roadmap §11 reescrito + §12/§13)
-Base: Wave 1 (7 agentes — 5 pesquisa + 2 auditoria) + Wave 2 (4 pesquisa documentação + 2 auditoria código + 2 síntese) + 24 bugs documentados (16 vivos em produção + 8 descobertos em auditoria).
+Última revisão: **2026-06-03** — Antigravity / Claude Opus 4.6 (Thinking). Adições: §3.C (bugs B25-B27 latência/billing), §8.8 (otimizações de latência aplicadas em produção), stack atualizada (Gemini como IA principal do gestor, `thinkingBudget: 0`, região `iad1`).
+Revisão anterior: 2026-05-31 — Claude Opus 4.7 (Wave 2: +8 agentes, B17-B24, novas seções 3.B/4.6/5.4-5.6/8.6-8.7/9.4/10.2, roadmap §11 reescrito + §12/§13)
+Base: Wave 1 + Wave 2 + 27 bugs documentados (24 originais + 3 novos de produção junho).
 
 ---
 
@@ -30,7 +31,7 @@ Base: Wave 1 (7 agentes — 5 pesquisa + 2 auditoria) + Wave 2 (4 pesquisa docum
 
 ## 1. Princípios não-negociáveis
 
-1. **Stack atual permanece**: Gemini Flash 2.5 + Deepgram + Evolution API + Supabase. **Não adotar framework agente** (Mastra/LangChain/AutoGPT) — 30 funcionários e fluxos previsíveis não justificam complexidade.
+1. **Stack atual permanece**: Gemini 2.5 Flash (`thinkingBudget: 0`, região `iad1`) + Deepgram nova-2 + Evolution API v2.3.0 (Railway) + Supabase. **Não adotar framework agente** (Mastra/LangChain/AutoGPT) — 30 funcionários e fluxos previsíveis não justificam complexidade.
 2. **NUNCA bloquear o motorista**: erro de tool, timeout, falha de validação → degrada graciosamente, nunca trava conversa.
 3. **NUNCA executar ação destrutiva sem confirmação explícita** (atualizar KM, registrar despesa, etc).
 4. **NUNCA vazar dados entre empresas**: toda query filtra por `empresa_id`. Validação no runtime, não confiar no LLM.
@@ -286,6 +287,33 @@ Quando você notar uma dessas formas no seu próximo PR, **pare e refatore antes
 **CATEGORIA A — Silent fail em Supabase** — `messageRouter.ts:297`, `sessionManager.ts:159`, `historico.ts:55`, `geminiClient.ts:145`.
 **CATEGORIA B — Falta `empresa_id` em SELECT** — `messageRouter.ts:704`, `:721`. Provavelmente mais.
 **CATEGORIA C — Type casts sem runtime validation** — `geminiClient.ts:145/150/172`, `deepgramClient.ts:56`, `frotaTools.ts:308-309`.
+
+### 🔥 §3.C — Bugs de produção Junho 2026 (latência e billing)
+
+Descobertos em uso real após deploy do Gemini como IA principal.
+
+**B25. Latência de 17s por mensagem de áudio — thinkingBudget ligado por padrão**
+- Sintoma: motorista enviava áudio, resposta demorava 12-17s percebidos (~6-9s no Vercel + ~6s transporte)
+- Causa: Gemini 2.5 Flash tem `thinkingBudget` LIGADO por padrão. Cada chamada gastava 2-4s extras de raciocínio interno, e cada áudio faz 2+ chamadas (tool round-trips) = até 8s perdidos
+- Fix: `generationConfig.thinkingConfig.thinkingBudget = 0` em `geminiClient.ts`. SDK legado (`@google/generative-ai@0.24.1`) não tipa `thinkingConfig` mas repassa verbatim pro REST body
+- **Trade-off**: thinking off reduz raciocínio complexo — REVERSÍVEL subindo `thinkingBudget` pra 512 se necessário
+- Impacto: **-5s na latência percebida** (17s → 12s)
+- Commit: `6ea3667`
+
+**B26. Região gru1 piorava latência de áudio — serviços pesados nos EUA**
+- Sintoma: configurar `preferredRegion: 'gru1'` (São Paulo) deveria melhorar mas não ajudava pra áudio
+- Causa: Evolution API (Railway), Deepgram e Gemini estão TODOS nos EUA. Ao pinar em São Paulo, cada chamada fazia viagem transoceânica extra (~200ms × 4 viagens = ~800ms perdidos)
+- Fix: mudar para `preferredRegion: 'iad1'` (US East) no webhook + `vercel.json`
+- **REGRA**: verificar ONDE ficam os serviços pesados antes de escolher região. Supabase BR é leve (queries pequenas), os serviços de IA são pesados.
+- Impacto: **-1s na latência percebida**
+- Commit: `d77dd01`
+
+**B27. Erro 429 em produção — Google mudou billing do Gemini**
+- Sintoma: bot parou de responder com erro `429 Too Many Requests` mesmo com poucas mensagens
+- Causa: Google mudou de pós-pagamento para **pré-pagamento obrigatório**. Conta sem crédito é "rebaixada" e bloqueia chamadas
+- Fix: adicionar crédito (R$60) no Google Cloud Billing via AI Studio
+- **REGRA**: monitorar billing do Google AI Studio periodicamente. Alerta visual: se resposta do bot vier com erro 429, verificar créditos primeiro
+- **Guarda implementada**: `geminiRateLimit.ts` com `limitesConfigurados()` — se `GEMINI_RPM`/`GEMINI_RPD` NÃO estiverem setadas (plano pago), a guarda fica DESLIGADA e pula 2 queries por mensagem (economia de ~100-200ms). Setar as envs liga a guarda (free tier).
 
 ---
 
@@ -704,6 +732,45 @@ Logar por turno:
 
 Dashboard semanal: tokens médios, cache hit ratio, top tools chamadas, latência p95.
 
+### 8.8 Otimizações de latência aplicadas (Junho 2026)
+
+> Status: **TODAS em produção**. Resultado: 17s → 12s percebidos para áudio.
+
+| # | Otimização | Impacto | Arquivo | Reversível? |
+|---|---|---|---|---|
+| 1 | `thinkingBudget: 0` | **-3 a -8s** por mensagem | `geminiClient.ts` | Sim (subir pra 512) |
+| 2 | Região `iad1` (US East) | **-0.8 a -1.2s** | `webhook/route.ts` + `vercel.json` | Sim (mudar região) |
+| 3 | Guarda de cota desligada no pago | **-0.1 a -0.2s** | `geminiRateLimit.ts` | Sim (setar GEMINI_RPM) |
+
+#### Configuração atual do Gemini:
+```typescript
+// geminiClient.ts
+const model = genAI.getGenerativeModel({
+  model: 'gemini-2.5-flash-preview-05-20',
+  generationConfig: {
+    thinkingConfig: { thinkingBudget: 0 },  // desliga thinking
+    maxOutputTokens: 1024,
+  },
+});
+```
+
+#### Configuração de região:
+```typescript
+// webhook/route.ts
+export const preferredRegion = 'iad1';  // US East, perto de Evolution/Deepgram/Gemini
+```
+```json
+// vercel.json
+{ "framework": "nextjs", "regions": ["iad1"] }
+```
+
+> ⚠️ **NÃO usar `gru1`** mesmo o sistema sendo BR. Veja B26 em §3.C.
+
+#### Próximas alavancas (NÃO aplicadas):
+- Fast path com queries diretas para perguntas comuns ("quantos caminhões") → potencial -3 a -5s
+- Cache TTL 30s para respostas repetidas → -6s na segunda pergunta igual
+- Flash-Lite como alternativa (menor latência, menor qualidade) → só considerar se iad1 não bastar
+
 ### 8.6 Audio: configuração Deepgram otimizada
 
 Migração nova-2 → **nova-3** documentada em [Deepgram nova-3 release notes](https://developers.deepgram.com/docs/models-languages-overview#nova-3) (24% menos WER em PT-BR vs nova-2). **Ação imediata na Fase 5.**
@@ -889,7 +956,7 @@ GROUP BY 1, 2, 3;
 
 ### 🚫 Não alterar sem aprovação
 
-- **Stack core**: Gemini 2.5 Flash, Deepgram nova-2 (migrar pra nova-3 só na Fase 5), Evolution API, Supabase
+- **Stack core**: Gemini 2.5 Flash (`thinkingBudget: 0`, região `iad1`), Deepgram nova-2 (migrar pra nova-3 só na Fase 5), Evolution API v2.3.0, Supabase
 - **Estrutura dos flows rígidos** (`flows/kmFlow.ts`, `flows/avariaFlow.ts`, etc) — são o **fallback** se Gemini cair. Preserva exato como está até que sejam migrados pra tools (Fase 7).
 - **Schema das tabelas existentes** (`motoristas`, `veiculos`, `km_logs`, etc) — só adições, nunca renames
 - **Auth flow** (`auth.ts` `identificarRemetente`) — 3 variações de telefone BR já funcionam, não tocar
