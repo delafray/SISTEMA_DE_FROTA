@@ -39,6 +39,7 @@ import { processarDespesaFlow } from '@/lib/whatsapp/flows/despesaFlow';
 import { processarImprevistoFlow } from '@/lib/whatsapp/flows/imprevistoFlow';
 import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
 import { processarComGemini, processarAudioComGemini } from '@/lib/whatsapp/geminiBot';
+import { cotaGeminiDisponivel } from '@/lib/whatsapp/geminiRateLimit';
 import { tentarFastPath } from '@/lib/whatsapp/fastPath';
 import { registrarMetrica } from '@/lib/ai/metricas';
 
@@ -110,9 +111,17 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     const isAudio = msgResolvida.tipo === 'audio' && !!msgResolvida.mediaId;
 
     if (isTexto || isAudio) {
-      const motoristaId = identity.tipo === 'motorista' ? identity.motorista_id : undefined;
-      await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id, motoristaId);
-      return;
+      // Camada 1: guarda de cota do free tier (RPM/RPD). Se ainda há orçamento,
+      // a IA responde. Se estourou, NÃO chama o Gemini — cai no menu determinístico
+      // logo abaixo (Camada 3: degradação graciosa, sem IA paga, sem perder a msg).
+      const cota = await cotaGeminiDisponivel();
+      if (cota.ok) {
+        const motoristaId = identity.tipo === 'motorista' ? identity.motorista_id : undefined;
+        await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id, motoristaId);
+        return;
+      }
+      log.warn('gemini_cota_estourada_fallback_menu', { motivo: cota.motivo, estado: sessao.estado });
+      // sem return → segue pro roteamento por menu abaixo
     }
   }
 

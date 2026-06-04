@@ -72,7 +72,14 @@ vi.mock('@supabase/supabase-js', () => ({
 // Mock do geminiBot — no e2e os testes verificam fluxos internos, não a IA conversacional.
 vi.mock('@/lib/whatsapp/geminiBot', () => ({
   processarComGemini: vi.fn().mockResolvedValue('Resposta simulada do Gemini'),
+  processarAudioComGemini: vi.fn().mockResolvedValue('Resposta simulada do Gemini (audio)'),
   limparHistoricoGemini: vi.fn(),
+}));
+
+// Cota do Gemini: por padrão SEMPRE disponível (clearAllMocks mantém a implementação).
+// O teste de fallback sobrescreve com mockResolvedValueOnce({ ok: false }).
+vi.mock('@/lib/whatsapp/geminiRateLimit', () => ({
+  cotaGeminiDisponivel: vi.fn().mockResolvedValue({ ok: true }),
 }));
 
 // ─── IMPORTS após mocks ─────────────────────────────────────────────────
@@ -83,6 +90,8 @@ import { getOrCreateSession, updateSession, resetToMenu } from '@/lib/whatsapp/s
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuBotoes, enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import { lerOdometro } from '@/services/aiService';
+import { processarComGemini } from '@/lib/whatsapp/geminiBot';
+import { cotaGeminiDisponivel } from '@/lib/whatsapp/geminiRateLimit';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
 
@@ -222,6 +231,20 @@ describe('E2E WhatsApp Bot — Transições de estado', () => {
     const [, resposta] = (enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0];
     expect(resposta).toBe('Resposta simulada do Gemini');
     expect(enviarMenuLista).not.toHaveBeenCalled();
+  });
+
+  // ─── 1b. Cota do Gemini estourada → degrada pro menu (Camada 3) ────────
+
+  it('1b) cota do Gemini estourada → texto NÃO chama a IA, cai no menu determinístico', async () => {
+    mockSessao('aguardando_acao', { veiculo_id: 'v-1', veiculo_placa: 'ABC1D23' });
+    (cotaGeminiDisponivel as ReturnType<typeof vi.fn>).mockResolvedValueOnce({ ok: false, motivo: 'rpd' });
+
+    await processarMensagem(makeMsg({ texto: 'quanto km tem o leao?' }));
+
+    // Não gastou cota da IA...
+    expect(processarComGemini).not.toHaveBeenCalled();
+    // ...e o motorista continua atendido pelo menu (fallback grátis).
+    expect(enviarMenuLista).toHaveBeenCalled();
   });
 
   // ─── 2. Seleção de veículo válida ─────────────────────────────────────
