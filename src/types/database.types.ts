@@ -970,6 +970,8 @@ export type Database = {
           telefone: string | null
           uf: string | null
           updated_at: string | null
+          whatsapp_instance: string | null
+          whatsapp_numero: string | null
         }
         Insert: {
           bairro?: string | null
@@ -989,6 +991,8 @@ export type Database = {
           telefone?: string | null
           uf?: string | null
           updated_at?: string | null
+          whatsapp_instance?: string | null
+          whatsapp_numero?: string | null
         }
         Update: {
           bairro?: string | null
@@ -1008,6 +1012,8 @@ export type Database = {
           telefone?: string | null
           uf?: string | null
           updated_at?: string | null
+          whatsapp_instance?: string | null
+          whatsapp_numero?: string | null
         }
         Relationships: []
       }

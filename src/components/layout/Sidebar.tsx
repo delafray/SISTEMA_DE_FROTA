@@ -200,6 +200,27 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         gap: "4px",
       }}>
         <SystemStatusBadge />
+        <Link
+          href="/perfil"
+          onClick={onNavigate}
+          style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "8px",
+            padding: "6px 8px",
+            borderRadius: "8px",
+            color: "rgba(191, 219, 254, 0.5)",
+            textDecoration: "none",
+            fontSize: "14px",
+            fontWeight: 500,
+            transition: "all 150ms",
+          }}
+          onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(255,255,255,0.07)"; e.currentTarget.style.color = "rgba(191,219,254,0.85)"; }}
+          onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "rgba(191,219,254,0.5)"; }}
+        >
+          <DriverIcon style={{ width: "16px", height: "16px" }} />
+          <span>Meu Perfil</span>
+        </Link>
         <button
           style={{
             display: "flex",

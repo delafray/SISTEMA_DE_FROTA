@@ -13,13 +13,170 @@ const fmtTel  = (v: string) => v.length === 11
   : v.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3");
 const fmtCep  = (v: string) => v.replace(/(\d{5})(\d{3})/, "$1-$2");
 
+// ─── Componente WhatsApp QR ──────────────────────────────────────────────────
+function WhatsAppSection({ empresaId }: { empresaId: string }) {
+  const [estado, setEstado]       = useState<string>("carregando");
+  const [numero, setNumero]       = useState("");
+  const [novoNumero, setNovoNumero] = useState("");
+  const [qr, setQr]               = useState<string | null>(null);
+  const [countdown, setCountdown] = useState(0);
+  const [loading, setLoading]     = useState(false);
+  const [msg, setMsg]             = useState<string | null>(null);
+
+  // Busca estado atual ao montar
+  useEffect(() => {
+    fetch('/api/whatsapp/reconectar')
+      .then(r => r.json())
+      .then(d => { setEstado(d.estado ?? 'desconhecido'); setNumero(d.numero ?? ''); })
+      .catch(() => setEstado('erro_conexao'));
+  }, [empresaId]);
+
+  // Polling de estado enquanto QR está na tela
+  useEffect(() => {
+    if (!qr) return;
+    const interval = setInterval(async () => {
+      try {
+        const d = await fetch('/api/whatsapp/reconectar').then(r => r.json());
+        if (d.estado === 'open') {
+          setQr(null);
+          setEstado('open');
+          setMsg('✅ Conectado com sucesso!');
+          clearInterval(interval);
+        }
+      } catch { /* ignora */ }
+    }, 3000);
+    return () => clearInterval(interval);
+  }, [qr]);
+
+  // Contagem regressiva de 60s quando QR aparece
+  useEffect(() => {
+    if (!qr) return;
+    setCountdown(60);
+    const tick = setInterval(() => {
+      setCountdown(n => {
+        if (n <= 1) { clearInterval(tick); setQr(null); setMsg('QR expirou. Clique em Reconectar para gerar um novo.'); return 0; }
+        return n - 1;
+      });
+    }, 1000);
+    return () => clearInterval(tick);
+  }, [qr]);
+
+  const handleReconectar = async () => {
+    setLoading(true);
+    setMsg(null);
+    setQr(null);
+    try {
+      const res = await fetch('/api/whatsapp/reconectar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numero: novoNumero || undefined }),
+      });
+      const data = await res.json();
+      if (!res.ok || data.error) { setMsg(`❌ ${data.error ?? 'Erro desconhecido'}`); return; }
+      if (data.qr) {
+        setQr(data.qr);
+        setEstado('aguardando_qr');
+        if (novoNumero) setNumero(novoNumero.replace(/\D/g, ''));
+      } else {
+        setMsg('⚠️ Evolution não retornou QR. Aguarde e tente novamente.');
+      }
+    } catch { setMsg('❌ Erro ao conectar com o servidor.'); }
+    finally { setLoading(false); }
+  };
+
+  const estadoLabel: Record<string, { cor: string; texto: string }> = {
+    open:           { cor: '#16a34a', texto: '🟢 Conectado' },
+    connecting:     { cor: '#d97706', texto: '🟡 Conectando...' },
+    close:          { cor: '#dc2626', texto: '🔴 Desconectado' },
+    aguardando_qr:  { cor: '#2563eb', texto: '🔵 Aguardando leitura do QR...' },
+    carregando:     { cor: '#94a3b8', texto: '⏳ Verificando...' },
+    sem_instancia:  { cor: '#94a3b8', texto: '⚠️ Instância não configurada' },
+    erro_conexao:   { cor: '#dc2626', texto: '🔴 Erro ao verificar' },
+    desconhecido:   { cor: '#94a3b8', texto: '❓ Estado desconhecido' },
+  };
+  const label = estadoLabel[estado] ?? estadoLabel.desconhecido;
+
+  return (
+    <FormSection title="WhatsApp do Bot">
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+
+        {/* Estado atual */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <span style={{ fontWeight: 600, color: label.cor, fontSize: 14 }}>{label.texto}</span>
+          {numero && <span style={{ fontSize: 12, color: '#64748b' }}>— {numero}</span>}
+        </div>
+
+        {/* Mensagem de feedback */}
+        {msg && (
+          <div style={{ padding: '10px 14px', background: '#f0fdf4', border: '1px solid #bbf7d0', borderRadius: 8, fontSize: 13, color: '#166534' }}>
+            {msg}
+          </div>
+        )}
+
+        {/* QR Code */}
+        {qr && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12, padding: 20, background: '#f8fafc', borderRadius: 12, border: '2px solid #e2e8f0' }}>
+            <div style={{ fontSize: 13, color: '#475569', fontWeight: 600 }}>
+              Escaneie com o WhatsApp do novo número
+            </div>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={qr.startsWith('data:') ? qr : `data:image/png;base64,${qr}`} alt="QR Code WhatsApp" style={{ width: 220, height: 220, borderRadius: 8 }} />
+            <div style={{ fontSize: 13, color: countdown <= 10 ? '#dc2626' : '#64748b' }}>
+              ⏱ Expira em <strong>{countdown}s</strong> — WhatsApp → Aparelhos conectados → Conectar aparelho
+            </div>
+          </div>
+        )}
+
+        {/* Campo novo número + botão */}
+        <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+          <FormField label="Novo número (com DDI, ex: 5531999887766)">
+            <input
+              value={novoNumero}
+              onChange={e => setNovoNumero(e.target.value.replace(/\D/g, ''))}
+              style={{ ...inputStyle, width: 240 }}
+              placeholder="5531999887766"
+              maxLength={15}
+            />
+          </FormField>
+          <Btn
+            type="button"
+            variant="primary"
+            disabled={loading}
+            onClick={handleReconectar}
+          >
+            {loading ? 'Gerando QR...' : qr ? '🔄 Novo QR' : '📱 Reconectar WhatsApp'}
+          </Btn>
+        </div>
+
+        <div style={{ fontSize: 12, color: '#94a3b8' }}>
+          Deixe o número em branco para reconectar com o mesmo número. Preencha para trocar para um novo número.
+        </div>
+      </div>
+    </FormSection>
+  );
+}
+
 export default function EditarEmpresaPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = createClient();
-  const [saving, setSaving]   = useState(false);
-  const [loading, setLoading] = useState(true);
-  const [err, setErr]         = useState("");
+  const [saving, setSaving]       = useState(false);
+  const [formLoading, setFormLoading] = useState(true);
+  const [err, setErr]               = useState("");
+  const [role, setRole]             = useState<string | null>(null);
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data }) => {
+      if (!data.user) return;
+      supabase.from('usuario_empresas')
+        .select('role')
+        .eq('usuario_id', data.user.id)
+        .eq('is_padrao', true)
+        .single()
+        .then(({ data: ue }) => setRole(ue?.role ?? null));
+    });
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const [form, setForm] = useState({
     nome_fantasia: "", razao_social: "", cnpj: "", inscricao_estadual: "",
@@ -44,7 +201,7 @@ export default function EditarEmpresaPage() {
         cidade:             data.cidade ?? "",
         uf:                 data.uf ?? "",
       });
-      setLoading(false);
+      setFormLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
@@ -90,7 +247,7 @@ export default function EditarEmpresaPage() {
     router.push("/empresas"); router.refresh();
   };
 
-  if (loading) return (
+  if (formLoading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
       Carregando...
     </div>
@@ -186,6 +343,9 @@ export default function EditarEmpresaPage() {
                 </FormField>
               </div>
             </FormSection>
+
+            {/* Seção WhatsApp — só visível para master */}
+            {role === 'master' && <WhatsAppSection empresaId={id} />}
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/empresas" variant="outline">Cancelar</Btn>
