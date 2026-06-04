@@ -33,6 +33,7 @@ EVOLUTION_API_URL=http://IP-DA-VM:8080              ← IP da VM Oracle Cloud (R
 EVOLUTION_API_KEY=sua-evolution-api-key             ← AUTHENTICATION_API_KEY configurado na Evolution
 EVOLUTION_INSTANCE_NAME=seu-bot                     ← nome da instância
 EVOLUTION_WEBHOOK_SECRET=seu-webhook-secret         ← deve bater com webhook.headers.apikey
+APP_URL=https://seu-app.vercel.app                  ← URL pública do Vercel (usada ao recriar instância pelo painel)
 
 # ── Sentry ──────────────────────────────────────────
 NEXT_PUBLIC_SENTRY_DSN=https://XXXX@oXXXX.ingest.us.sentry.io/XXXX

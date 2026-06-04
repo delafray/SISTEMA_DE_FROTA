@@ -36,6 +36,20 @@ export async function processarGestorFlow(
   msg: ParsedMessage,
   identity: IdentityGestor
 ): Promise<void> {
+  // Fast-path: "lembrete: <texto>" — sem IA, detecção por prefixo
+  if (msg.tipo === 'texto' && msg.texto) {
+    const match = msg.texto.match(/^lembrete[:\s]+(.+)/i);
+    if (match) {
+      await processarLembrete(msg, identity, match[1].trim());
+      return;
+    }
+    // Confirmação de lembrete pendente no contexto da conversa
+    if (/^(sim|anotar|salvar|confirmar|ok|s)$/i.test(msg.texto.trim())) {
+      await confirmarLembretePendente(msg, identity);
+      return;
+    }
+  }
+
   if (msg.tipo === 'foto' || msg.tipo === 'documento') {
     await enviarTexto(
       msg.from,
@@ -98,6 +112,50 @@ export async function processarGestorFlow(
       await enviarMenuGestor(msg.from, identity);
       return;
   }
+}
+
+// ─── LEMBRETES ───────────────────────────────────────────────────────
+
+// Cache em memória por telefone (TTL da sessão Node — descartado ao reiniciar)
+const lembretesPendentes = new Map<string, string>();
+
+async function processarLembrete(
+  msg: ParsedMessage,
+  identity: IdentityGestor,
+  texto: string
+): Promise<void> {
+  lembretesPendentes.set(msg.from, texto);
+  await enviarTexto(
+    msg.from,
+    `📝 *Anotar este lembrete?*\n\n_"${texto}"_\n\nResponda *sim* para anotar ou ignore para cancelar.`
+  );
+}
+
+async function confirmarLembretePendente(
+  msg: ParsedMessage,
+  identity: IdentityGestor
+): Promise<void> {
+  const texto = lembretesPendentes.get(msg.from);
+  if (!texto) return; // não havia lembrete pendente — deixa seguir pro fluxo normal
+
+  lembretesPendentes.delete(msg.from);
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from('lembretes').insert({
+    empresa_id: identity.empresa_id,
+    usuario_id: identity.usuario_id,
+    texto,
+    origem: 'whatsapp',
+  });
+
+  if (error) {
+    log.error('lembrete_salvar_falhou', { message: error.message });
+    await enviarTexto(msg.from, '❌ Erro ao salvar o lembrete. Tente novamente.');
+    return;
+  }
+
+  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+  await enviarTexto(msg.from, `✅ Lembrete anotado às ${hora}! Vai aparecer no painel até você dar ciência.`);
 }
 
 // ─── HANDLERS ────────────────────────────────────────────────────────

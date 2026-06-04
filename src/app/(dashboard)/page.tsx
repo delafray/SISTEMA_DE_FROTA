@@ -2,6 +2,7 @@ import { createClient } from "@/lib/supabase/server";
 import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, KpiCard } from "@/components/ui/ds";
+import { LembretesWidget } from "@/components/dashboard/LembretesWidget";
 
 export const dynamic = "force-dynamic";
 
@@ -192,6 +193,9 @@ export default async function DashboardPage() {
       <PageHeader title="Painel de Controle" subtitle="Visão geral do sistema" />
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }} className="has-bottom-nav">
+
+        {/* ── Lembretes pendentes ──────────────────────────────── */}
+        <LembretesWidget />
 
         {/* ── Gerar Rota — ação rápida ─────────────────────────── */}
         <Link

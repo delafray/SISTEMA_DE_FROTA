@@ -92,10 +92,13 @@ export async function POST(req: NextRequest) {
   await new Promise(r => setTimeout(r, 150));
 
   // 4. Recria instância com webhook embutido + pede QR
-  const webhookUrl = process.env.NEXTAUTH_URL
-    ?? process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}/api/whatsapp/webhook`
-    : `${process.env.EVOLUTION_API_URL?.replace(':8080', ':3000') ?? ''}/api/whatsapp/webhook`;
+  // APP_URL = URL pública do Vercel (ex: https://sistema-de-frota.vercel.app)
+  const appUrl = process.env.APP_URL
+    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
+  if (!appUrl) {
+    return NextResponse.json({ error: 'APP_URL não configurada nas variáveis de ambiente' }, { status: 500 });
+  }
+  const webhookUrl = `${appUrl}/api/whatsapp/webhook`;
 
   const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET ?? '';
 

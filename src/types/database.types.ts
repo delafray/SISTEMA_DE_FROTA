@@ -1233,6 +1233,33 @@ export type Database = {
           },
         ]
       }
+      lembretes: {
+        Row: {
+          id: string
+          empresa_id: string
+          usuario_id: string
+          texto: string
+          origem: string
+          criado_em: string
+          ciente_em: string | null
+          ciente_por: string | null
+        }
+        Insert: {
+          id?: string
+          empresa_id: string
+          usuario_id: string
+          texto: string
+          origem?: string
+          criado_em?: string
+          ciente_em?: string | null
+          ciente_por?: string | null
+        }
+        Update: {
+          ciente_em?: string | null
+          ciente_por?: string | null
+        }
+        Relationships: []
+      }
       km_logs: {
         Row: {
           confirmado: boolean | null
