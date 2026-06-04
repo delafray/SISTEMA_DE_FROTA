@@ -13,9 +13,6 @@ export default function PerfilPage() {
   const [msg, setMsg]             = useState<{ tipo: "ok" | "erro"; texto: string } | null>(null);
 
   useEffect(() => {
-    createClient().from("perfis").select("nome").then(({ data }) => {
-      // pega o perfil do user logado via auth
-    });
     createClient().auth.getUser().then(({ data }) => {
       if (data.user) {
         createClient()

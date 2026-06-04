@@ -189,25 +189,36 @@ Se vier `"close"` → repita o passo de gerar QR Code de novo.
 
 ## Variáveis para o .env.local / Vercel
 
-Anote estes 4 valores e configure tanto no `.env.local` local quanto na Vercel:
+Configure tanto no `.env.local` local quanto na Vercel:
 
 ```env
-EVOLUTION_API_URL=http://129.80.27.159:8080        ← IP da VM Oracle Cloud
-EVOLUTION_API_KEY=<SUA_EVOLUTION_API_KEY>               ← AUTHENTICATION_API_KEY da Evolution
-EVOLUTION_INSTANCE_NAME=frota-bot-novo             ← nome da instância criada
-EVOLUTION_WEBHOOK_SECRET=<SEU_WEBHOOK_SECRET> ← deve ser o mesmo valor em webhook.headers.apikey
+EVOLUTION_API_URL=http://IP-DA-VM:8080             ← IP da VM Oracle Cloud
+EVOLUTION_API_KEY=<SUA_EVOLUTION_API_KEY>          ← AUTHENTICATION_API_KEY da Evolution
+EVOLUTION_INSTANCE_NAME=frota-bot-novo             ← nome da instância (fallback — valor canônico fica no banco)
+EVOLUTION_WEBHOOK_SECRET=<SEU_WEBHOOK_SECRET>      ← deve bater com webhook.headers.apikey
+APP_URL=https://seu-app.vercel.app                 ← URL pública do Vercel (usada ao recriar instância pelo painel)
 ```
 
-> **EVOLUTION_WEBHOOK_SECRET**: enviado pela Evolution como header `apikey` em cada POST ao webhook. O `security.ts` valida que esse header existe e bate com essa env. **Tem que ser o MESMO valor** no webhook (campo `headers.apikey`) e na Vercel/env.local.
+> **EVOLUTION_WEBHOOK_SECRET**: enviado pela Evolution como header `apikey` em cada POST ao webhook. O `security.ts` valida que esse header existe e bate com essa env. **Tem que ser o MESMO valor** no webhook e na Vercel/env.local.
+
+> **APP_URL**: usada pela rota `/api/whatsapp/reconectar` ao recriar a instância pelo painel. Sem ela o botão "Reconectar WhatsApp" retorna erro 500.
+
+> **EVOLUTION_INSTANCE_NAME**: ainda necessária como fallback se a tabela `empresas` não tiver `whatsapp_instance` preenchido. O valor canônico fica na coluna `empresas.whatsapp_instance` (gerenciado pelo painel em Empresas → editar → seção WhatsApp).
 
 ---
 
 ## Reconexão (quando bot para de responder)
 
-1. Verificar estado: `GET /instance/connectionState/seu-bot`
-2. Se `"state": "close"`:
-   - `GET /instance/connect/seu-bot` → escanear QR Code novamente
-   - WhatsApp → Aparelhos conectados → Conectar
+### Pelo painel (recomendado)
+1. Dashboard → **Empresas** → editar a empresa → rolar até a seção **WhatsApp do Bot**
+2. O estado atual aparece (🟢 Conectado / 🔴 Desconectado)
+3. Preencha o novo número se quiser trocar, ou deixe em branco para reconectar no mesmo
+4. Clique **📱 Reconectar WhatsApp** → QR aparece na tela com contador de 60s
+5. WhatsApp → Aparelhos conectados → Conectar aparelho → escanear
+
+### Pela API (alternativa)
+1. Verificar estado: `GET /instance/connectionState/frota-bot-novo`
+2. Se `"state": "close"` → rodar `bash /home/ubuntu/evolution/recreate.sh` na VM
 
 ---
 

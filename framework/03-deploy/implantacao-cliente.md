@@ -21,7 +21,7 @@
 
 ## Checklist de implantação (ordem exata)
 
-1. **Supabase** → criar projeto, copiar 3 chaves, executar migrations
+1. **Supabase** → criar projeto, copiar 3 chaves, executar **todas** as migrations abaixo na ordem:
 2. **Cloudflare R2** → criar bucket, criar API token, anotar 5 variáveis
 3. **VM Oracle + Evolution API** → deploy `evoapicloud/evolution-api:v2.3.7` + Postgres + Redis (`DATABASE_ENABLED=true`), vars, volumes. Ver [oracle-cloud.md](oracle-cloud.md) + [../01-whatsapp-bot/setup-evolution.md](../01-whatsapp-bot/setup-evolution.md). *(Railway foi descontinuado.)*
 4. **GitHub + Vercel** → fork repo, conectar Vercel, TODAS env vars, região `iad1`
@@ -33,6 +33,27 @@
 10. **Instância + Webhook** → criar instância Evolution, configurar webhook
 11. **QR Code** → gerar, escanear, verificar `state: "open"`
 12. **Teste final** → motorista manda "oi" → bot responde
+
+---
+
+## Migrations Supabase (passo 1 — rodar todas no SQL Editor)
+
+| Arquivo | O que faz | Obrigatório |
+|---|---|---|
+| Schema principal | Tabelas base (gerado pelo Supabase) | ✅ |
+| `db/migration_whatsapp_historico.sql` | Histórico de conversas do bot | ✅ |
+| `db/migration_session_atomic.sql` | RPC de sessão atômica | ✅ |
+| `db/migration_bot_metricas.sql` | Métricas do bot | ✅ |
+| `db/migration_geocode_google.sql` | Cache e cota do Google Geocoding | ✅ |
+| `db/migration_coordenadas_aprendidas.sql` | Coordenadas aprendidas pela frota | ✅ |
+| `db/migration_fix_permissions_e_cep.sql` | GRANTs de permissão + CEP opcional | ✅ |
+| `db/migration_fix_cota_ambiguo.sql` | Fix da RPC de cota (coluna ambígua) | ✅ |
+| `db/migration_limpeza_modelo.sql` | Rename de tabelas (viagens→pedidos, fretes→entregas) | ✅ |
+| `db/migration_whatsapp_empresa.sql` | Colunas `whatsapp_instance` e `whatsapp_numero` em `empresas` | ✅ |
+| `db/migration_lembretes.sql` | Tabela de lembretes do painel | ✅ |
+| `db/migration_fix_lembretes_fk.sql` | Corrige FK de lembretes → perfis (necessário para o join de nome funcionar) | ✅ |
+
+> Após rodar as migrations, popular `empresas.whatsapp_instance` com o nome da instância Evolution (`frota-bot-novo` ou equivalente).
 
 ---
 

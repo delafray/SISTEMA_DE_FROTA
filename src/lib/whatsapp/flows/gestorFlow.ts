@@ -145,7 +145,11 @@ async function confirmarLembretePendente(
   identity: IdentityGestor
 ): Promise<void> {
   const texto = lembretesPendentes.get(msg.from);
-  if (!texto) return; // não havia lembrete pendente — deixa seguir pro fluxo normal
+  if (!texto) {
+    // Contexto perdido (restart do servidor ou timeout) — avisa o gestor
+    await enviarTexto(msg.from, 'Não encontrei um lembrete pendente para confirmar. Envie novamente com "lembrete: ..." e responda sim em seguida.');
+    return;
+  }
 
   lembretesPendentes.delete(msg.from);
 
