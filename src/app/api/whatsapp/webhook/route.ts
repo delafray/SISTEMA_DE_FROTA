@@ -17,8 +17,9 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('webhook');
 
-// Pina a função na região São Paulo — reduz latência BR (Supabase + Gemini)
-export const preferredRegion = 'gru1';
+// Pina na região US East — mais perto do Evolution API, Deepgram e Gemini (todos US)
+// Supabase (BR) perde ~150ms nas queries pequenas, trade-off favorável
+export const preferredRegion = 'iad1';
 
 // ─── POST: Receber mensagens ─────────────────────────────────────────
 
