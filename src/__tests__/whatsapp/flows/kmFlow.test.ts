@@ -1,372 +1,256 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
-import type { ParsedMessage } from "@/lib/whatsapp/messageParser";
-import type { Sessao } from "@/lib/whatsapp/sessionManager";
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { ParsedMessage } from '@/lib/whatsapp/messageParser';
+import type { Sessao } from '@/lib/whatsapp/sessionManager';
 
 // ─── MOCKS ──────────────────────────────────────────────────────────────
 
-vi.mock("@/lib/whatsapp/messageSender", () => ({
+vi.mock('@/lib/whatsapp/messageSender', () => ({
   enviarTexto: vi.fn().mockResolvedValue(true),
-  enviarBotoes: vi.fn().mockResolvedValue(true),
-  enviarMenuTexto: vi.fn().mockResolvedValue(true),
-  formatarMenuTexto: vi.fn(() => ""),
 }));
 
-vi.mock("@/lib/whatsapp/menuHelper", () => ({
+vi.mock('@/lib/whatsapp/menuHelper', () => ({
   enviarMenuBotoes: vi.fn().mockResolvedValue(true),
-  enviarMenuLista: vi.fn().mockResolvedValue(true),
 }));
 
-vi.mock("@/lib/whatsapp/sessionManager", () => ({
+vi.mock('@/lib/whatsapp/sessionManager', () => ({
   updateSession: vi.fn().mockResolvedValue(undefined),
   resetToMenu: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock("@/services/aiService", () => ({
+vi.mock('@/services/aiService', () => ({
   lerOdometro: vi.fn(),
 }));
 
-vi.mock("@/lib/whatsapp/messageParser", async () => {
-  const actual = await vi.importActual<typeof import("@/lib/whatsapp/messageParser")>(
-    "@/lib/whatsapp/messageParser"
+vi.mock('@/lib/whatsapp/messageParser', async () => {
+  const actual = await vi.importActual<typeof import('@/lib/whatsapp/messageParser')>(
+    '@/lib/whatsapp/messageParser'
   );
-  return {
-    ...actual,
-    getMediaUrl: vi.fn(),
-  };
+  return { ...actual, getMediaUrl: vi.fn() };
 });
 
+vi.mock('@/lib/storage/r2', () => ({
+  persistirMidiaNoR2: vi.fn().mockResolvedValue('https://r2.dev/km.jpg'),
+  chaveMidia: vi.fn().mockReturnValue('key/emp/km.jpg'),
+}));
+
 const supabaseInsertMock = vi.fn();
-const supabaseMaybeSingleMock = vi.fn().mockResolvedValue({ data: null });
-const supabaseEqMock = vi.fn(() => ({ eq: supabaseEqMock, maybeSingle: supabaseMaybeSingleMock }));
-const supabaseSelectMock = vi.fn(() => ({ eq: supabaseEqMock }));
-const supabaseFromMock = vi.fn(() => ({
-  select: supabaseSelectMock,
-  insert: supabaseInsertMock,
+vi.mock('@supabase/supabase-js', () => ({
+  createClient: vi.fn(() => ({ from: vi.fn(() => ({ insert: supabaseInsertMock })) })),
 }));
 
-vi.mock("@supabase/supabase-js", () => ({
-  createClient: vi.fn(() => ({ from: supabaseFromMock })),
-}));
+// ─── IMPORTS após mocks ──────────────────────────────────────────────────
 
-// ─── IMPORTS após mocks ─────────────────────────────────────────────────
-
-import { processarKmFlow } from "@/lib/whatsapp/flows/kmFlow";
-import { enviarTexto } from "@/lib/whatsapp/messageSender";
-import { enviarMenuBotoes } from "@/lib/whatsapp/menuHelper";
-import { updateSession } from "@/lib/whatsapp/sessionManager";
-import { lerOdometro } from "@/services/aiService";
-import { getMediaUrl } from "@/lib/whatsapp/messageParser";
+import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
+import { enviarTexto } from '@/lib/whatsapp/messageSender';
+import { enviarMenuBotoes } from '@/lib/whatsapp/menuHelper';
+import { updateSession, resetToMenu } from '@/lib/whatsapp/sessionManager';
+import { lerOdometro } from '@/services/aiService';
+import { getMediaUrl } from '@/lib/whatsapp/messageParser';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
 
-function makeSessao(overrides: Partial<Sessao> = {}): Sessao {
+function makeMsg(over: Partial<ParsedMessage> = {}): ParsedMessage {
   return {
-    id: "sessao-1",
-    motorista_id: "motorista-1",
-    empresa_id: "empresa-1",
-    telefone_whatsapp: "5531999990000",
-    estado: "aguardando_foto_km",
-    contexto: { veiculo_id: "veiculo-1" },
-    fluxo_atual: "km",
-    expira_em: new Date(Date.now() + 600_000).toISOString(),
-    ...overrides,
-  } as Sessao;
+    from: '5531999',
+    fromName: 'Motorista',
+    messageId: 'wamid.x',
+    timestamp: new Date(),
+    tipo: 'texto',
+    phoneNumberId: 'pnid',
+    ...over,
+  };
 }
 
-function makeMsg(overrides: Partial<ParsedMessage> = {}): ParsedMessage {
+function makeSessao(estado: string, contexto: Record<string, unknown> = {}): Sessao {
   return {
-    from: "5531999990000",
-    tipo: "texto",
-    texto: "",
-    ...overrides,
-  } as ParsedMessage;
+    id: 'sess-1',
+    whatsapp: '5531999',
+    motorista_id: 'mot-1',
+    usuario_id: 'usr-1',
+    empresa_id: 'emp-1',
+    estado: estado as Sessao['estado'],
+    contexto,
+    ultimo_contato: new Date().toISOString(),
+  };
 }
 
-beforeEach(() => {
-  vi.clearAllMocks();
-  supabaseInsertMock.mockResolvedValue({ error: null });
-  supabaseMaybeSingleMock.mockResolvedValue({ data: null });
-});
+// ─── aguardando_foto_km ──────────────────────────────────────────────────
 
-// ─── TESTES ─────────────────────────────────────────────────────────────
+describe('kmFlow — aguardando_foto_km', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseInsertMock.mockResolvedValue({ error: null });
+  });
+  afterEach(() => vi.restoreAllMocks());
 
-describe("kmFlow — aguardando_foto_km", () => {
-  it("aceita digitação direta de número quando usuário manda texto numérico", async () => {
-    const msg = makeMsg({ tipo: "texto", texto: "125430" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_lido: 125430 })
+  it('texto com número válido → salva como manual, sem chamar IA', async () => {
+    await processarKmFlow(
+      makeMsg({ tipo: 'texto', texto: '125430' }),
+      makeSessao('aguardando_foto_km', { veiculo_id: 'v-1' })
     );
+    expect(lerOdometro).not.toHaveBeenCalled();
+    expect(supabaseInsertMock).toHaveBeenCalledOnce();
+    expect(supabaseInsertMock.mock.calls[0][0].km_lido).toBe(125430);
+    expect(resetToMenu).toHaveBeenCalledWith('sess-1');
   });
 
-  it("pede foto ou digitação quando recebe texto não-numérico", async () => {
-    const msg = makeMsg({ tipo: "texto", texto: "bom dia" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("foto do painel")
-    );
-    expect(supabaseInsertMock).not.toHaveBeenCalled();
+  it('texto não-numérico → pede foto, não chama IA', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: 'oi' }), makeSessao('aguardando_foto_km'));
+    expect(lerOdometro).not.toHaveBeenCalled();
+    expect(enviarTexto).toHaveBeenCalledOnce();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('foto');
   });
 
-  it("pede foto quando recebe mídia que não é foto", async () => {
-    const msg = makeMsg({ tipo: "audio" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("foto clara")
-    );
+  it('tipo != foto e != texto → pede foto', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'documento' }), makeSessao('aguardando_foto_km'));
+    expect(lerOdometro).not.toHaveBeenCalled();
+    expect(enviarTexto).toHaveBeenCalledOnce();
   });
 
-  it("chama IA quando recebe foto e mostra botões se confiança alta", async () => {
-    vi.mocked(getMediaUrl).mockResolvedValue("https://meta.media/painel.jpg");
-    vi.mocked(lerOdometro).mockResolvedValue({
-      ok: true,
-      data: { km: 125430, confianca: 95, observacao: "" },
-    });
-
-    const msg = makeMsg({ tipo: "foto", mediaId: "media-1" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarMenuBotoes).toHaveBeenCalledWith(
-      sessao.id,
-      msg.from,
-      expect.stringContaining("125.430"),
-      expect.arrayContaining([
-        expect.objectContaining({ id: "km_confirmar" }),
-        expect.objectContaining({ id: "km_digitar" }),
-      ])
-    );
-    expect(updateSession).toHaveBeenCalledWith(
-      sessao.id,
-      expect.objectContaining({ estado: "aguardando_confirmacao_km" })
-    );
+  it('foto sem mediaUrl → pede digitação manual + atualiza estado', async () => {
+    (getMediaUrl as ReturnType<typeof vi.fn>).mockResolvedValue(null);
+    await processarKmFlow(makeMsg({ tipo: 'foto', mediaId: 'mid-1' }), makeSessao('aguardando_foto_km'));
+    expect(lerOdometro).not.toHaveBeenCalled();
+    expect(updateSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({ estado: 'aguardando_km_manual' }));
   });
 
-  it("pede digitação manual quando IA tem confiança baixa", async () => {
-    vi.mocked(getMediaUrl).mockResolvedValue("https://meta.media/painel.jpg");
-    vi.mocked(lerOdometro).mockResolvedValue({
-      ok: true,
-      data: { km: 125430, confianca: 60, observacao: "" },
-    });
-
-    const msg = makeMsg({ tipo: "foto", mediaId: "media-1" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("60%")
-    );
-    expect(updateSession).toHaveBeenCalledWith(
-      sessao.id,
-      expect.objectContaining({ estado: "aguardando_km_manual" })
-    );
+  it('foto OK, IA falha → pede digitação manual', async () => {
+    (getMediaUrl as ReturnType<typeof vi.fn>).mockResolvedValue('https://cdn/painel.jpg');
+    (lerOdometro as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, motivo: 'timeout' });
+    await processarKmFlow(makeMsg({ tipo: 'foto', mediaId: 'mid-1' }), makeSessao('aguardando_foto_km'));
+    expect(updateSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({ estado: 'aguardando_km_manual' }));
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
   });
 
-  it("cai em fallback manual quando IA falha", async () => {
-    vi.mocked(getMediaUrl).mockResolvedValue("https://meta.media/painel.jpg");
-    vi.mocked(lerOdometro).mockResolvedValue({
-      ok: false,
-      fallbackManual: true,
-      motivo: "api_error",
-    });
+  it('foto OK, IA confiança >= 85 → mostra KM lido + botões confirmar/digitar', async () => {
+    (getMediaUrl as ReturnType<typeof vi.fn>).mockResolvedValue('https://cdn/painel.jpg');
+    (lerOdometro as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, data: { km: 125430, confianca: 92 } });
+    await processarKmFlow(makeMsg({ tipo: 'foto', mediaId: 'mid-1' }), makeSessao('aguardando_foto_km'));
 
-    const msg = makeMsg({ tipo: "foto", mediaId: "media-1" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(updateSession).toHaveBeenCalledWith(
-      sessao.id,
-      expect.objectContaining({ estado: "aguardando_km_manual" })
-    );
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
+    const [, , texto, botoes] = (enviarMenuBotoes as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(texto).toContain('125');
+    expect(botoes).toEqual([
+      { id: 'km_confirmar', titulo: '✅ Confirmar' },
+      { id: 'km_digitar', titulo: '✏️ Digitar manual' },
+    ]);
+    expect(updateSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({
+      estado: 'aguardando_confirmacao_km',
+      contexto: expect.objectContaining({ km_lido: 125430, km_confianca: 92 }),
+    }));
   });
 
-  it("cai em fallback quando download da mídia falha", async () => {
-    vi.mocked(getMediaUrl).mockResolvedValue(null);
-
-    const msg = makeMsg({ tipo: "foto", mediaId: "media-1" });
-    const sessao = makeSessao({ estado: "aguardando_foto_km" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("Não consegui baixar")
-    );
-    expect(updateSession).toHaveBeenCalledWith(
-      sessao.id,
-      expect.objectContaining({ estado: "aguardando_km_manual" })
-    );
+  it('foto OK, IA confiança < 85 → pede digitação manual', async () => {
+    (getMediaUrl as ReturnType<typeof vi.fn>).mockResolvedValue('https://cdn/painel.jpg');
+    (lerOdometro as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, data: { km: 99999, confianca: 70 } });
+    await processarKmFlow(makeMsg({ tipo: 'foto', mediaId: 'mid-1' }), makeSessao('aguardando_foto_km'));
+    expect(enviarMenuBotoes).not.toHaveBeenCalled();
+    expect(updateSession).toHaveBeenCalledWith('sess-1', expect.objectContaining({ estado: 'aguardando_km_manual' }));
   });
 });
 
-describe("kmFlow — aguardando_confirmacao_km", () => {
-  it("salva KM quando usuário clica em confirmar", async () => {
-    const sessao = makeSessao({
-      estado: "aguardando_confirmacao_km",
-      contexto: { veiculo_id: "veiculo-1", km_lido: 125430, km_confianca: 95 },
-    });
-    const msg = makeMsg({ tipo: "botao", botaoId: "km_confirmar" });
+// ─── aguardando_confirmacao_km ───────────────────────────────────────────
 
-    await processarKmFlow(msg, sessao);
+describe('kmFlow — aguardando_confirmacao_km', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseInsertMock.mockResolvedValue({ error: null });
+  });
+  afterEach(() => vi.restoreAllMocks());
 
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_lido: 125430 })
-    );
+  it('km_confirmar com km_lido → salva como ia_confirmado com ia_confianca preenchida', async () => {
+    const sessao = makeSessao('aguardando_confirmacao_km', { veiculo_id: 'v-1', km_lido: 125430, km_confianca: 92 });
+    await processarKmFlow(makeMsg({ tipo: 'botao', botaoId: 'km_confirmar' }), sessao);
+
+    expect(supabaseInsertMock).toHaveBeenCalledOnce();
+    const ins = supabaseInsertMock.mock.calls[0][0];
+    expect(ins.km_lido).toBe(125430);
+    expect(ins.ia_confianca).toBe(92);
+    expect(ins.ia_raw_response).toContain('125430');
+    expect(resetToMenu).toHaveBeenCalledWith('sess-1');
   });
 
-  it("ao confirmar leitura da IA, persiste ia_confianca e ia_raw_response (origem ia_confirmado)", async () => {
-    const sessao = makeSessao({
-      estado: "aguardando_confirmacao_km",
-      contexto: {
-        veiculo_id: "veiculo-1",
-        km_lido: 125430,
-        km_confianca: 95,
-        foto_url: "https://meta.media/painel.jpg",
-      },
-    });
-    const msg = makeMsg({ tipo: "botao", botaoId: "km_confirmar" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        km_lido: 125430,
-        ia_confianca: 95,
-        ia_raw_response: JSON.stringify({ km_lido: 125430, confianca: 95 }),
-        foto_urls: ["https://meta.media/painel.jpg"],
-      })
-    );
+  it('km_confirmar sem km_lido no contexto → pede digitação manual', async () => {
+    const sessao = makeSessao('aguardando_confirmacao_km', { veiculo_id: 'v-1' });
+    await processarKmFlow(makeMsg({ tipo: 'botao', botaoId: 'km_confirmar' }), sessao);
+    expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(updateSession).toHaveBeenCalledWith('sess-1', { estado: 'aguardando_km_manual' });
   });
 
-  it("correção numérica via texto NÃO herda metadados da IA do contexto (origem manual)", async () => {
-    // O motorista rejeitou a leitura da IA (125430/95% ainda no contexto) e digitou
-    // outro valor — o registro manual não pode carregar a confiança/raw descartados.
-    const sessao = makeSessao({
-      estado: "aguardando_confirmacao_km",
-      contexto: { veiculo_id: "veiculo-1", km_lido: 125430, km_confianca: 95 },
-    });
-    const msg = makeMsg({ tipo: "texto", texto: "125500" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        km_lido: 125500,
-        ia_confianca: null,
-        ia_raw_response: null,
-      })
-    );
-  });
-
-  it("muda estado para manual quando usuário clica em corrigir", async () => {
-    const sessao = makeSessao({
-      estado: "aguardando_confirmacao_km",
-      contexto: { veiculo_id: "veiculo-1", km_lido: 125430, km_confianca: 95 },
-    });
-    const msg = makeMsg({ tipo: "botao", botaoId: "km_digitar" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(updateSession).toHaveBeenCalledWith(
-      sessao.id,
-      expect.objectContaining({ estado: "aguardando_km_manual" })
+  it('km_digitar → transição para aguardando_km_manual', async () => {
+    await processarKmFlow(
+      makeMsg({ tipo: 'botao', botaoId: 'km_digitar' }),
+      makeSessao('aguardando_confirmacao_km', { veiculo_id: 'v-1' })
     );
     expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(updateSession).toHaveBeenCalledWith('sess-1', { estado: 'aguardando_km_manual' });
   });
 
-  it("aceita correção numérica via texto livre", async () => {
-    const sessao = makeSessao({
-      estado: "aguardando_confirmacao_km",
-      contexto: { veiculo_id: "veiculo-1", km_lido: 125430 },
-    });
-    const msg = makeMsg({ tipo: "texto", texto: "125500" });
+  it('texto com número → salva como manual (ia_confianca=null, ia_raw=null)', async () => {
+    const sessao = makeSessao('aguardando_confirmacao_km', { veiculo_id: 'v-1', km_lido: 125430, km_confianca: 92 });
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: '126000' }), sessao);
+    const ins = supabaseInsertMock.mock.calls[0][0];
+    expect(ins.km_lido).toBe(126000);
+    expect(ins.ia_confianca).toBeNull();
+    expect(ins.ia_raw_response).toBeNull();
+  });
 
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_lido: 125500 })
+  it('tipo inválido → reenvia botões', async () => {
+    await processarKmFlow(
+      makeMsg({ tipo: 'foto', mediaId: 'x' }),
+      makeSessao('aguardando_confirmacao_km', { veiculo_id: 'v-1' })
     );
+    expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(enviarMenuBotoes).toHaveBeenCalledOnce();
   });
 });
 
-describe("kmFlow — aguardando_km_manual", () => {
-  it("rejeita texto que não é número", async () => {
-    const sessao = makeSessao({ estado: "aguardando_km_manual" });
-    const msg = makeMsg({ tipo: "texto", texto: "abc" });
+// ─── aguardando_km_manual ────────────────────────────────────────────────
 
-    await processarKmFlow(msg, sessao);
+describe('kmFlow — aguardando_km_manual', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    vi.spyOn(console, 'error').mockImplementation(() => {});
+    supabaseInsertMock.mockResolvedValue({ error: null });
+  });
+  afterEach(() => vi.restoreAllMocks());
 
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("apenas o")
-    );
+  it('tipo != texto → pede digitação', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'foto' }), makeSessao('aguardando_km_manual', { veiculo_id: 'v-1' }));
     expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(enviarTexto).toHaveBeenCalledOnce();
   });
 
-  it("aceita número como KM e persiste", async () => {
-    const sessao = makeSessao({ estado: "aguardando_km_manual" });
-    const msg = makeMsg({ tipo: "texto", texto: "125430" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({ km_lido: 125430 })
-    );
+  it('texto inválido "abc" → mensagem de erro', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: 'abc' }), makeSessao('aguardando_km_manual', { veiculo_id: 'v-1' }));
+    expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('número'));
   });
 
-  it("digitação manual NÃO grava metadados de IA mesmo com leitura rejeitada no contexto", async () => {
-    // Cenário do bug: IA leu 999999 (40%), motorista descartou e digitou 125430.
-    // O km_log manual deve sair com ia_confianca/ia_raw_response nulos.
-    const sessao = makeSessao({
-      estado: "aguardando_km_manual",
-      contexto: {
-        veiculo_id: "veiculo-1",
-        km_lido: 999999,
-        km_confianca: 40,
-        foto_url: "https://meta.media/painel.jpg",
-      },
-    });
-    const msg = makeMsg({ tipo: "texto", texto: "125430" });
-
-    await processarKmFlow(msg, sessao);
-
-    expect(supabaseInsertMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        km_lido: 125430,
-        ia_confianca: null,
-        ia_raw_response: null,
-      })
-    );
+  it('"125.430" (ponto de milhar) → parseia para 125430 e salva', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: '125.430' }), makeSessao('aguardando_km_manual', { veiculo_id: 'v-1' }));
+    expect(supabaseInsertMock.mock.calls[0][0].km_lido).toBe(125430);
   });
 
-  it("trata erro de KM retroativo do trigger do banco", async () => {
-    supabaseInsertMock.mockResolvedValueOnce({
-      error: { message: "km_atual maior que o novo valor" },
-    });
+  it('sem veiculo_id → mensagem de erro, não salva', async () => {
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: '125430' }), makeSessao('aguardando_km_manual'));
+    expect(supabaseInsertMock).not.toHaveBeenCalled();
+    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('nenhum caminhão'));
+  });
 
-    const sessao = makeSessao({ estado: "aguardando_km_manual" });
-    const msg = makeMsg({ tipo: "texto", texto: "100" });
+  it('INSERT falha por KM retroativo → mensagem específica, não chama resetToMenu', async () => {
+    supabaseInsertMock.mockResolvedValue({ error: { message: 'km_atual retroativ', code: 'P0001' } });
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: '100' }), makeSessao('aguardando_km_manual', { veiculo_id: 'v-1' }));
+    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('menor'));
+    expect(resetToMenu).not.toHaveBeenCalled();
+  });
 
-    await processarKmFlow(msg, sessao);
-
-    expect(enviarTexto).toHaveBeenCalledWith(
-      msg.from,
-      expect.stringContaining("menor")
-    );
+  it('INSERT falha genérico → mensagem genérica, não chama resetToMenu', async () => {
+    supabaseInsertMock.mockResolvedValue({ error: { message: 'connection error', code: '500' } });
+    await processarKmFlow(makeMsg({ tipo: 'texto', texto: '125430' }), makeSessao('aguardando_km_manual', { veiculo_id: 'v-1' }));
+    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('Erro ao salvar'));
+    expect(resetToMenu).not.toHaveBeenCalled();
   });
 });

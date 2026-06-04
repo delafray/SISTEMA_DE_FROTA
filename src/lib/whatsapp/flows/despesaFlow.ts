@@ -164,8 +164,10 @@ async function processarConfirmacaoDespesa(msg: ParsedMessage, sessao: Sessao): 
     const valor = parseValor(msg.texto);
     if (valor !== null) {
       const dados = sessao.contexto.despesa_dados as Record<string, unknown> ?? {};
+      const dadosAtualizados = { ...dados, valor };
+      sessao.contexto.despesa_dados = dadosAtualizados;
       await updateSession(sessao.id, {
-        contexto: { despesa_dados: { ...dados, valor } },
+        contexto: { despesa_dados: dadosAtualizados },
       });
       await salvarDespesa(msg.from, sessao);
       return;

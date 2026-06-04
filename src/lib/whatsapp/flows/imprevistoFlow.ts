@@ -152,9 +152,11 @@ async function processarMidia(msg: ParsedMessage, sessao: Sessao): Promise<void>
   // Texto livre → salvar como observação
   if (msg.tipo === 'texto' && msg.texto) {
     const dados = sessao.contexto.imprevisto_dados as Record<string, unknown> ?? {};
+    const dadosAtualizados = { ...dados, observacao: msg.texto };
+    sessao.contexto.imprevisto_dados = dadosAtualizados;
     await updateSession(sessao.id, {
       contexto: {
-        imprevisto_dados: { ...dados, observacao: msg.texto },
+        imprevisto_dados: dadosAtualizados,
       },
     });
     await salvarImprevisto(msg.from, sessao);
