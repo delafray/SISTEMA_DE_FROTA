@@ -20,7 +20,7 @@ const INTENT_CONFIANCA_MINIMA = 55;
 // Palavras que disparam registro de lembrete — sem IA, detecção por prefixo
 // Exemplos válidos: "lembrete: fechei contrato", "anote que recebi pagamento",
 //                   "registro, viagem cancelada", "guarda esse dado"
-const LEMBRETE_REGEX = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]+(.*)/i;
+const LEMBRETE_REGEX = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
 
 type IdentityGestor = Extract<UserIdentity, { tipo: 'gestor' | 'master' }>;
 
@@ -48,16 +48,14 @@ export async function processarGestorFlow(
     if (matchLembrete) {
       const conteudo = matchLembrete[2].trim();
       if (conteudo) {
+        // Salva IMEDIATAMENTE — sem passo de confirmação.
+        // Confirmação em 2 etapas quebrava em serverless (Vercel): a 2ª mensagem
+        // pode cair em outra instância, perdendo o estado em memória.
         await processarLembrete(msg, identity, conteudo);
       } else {
         // Falou só "lembrete" sem conteúdo — pede o texto
         await enviarTexto(msg.from, '📝 O que você quer anotar? Continue com:\n"lembrete: <seu texto aqui>"');
       }
-      return;
-    }
-    // Confirmação de lembrete pendente no contexto da conversa
-    if (/^(sim|anotar|salvar|confirmar|ok|s|isso|exato|correto)$/i.test(msg.texto.trim())) {
-      await confirmarLembretePendente(msg, identity);
       return;
     }
   }
@@ -128,34 +126,13 @@ export async function processarGestorFlow(
 
 // ─── LEMBRETES ───────────────────────────────────────────────────────
 
-// Cache em memória por telefone (TTL da sessão Node — descartado ao reiniciar)
-const lembretesPendentes = new Map<string, string>();
-
+// Salva o lembrete IMEDIATAMENTE no banco (sem estado em memória).
+// Stateless de propósito: cada mensagem é independente, robusto em serverless.
 async function processarLembrete(
   msg: ParsedMessage,
   identity: IdentityGestor,
   texto: string
 ): Promise<void> {
-  lembretesPendentes.set(msg.from, texto);
-  await enviarTexto(
-    msg.from,
-    `📝 *Anotar este lembrete?*\n\n_"${texto}"_\n\nResponda *sim* para anotar ou ignore para cancelar.`
-  );
-}
-
-async function confirmarLembretePendente(
-  msg: ParsedMessage,
-  identity: IdentityGestor
-): Promise<void> {
-  const texto = lembretesPendentes.get(msg.from);
-  if (!texto) {
-    // Contexto perdido (restart do servidor ou timeout) — avisa o gestor
-    await enviarTexto(msg.from, 'Não encontrei um lembrete pendente para confirmar. Envie novamente com "lembrete: ..." e responda sim em seguida.');
-    return;
-  }
-
-  lembretesPendentes.delete(msg.from);
-
   const supabase = getSupabase();
   const { error } = await supabase.from('lembretes').insert({
     empresa_id: identity.empresa_id,
@@ -170,8 +147,7 @@ async function confirmarLembretePendente(
     return;
   }
 
-  const hora = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-  await enviarTexto(msg.from, `✅ Lembrete anotado às ${hora}! Vai aparecer no painel até você dar ciência.`);
+  await enviarTexto(msg.from, `✅ Lembrete anotado!\n\n_"${texto}"_\n\nVai aparecer no painel até você dar ciência.`);
 }
 
 // ─── HANDLERS ────────────────────────────────────────────────────────
