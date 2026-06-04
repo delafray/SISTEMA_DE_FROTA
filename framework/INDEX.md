@@ -67,6 +67,14 @@
 
 ---
 
+### 🎨 Arquitetura e UI → [07-arquitetura-e-ui/](07-arquitetura-e-ui/canvas-interativo.md)
+
+| Quero... | Vá para |
+|---|---|
+| Implementar um Canvas visual de Arquitetura no Painel (React Flow) | [canvas-interativo.md](07-arquitetura-e-ui/canvas-interativo.md) |
+
+---
+
 ## Mapa rápido de arquivos
 
 ```
@@ -97,9 +105,11 @@ framework/
 ├── 05-planos-e-decisoes/
 │   ├── INDEX.md
 │   └── acoes-pendentes.md
-└── 06-testes/
-    ├── INDEX.md
-    └── politica.md
+├── 06-testes/
+│   ├── INDEX.md
+│   └── politica.md
+└── 07-arquitetura-e-ui/
+    └── canvas-interativo.md
 ```
 
 ---
