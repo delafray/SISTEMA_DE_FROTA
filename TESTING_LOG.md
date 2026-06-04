@@ -107,3 +107,4 @@ Formato: `- [DATA] [MODELO] — [O QUE FEZ] — [QUANTOS TESTES NOVOS] — [STAT
 
 
 - 2026-06-04 Antigravity - Criou Canvas de Arquitetura Interativo no Dashboard (React Flow) - +1 teste - ? 1054/1055 passaram (1 falha flaky preexistente em app/mobile/rota)
+- 2026-06-04 Antigravity - Adicionou Painel Lateral Interativo no Canvas de Arquitetura - +1 caso de teste no page.test.tsx - ? Passaram
