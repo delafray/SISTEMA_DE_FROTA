@@ -27,6 +27,7 @@
 | 14 | **Nominatim** | Endereço → lat/lng | Grátis (1 req/s) | — |
 | 15 | **OSRM** | Cálculo de rotas | Grátis (self-hosted) | Na VM Oracle |
 | 16 | **VROOM** | Otimização VRP | Grátis (self-hosted) | Na VM Oracle |
+| 17 | **Overpass** | Validação de coordenadas | Grátis / sem cadastro | — |
 
 **Custo total: ~R$ 5-20/mês** (só OpenAI é obrigatoriamente pago)
 

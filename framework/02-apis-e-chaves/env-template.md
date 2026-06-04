@@ -44,19 +44,30 @@ GEMINI_API_KEY=sua-gemini-key
 
 # ── Deepgram API (Speech-to-Text) ───────────────────
 DEEPGRAM_API_KEY=sua-deepgram-key
+DEEPGRAM_MODEL=nova-2                                     ← modelo de transcrição (padrão: nova-2)
 
 # ── Google Maps Geocoding API ───────────────────────
 GOOGLE_MAPS_API_KEY=sua-google-maps-key
+
+# ── Overpass API (validação de coordenadas) ─────────
+OVERPASS_URL=https://overpass-api.de/api/interpreter       ← gratuito, sem cadastro
 
 # ── Guarda de cota Gemini (SÓ free tier) ────────────
 # Descomente apenas se estiver no plano GRATUITO:
 # GEMINI_RPM=5
 # GEMINI_RPD=250
+# GEMINI_LIMITE_DIA=250                                   ← limite diário de chamadas
 
 # ── Geocoding ───────────────────────────────────────
 GEOCODE_LIMITE_MENSAL=9800
 NOMINATIM_URL=https://nominatim.openstreetmap.org
 VIACEP_URL=https://viacep.com.br/ws
+
+# ── Tracking de uso de APIs ─────────────────────────
+USO_APIS_ENC_KEY=chave-criptografia-32-chars-aqui          ← chave AES para criptografar dados de uso
+
+# ── Build (automático na Vercel, não precisa setar) ──
+# NEXT_PUBLIC_BUILD_SHA=abc123                             ← preenchido automaticamente pelo Vercel
 ```
 
 ---
