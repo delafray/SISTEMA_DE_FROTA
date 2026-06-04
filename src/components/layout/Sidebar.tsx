@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
@@ -22,6 +23,69 @@ const ChartIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24
 const CloseIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
 const GaugeIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l3-3m6 1a9 9 0 11-18 0 9 9 0 0118 0z" /><circle cx="12" cy="14" r="1" /></svg>;
 const ServerIcon   = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>;
+
+/* ─── SystemStatusBadge ──────────────────────────────────────── */
+interface ServiceStatus { name: string; ok: boolean; }
+interface MonitorStatus { ok: boolean; services: ServiceStatus[]; }
+
+function SystemStatusBadge() {
+  const [status, setStatus] = useState<MonitorStatus | null>(null);
+
+  useEffect(() => {
+    const check = async () => {
+      try {
+        const res = await fetch('/api/monitoring/status', { cache: 'no-store' });
+        const data: MonitorStatus = await res.json();
+        setStatus(data);
+      } catch {
+        setStatus({ ok: false, services: [] });
+      }
+    };
+    check();
+    const interval = setInterval(check, 60_000);
+    return () => clearInterval(interval);
+  }, []);
+
+  if (!status) return null;
+
+  const color  = status.ok ? '#4ade80' : '#f87171';
+  const label  = status.ok ? 'Sistemas OK' : 'Verificar serviços';
+  const tip    = status.services.map(s => `${s.ok ? '✅' : '❌'} ${s.name}`).join('\n');
+
+  return (
+    <a
+      href="http://129.80.27.159:3001"
+      target="_blank"
+      rel="noopener noreferrer"
+      title={tip || label}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        gap: '7px',
+        padding: '5px 8px',
+        borderRadius: '6px',
+        textDecoration: 'none',
+        transition: 'background 150ms',
+        cursor: 'pointer',
+      }}
+      onMouseEnter={e => { e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'; }}
+      onMouseLeave={e => { e.currentTarget.style.backgroundColor = 'transparent'; }}
+    >
+      <span style={{
+        width: '8px',
+        height: '8px',
+        borderRadius: '50%',
+        backgroundColor: color,
+        flexShrink: 0,
+        boxShadow: `0 0 6px ${color}88`,
+      }} />
+      <span style={{ fontSize: '11px', color: `${color}cc`, fontWeight: 500 }}>
+        {label}
+      </span>
+    </a>
+  );
+}
+
 /* ─── NavItem ────────────────────────────────────────────────── */
 function NavItem({ href, label, icon: Icon, onNavigate }: {
   href: string;
@@ -135,6 +199,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
         flexDirection: "column",
         gap: "4px",
       }}>
+        <SystemStatusBadge />
         <button
           style={{
             display: "flex",
