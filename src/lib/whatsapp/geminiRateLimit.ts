@@ -23,11 +23,15 @@ const MODOS_GEMINI = ['gemini_texto', 'gemini_audio'];
 
 export type ResultadoCota = { ok: true } | { ok: false; motivo: 'rpm' | 'rpd' };
 
-/** Lê os limites do ambiente a cada chamada (testável via stubEnv). */
+/**
+ * Lê os limites do ambiente a cada chamada (testável via stubEnv).
+ * DEFAULTS = tier PAGO (altos) → a guarda vira rede de segurança e não atrapalha.
+ * Se a chave for FREE tier, baixe via env (ex.: GEMINI_RPM=5, GEMINI_RPD=250).
+ */
 function limites(): { rpm: number; rpd: number } {
   return {
-    rpm: Number(process.env.GEMINI_RPM ?? '15'),
-    rpd: Number(process.env.GEMINI_RPD ?? '250'),
+    rpm: Number(process.env.GEMINI_RPM ?? '1000'),
+    rpd: Number(process.env.GEMINI_RPD ?? '50000'),
   };
 }
 

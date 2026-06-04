@@ -70,13 +70,20 @@ describe('processarComGemini — texto', () => {
     expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'model', 'Funcionalidade ja existe.');
   });
 
-  it('Gemini falha → mensagem amigavel, NAO grava no historico', async () => {
-    mocks.chatGemini.mockResolvedValue({ ok: false, motivo: 'rate limit' });
+  it('Gemini falha → avisa "sistema fora do ar" com codigo do erro, NAO grava no historico', async () => {
+    mocks.chatGemini.mockResolvedValue({ ok: false, motivo: '[GoogleGenerativeAI Error] 403 Forbidden denied access' });
 
     const r = await processarComGemini('+5511999999999', 'oi');
 
-    expect(r).toContain('problema temporario');
+    expect(r).toContain('fora do ar');
+    expect(r).toContain('erro: 403'); // codigo curto pro gestor diagnosticar
     expect(mocks.gravarMensagem).not.toHaveBeenCalled();
+  });
+
+  it('codigo do erro reflete 429 (rate limit/quota)', async () => {
+    mocks.chatGemini.mockResolvedValue({ ok: false, motivo: '429 Too Many Requests RESOURCE_EXHAUSTED' });
+    const r = await processarComGemini('+5511999999999', 'oi');
+    expect(r).toContain('erro: 429');
   });
 
   it('sem nome do remetente: nao prefixa com [Motorista: ...]', async () => {
@@ -112,13 +119,13 @@ describe('processarAudioComGemini — audio', () => {
     expect(mocks.gravarMensagem).not.toHaveBeenCalled();
   });
 
-  it('erro generico → pede pra escrever', async () => {
+  it('erro generico (transcricao/sistema) → avisa "fora do ar" com codigo', async () => {
     mocks.chatGeminiComAudio.mockResolvedValue({ ok: false, motivo: 'transcricao_falhou: HTTP 500' });
 
     const r = await processarAudioComGemini('+5511999999999', 'https://audio');
 
-    expect(r).toContain('Nao consegui processar');
-    expect(r).toContain('escrito');
+    expect(r).toContain('fora do ar');
+    expect(r).toContain('erro: 5xx');
   });
 });
 

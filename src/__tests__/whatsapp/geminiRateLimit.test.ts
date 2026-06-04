@@ -36,30 +36,36 @@ function contagens(dia: number, minuto: number) {
 }
 
 describe('cotaGeminiDisponivel', () => {
-  it('dentro dos limites → ok', async () => {
-    contagens(100, 5); // dia 100/250, minuto 5/15
+  it('defaults de tier PAGO (altos) não derrubam volume normal', async () => {
+    // Sem env: defaults 1000 RPM / 50000 RPD. 300/dia e 30/min passam fácil.
+    // (Com os defaults antigos de free tier — 250 RPD — isso seria bloqueado.)
+    contagens(300, 30);
     expect(await cotaGeminiDisponivel()).toEqual({ ok: true });
   });
 
   it('estourou o DIA (RPD) → ok:false motivo rpd', async () => {
+    vi.stubEnv('GEMINI_RPD', '250');
     contagens(250, 0);
     expect(await cotaGeminiDisponivel()).toEqual({ ok: false, motivo: 'rpd' });
   });
 
   it('dia ok mas estourou o MINUTO (RPM) → ok:false motivo rpm', async () => {
+    vi.stubEnv('GEMINI_RPM', '15');
     contagens(50, 15);
     expect(await cotaGeminiDisponivel()).toEqual({ ok: false, motivo: 'rpm' });
   });
 
   it('RPD tem precedência sobre RPM (checa o dia primeiro)', async () => {
+    vi.stubEnv('GEMINI_RPM', '15');
+    vi.stubEnv('GEMINI_RPD', '250');
     contagens(250, 15); // ambos estourados
     expect(await cotaGeminiDisponivel()).toEqual({ ok: false, motivo: 'rpd' });
   });
 
-  it('respeita limites custom de env (GEMINI_RPM/GEMINI_RPD)', async () => {
-    vi.stubEnv('GEMINI_RPM', '3');
-    vi.stubEnv('GEMINI_RPD', '10');
-    contagens(2, 3); // minuto bate o RPM=3
+  it('respeita limites custom de env (free tier: GEMINI_RPM=5)', async () => {
+    vi.stubEnv('GEMINI_RPM', '5');
+    vi.stubEnv('GEMINI_RPD', '250');
+    contagens(2, 5); // minuto bate o RPM=5
     expect(await cotaGeminiDisponivel()).toEqual({ ok: false, motivo: 'rpm' });
   });
 
