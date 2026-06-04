@@ -808,11 +808,12 @@ async function rotearComGemini(
       // Gestor/master falou palavra de anotação → desviar pro gestorFlow, não pro Gemini
       // Mesma regex do gestorFlow: lembrete, registro, anote, anotar, guarda, salva, nota...
       if (identity.tipo !== 'motorista') {
-        const LEMBRETE_AUDIO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]+(.*)/i;
+        const LEMBRETE_AUDIO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
         const matchLembrete = texto.match(LEMBRETE_AUDIO);
-        if (matchLembrete && matchLembrete[2].trim()) {
+        if (matchLembrete) {
+          const conteudo = matchLembrete[2].trim();
           await processarGestorFlow(
-            { ...msg, tipo: 'texto', texto: `lembrete: ${matchLembrete[2].trim()}` },
+            { ...msg, tipo: 'texto', texto: conteudo ? `lembrete: ${conteudo}` : 'lembrete' },
             identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
           );
           return;
@@ -840,11 +841,12 @@ async function rotearComGemini(
 
   // Gestor/master digitou palavra de anotação → desviar pro gestorFlow, não pro Gemini
   if (identity.tipo !== 'motorista') {
-    const LEMBRETE_TEXTO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]+(.*)/i;
+    const LEMBRETE_TEXTO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
     const matchLembrete = textoParaGemini.match(LEMBRETE_TEXTO);
-    if (matchLembrete && matchLembrete[2].trim()) {
+    if (matchLembrete) {
+      const conteudo = matchLembrete[2].trim();
       await processarGestorFlow(
-        { ...msg, tipo: 'texto', texto: `lembrete: ${matchLembrete[2].trim()}` },
+        { ...msg, tipo: 'texto', texto: conteudo ? `lembrete: ${conteudo}` : 'lembrete' },
         identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
       );
       return;

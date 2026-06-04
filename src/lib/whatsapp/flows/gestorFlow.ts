@@ -49,8 +49,11 @@ export async function processarGestorFlow(
       const conteudo = matchLembrete[2].trim();
       if (conteudo) {
         await processarLembrete(msg, identity, conteudo);
-        return;
+      } else {
+        // Falou só "lembrete" sem conteúdo — pede o texto
+        await enviarTexto(msg.from, '📝 O que você quer anotar? Continue com:\n"lembrete: <seu texto aqui>"');
       }
+      return;
     }
     // Confirmação de lembrete pendente no contexto da conversa
     if (/^(sim|anotar|salvar|confirmar|ok|s|isso|exato|correto)$/i.test(msg.texto.trim())) {
