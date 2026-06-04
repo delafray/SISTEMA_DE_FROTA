@@ -54,7 +54,7 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 | Shape | VM.Standard.A1.Flex (ARM/Ampere) |
 | OCPUs | 4 |
 | RAM | 24 GB |
-| Disco | 47 GB |
+| Disco | 150 GB (Boot Volume — confirmado no console OCI em 04/06/2026) |
 | OS | Ubuntu 22.04 |
 | Custo | R$ 0 (Always Free permanente) |
 
