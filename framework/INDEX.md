@@ -38,6 +38,7 @@
 | Configurar Oracle Cloud VM (OSRM + VROOM) | [oracle-cloud.md](03-deploy/oracle-cloud.md) |
 | Implantar sistema para novo cliente (do zero) | [implantacao-cliente.md](03-deploy/implantacao-cliente.md) |
 | Cadastrar nova empresa no sistema | [onboarding-empresa.md](03-deploy/onboarding-empresa.md) |
+| **Migrar Evolution API do Railway → Oracle Cloud (custo zero)** | [migrar-railway-para-oracle.md](03-deploy/migrar-railway-para-oracle.md) |
 
 ---
 
@@ -87,7 +88,7 @@ framework/
 │   ├── como-consultar-tabela.md     ← Passo a passo: nova consulta via WhatsApp
 │   ├── setup-evolution.md           ← Railway, Docker, QR Code, webhook
 │   ├── audio-e-transcricao.md       ← Deepgram, download encriptado
-│   └── bugs-conhecidos.md           ← B1-B27, armadilhas, lições
+│   └── bugs-conhecidos.md           ← B1-B29, armadilhas, lições
 ├── 02-apis-e-chaves/
 │   ├── INDEX.md
 │   ├── todas-as-apis.md             ← 16 serviços, como obter cada chave
