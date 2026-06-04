@@ -6,9 +6,16 @@
  * Server component — lê os números ao vivo do banco (service role).
  */
 
+import { redirect } from 'next/navigation';
 import { carregarLinhasUso, type StatusUso } from '@/lib/apis/usoApis';
+import { createClient } from '@/lib/supabase/server';
+import { lerCadastros } from '@/lib/apis/apiCadastros';
+import { CadastroApiEditor } from './CadastroApiEditor';
 
 export const dynamic = 'force-dynamic';
+
+/** Só admin/master podem ver esta página (guarda emails de conta + final de cartão). */
+const ROLES_PERMITIDOS = ['admin', 'master'];
 
 const COR: Record<StatusUso, { barra: string; texto: string; fundo: string }> = {
   ok:      { barra: '#16a34a', texto: '#166534', fundo: '#f0fdf4' },
@@ -18,7 +25,23 @@ const COR: Record<StatusUso, { barra: string; texto: string; fundo: string }> = 
 };
 
 export default async function UsoApisPage() {
-  const linhas = await carregarLinhasUso();
+  // ── Gate de acesso: só admin/master ──────────────────────────────────
+  const supabase = await createClient();
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) redirect('/login');
+
+  const { data: ue } = await supabase
+    .from('usuario_empresas')
+    .select('role')
+    .eq('usuario_id', user.id)
+    .eq('is_padrao', true)
+    .single();
+
+  if (!ue || !ROLES_PERMITIDOS.includes(ue.role)) {
+    redirect('/'); // sem permissão → volta pro dashboard
+  }
+
+  const [linhas, cadastros] = await Promise.all([carregarLinhasUso(), lerCadastros()]);
 
   return (
     <div style={{ padding: 24, maxWidth: 860, margin: '0 auto' }}>
@@ -103,6 +126,15 @@ export default async function UsoApisPage() {
                     </a>
                   )}
                 </div>
+
+                {/* Cadastro de conta: email + final do cartão (admin only) */}
+                <CadastroApiEditor
+                  apiId={api.id}
+                  semCadastro={api.semCadastro}
+                  email={cadastros[api.id]?.email ?? null}
+                  cartaoFinal={cadastros[api.id]?.cartaoFinal ?? null}
+                  observacao={cadastros[api.id]?.observacao ?? null}
+                />
               </div>
             </div>
           );

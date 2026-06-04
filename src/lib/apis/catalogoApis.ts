@@ -24,6 +24,9 @@ export interface ApiCatalogo {
   urlUso?: string;
   /** Se medimos o uso internamente, qual métrica. */
   medicao?: MedicaoApi;
+  /** Serviço público acessado direto (sem conta/email). Quando true, a UI mostra
+   *  "não precisou de cadastro" em vez do campo de email/cartão. */
+  semCadastro?: boolean;
 }
 
 export const CATALOGO_APIS: ApiCatalogo[] = [
@@ -120,6 +123,7 @@ export const CATALOGO_APIS: ApiCatalogo[] = [
     descricao: 'Geocoding público de fallback quando o Google está fora/sem cota.',
     cota: 'Público grátis · máx. 1 req/s',
     urlUso: 'https://operations.osmfoundation.org/policies/nominatim/',
+    semCadastro: true,
   },
   {
     id: 'viacep',
@@ -128,5 +132,6 @@ export const CATALOGO_APIS: ApiCatalogo[] = [
     descricao: 'Busca logradouro/bairro/cidade a partir do CEP brasileiro.',
     cota: 'Público grátis (sem SLA)',
     urlUso: 'https://viacep.com.br/',
+    semCadastro: true,
   },
 ];

@@ -132,15 +132,15 @@ export function PWAInstallPrompt() {
       {/* Texto */}
       <div style={{ flex: 1, minWidth: 0 }}>
         <p style={{ margin: 0, color: '#f1f5f9', fontWeight: 600, fontSize: '0.875rem' }}>
-          Instalar FROTA
+          📲 Instalar FROTA
         </p>
         {isIOS ? (
           <p style={{ margin: '2px 0 0', color: '#94a3b8', fontSize: '0.75rem' }}>
-            Toque em <strong style={{ color: '#6366f1' }}>Compartilhar ⎋</strong> → &quot;Adicionar à Tela de Início&quot;
+            Pra usar <strong style={{ color: '#a5b4fc' }}>sem internet</strong>: <strong style={{ color: '#6366f1' }}>Compartilhar ⎋</strong> → &quot;Adicionar à Tela de Início&quot;
           </p>
         ) : (
           <p style={{ margin: '2px 0 0', color: '#94a3b8', fontSize: '0.75rem' }}>
-            Acesse como app nativo, sem navegador
+            Instale pra usar a rota e capturar notas <strong style={{ color: '#a5b4fc' }}>sem internet</strong>
           </p>
         )}
       </div>
