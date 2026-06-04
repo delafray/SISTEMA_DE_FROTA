@@ -121,7 +121,7 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
       const cota = await cotaGeminiDisponivel();
       if (cota.ok) {
         const motoristaId = identity.tipo === 'motorista' ? identity.motorista_id : undefined;
-        await rotearComGemini(msgResolvida, identity.nome ?? identity.tipo, identity.empresa_id, motoristaId);
+        await rotearComGemini(msgResolvida, identity, identity.nome ?? identity.tipo, identity.empresa_id, motoristaId);
         return;
       }
       log.warn('gemini_cota_estourada_fallback_menu', { motivo: cota.motivo, estado: sessao.estado });
@@ -785,6 +785,7 @@ export function isSaudacao(msg: ParsedMessage): boolean {
  */
 async function rotearComGemini(
   msg: ParsedMessage,
+  identity: UserIdentity,
   nomeRemetente: string,
   empresaId?: string,
   motoristaId?: string
@@ -798,6 +799,31 @@ async function rotearComGemini(
       await enviarTexto(msg.from, 'Nao foi possivel baixar o audio. Por favor, envie sua mensagem por escrito.');
       return;
     }
+
+    // Transcreve primeiro para poder checar padrões antes do Gemini
+    const transcricao = await transcreverAudio(dataUrl);
+    if (transcricao.ok && transcricao.data.texto) {
+      const texto = transcricao.data.texto.trim();
+
+      // Gestor/master falou "lembrete: ..." → desviar pro gestorFlow, não pro Gemini
+      if (identity.tipo !== 'motorista') {
+        const matchLembrete = texto.match(/^lembrete[:\s,]+(.+)/i);
+        if (matchLembrete) {
+          await processarGestorFlow(
+            { ...msg, tipo: 'texto', texto: `lembrete: ${matchLembrete[1].trim()}` },
+            identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
+          );
+          return;
+        }
+      }
+
+      // Não é lembrete — segue pro Gemini com o texto já transcrito
+      const resposta = await processarComGemini(msg.from, texto, nomeRemetente, empresaId, motoristaId);
+      await enviarTexto(msg.from, resposta);
+      return;
+    }
+
+    // Transcrição falhou — tenta com o pipeline completo de áudio do Gemini
     const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId, motoristaId);
     await enviarTexto(msg.from, resposta);
     return;
