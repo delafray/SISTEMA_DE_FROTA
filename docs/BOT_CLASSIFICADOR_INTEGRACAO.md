@@ -71,8 +71,8 @@ Testes unitários: `src/__tests__/whatsapp/botParse.test.ts` + `botExecutor.test
 
 1. **Escritas não-KM** (mudar status, registrar) — respondem "em construção" (não gravam).
    Falta generalizar o propose→confirm pra UPDATE/INSERT de outras colunas.
-2. **Áudio no modo classificador** — por ora áudio cai no lembrete (transcrição via Deepgram
-   já existe; é só plugar antes de classificar).
+2. ✅ **Áudio JÁ funciona** no modo classificador (transcreve via Deepgram/Whisper antes de
+   classificar — `classificarERotear`).
 3. **Fila/ACK assíncrono** (QStash) — hoje é síncrono; a pesquisa recomenda ACK rápido +
    worker pra escalar. Aceitável no volume atual.
 4. **Consultar Financeiro** — tabela `financeiro` ainda não está na curadoria de colunas.

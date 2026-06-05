@@ -14,7 +14,9 @@
 
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 import type { ParsedMessage } from "@/lib/whatsapp/messageParser";
+import { getMediaAsBase64DataUrl } from "@/lib/whatsapp/messageParser";
 import type { UserIdentity } from "@/lib/whatsapp/auth";
+import { transcreverAudio } from "@/services/aiService";
 import { variacoesTelefone } from "@/lib/utils/telefone";
 import { montarContextoIA, type RegraCtx, type TelCtx } from "@/lib/whatsapp/montarContexto";
 import { classificar, type RegraClassif } from "@/lib/whatsapp/classificador";
@@ -143,15 +145,26 @@ async function resolverPendente(
 // ─── entrada principal ─────────────────────────────────────────────────
 export async function classificarERotear(msg: ParsedMessage, identity: UserIdentity): Promise<{ disparou: boolean }> {
   try {
-    if (msg.tipo !== "texto" || !msg.texto?.trim()) return { disparou: false }; // áudio/foto → cai no lembrete
-    const texto = msg.texto.trim();
     const supa = sb();
 
-    // idempotência: não processa o mesmo wamid 2x
+    // idempotência: não processa o mesmo wamid 2x (antes de transcrever, p/ economizar)
     if (msg.messageId) {
       const { error } = await supa.from("bot_msgs_processadas").insert({ wamid: msg.messageId });
       if (error && error.code === "23505") { log.info("msg_duplicada", { wamid: msg.messageId }); return { disparou: true }; }
     }
+
+    // resolve o texto: texto direto OU transcrição do áudio (Deepgram/Whisper)
+    let texto = (msg.texto ?? "").trim();
+    if (!texto && msg.tipo === "audio" && msg.messageId) {
+      const dataUrl = await getMediaAsBase64DataUrl(msg.messageId);
+      if (dataUrl) {
+        const tr = await transcreverAudio(dataUrl);
+        if (tr.ok && tr.data.texto) texto = tr.data.texto.trim();
+      }
+      log.info("motor_audio_transcrito", { from: msg.from, ok: !!texto, texto: texto.slice(0, 80) });
+    }
+    if (!texto) return { disparou: false }; // foto/doc/áudio-sem-transcrição → cai no lembrete
+    log.info("motor_entrou", { from: msg.from, tipo: msg.tipo });
 
     // carrega regras (com escopo + ações) e telefone
     const [{ data: regrasData }, { data: telRow }, { data: ctxData }] = await Promise.all([
