@@ -12,14 +12,18 @@ import type { UserIdentity } from '@/lib/whatsapp/auth';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { classificarIntentTexto } from '@/services/aiService';
 import { createLogger } from '@/lib/logger';
+import { extrairLembrete } from '@/lib/whatsapp/lembreteParser';
+import { criarLembrete } from '@/lib/ai/tools/frotaTools';
 
 const log = createLogger('gestorFlow');
 
 const INTENT_CONFIANCA_MINIMA = 55;
 
-// NOTA: lembretes/anotações agora são uma TOOL do Gemini (criar_lembrete em frotaTools.ts),
-// não mais regex aqui. A IA entende qualquer frase ("cria um lembrete", "anota aí que...")
-// e chama a tool. Isso evita falso-positivo ("nota fiscal") e frases não-prefixadas.
+// Lembretes têm DOIS caminhos: (1) deterministic via extrairLembrete (gatilho exato:
+// "lembrete", "me lembra", "anota") — tratado aqui ANTES do intent classifier, pra
+// não cair em "fallback → menu"; (2) frases fora do padrão ficam pra tool do Gemini
+// (criar_lembrete em frotaTools.ts). O caminho (1) é defense-in-depth: o router já
+// detecta no topo, mas o gestorFlow também garante caso seja chamado por outra via.
 
 type IdentityGestor = Extract<UserIdentity, { tipo: 'gestor' | 'master' }>;
 
@@ -50,6 +54,28 @@ export async function processarGestorFlow(
 
   if (msg.tipo !== 'texto' || !msg.texto) {
     await enviarMenuGestor(msg.from, identity);
+    return;
+  }
+
+  // Lembrete DETERMINÍSTICO (gatilho exato) ANTES do intent classifier — senão
+  // "anota que fechei contrato" vira 'fallback' e cai no menu sem nunca salvar.
+  const conteudoLembrete = extrairLembrete(msg.texto);
+  if (conteudoLembrete !== null) {
+    const usuarioId = 'usuario_id' in identity ? identity.usuario_id : undefined;
+    if (!conteudoLembrete) {
+      await enviarTexto(msg.from, '📝 O que você quer anotar? Ex: "lembrete: comprar pneu"');
+      return;
+    }
+    log.info('lembrete_gestor_detectado', { from: msg.from, chars: conteudoLembrete.length });
+    const r = await criarLembrete(identity.empresa_id, usuarioId, conteudoLembrete, identity.nome, msg.from);
+    if (r.ok) log.info('lembrete_gestor_salvo', { from: msg.from });
+    else log.warn('lembrete_gestor_falhou', { from: msg.from, erro: r.erro });
+    await enviarTexto(
+      msg.from,
+      r.ok
+        ? `✅ Anotado: ${conteudoLembrete}\n\nVai aparecer no painel até alguém dar ciência.`
+        : '❌ Não consegui salvar o lembrete agora. Tenta de novo em instantes.'
+    );
     return;
   }
 

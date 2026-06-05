@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   sendMessage: vi.fn(),
   transcrever: vi.fn(),
   getGenerativeModel: vi.fn(),
+  startChat: vi.fn(),
 }));
 
 vi.mock('@google/generative-ai', () => {
@@ -24,7 +25,13 @@ vi.mock('@google/generative-ai', () => {
     getGenerativeModel(params: unknown) {
       mocks.getGenerativeModel(params); // captura pra inspecionar generationConfig
       return {
-        startChat: () => ({ sendMessage: mocks.sendMessage }),
+        startChat: (startParams: unknown) => {
+          mocks.startChat(startParams); // captura toolConfig por chamada de startChat
+          return {
+            sendMessage: mocks.sendMessage,
+            getHistory: async () => [],
+          };
+        },
       };
     }
   }
@@ -32,6 +39,7 @@ vi.mock('@google/generative-ai', () => {
   // no mock pra import nao quebrar.
   return {
     GoogleGenerativeAI,
+    FunctionCallingMode: { MODE_UNSPECIFIED: 'MODE_UNSPECIFIED', AUTO: 'AUTO', ANY: 'ANY', NONE: 'NONE' },
     SchemaType: {
       OBJECT: 'object',
       STRING: 'string',
@@ -46,26 +54,32 @@ vi.mock('@/lib/ai/deepgramClient', () => ({
   transcreverComDeepgram: mocks.transcrever,
 }));
 
-import { chatGeminiComAudio } from '@/lib/ai/geminiClient';
+import { chatGemini, chatGeminiComAudio } from '@/lib/ai/geminiClient';
 
 beforeEach(() => {
   mocks.sendMessage.mockReset();
   mocks.transcrever.mockReset();
   mocks.getGenerativeModel.mockReset();
+  mocks.startChat.mockReset();
   process.env.GEMINI_API_KEY = 'test-key';
+  process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
 });
 
 describe('chatGemini — config de latência', () => {
-  it('desliga o thinking do 2.5-flash (thinkingBudget 0) e limita tokens', async () => {
+  it('thinkingBudget baixo (>0) + temperature 0 + limita tokens', async () => {
     mocks.transcrever.mockResolvedValue({ ok: true, texto: 'oi' });
     mocks.sendMessage.mockResolvedValue({ response: { text: () => 'ok' } });
 
     await chatGeminiComAudio('https://audio', []); // reusa chatGemini internamente
 
     const params = mocks.getGenerativeModel.mock.calls[0][0] as {
-      generationConfig?: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number };
+      generationConfig?: { thinkingConfig?: { thinkingBudget?: number }; maxOutputTokens?: number; temperature?: number };
     };
-    expect(params.generationConfig?.thinkingConfig?.thinkingBudget).toBe(0);
+    // thinking NÃO totalmente off (degradava a decisão de chamar tool), mas baixo p/ latência.
+    expect(params.generationConfig?.thinkingConfig?.thinkingBudget).toBeGreaterThan(0);
+    expect(params.generationConfig?.thinkingConfig?.thinkingBudget).toBeLessThanOrEqual(512);
+    expect(params.generationConfig?.temperature).toBe(0);
     expect(params.generationConfig?.maxOutputTokens).toBeGreaterThan(0);
   });
 
@@ -170,5 +184,39 @@ describe('chatGeminiComAudio — pipeline Deepgram → Gemini', () => {
 
     expect(res.ok).toBe(false);
     if (!res.ok) expect(res.motivo).toBe('rate limit');
+  });
+});
+
+describe('chatGemini — forcarTool (mode ANY na 1a rodada)', () => {
+  it('forcarTool="criar_lembrete" → 1o startChat tem toolConfig ANY restrito; 2o startChat (loop) SEM toolConfig', async () => {
+    // 1a resposta sem functionCall (mock simples) → o loop encerra rápido.
+    mocks.sendMessage.mockResolvedValue({ response: { text: () => 'Anotado.' } });
+
+    const res = await chatGemini('anota aí algo', [], 'emp-1', undefined, 'usr-1', 'criar_lembrete');
+
+    expect(res.ok).toBe(true);
+
+    // 1o startChat: toolConfig ANY com allowedFunctionNames = ['criar_lembrete']
+    const primeiro = mocks.startChat.mock.calls[0][0] as {
+      toolConfig?: { functionCallingConfig?: { mode?: string; allowedFunctionNames?: string[] } };
+    };
+    expect(primeiro.toolConfig?.functionCallingConfig?.mode).toBe('ANY');
+    expect(primeiro.toolConfig?.functionCallingConfig?.allowedFunctionNames).toEqual(['criar_lembrete']);
+
+    // 2o startChat (reabertura p/ loop em AUTO): SEM toolConfig (evita loop infinito)
+    const segundo = mocks.startChat.mock.calls[1]?.[0] as { toolConfig?: unknown } | undefined;
+    expect(segundo).toBeDefined();
+    expect(segundo?.toolConfig).toBeUndefined();
+  });
+
+  it('SEM forcarTool → startChat NÃO tem toolConfig (modo AUTO normal)', async () => {
+    mocks.sendMessage.mockResolvedValue({ response: { text: () => 'ok' } });
+
+    await chatGemini('quantos motoristas?', [], 'emp-1');
+
+    const primeiro = mocks.startChat.mock.calls[0][0] as { toolConfig?: unknown };
+    expect(primeiro.toolConfig).toBeUndefined();
+    // Só um startChat (não reabre sessão quando não força)
+    expect(mocks.startChat).toHaveBeenCalledOnce();
   });
 });

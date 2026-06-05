@@ -40,6 +40,9 @@ import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
 import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { classificarIntentTexto } from '@/services/aiService';
 
+process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
+process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-key';
+
 function makeMsg(over: Partial<ParsedMessage> = {}): ParsedMessage {
   return { from: '5531999', fromName: 'Gestor', messageId: 'wamid.x', timestamp: new Date(), tipo: 'texto', phoneNumberId: 'pnid', ...over };
 }
@@ -96,6 +99,45 @@ describe('gestorFlow — classificação de intent', () => {
     (classificarIntentTexto as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, data: { intent: 'fallback', confianca: 80 } });
     await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'bom dia' }), makeIdentity());
     expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('entendo perguntas'));
+  });
+
+  // ─── Lembrete DETERMINÍSTICO no gestorFlow (Fix #5) ───────────────────
+  it('"anota que fechei contrato" → PERSISTE lembrete (insert), NÃO classifica intent nem cai no menu', async () => {
+    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'anota que fechei contrato' }), makeIdentity());
+    // Salvou via criarLembrete → insert na tabela lembretes
+    expect(insertSpy).toHaveBeenCalledWith('lembretes', expect.objectContaining({
+      empresa_id: 'emp-1',
+      texto: 'fechei contrato',
+      origem: 'whatsapp',
+      criado_por_nome: 'Gestor Teste',
+      criado_por_telefone: '5531999',
+    }));
+    // NÃO foi pro intent classifier (lembrete tratado antes)
+    expect(classificarIntentTexto).not.toHaveBeenCalled();
+    // Confirmou pro gestor, sem cair no menu
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('Anotado');
+  });
+
+  it('"lembrete: comprar pneu" → persiste e confirma', async () => {
+    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'lembrete: comprar pneu' }), makeIdentity());
+    expect(insertSpy).toHaveBeenCalledWith('lembretes', expect.objectContaining({ texto: 'comprar pneu' }));
+    expect(classificarIntentTexto).not.toHaveBeenCalled();
+  });
+
+  it('"lembrete" sozinho → pede o texto, NÃO insere nem classifica', async () => {
+    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'lembrete' }), makeIdentity());
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(classificarIntentTexto).not.toHaveBeenCalled();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('O que você quer anotar');
+  });
+
+  it('pergunta normal "qual o lucro?" → NÃO dispara lembrete, vai pro intent classifier', async () => {
+    (classificarIntentTexto as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, data: { intent: 'consulta_lucro_mensal', confianca: 90 } });
+    supabaseDataMap['pedidos_com_resultado'] = { data: [], error: null };
+    supabaseDataMap['veiculos_resultado_periodo'] = { data: [], error: null };
+    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'qual o lucro?' }), makeIdentity());
+    expect(insertSpy).not.toHaveBeenCalled();
+    expect(classificarIntentTexto).toHaveBeenCalledOnce();
   });
 
   it('intent=consulta_lucro_mensal → chama responderLucroMensal, envia texto', async () => {

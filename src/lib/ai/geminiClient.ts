@@ -7,7 +7,12 @@
  * - Retornar sempre uma string de resposta (nunca lança exceção pro fluxo)
  */
 
-import { GoogleGenerativeAI, type GenerationConfig } from '@google/generative-ai';
+import {
+  GoogleGenerativeAI,
+  FunctionCallingMode,
+  type GenerationConfig,
+  type ToolConfig,
+} from '@google/generative-ai';
 import { createLogger } from '@/lib/logger';
 import { transcreverComDeepgram } from './deepgramClient';
 import { declarations as frotaToolDeclarations, executarTool } from './tools/frotaTools';
@@ -32,7 +37,14 @@ const log = createLogger('gemini-client');
  */
 const GENERATION_CONFIG: GenerationConfig & { thinkingConfig?: { thinkingBudget?: number } } = {
   maxOutputTokens: 1024,
-  thinkingConfig: { thinkingBudget: 0 },
+  // temperature baixa aumenta o determinismo da DECISAO de chamar function (flash).
+  // Reduz o "as vezes salva, na maioria nao" do function calling.
+  temperature: 0,
+  // thinkingBudget pequeno (>0) em vez de 0: thinking totalmente off degrada a
+  // decisao de QUANDO chamar a tool. 128 e o suficiente pra escolher a tool certa
+  // sem o custo de latencia do raciocinio longo. REVERSIVEL: suba pra 512 se o
+  // fluxo de confirmacao de KM ficar confuso; volte a 0 se latencia incomodar.
+  thinkingConfig: { thinkingBudget: 128 },
 };
 
 const SYSTEM_PROMPT = `Você é o assistente da Frota Delafray.
@@ -134,7 +146,9 @@ export async function chatGemini(
   historico: HistoricoMensagem[] = [],
   empresaId?: string,
   motoristaId?: string,
-  usuarioId?: string
+  usuarioId?: string,
+  forcarTool?: string,
+  remetente?: { nome?: string; telefone?: string }
 ): Promise<RespostaGemini> {
   try {
     const client = getClient();
@@ -143,7 +157,7 @@ export async function chatGemini(
       systemInstruction: SYSTEM_PROMPT,
       // Tools so quando temos empresa_id (motorista/gestor identificado)
       tools: empresaId ? [{ functionDeclarations: frotaToolDeclarations }] : undefined,
-      generationConfig: GENERATION_CONFIG, // thinking off → latência menor
+      generationConfig: GENERATION_CONFIG, // thinking baixo → latência menor
     });
 
     const history = historico.map((h) => ({
@@ -151,10 +165,36 @@ export async function chatGemini(
       parts: [{ text: h.text }],
     }));
 
-    const chat = model.startChat({ history });
+    // Quando `forcarTool` esta setado, a PRIMEIRA chamada usa modo ANY restrito
+    // aquela tool — forca o modelo a emitir a functionCall (ex: criar_lembrete) em
+    // vez de so responder texto. Restringir a UMA tool com parametro evita o 400
+    // que ANY dispara em tools de properties vazio.
+    //
+    // ATENCAO ao SDK legado (v0.24.1): `chat.sendMessage(msg, opts)` so aceita
+    // SingleRequestOptions (signal/timeout) — NAO toolConfig por chamada. O
+    // toolConfig vive em startChat e vale pra TODAS as mensagens da sessao. Por
+    // isso a sessao ANY e usada SO na 1a rodada; depois reabrimos a sessao em modo
+    // AUTO (sem toolConfig) com o historico acumulado, pra que as functionResponse
+    // nao fiquem em loop infinito de tool calls.
+    const toolConfigForcado: ToolConfig | undefined =
+      forcarTool && empresaId
+        ? { functionCallingConfig: { mode: FunctionCallingMode.ANY, allowedFunctionNames: [forcarTool] } }
+        : undefined;
+
+    let chat = model.startChat(
+      toolConfigForcado ? { history, toolConfig: toolConfigForcado } : { history }
+    );
 
     // Primeira chamada com retry (resiliencia em 5xx/429/network)
     let currentResult = await comRetry(() => chat.sendMessage(mensagemAtual), { nome: 'gemini_send' });
+
+    // Apos a 1a rodada forcada (ANY), reabre a sessao em AUTO com o historico ja
+    // acumulado — assim o loop de functionResponse roda sem toolConfig e o modelo
+    // pode confirmar em texto (sem ser obrigado a chamar tool de novo).
+    if (toolConfigForcado) {
+      const histAcumulado = await chat.getHistory();
+      chat = model.startChat({ history: histAcumulado });
+    }
 
     // Loop multi-turn de tools com cap. Gemini pode encadear: chamar tool A,
     // ver resultado, chamar tool B (ex: listar_veiculos -> buscar_km do escolhido).
@@ -171,7 +211,7 @@ export async function chatGemini(
           log.info('gemini_tool_call', { name: call.name, round });
           toolsChamadas.push(call.name);
           const args = call.args as Record<string, unknown> | undefined;
-          const resultado = await executarTool(call.name, empresaId, motoristaId, args, usuarioId);
+          const resultado = await executarTool(call.name, empresaId, motoristaId, args, usuarioId, remetente);
           return {
             functionResponse: {
               name: call.name,

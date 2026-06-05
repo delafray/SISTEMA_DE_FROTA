@@ -12,7 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
 }));
 
-import { listarMotoristas, listarVeiculos, executarTool, buscarKmCaminhao, meuCaminhao, criarLembrete } from '@/lib/ai/tools/frotaTools';
+import { listarMotoristas, listarVeiculos, executarTool, buscarKmCaminhao, meuCaminhao, criarLembrete, declarations } from '@/lib/ai/tools/frotaTools';
 
 function setupSelect(returnData: unknown[], error: { message: string } | null = null) {
   supabaseFromMock.mockReturnValue({
@@ -31,6 +31,33 @@ beforeEach(() => {
   vi.spyOn(console, 'log').mockImplementation(() => {});
   vi.spyOn(console, 'warn').mockImplementation(() => {});
   vi.spyOn(console, 'error').mockImplementation(() => {});
+});
+
+describe('declarations — schema seguro pra mode ANY', () => {
+  it('NENHUMA tool tem parameters com properties vazio (quebraria mode ANY)', () => {
+    for (const d of declarations) {
+      const props = (d.parameters as { properties?: Record<string, unknown> } | undefined)?.properties;
+      // Ou nao tem parameters (tool sem parametro), ou tem properties NAO vazio.
+      const okSemParams = !d.parameters;
+      const okComProps = !!props && Object.keys(props).length > 0;
+      expect(okSemParams || okComProps).toBe(true);
+    }
+  });
+
+  it('tools sem parametro (listar_motoristas/listar_veiculos/meu_caminhao) OMITEM parameters', () => {
+    const semParam = ['listar_motoristas', 'listar_veiculos', 'meu_caminhao'];
+    for (const nome of semParam) {
+      const d = declarations.find((x) => x.name === nome);
+      expect(d).toBeDefined();
+      expect(d?.parameters).toBeUndefined();
+    }
+  });
+
+  it('criar_lembrete MANTÉM o parametro texto (precisa dele pra ANY restrito)', () => {
+    const d = declarations.find((x) => x.name === 'criar_lembrete');
+    const props = (d?.parameters as { properties?: Record<string, unknown> } | undefined)?.properties;
+    expect(props && Object.keys(props)).toContain('texto');
+  });
 });
 
 describe('listarMotoristas', () => {
@@ -329,6 +356,8 @@ describe('criarLembrete', () => {
       usuario_id: 'usr-1',
       texto: 'Ligar pro cliente João amanhã',
       origem: 'whatsapp',
+      criado_por_nome: null,
+      criado_por_telefone: null,
     });
   });
 
@@ -393,5 +422,19 @@ describe('criarLembrete', () => {
     const res = await executarTool('criar_lembrete', 'emp-1', undefined, { texto: 'x' }, undefined);
     expect(res.ok).toBe(true);
     expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ usuario_id: null }));
+  });
+
+  it('dispatcher: propaga remetente (nome/telefone) pra criado_por_*', async () => {
+    const insertMock = setupInsert();
+    const res = await executarTool(
+      'criar_lembrete', 'emp-1', undefined, { texto: 'ligar pro cliente' }, 'usr-1',
+      { nome: 'Ronaldo', telefone: '5531999' }
+    );
+    expect(res.ok).toBe(true);
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      texto: 'ligar pro cliente',
+      criado_por_nome: 'Ronaldo',
+      criado_por_telefone: '5531999',
+    }));
   });
 });

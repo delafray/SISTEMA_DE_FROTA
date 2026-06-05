@@ -51,6 +51,11 @@ vi.mock('@/lib/ai/tools/frotaTools', () => ({
   criarLembrete: vi.fn().mockResolvedValue({ ok: true, dados: { salvo: true } }),
 }));
 
+// Cota do Gemini — por padrão disponível. Testes específicos sobrescrevem.
+vi.mock('@/lib/whatsapp/geminiRateLimit', () => ({
+  cotaGeminiDisponivel: vi.fn().mockResolvedValue({ ok: true }),
+}));
+
 const supabaseFromMock = vi.fn();
 vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
@@ -72,6 +77,7 @@ import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
 import { processarAvariaFlow } from '@/lib/whatsapp/flows/avariaFlow';
 import { processarComGemini } from '@/lib/whatsapp/geminiBot';
 import { criarLembrete } from '@/lib/ai/tools/frotaTools';
+import { cotaGeminiDisponivel } from '@/lib/whatsapp/geminiRateLimit';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
 
@@ -98,6 +104,9 @@ function mockMotorista() {
 }
 
 function mockSessao(estado: string, contexto: Record<string, unknown> = {}) {
+  // Re-aplica o default da cota (vi.clearAllMocks no beforeEach apaga a implementacao,
+  // fazendo cotaGeminiDisponivel devolver undefined → o gate caía no menu).
+  (cotaGeminiDisponivel as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true });
   (getOrCreateSession as ReturnType<typeof vi.fn>).mockResolvedValue({
     id: 'sess-1',
     whatsapp: '5531999',
@@ -179,7 +188,8 @@ describe('processarMensagem — identidade', () => {
 
     await processarMensagem(makeMsg({ texto: 'lembrete: comprar pneu' }));
 
-    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'comprar pneu');
+    // Agora propaga nome + telefone de quem mandou (criado_por_*).
+    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'comprar pneu', 'Carlos', '5531999');
     expect(processarComGemini).not.toHaveBeenCalled();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('Anotado');
   });
@@ -192,7 +202,7 @@ describe('processarMensagem — identidade', () => {
 
     await processarMensagem(makeMsg({ texto: 'anota que recebi 5 mil' }));
 
-    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'recebi 5 mil');
+    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'recebi 5 mil', 'Carlos', '5531999');
     expect(processarComGemini).not.toHaveBeenCalled();
   });
 
@@ -219,6 +229,29 @@ describe('processarMensagem — identidade', () => {
 
     expect(criarLembrete).not.toHaveBeenCalled();
     expect(processarComGemini).toHaveBeenCalledOnce();
+  });
+
+  // Fix #4: lembrete deterministico roda ANTES da guarda de cota.
+  it('cota ESTOURADA + "lembrete: comprar pneu" → AINDA salva (parser antes da guarda de cota)', async () => {
+    mockMotorista();
+    mockSessao('novo'); // reseta cota p/ {ok:true}...
+    (cotaGeminiDisponivel as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, motivo: 'RPD' }); // ...e aqui força estouro
+
+    await processarMensagem(makeMsg({ texto: 'lembrete: comprar pneu' }));
+
+    expect(criarLembrete).toHaveBeenCalledWith('emp-1', 'usr-1', 'comprar pneu', 'João', '5531999');
+    expect(processarComGemini).not.toHaveBeenCalled();
+  });
+
+  // Fix #4: lembrete deterministico roda mesmo com flow pendente (estado != ocioso).
+  it('flow pendente (aguardando_foto_km) + "lembrete: trocar pneu" → salva antes de delegar ao flow', async () => {
+    mockMotorista();
+    mockSessao('aguardando_foto_km');
+
+    await processarMensagem(makeMsg({ texto: 'lembrete: trocar pneu' }));
+
+    expect(criarLembrete).toHaveBeenCalledWith('emp-1', 'usr-1', 'trocar pneu', 'João', '5531999');
+    expect(processarKmFlow).not.toHaveBeenCalled();
   });
 });
 
@@ -255,6 +288,31 @@ describe('processarMensagem — roteamento motorista', () => {
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
     expect(enviarMenuLista).not.toHaveBeenCalled();
+    // Pergunta normal NÃO força tool (forcarTool = 7º arg de processarComGemini = undefined)
+    const args = (processarComGemini as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(args[6]).toBeUndefined();
+  });
+
+  // Fix #6: sinal LEVE de lembrete (não casa no parser exato) → força a tool via ANY.
+  it('"guarda esse dado: cliente novo" (sinal leve) → chama Gemini com forcarTool=criar_lembrete', async () => {
+    mockSessao('novo');
+    await processarMensagem(makeMsg({ texto: 'guarda esse dado: cliente novo fechou' }));
+    // Parser exato NÃO pega "guarda" → criarLembrete deterministico NÃO chamado
+    expect(criarLembrete).not.toHaveBeenCalled();
+    // Mas força a tool no Gemini (7º arg = 'criar_lembrete')
+    expect(processarComGemini).toHaveBeenCalledOnce();
+    const args = (processarComGemini as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(args[6]).toBe('criar_lembrete');
+    // E propaga remetente (8º arg) com nome+telefone
+    expect(args[7]).toEqual({ nome: 'João', telefone: '5531999' });
+  });
+
+  it('"nota fiscal 12345" → NÃO força tool (exclusão de nota fiscal)', async () => {
+    mockSessao('novo');
+    await processarMensagem(makeMsg({ texto: 'nota fiscal 12345 do cliente' }));
+    expect(criarLembrete).not.toHaveBeenCalled();
+    const args = (processarComGemini as ReturnType<typeof vi.fn>).mock.calls[0];
+    expect(args[6]).toBeUndefined();
   });
 
   it('saudação "oi" → fast-path responde sem chamar Gemini (economia de tokens)', async () => {

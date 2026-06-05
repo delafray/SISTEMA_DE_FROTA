@@ -51,6 +51,52 @@ const log = createLogger('router');
 const SMART_ROUTER_CONFIANCA_MINIMA = 60;
 
 /**
+ * Detecção DETERMINÍSTICA de lembrete (custo 0 token), reutilizável em qualquer
+ * ponto do router. Roda ANTES da guarda de cota, do gate de ociosidade e do
+ * intent classifier — o gatilho exato ("lembrete", "me lembra", "anota") sempre
+ * salva, independente de role (motorista/gestor/master), estado da sessão ou
+ * orçamento da IA. A tool do Gemini (criar_lembrete) fica como reserva pra frases
+ * fora do padrão.
+ *
+ * Retorno:
+ *  - true  → era lembrete (já tratado: salvo, ou pediu o texto). O caller deve `return`.
+ *  - false → NÃO era lembrete. Segue o fluxo normal.
+ */
+async function tentarLembreteDeterministico(
+  msg: ParsedMessage,
+  identity: UserIdentity,
+  empresaId?: string
+): Promise<boolean> {
+  if (msg.tipo !== 'texto' || !msg.texto) return false;
+  const conteudo = extrairLembrete(msg.texto);
+  if (conteudo === null) return false;
+
+  const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
+  const nomeQuemMandou = 'nome' in identity ? identity.nome : undefined;
+
+  if (!conteudo) {
+    log.info('lembrete_deterministico_detectado', { from: msg.from, sem_conteudo: true });
+    await enviarTexto(msg.from, '📝 O que você quer anotar? Ex: "lembrete: comprar pneu"');
+    return true;
+  }
+
+  log.info('lembrete_deterministico_detectado', { from: msg.from, chars: conteudo.length });
+  const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo, nomeQuemMandou, msg.from);
+  if (r.ok) {
+    log.info('lembrete_deterministico_salvo', { from: msg.from, empresa_id: empresaId });
+  } else {
+    log.warn('lembrete_deterministico_falhou', { from: msg.from, erro: r.erro });
+  }
+  await enviarTexto(
+    msg.from,
+    r.ok
+      ? `✅ Anotado: ${conteudo}\n\nVai aparecer no painel até alguém dar ciência.`
+      : '❌ Não consegui salvar o lembrete agora. Tenta de novo em instantes.'
+  );
+  return true;
+}
+
+/**
  * GEMINI_MODE: quando true, todas as mensagens de texto e audio sao
  * processadas pelo Gemini Flash em vez dos fluxos de menu rigidos.
  * Mudar para false para reverter ao comportamento anterior.
@@ -65,6 +111,13 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
 
   if (identity.tipo === 'desconhecido') {
     log.warn('remetente_desconhecido', { from: msg.from, msg_id: msg.messageId });
+    return;
+  }
+
+  // 1.5. Lembrete DETERMINÍSTICO (gatilho exato) — ANTES de tudo: cota, sessão,
+  // role e intent classifier. Garante que "lembrete: X" / "me lembra de X" /
+  // "anota que X" SEMPRE salve, mesmo com cota estourada ou flow pendente.
+  if (await tentarLembreteDeterministico(msg, identity, identity.empresa_id)) {
     return;
   }
 
@@ -794,28 +847,8 @@ async function rotearComGemini(
 ): Promise<void> {
   // usuario_id vai pro Gemini pra ferramentas que precisam saber QUEM é (ex: criar_lembrete).
   const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
-
-  // Detecção DETERMINÍSTICA de lembrete — salva na hora, sem depender da IA "decidir"
-  // chamar a tool (ela às vezes só responde "ok" e guarda na conversa, sem persistir).
-  // QUALQUER telefone cadastrado pode anotar (motorista, gestor, master) — sem restrição
-  // de role no app; o Supabase é quem guarda os dados. A tool do Gemini fica como reserva.
   const nomeQuemMandou = 'nome' in identity ? identity.nome : undefined;
-  async function tentarLembreteDeterministico(texto: string): Promise<boolean> {
-    const conteudo = extrairLembrete(texto);
-    if (conteudo === null) return false;
-    if (!conteudo) {
-      await enviarTexto(msg.from, '📝 O que você quer anotar? Ex: "lembrete: comprar pneu"');
-      return true;
-    }
-    const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo, nomeQuemMandou, msg.from);
-    await enviarTexto(
-      msg.from,
-      r.ok
-        ? `✅ Anotado: ${conteudo}\n\nVai aparecer no painel até alguém dar ciência.`
-        : '❌ Não consegui salvar o lembrete agora. Tenta de novo em instantes.'
-    );
-    return true;
-  }
+  const remetente = { nome: nomeQuemMandou, telefone: msg.from };
 
   // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
   // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
@@ -828,13 +861,15 @@ async function rotearComGemini(
     }
 
     // Transcreve primeiro (texto direto pro Gemini é mais rápido que reprocessar o áudio).
-    // Lembretes/anotações agora são uma TOOL do Gemini (criar_lembrete) — sem regex frágil.
     const transcricao = await transcreverAudio(dataUrl);
     if (transcricao.ok && transcricao.data.texto) {
       const texto = transcricao.data.texto.trim();
-      // Lembrete por áudio → salva determinístico, não passa pela IA
-      if (await tentarLembreteDeterministico(texto)) return;
-      const resposta = await processarComGemini(msg.from, texto, nomeRemetente, empresaId, motoristaId, usuarioId);
+      // Lembrete por áudio → salva determinístico (gatilho exato), não passa pela IA.
+      // Reusa o helper de módulo com uma msg sintética carregando a transcrição.
+      if (await tentarLembreteDeterministico({ ...msg, tipo: 'texto', texto }, identity, empresaId)) return;
+      // Sinal LEVE de lembrete (guarda/registra/salva/não esquece) → força a tool via ANY.
+      const forcar = pareceLembreteLeve(texto) ? 'criar_lembrete' : undefined;
+      const resposta = await processarComGemini(msg.from, texto, nomeRemetente, empresaId, motoristaId, usuarioId, forcar, remetente);
       await enviarTexto(msg.from, resposta);
       return;
     }
@@ -845,7 +880,8 @@ async function rotearComGemini(
     return;
   }
 
-  // Texto: fluxo normal
+  // Texto: fluxo normal. (Lembrete por gatilho exato já foi tratado no topo de
+  // processarMensagem — aqui só chegam mensagens que NÃO casaram com o parser.)
   const textoParaGemini = msg.texto ?? '';
   if (!textoParaGemini) {
     await enviarTexto(msg.from, 'Nao consegui entender a mensagem. Por favor, envie um texto.');
@@ -869,10 +905,31 @@ async function rotearComGemini(
     return;
   }
 
-  // Lembrete por texto → salva determinístico, não passa pela IA
-  if (await tentarLembreteDeterministico(textoParaGemini)) return;
+  // Sinal LEVE de lembrete (não casou no parser exato, mas tem intenção de guardar:
+  // "guarda esse dado", "registra que...", "salva aí", "não esquece de..."). Aqui
+  // FORÇAMOS a tool via mode ANY (forcarTool) — mais confiável que torcer pro AUTO
+  // chamar sozinho. A tool persiste e o modelo confirma em texto.
+  const forcar = pareceLembreteLeve(textoParaGemini) ? 'criar_lembrete' : undefined;
+  if (forcar) log.info('lembrete_leve_forcando_tool', { from: msg.from });
 
-  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId, usuarioId);
+  const resposta = await processarComGemini(
+    msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId, usuarioId, forcar, remetente
+  );
   await enviarTexto(msg.from, resposta);
+}
+
+/**
+ * Sinal LEVE de intenção de lembrete — propositalmente mais amplo que o parser
+ * exato (extrairLembrete). Pega verbos de "guardar informação" que o parser
+ * evita por ambiguidade (guarda/registra/salva/não esquece). Usado SÓ pra decidir
+ * forçar a tool criar_lembrete no Gemini (mode ANY); a desambiguação final fica
+ * com o modelo. NÃO dispara em "nota fiscal" / consultas.
+ */
+function pareceLembreteLeve(texto: string): boolean {
+  const t = (texto ?? '').toLowerCase();
+  if (!t.trim()) return false;
+  // Exclui "nota fiscal" / "nota de ..." pra não confundir com despesa/documento.
+  if (/\bnota\s+fiscal\b/.test(t)) return false;
+  return /\b(guarda|guardar|registra|registrar|registro|salva|salvar|anota|anote|n[ãa]o\s+esque[çc]a|n[ãa]o\s+esquece)\b/.test(t);
 }
 

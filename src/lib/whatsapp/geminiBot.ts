@@ -53,15 +53,17 @@ export async function processarComGemini(
   nomeRemetente?: string,
   empresaId?: string,
   motoristaId?: string,
-  usuarioId?: string
+  usuarioId?: string,
+  forcarTool?: string,
+  remetente?: { nome?: string; telefone?: string }
 ): Promise<string> {
-  log.info('gemini_processando', { telefone, msg_len: mensagem.length, com_tools: !!empresaId });
+  log.info('gemini_processando', { telefone, msg_len: mensagem.length, com_tools: !!empresaId, forcar_tool: forcarTool });
 
   const mensagemComContexto = prefixarComRemetente(mensagem, nomeRemetente);
   const historico: HistoricoMensagem[] = await lerHistorico(telefone);
 
   const inicio = Date.now();
-  const resultado = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId, usuarioId);
+  const resultado = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId, usuarioId, forcarTool, remetente);
   const latencia = Date.now() - inicio;
 
   if (!resultado.ok) {

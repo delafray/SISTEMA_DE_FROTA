@@ -92,13 +92,36 @@ export async function POST(req: NextRequest) {
   await new Promise(r => setTimeout(r, 150));
 
   // 4. Recria instância com webhook embutido + pede QR
-  // APP_URL = URL pública do Vercel (ex: https://sistema-de-frota.vercel.app)
-  const appUrl = process.env.APP_URL
-    ?? (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : null);
-  if (!appUrl) {
-    return NextResponse.json({ error: 'APP_URL não configurada nas variáveis de ambiente' }, { status: 500 });
+  //
+  // ⚠️ URL DO WEBHOOK = DOMÍNIO DE PRODUÇÃO ESTÁVEL. Tem que ser fixo, NUNCA o
+  // deployment específico. `process.env.VERCEL_URL` aponta pro deploy atual (preview,
+  // com hash tipo `...-qcymmnkwc-...`) e MUDA a cada deploy — foi exatamente o que
+  // quebrou o webhook (Evolution apontando pra preview morto, zero log em produção).
+  // Ordem de preferência: APP_URL (domínio fixo que você define) →
+  // VERCEL_PROJECT_PRODUCTION_URL (alias de produção estável que a Vercel injeta).
+  const rawUrl = process.env.APP_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null);
+  if (!rawUrl) {
+    log.error('reconectar_sem_app_url', { tem_vercel_prod: !!process.env.VERCEL_PROJECT_PRODUCTION_URL });
+    return NextResponse.json(
+      { error: 'APP_URL não configurada. Defina APP_URL (Production) com o domínio fixo, ex: https://sistema-de-frota.vercel.app' },
+      { status: 500 }
+    );
   }
+  const appUrl = rawUrl.replace(/\/+$/, ''); // sem barra final
+
+  // Guarda anti-regressão: recusa URL que pareça um deployment de PREVIEW do Vercel
+  // (padrão `projeto-<hash>-<scope>.vercel.app`). Webhook de preview re-quebra a entrega.
+  if (/-[a-z0-9]{8,}-[a-z0-9-]+\.vercel\.app/i.test(appUrl)) {
+    log.error('reconectar_url_preview_detectada', { appUrl });
+    return NextResponse.json(
+      { error: 'A URL resolvida parece um preview instável do Vercel. Configure APP_URL com o domínio de produção fixo antes de reconectar.' },
+      { status: 500 }
+    );
+  }
+
   const webhookUrl = `${appUrl}/api/whatsapp/webhook`;
+  log.info('reconectar_webhook_url', { webhookUrl });
 
   const webhookSecret = process.env.EVOLUTION_WEBHOOK_SECRET ?? '';
 

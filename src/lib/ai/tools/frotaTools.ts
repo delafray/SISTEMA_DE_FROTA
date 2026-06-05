@@ -28,18 +28,17 @@ function getSupabase() {
 
 // ─── Declaracoes pro Gemini ──────────────────────────────────────────
 
-export const declarations: FunctionDeclaration[] = [
+export const declarations: FunctionDeclaration[] = ([
   {
     name: 'listar_motoristas',
     description:
       'Lista TODOS os motoristas ativos da empresa do usuario. Use quando o usuario perguntar: ' +
       '"quantos motoristas tenho", "quais sao meus motoristas", "me da os nomes dos motoristas", ' +
       '"quem sao os motoristas". Devolve quantidade e nomes.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {},
-      required: [],
-    },
+    // SEM parametros: spec oficial diz que FunctionDeclaration.parameters e opcional e
+    // "for function with no parameters this can be left unset". Um schema com
+    // properties:{} VAZIO dispara 400 INVALID_ARGUMENT em modo ANY (e em varias versoes
+    // de backend: "should be non-empty for OBJECT type"). Por isso OMITIMOS o campo.
   },
   {
     name: 'listar_veiculos',
@@ -48,11 +47,7 @@ export const declarations: FunctionDeclaration[] = [
       'Use quando perguntar: "quantos caminhoes tenho", "quais sao meus veiculos", ' +
       '"qual a placa do (apelido/marca)", "me fala sobre os caminhoes". ' +
       'Devolve quantidade e detalhes: placa, apelido, marca, modelo.',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {},
-      required: [],
-    },
+    // SEM parametros (mesma razao de listar_motoristas).
   },
   {
     name: 'buscar_km_caminhao',
@@ -81,11 +76,7 @@ export const declarations: FunctionDeclaration[] = [
       'Devolve o caminhao VINCULADO ao motorista (placa, apelido, marca, modelo, km_atual). ' +
       'Use quando o motorista perguntar: "qual e meu caminhao", "qual caminhao esta comigo", ' +
       '"qual veiculo esta relacionado a mim", "que caminhao estou dirigindo".',
-    parameters: {
-      type: SchemaType.OBJECT,
-      properties: {},
-      required: [],
-    },
+    // SEM parametros (mesma razao de listar_motoristas).
   },
   {
     name: 'propor_atualizacao_km',
@@ -143,7 +134,24 @@ export const declarations: FunctionDeclaration[] = [
       required: ['texto'],
     },
   },
-];
+] as FunctionDeclaration[]).map(sanitizarDeclaracao);
+
+/**
+ * Defesa em profundidade: garante que NENHUMA declaracao chegue ao SDK com
+ * `parameters` cujo `properties` seja vazio. O backend do Gemini rejeita
+ * (400 INVALID_ARGUMENT — "should be non-empty for OBJECT type") esse formato,
+ * principalmente quando o toolConfig esta em modo ANY. Se alguem reintroduzir
+ * `parameters:{type:OBJECT, properties:{}}` numa tool sem parametro, este map
+ * apaga o campo em vez de quebrar TODO o array de tools.
+ */
+function sanitizarDeclaracao(decl: FunctionDeclaration): FunctionDeclaration {
+  const props = decl.parameters?.properties;
+  if (decl.parameters && (!props || Object.keys(props).length === 0)) {
+    const { parameters: _omit, ...resto } = decl;
+    return resto;
+  }
+  return decl;
+}
 
 // ─── Implementacao das tools ──────────────────────────────────────────
 
@@ -589,7 +597,8 @@ export async function executarTool(
   empresaId: string,
   motoristaId?: string,
   args?: Record<string, unknown>,
-  usuarioId?: string
+  usuarioId?: string,
+  remetente?: { nome?: string; telefone?: string }
 ): Promise<ResultadoTool> {
   // B21: NUNCA normalize undefined → ''. Tipos distintos = semantica distinta.
   // Tool valida e devolve erro 'sem_permissao' explicito quando motorista ausente.
@@ -597,7 +606,9 @@ export async function executarTool(
   const usrId = typeof usuarioId === 'string' && usuarioId.trim() !== '' ? usuarioId : undefined;
   switch (nome) {
     case 'criar_lembrete':
-      return criarLembrete(empresaId, usrId, args?.texto);
+      // Propaga nome/telefone de quem mandou — alinha a atribuicao no painel com o
+      // caminho deterministico (lembreteParser), que ja preenche criado_por_*.
+      return criarLembrete(empresaId, usrId, args?.texto, remetente?.nome, remetente?.telefone);
     case 'listar_motoristas':
       return listarMotoristas(empresaId);
     case 'listar_veiculos':
