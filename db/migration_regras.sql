@@ -36,4 +36,5 @@ CREATE TABLE IF NOT EXISTS regras (
 CREATE INDEX IF NOT EXISTS regras_tipo_ativa ON regras (tipo, ativa);
 
 -- SEM TRAVA: acesso total, sem RLS (consistente com a tabela lembretes).
+ALTER TABLE regras DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON regras TO anon, authenticated, service_role;

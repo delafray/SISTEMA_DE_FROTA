@@ -22,4 +22,6 @@ CREATE TABLE IF NOT EXISTS telefones (
 
 CREATE UNIQUE INDEX IF NOT EXISTS telefones_canonico ON telefones (telefone);
 
+-- SEM TRAVA: RLS desligada (a página grava pelo navegador). Igual à tabela lembretes.
+ALTER TABLE telefones DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON telefones TO anon, authenticated, service_role;
