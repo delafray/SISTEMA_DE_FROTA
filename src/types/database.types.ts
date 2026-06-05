@@ -21,6 +21,7 @@ export type Database = {
           id: string
           inicio: string
           km_evento: number | null
+          km_fim: number | null
           motorista_id: string | null
           observacao: string | null
           status: string
@@ -32,6 +33,7 @@ export type Database = {
           id?: string
           inicio?: string
           km_evento?: number | null
+          km_fim?: number | null
           motorista_id?: string | null
           observacao?: string | null
           status?: string
@@ -43,6 +45,7 @@ export type Database = {
           id?: string
           inicio?: string
           km_evento?: number | null
+          km_fim?: number | null
           motorista_id?: string | null
           observacao?: string | null
           status?: string
