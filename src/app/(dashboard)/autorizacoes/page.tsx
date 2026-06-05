@@ -10,25 +10,23 @@ import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { telefoneCanonico, telefoneExibicao } from "@/lib/utils/telefone";
+import { ordenarAcoes } from "@/lib/schemas/regra";
 
-const NIVEIS = ["", "consultar", "modificar", "criar"] as const;
-type Nivel = (typeof NIVEIS)[number];
+type Nivel = string;
 const META: Record<string, { label: string; short: string; bg: string; color: string; border: string }> = {
   "":        { label: "—",         short: "",  bg: "transparent", color: "#cbd5e1", border: "#e2e8f0" },
   consultar: { label: "Consultar", short: "C", bg: "#dbeafe",     color: "#1d4ed8", border: "#93c5fd" },
-  modificar: { label: "Modificar", short: "M", bg: "#fef3c7",     color: "#b45309", border: "#fcd34d" },
-  criar:     { label: "Criar",     short: "+", bg: "#dcfce7",     color: "#15803d", border: "#86efac" },
+  alterar:   { label: "Alterar",   short: "A", bg: "#fef3c7",     color: "#b45309", border: "#fcd34d" },
+  registrar: { label: "Registrar", short: "R", bg: "#dcfce7",     color: "#15803d", border: "#86efac" },
 };
 
-type Regra = { id: string; nome: string; tipo: string };
+type Regra = { id: string; nome: string; tipo: string; acoes: string[] };
 type Perfil = { id: string; nome: string | null };
 type Tel = {
   id: string; telefone: string; telefone_exibicao: string | null;
   usuario_id: string | null; usuario_nome: string | null;
   ativo: boolean; anotar: boolean; permissoes: Record<string, string>;
 };
-
-const tetoDaRegra = (tipo: string): Nivel => (tipo === "registrar" ? "criar" : "consultar");
 
 const COL_TEL = 132, COL_USR = 150, COL = 30, ROW_H = 26, HEAD_H = 140;
 const headBg = "#1e293b";
@@ -51,11 +49,12 @@ export default function AutorizacoesPage() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
       const [rg, tl, pf] = await Promise.all([
-        supabase.from("regras").select("id,nome,tipo").eq("ativa", true).order("prioridade", { ascending: false }).order("nome"),
+        supabase.from("regras").select("id,nome,tipo,acoes").eq("ativa", true).order("prioridade", { ascending: false }).order("nome"),
         supabase.from("telefones").select("*").order("criado_em"),
         supabase.from("perfis").select("id,nome").order("nome"),
       ]);
-      setRegras((rg.data ?? []) as Regra[]);
+      // regras tipo 'anotar' são o flag Anotar (coluna fixa) — não viram coluna que cicla.
+      setRegras(((rg.data ?? []) as Regra[]).filter((r) => r.tipo !== "anotar"));
       setTels(((tl.data ?? []) as Tel[]).map(mapRow));
       setPerfis((pf.data ?? []) as Perfil[]);
       setLoading(false);
@@ -71,11 +70,11 @@ export default function AutorizacoesPage() {
 
   const ciclar = (tel: Tel, regra: Regra) => {
     if (!tel.ativo) return;
-    const teto = NIVEIS.indexOf(tetoDaRegra(regra.tipo));
-    const atual = NIVEIS.indexOf((tel.permissoes[regra.id] as Nivel) ?? "");
-    const prox = atual + 1 > teto ? 0 : atual + 1;
+    const ciclo = ["", ...ordenarAcoes(regra.acoes ?? [])];   // cicla só pelas ações da regra
+    const atual = ciclo.indexOf(tel.permissoes[regra.id] ?? "");
+    const prox = ciclo[(atual + 1) % ciclo.length] ?? "";
     const novo = { ...tel.permissoes };
-    if (NIVEIS[prox] === "") delete novo[regra.id]; else novo[regra.id] = NIVEIS[prox];
+    if (prox === "") delete novo[regra.id]; else novo[regra.id] = prox;
     patch(tel.id, { permissoes: novo });
   };
 
@@ -118,7 +117,7 @@ export default function AutorizacoesPage() {
       <div style={{ padding: "8px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
         <div style={{ fontSize: 15, fontWeight: 800 }}>🛡️ Autorizações — Telefones × Permissões</div>
         <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", alignItems: "center", color: "#64748b" }}>
-          {(["consultar", "modificar", "criar"] as Nivel[]).map((n) => (
+          {(["consultar", "alterar", "registrar"] as Nivel[]).map((n) => (
             <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
               <span style={{ width: 16, height: 16, borderRadius: 4, background: META[n].bg, border: `1px solid ${META[n].border}`, color: META[n].color, fontWeight: 800, fontSize: 10, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>{META[n].short}</span>
               {META[n].label}
@@ -217,7 +216,7 @@ export default function AutorizacoesPage() {
       {tip && regras[tip.i] && (
         <div style={{ position: "fixed", left: Math.min(tip.x + 14, (typeof window !== "undefined" ? window.innerWidth : 1200) - 280), top: tip.y + 14, width: 260, background: "#0f172a", color: "#e2e8f0", borderRadius: 8, padding: "10px 12px", zIndex: 50, boxShadow: "0 10px 30px rgba(0,0,0,0.35)", pointerEvents: "none" }}>
           <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>{regras[tip.i].nome}</div>
-          <div style={{ fontSize: 12, color: "#7dd3fc" }}>Tipo: <b>{regras[tip.i].tipo}</b> · Teto: <b>{META[tetoDaRegra(regras[tip.i].tipo)].label}</b></div>
+          <div style={{ fontSize: 12, color: "#7dd3fc" }}>Ações: <b>{ordenarAcoes(regras[tip.i].acoes ?? []).map((a) => META[a].label).join(" → ") || "—"}</b></div>
         </div>
       )}
 

@@ -23,7 +23,7 @@ export type TelCtx = {
   usuario_nome: string | null;
   ativo: boolean;
   anotar: boolean;
-  permissoes: Record<string, string>;   // { "<regra_id>": "consultar|modificar|criar" }
+  permissoes: Record<string, string>;   // { "<regra_id>": "consultar|alterar|registrar" }
 };
 
 export type RegraDisponivel = RegraCtx & { nivel: string };

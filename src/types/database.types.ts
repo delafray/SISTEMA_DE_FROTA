@@ -97,6 +97,7 @@ export type Database = {
       }
       regras: {
         Row: {
+          acoes: string[]
           ativa: boolean
           atualizado_em: string
           campos: Json
@@ -114,6 +115,7 @@ export type Database = {
           prioridade: number
           quem_pode_disparar: string[]
           resposta: string | null
+          teto: string | null
           tipo: string
           versao: number
         }
@@ -125,6 +127,7 @@ export type Database = {
           empresas_alvo?: string[]
           escopo_dados?: Json
           exige_confirmacao?: boolean
+          acoes?: string[]
           fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
@@ -135,6 +138,7 @@ export type Database = {
           prioridade?: number
           quem_pode_disparar?: string[]
           resposta?: string | null
+          teto?: string | null
           tipo?: string
           versao?: number
         }
@@ -146,6 +150,7 @@ export type Database = {
           empresas_alvo?: string[]
           escopo_dados?: Json
           exige_confirmacao?: boolean
+          acoes?: string[]
           fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
@@ -156,6 +161,7 @@ export type Database = {
           prioridade?: number
           quem_pode_disparar?: string[]
           resposta?: string | null
+          teto?: string | null
           tipo?: string
           versao?: number
         }

@@ -4,10 +4,7 @@ import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn } from "@/components/ui/ds";
-import {
-  REGRA_TIPOS, REGRA_TIPO_LABEL, REGRA_PUBLICOS, regraSchema,
-  type RegraTipo, type RegraPublico,
-} from "@/lib/schemas/regra";
+import { REGRA_PUBLICOS, regraSchema, PRESETS_ACESSO, presetDeAcoes, type RegraPublico } from "@/lib/schemas/regra";
 
 export default function EditarRegraPage() {
   const router = useRouter();
@@ -20,7 +17,7 @@ export default function EditarRegraPage() {
   const [fixa, setFixa] = useState(false);
   const [form, setForm] = useState({
     nome: "",
-    tipo: "consultar" as RegraTipo,
+    preset: "consultar",
     prioridade: 0,
     ativa: true,
     exige_confirmacao: false,
@@ -41,7 +38,7 @@ export default function EditarRegraPage() {
       setFixa(!!data.fixa);
       setForm({
         nome: data.nome ?? "",
-        tipo: (data.tipo as RegraTipo) ?? "consultar",
+        preset: presetDeAcoes(data.acoes ?? [], data.tipo ?? "consultar"),
         prioridade: data.prioridade ?? 0,
         ativa: !!data.ativa,
         exige_confirmacao: !!data.exige_confirmacao,
@@ -59,6 +56,7 @@ export default function EditarRegraPage() {
   }, []);
 
   const linhas = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
+  const presetAtual = PRESETS_ACESSO.find((p) => p.key === form.preset) ?? PRESETS_ACESSO[1];
 
   const togglePublico = (p: RegraPublico) => {
     setForm((f) => {
@@ -76,7 +74,8 @@ export default function EditarRegraPage() {
     setErro(null);
     const parsed = regraSchema.safeParse({
       nome: form.nome.trim(),
-      tipo: form.tipo,
+      tipo: presetAtual.tipo,
+      acoes: presetAtual.acoes,
       ativa: form.ativa,
       fixa,
       prioridade: Number(form.prioridade) || 0,
@@ -135,9 +134,9 @@ export default function EditarRegraPage() {
               <FormField label="Nome da regra *">
                 <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} style={inputStyle} required />
               </FormField>
-              <FormField label="Tipo *">
-                <select value={form.tipo} disabled={fixa} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as RegraTipo }))} style={{ ...selectStyle, opacity: fixa ? 0.6 : 1 }}>
-                  {REGRA_TIPOS.map((t) => <option key={t} value={t}>{REGRA_TIPO_LABEL[t]}</option>)}
+              <FormField label="Acesso *">
+                <select value={form.preset} disabled={fixa} onChange={(e) => setForm((f) => ({ ...f, preset: e.target.value }))} style={{ ...selectStyle, opacity: fixa ? 0.6 : 1 }}>
+                  {PRESETS_ACESSO.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
               </FormField>
               <FormField label="Prioridade">
@@ -165,7 +164,7 @@ export default function EditarRegraPage() {
             </FormField>
           </FormSection>
 
-          {form.tipo === "consultar" && (
+          {presetAtual.acoes.includes("consultar") && (
             <FormSection title="Resposta (Consultar)">
               <FormField label="Resposta que a IA dá quando a regra casa">
                 <textarea value={form.resposta} onChange={(e) => setForm((f) => ({ ...f, resposta: e.target.value }))} style={{ ...inputStyle, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} />

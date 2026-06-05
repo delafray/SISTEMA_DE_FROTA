@@ -4,10 +4,7 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn } from "@/components/ui/ds";
-import {
-  REGRA_TIPOS, REGRA_TIPO_LABEL, REGRA_PUBLICOS, regraSchema,
-  type RegraTipo, type RegraPublico,
-} from "@/lib/schemas/regra";
+import { REGRA_PUBLICOS, regraSchema, PRESETS_ACESSO, type RegraPublico } from "@/lib/schemas/regra";
 
 export default function NovaRegraPage() {
   const router = useRouter();
@@ -16,7 +13,7 @@ export default function NovaRegraPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [form, setForm] = useState({
     nome: "",
-    tipo: "consultar" as RegraTipo,
+    preset: "consultar",
     prioridade: 0,
     ativa: true,
     exige_confirmacao: false,
@@ -29,6 +26,7 @@ export default function NovaRegraPage() {
   });
 
   const linhas = (s: string) => s.split("\n").map((l) => l.trim()).filter(Boolean);
+  const presetAtual = PRESETS_ACESSO.find((p) => p.key === form.preset) ?? PRESETS_ACESSO[1];
 
   const togglePublico = (p: RegraPublico) => {
     setForm((f) => {
@@ -47,7 +45,8 @@ export default function NovaRegraPage() {
     setErro(null);
     const parsed = regraSchema.safeParse({
       nome: form.nome.trim(),
-      tipo: form.tipo,
+      tipo: presetAtual.tipo,
+      acoes: presetAtual.acoes,
       ativa: form.ativa,
       fixa: false,
       prioridade: Number(form.prioridade) || 0,
@@ -112,9 +111,9 @@ export default function NovaRegraPage() {
               <FormField label="Nome da regra *">
                 <input value={form.nome} onChange={(e) => setForm((f) => ({ ...f, nome: e.target.value }))} style={inputStyle} required />
               </FormField>
-              <FormField label="Tipo *">
-                <select value={form.tipo} onChange={(e) => setForm((f) => ({ ...f, tipo: e.target.value as RegraTipo }))} style={selectStyle}>
-                  {REGRA_TIPOS.map((t) => <option key={t} value={t}>{REGRA_TIPO_LABEL[t]}</option>)}
+              <FormField label="Acesso *">
+                <select value={form.preset} onChange={(e) => setForm((f) => ({ ...f, preset: e.target.value }))} style={selectStyle}>
+                  {PRESETS_ACESSO.map((p) => <option key={p.key} value={p.key}>{p.label}</option>)}
                 </select>
               </FormField>
               <FormField label="Prioridade">
@@ -160,7 +159,7 @@ export default function NovaRegraPage() {
             </FormField>
           </FormSection>
 
-          {form.tipo === "consultar" && (
+          {presetAtual.acoes.includes("consultar") && (
             <FormSection title="Resposta (Consultar)">
               <FormField label="Resposta que a IA dá quando a regra casa">
                 <textarea
@@ -173,14 +172,14 @@ export default function NovaRegraPage() {
             </FormSection>
           )}
 
-          {form.tipo === "registrar" && (
+          {(presetAtual.acoes.includes("alterar") || presetAtual.acoes.includes("registrar")) && (
             <div style={{ padding: "12px 14px", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", fontSize: "13px", color: "#92400e" }}>
-              ⚠️ <b>Registrar</b> (a IA grava no banco) é a fase de risco — coleta de campos, seleção de tabelas e
-              confirmação obrigatória vêm na próxima etapa. Ver <code>docs/MOTOR_REGRAS_ARQUITETURA.md</code>.
+              ⚠️ <b>Alterar/Registrar</b> (a IA grava no banco) é a fase de risco — coleta de campos, escopo e
+              confirmação obrigatória vêm com o motor de execução. Ver <code>docs/MOTOR_REGRAS_ARQUITETURA.md</code>.
             </div>
           )}
 
-          {form.tipo === "anotar" && (
+          {presetAtual.key === "anotar" && (
             <div style={{ padding: "12px 14px", background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px", fontSize: "13px", color: "#166534" }}>
               ℹ️ <b>Anotar</b> funciona como o lembrete de hoje — grava a anotação no painel.
             </div>
