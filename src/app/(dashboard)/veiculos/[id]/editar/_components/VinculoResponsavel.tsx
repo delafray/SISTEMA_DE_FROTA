@@ -5,6 +5,7 @@ import { createClient } from "@/lib/supabase/client";
 
 type Aloc = { id: string; motorista_id: string | null; status: string; km_evento: number | null; km_fim: number | null; inicio: string; fim: string | null };
 type Mot = { id: string; nome: string; usuario_id: string | null; ativo: boolean };
+type MV = { alocId: string; veiculo_id: string; placa: string | null; apelido: string | null; km_atual: number | null };
 
 const STATUS_LABEL: Record<string, string> = { operacional: "Operacional", parado: "Parado", manutencao: "Manutenção", inativo: "Inativo" };
 const ACOES = [
@@ -37,16 +38,32 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
   const [kmLocal, setKmLocal] = useState<number | null>(kmAtual);
   const [popup, setPopup] = useState(false);
   const [salvando, setSalvando] = useState(false);
+  const [motoristaVeiculo, setMotoristaVeiculo] = useState<Record<string, MV>>({});
+  const [transfer, setTransfer] = useState<{ mot: Mot; mv: MV } | null>(null);
+  const [baixaPendente, setBaixaPendente] = useState<{ alocId: string; veiculo_id: string; km: number | null; destino: string } | null>(null);
 
   const load = useCallback(async () => {
-    const [a, m, v] = await Promise.all([
+    const [a, m, v, allAl, allVe] = await Promise.all([
       supabase.from("alocacoes").select("*").eq("veiculo_id", veiculoId).order("inicio", { ascending: false }),
       supabase.from("motoristas").select("id,nome,usuario_id,ativo").eq("empresa_id", empresaId).order("nome"),
       supabase.from("veiculos").select("km_atual").eq("id", veiculoId).maybeSingle(),
+      supabase.from("alocacoes").select("id,veiculo_id,motorista_id").is("fim", null).eq("status", "operacional"),
+      supabase.from("veiculos").select("id,placa,apelido,km_atual").eq("empresa_id", empresaId),
     ]);
     setAlocs((a.data ?? []) as Aloc[]);
     setMots((m.data ?? []) as Mot[]);
     if (v.data?.km_atual != null) setKmLocal(v.data.km_atual);
+    // mapa motorista → veículo que ele já está (em OUTRO veículo, não este)
+    const veMap = new Map<string, { placa: string | null; apelido: string | null; km_atual: number | null }>();
+    for (const ve of allVe.data ?? []) veMap.set(ve.id, { placa: ve.placa, apelido: ve.apelido, km_atual: ve.km_atual });
+    const mv: Record<string, MV> = {};
+    for (const al of allAl.data ?? []) {
+      if (al.motorista_id && al.veiculo_id !== veiculoId) {
+        const ve = veMap.get(al.veiculo_id);
+        mv[al.motorista_id] = { alocId: al.id, veiculo_id: al.veiculo_id, placa: ve?.placa ?? null, apelido: ve?.apelido ?? null, km_atual: ve?.km_atual ?? null };
+      }
+    }
+    setMotoristaVeiculo(mv);
   }, [veiculoId, empresaId, supabase]);
 
   // carga + REALTIME: km muda pelo sistema, zap ou app → a tela atualiza sozinha
@@ -72,12 +89,24 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
   const [erro, setErro] = useState("");
 
   const abrirPopup = () => {
-    setAcao("motorista"); setMotSel(""); setErro("");
+    setAcao("motorista"); setMotSel(""); setErro(""); setBaixaPendente(null); setTransfer(null);
     setKmInput(kmLocal != null ? String(kmLocal) : "");
     setDataEvento(toLocal(new Date().toISOString()));
     setPopup(true);
   };
   const minData = atual ? toLocal(atual.inicio) : undefined;
+
+  const escolherMotorista = (m: Mot) => {
+    const mv = motoristaVeiculo[m.id];
+    if (mv) setTransfer({ mot: m, mv });            // já está em outro caminhão → sub-popup
+    else { setMotSel(m.id); setBaixaPendente(null); }
+  };
+  const confirmarTransfer = (destino: string) => {
+    if (!transfer) return;
+    setMotSel(transfer.mot.id);
+    setBaixaPendente({ alocId: transfer.mv.alocId, veiculo_id: transfer.mv.veiculo_id, km: transfer.mv.km_atual, destino });
+    setTransfer(null);
+  };
 
   const confirmar = async () => {
     setErro("");
@@ -96,6 +125,18 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
       km_evento: kmNum,
       inicio: inicioISO,
     });
+    // BAIXA: se o motorista escolhido já estava em OUTRO caminhão, fecha o vínculo
+    // de lá (km de devolução + horário) e deixa aquele veículo no destino escolhido.
+    if (acao === "motorista" && baixaPendente) {
+      await supabase.from("alocacoes").update({ fim: inicioISO, km_fim: baixaPendente.km }).eq("id", baixaPendente.alocId);
+      await supabase.from("alocacoes").insert({
+        veiculo_id: baixaPendente.veiculo_id,
+        motorista_id: null,
+        status: baixaPendente.destino,
+        km_evento: baixaPendente.km,
+        inicio: inicioISO,
+      });
+    }
     if (kmNum != null) { await supabase.from("veiculos").update({ km_atual: kmNum }).eq("id", veiculoId); setKmLocal(kmNum); onKm(kmNum); }
     setSalvando(false);
     setPopup(false);
@@ -175,11 +216,26 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
               </div>
               {acao === "motorista" && (
                 <div>
-                  <label style={lbl}>Motorista (🟢 com usuário · 🟠 sem usuário)</label>
-                  <select value={motSel} onChange={(e) => setMotSel(e.target.value)} style={inp}>
-                    <option value="">— selecione —</option>
-                    {mots.filter((m) => m.ativo).map((m) => <option key={m.id} value={m.id}>{m.usuario_id ? "🟢" : "🟠"} {m.nome}</option>)}
-                  </select>
+                  <label style={lbl}>Motorista (🟢 com usuário · 🟠 sem · linha laranja = já está em outro caminhão)</label>
+                  <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                    {mots.filter((m) => m.ativo).map((m) => {
+                      const outro = motoristaVeiculo[m.id];
+                      const sel = motSel === m.id;
+                      return (
+                        <button key={m.id} type="button" onClick={() => escolherMotorista(m)}
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", borderBottom: "1px solid #f1f5f9", textAlign: "left", cursor: "pointer", fontSize: 13, background: sel ? "#dbeafe" : outro ? "#fff7ed" : "#fff" }}>
+                          <Dot on={!!m.usuario_id} />
+                          <span style={{ fontWeight: 600 }}>{m.nome}</span>
+                          {outro && <span style={{ marginLeft: "auto", fontSize: 11, color: "#b45309", fontWeight: 700 }}>🚛 {outro.placa ?? "?"}{outro.apelido ? ` (${outro.apelido})` : ""}</span>}
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {baixaPendente && (
+                    <div style={{ marginTop: 6, fontSize: 12, color: "#b45309", background: "#fff7ed", border: "1px solid #fde68a", borderRadius: 6, padding: "6px 8px" }}>
+                      ⚠ Ao confirmar, o caminhão anterior dele vai para <b>{baixaPendente.destino === "manutencao" ? "Manutenção" : "Parado"}</b> (baixa com KM {km(baixaPendente.km)}).
+                    </div>
+                  )}
                 </div>
               )}
               <div style={{ display: "flex", gap: 12 }}>
@@ -200,6 +256,24 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
                 <button type="button" style={btnGhost} onClick={() => setPopup(false)}>Cancelar</button>
                 <button type="button" style={btnPri} onClick={confirmar} disabled={salvando}>{salvando ? "Salvando..." : "Confirmar"}</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {transfer && (
+        <div onClick={() => setTransfer(null)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.55)", zIndex: 70, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
+            <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, fontSize: 14 }}>Transferir motorista</div>
+            <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ fontSize: 13, color: "#475569" }}>
+                <b>{transfer.mot.nome}</b> já está com o caminhão <b>{transfer.mv.placa ?? "?"}{transfer.mv.apelido ? ` (${transfer.mv.apelido})` : ""}</b>. Ao transferi-lo, o que fazer com esse caminhão? (não pode ir pra outro motorista aqui)
+              </div>
+              <div style={{ display: "flex", gap: 8 }}>
+                <button type="button" style={btnPri} onClick={() => confirmarTransfer("manutencao")}>🔧 Manutenção</button>
+                <button type="button" style={{ ...btnPri, background: "#64748b" }} onClick={() => confirmarTransfer("parado")}>🅿 Deixar parado</button>
+              </div>
+              <button type="button" style={btnGhost} onClick={() => setTransfer(null)}>Cancelar</button>
             </div>
           </div>
         </div>
