@@ -23,6 +23,8 @@ const ChartIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24
 const CloseIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" /></svg>;
 const GaugeIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 14l3-3m6 1a9 9 0 11-18 0 9 9 0 0118 0z" /><circle cx="12" cy="14" r="1" /></svg>;
 const ServerIcon   = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M4 7v10c0 2.21 3.582 4 8 4s8-1.79 8-4V7M4 7c0 2.21 3.582 4 8 4s8-1.79 8-4M4 7c0-2.21 3.582-4 8-4s8 1.79 8 4m0 5c0 2.21-3.582 4-8 4s-8-1.79-8-4" /></svg>;
+const BrainIcon    = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M9.5 3a2.5 2.5 0 00-2.45 2A2.5 2.5 0 005 7.5c0 .54.17 1.04.46 1.45A2.5 2.5 0 005 11.5a2.5 2.5 0 001.55 2.31A2.5 2.5 0 009.5 17a2 2 0 002-2V5a2 2 0 00-2-2zm5 0a2.5 2.5 0 012.45 2A2.5 2.5 0 0119 7.5c0 .54-.17 1.04-.46 1.45A2.5 2.5 0 0119 11.5a2.5 2.5 0 01-1.55 2.31A2.5 2.5 0 0114.5 17a2 2 0 01-2-2V5a2 2 0 012-2z" /></svg>;
+const ShieldIcon   = (p: SvgProps) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6l7-3z" /><path strokeLinecap="round" strokeLinejoin="round" d="M9.5 12l1.8 1.8L15 10" /></svg>;
 
 /* ─── SystemStatusBadge ──────────────────────────────────────── */
 interface ServiceStatus { name: string; ok: boolean; }
@@ -177,6 +179,12 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <NavItem href="/veiculos"    label="Veículos"    icon={TruckIcon}  onNavigate={onNavigate} />
             <NavItem href="/motoristas"  label="Motoristas"  icon={DriverIcon} onNavigate={onNavigate} />
             <NavItem href="/clientes"    label="Clientes"    icon={ClientIcon} onNavigate={onNavigate} />
+          </div>
+
+          <SectionLabel>WhatsApp</SectionLabel>
+          <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+            <NavItem href="/regras"        label="Regras"       icon={BrainIcon}  onNavigate={onNavigate} />
+            <NavItem href="/autorizacoes"  label="Autorizações" icon={ShieldIcon} onNavigate={onNavigate} />
           </div>
 
           <SectionLabel>Administração</SectionLabel>

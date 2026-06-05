@@ -14,6 +14,108 @@ export type Database = {
   }
   public: {
     Tables: {
+      telefones: {
+        Row: {
+          anotar: boolean
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          papel: string | null
+          permissoes: Json
+          telefone: string
+          telefone_exibicao: string | null
+          usuario_id: string | null
+          usuario_nome: string | null
+        }
+        Insert: {
+          anotar?: boolean
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          papel?: string | null
+          permissoes?: Json
+          telefone: string
+          telefone_exibicao?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Update: {
+          anotar?: boolean
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          papel?: string | null
+          permissoes?: Json
+          telefone?: string
+          telefone_exibicao?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Relationships: []
+      }
+      regras: {
+        Row: {
+          ativa: boolean
+          atualizado_em: string
+          campos: Json
+          criado_em: string
+          empresas_alvo: string[]
+          escopo_dados: Json
+          exige_confirmacao: boolean
+          frases_exemplo: string[]
+          frases_negativas: string[]
+          id: string
+          nome: string
+          observacao: string | null
+          prioridade: number
+          quem_pode_disparar: string[]
+          resposta: string | null
+          tipo: string
+          versao: number
+        }
+        Insert: {
+          ativa?: boolean
+          atualizado_em?: string
+          campos?: Json
+          criado_em?: string
+          empresas_alvo?: string[]
+          escopo_dados?: Json
+          exige_confirmacao?: boolean
+          frases_exemplo?: string[]
+          frases_negativas?: string[]
+          id?: string
+          nome: string
+          observacao?: string | null
+          prioridade?: number
+          quem_pode_disparar?: string[]
+          resposta?: string | null
+          tipo?: string
+          versao?: number
+        }
+        Update: {
+          ativa?: boolean
+          atualizado_em?: string
+          campos?: Json
+          criado_em?: string
+          empresas_alvo?: string[]
+          escopo_dados?: Json
+          exige_confirmacao?: boolean
+          frases_exemplo?: string[]
+          frases_negativas?: string[]
+          id?: string
+          nome?: string
+          observacao?: string | null
+          prioridade?: number
+          quem_pode_disparar?: string[]
+          resposta?: string | null
+          tipo?: string
+          versao?: number
+        }
+        Relationships: []
+      }
       abastecimentos: {
         Row: {
           confirmado: boolean | null
