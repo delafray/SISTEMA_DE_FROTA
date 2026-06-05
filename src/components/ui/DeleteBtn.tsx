@@ -4,7 +4,10 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import type { Database } from "@/types/database.types";
 
-type TableName = keyof Database["public"]["Tables"];
+// só tabelas que têm coluna `id` (DeleteBtn deleta por id)
+type TableName = {
+  [K in keyof Database["public"]["Tables"]]: "id" extends keyof Database["public"]["Tables"][K]["Row"] ? K : never;
+}[keyof Database["public"]["Tables"]];
 
 export function DeleteBtn({ id, table, label = "registro" }: {
   id: string;

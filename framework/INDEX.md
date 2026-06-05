@@ -85,8 +85,10 @@
 | Entender por que o bot anota lembrete de **qualquer número sem trava** + Realtime instantâneo | [docs/LEMBRETES_SEM_TRAVA.md](../docs/LEMBRETES_SEM_TRAVA.md) |
 | Plano (NÃO implementado) da IA com 3 intenções: Pergunta / Registro / Anotar | [docs/PLANO_IA_REGRAS_3_INTENCOES.md](../docs/PLANO_IA_REGRAS_3_INTENCOES.md) |
 | Arquitetura pesquisada (com fontes) do motor de regras no-code genérico | [docs/MOTOR_REGRAS_ARQUITETURA.md](../docs/MOTOR_REGRAS_ARQUITETURA.md) |
+| **Motor do bot: classificador Gemini ligado ao WhatsApp** (flag `MODO_CLASSIFICADOR`, consulta/altera-KM/desambiguação, segurança) | [docs/BOT_CLASSIFICADOR_INTEGRACAO.md](../docs/BOT_CLASSIFICADOR_INTEGRACAO.md) |
 
 > ⚠️ Decisão do dono (05/06/2026): lembretes **sem nenhuma regra** (empresa, usuário, role, RLS). **Não recolocar travas sem ordem explícita.**
+> 🤖 Motor do bot (classificador) implantado 05/06/2026 atrás de `MODO_CLASSIFICADOR` (default OFF). Ligar exige `db/migration_bot_classificador.sql`. Detalhes: [docs/BOT_CLASSIFICADOR_INTEGRACAO.md](../docs/BOT_CLASSIFICADOR_INTEGRACAO.md).
 
 ---
 

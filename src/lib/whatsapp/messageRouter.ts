@@ -45,6 +45,7 @@ import { registrarMetrica } from '@/lib/ai/metricas';
 import { extrairLembrete } from '@/lib/whatsapp/lembreteParser';
 import { criarLembrete } from '@/lib/ai/tools/frotaTools';
 import { verificarTelefone } from '@/lib/whatsapp/autorizacao';
+import { classificarERotear } from '@/lib/whatsapp/classificadorBot';
 
 
 const log = createLogger('router');
@@ -122,6 +123,13 @@ const MODO_SOMENTE_LEMBRETE =
   process.env.MODO_SOMENTE_LEMBRETE != null
     ? process.env.MODO_SOMENTE_LEMBRETE === 'true'
     : process.env.NODE_ENV !== 'test';
+
+// MODO CLASSIFICADOR — quando LIGADO, a mensagem passa primeiro pelo classificador
+// (regras + Gemini). Se disparou uma regra (consulta/altera/ambíguo/anota) → trata e
+// encerra. Se NÃO disparou → cai no fluxo normal (lembrete). DESLIGADO por padrão:
+// zero mudança. Ligar: env MODO_CLASSIFICADOR=true (mantenha MODO_SOMENTE_LEMBRETE=true
+// como rede de segurança — o que o classificador não tratar vira lembrete).
+const MODO_CLASSIFICADOR = process.env.MODO_CLASSIFICADOR === 'true';
 
 /**
  * Limpa o texto do lembrete: tira um prefixo opcional ("lembrete:", "nota -",
@@ -213,6 +221,14 @@ async function salvarComoLembrete(msg: ParsedMessage, identity: UserIdentity): P
 export async function processarMensagem(msg: ParsedMessage): Promise<void> {
   // 1. Identificar remetente
   const identity = await identificarRemetente(msg.from);
+
+  // 1.3. MODO CLASSIFICADOR — roteia pela IA/regras ANTES do lembrete. Se tratou a
+  // mensagem (consulta/altera/ambíguo/anota) encerra; senão, segue pro lembrete.
+  // Fail-safe interno: qualquer erro devolve disparou=false (cai no lembrete).
+  if (MODO_CLASSIFICADOR) {
+    const r = await classificarERotear(msg, identity);
+    if (r.disparou) return;
+  }
 
   // 1.4. MODO SOMENTE LEMBRETE — atalho total: TODA mensagem vira lembrete, sem
   // LLM, sem sessão, sem menu. SEM TRAVA: vale para QUALQUER número — cadastrado

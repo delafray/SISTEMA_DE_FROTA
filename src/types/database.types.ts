@@ -101,6 +101,18 @@ export type Database = {
         Update: { ativo?: boolean; conteudo?: string; criado_em?: string; id?: string; ordem?: number; titulo?: string }
         Relationships: []
       }
+      bot_msgs_processadas: {
+        Row: { processado_em: string; wamid: string }
+        Insert: { processado_em?: string; wamid: string }
+        Update: { processado_em?: string; wamid?: string }
+        Relationships: []
+      }
+      bot_estado_pendente: {
+        Row: { criado_em: string; dados: Json; expira_em: string; telefone: string; tipo: string }
+        Insert: { criado_em?: string; dados: Json; expira_em: string; telefone: string; tipo: string }
+        Update: { criado_em?: string; dados?: Json; expira_em?: string; telefone?: string; tipo?: string }
+        Relationships: []
+      }
       regras: {
         Row: {
           acoes: string[]
