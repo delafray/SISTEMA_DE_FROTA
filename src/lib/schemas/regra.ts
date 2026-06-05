@@ -18,8 +18,12 @@ export const regraSchema = z.object({
   nome: z.string().min(2, "O nome deve ter no mínimo 2 caracteres"),
   tipo: z.enum(REGRA_TIPOS),
   ativa: z.boolean().default(true),
+  fixa: z.boolean().default(false),
   prioridade: z.number().int().default(0),
-  // Frases que disparam a regra (1+ recomendado; piso prático 3).
+  // GATILHOS: palavras que disparam a regra (a primeira palavra no contexto).
+  // Ex: "anota", "lembrete", "me lembra". Disparo direto/determinístico.
+  gatilhos: z.array(z.string().min(1)).default([]),
+  // Frases-exemplo: exemplos completos pra treino do classificador.
   frases_exemplo: z.array(z.string().min(1)).default([]),
   // Frases que NÃO devem disparar (evita falso-positivo).
   frases_negativas: z.array(z.string().min(1)).default([]),

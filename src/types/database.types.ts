@@ -65,8 +65,10 @@ export type Database = {
           empresas_alvo: string[]
           escopo_dados: Json
           exige_confirmacao: boolean
+          fixa: boolean
           frases_exemplo: string[]
           frases_negativas: string[]
+          gatilhos: string[]
           id: string
           nome: string
           observacao: string | null
@@ -84,8 +86,10 @@ export type Database = {
           empresas_alvo?: string[]
           escopo_dados?: Json
           exige_confirmacao?: boolean
+          fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
+          gatilhos?: string[]
           id?: string
           nome: string
           observacao?: string | null
@@ -103,8 +107,10 @@ export type Database = {
           empresas_alvo?: string[]
           escopo_dados?: Json
           exige_confirmacao?: boolean
+          fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
+          gatilhos?: string[]
           id?: string
           nome?: string
           observacao?: string | null

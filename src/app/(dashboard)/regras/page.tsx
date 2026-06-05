@@ -15,6 +15,7 @@ type Regra = {
   nome: string;
   tipo: string;
   ativa: boolean;
+  fixa: boolean;
   prioridade: number;
   frases_exemplo: string[] | null;
   quem_pode_disparar: string[] | null;
@@ -36,7 +37,8 @@ export default function RegrasPage() {
 
       const data = await loadAll<Regra>((from, to) =>
         supabase.from("regras")
-          .select("id,nome,tipo,ativa,prioridade,frases_exemplo,quem_pode_disparar,empresas_alvo")
+          .select("id,nome,tipo,ativa,fixa,prioridade,frases_exemplo,quem_pode_disparar,empresas_alvo")
+          .order("fixa", { ascending: false })
           .order("prioridade", { ascending: false })
           .order("nome")
           .range(from, to)
@@ -92,6 +94,7 @@ export default function RegrasPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Regras (IA)" count={loading ? undefined : todas.length}>
+        <Btn href="/regras/contexto" size="sm" variant="outline">🔎 Contexto IA</Btn>
         <Btn href="/regras/novo" size="sm">+ Nova Regra</Btn>
       </PageHeader>
 
@@ -124,7 +127,7 @@ export default function RegrasPage() {
             ) : (
               filtradas.map(r => (
                 <Tr key={r.id}>
-                  <Td>{r.nome}</Td>
+                  <Td>{r.fixa && <span title="Regra fixa">🔒 </span>}{r.nome}</Td>
                   <Td>{tipoBadge(r.tipo)}</Td>
                   <Td>{r.frases_exemplo?.length ?? 0}</Td>
                   <Td>{alvo(r)}</Td>
@@ -132,7 +135,8 @@ export default function RegrasPage() {
                   <Td>{r.ativa ? <Badge variant="success">Ativa</Badge> : <Badge variant="default">Inativa</Badge>}</Td>
                   <Td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                      <DeleteBtn id={r.id} table="regras" label="regra" />
+                      <a href={`/regras/${r.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                      {!r.fixa && <DeleteBtn id={r.id} table="regras" label="regra" />}
                     </div>
                   </Td>
                 </Tr>
@@ -146,7 +150,8 @@ export default function RegrasPage() {
           {loading ? null : filtradas.map(r => (
             <MobileCard
               key={r.id}
-              title={r.nome}
+              href={`/regras/${r.id}/editar`}
+              title={`${r.fixa ? "🔒 " : ""}${r.nome}`}
               subtitle={REGRA_TIPO_LABEL[r.tipo as RegraTipo] ?? r.tipo}
               badge={r.ativa ? <Badge variant="success">Ativa</Badge> : <Badge variant="default">Inativa</Badge>}
               details={[
