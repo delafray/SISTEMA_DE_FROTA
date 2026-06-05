@@ -16,9 +16,12 @@ export async function GET(req: NextRequest) {
 
   const historico = req.nextUrl.searchParams.get('historico') === 'true';
 
+  // Embed DESAMBIGUADO: `lembretes` tem DUAS FKs pra `perfis` (usuario_id = quem
+  // criou, ciente_por = quem deu ciência). Sem o `!lembretes_usuario_id_fkey` o
+  // PostgREST devolve erro PGRST201 e a query inteira falha → painel vazio.
   let query = supabase
     .from('lembretes')
-    .select('id, texto, origem, criado_em, ciente_em, usuario_id, criado_por_nome, perfis(nome)')
+    .select('id, texto, origem, criado_em, ciente_em, usuario_id, criado_por_nome, perfis!lembretes_usuario_id_fkey(nome)')
     .eq('empresa_id', ue.empresa_id)
     .order('criado_em', { ascending: false });
 

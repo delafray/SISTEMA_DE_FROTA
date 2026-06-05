@@ -28,6 +28,16 @@ faz UMA coisa só — gravar lembrete.** Reescrito do zero, determinístico, **s
   `GRANT DELETE, UPDATE ON public.lembretes TO service_role;` (não tenho acesso de DDL pra rodar isso).
 - Suíte: **1208/1208** ✅ (modo desligado em teste preserva o roteamento antigo).
 
+### Bug 3 — PAINEL VAZIO (leitura) — ✅ RESOLVIDO
+Após o lembrete passar a SALVAR (verificado no banco), ele **não aparecia no painel**. Causa: a API
+`GET /api/lembretes` fazia embed `perfis(nome)`, mas a migration que adicionou a FK `ciente_por → perfis`
+deixou **duas** relações `lembretes↔perfis` (`usuario_id` e `ciente_por`). Embed ambíguo → PostgREST
+retorna **erro `PGRST201`** → a query inteira falha → API devolve `{ lembretes: [] }` → painel vazio.
+**Fix:** desambiguar o embed para `perfis!lembretes_usuario_id_fkey(nome)` (`src/app/api/lembretes/route.ts`).
+Verificado contra o Supabase real: a query passou a retornar as linhas (o "Oi" aparece com o nome do criador).
+> ⚠️ Prevenção: ao adicionar uma 2ª FK pra uma tabela já usada em `select('outra(...)')`, **todo embed
+> daquela tabela vira ambíguo** e quebra silenciosamente. Sempre desambiguar com `tabela!nome_da_fk(...)`.
+
 ---
 
 ## ✅✅ RESOLUÇÃO FINAL — 2 bugs distintos, ambos resolvidos
