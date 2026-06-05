@@ -15,6 +15,8 @@ export default function ContextoPage() {
   const [mensagem, setMensagem] = useState("anota aí que o caminhão voltou");
   const [res, setRes] = useState<Contexto | null>(null);
   const [carregando, setCarregando] = useState(false);
+  const [clf, setClf] = useState<{ autorizado: boolean; motivo?: string; casaram?: string[]; raciocinio?: string; resposta: string } | null>(null);
+  const [classificando, setClassificando] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -41,6 +43,15 @@ export default function ContextoPage() {
     setCarregando(false);
   };
 
+  const classificarIA = async () => {
+    setClassificando(true); setClf(null);
+    try {
+      const r = await fetch("/api/regras/classificar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telefone, mensagem }) });
+      setClf(await r.json());
+    } catch { setClf({ autorizado: false, resposta: "Erro ao classificar." }); }
+    setClassificando(false);
+  };
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Pré-visualizar contexto da IA" actions={<Btn href="/regras" variant="ghost">← Voltar</Btn>} />
@@ -61,9 +72,10 @@ export default function ContextoPage() {
             </FormField>
           </div>
 
-          <div>
-            <Btn onClick={montar} disabled={carregando || !telefone.trim()}>{carregando ? "Montando..." : "Montar contexto"}</Btn>
-            <span style={{ marginLeft: 12, fontSize: 12, color: "#94a3b8" }}>{regras.length} regra(s) cadastrada(s)</span>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <Btn onClick={montar} variant="outline" disabled={carregando || !telefone.trim()}>{carregando ? "Montando..." : "Montar contexto"}</Btn>
+            <Btn onClick={classificarIA} disabled={classificando || !telefone.trim()}>{classificando ? "Classificando..." : "🤖 Classificar (IA)"}</Btn>
+            <span style={{ fontSize: 12, color: "#94a3b8" }}>{regras.length} regra(s) cadastrada(s)</span>
           </div>
 
           {res && (
@@ -81,6 +93,19 @@ export default function ContextoPage() {
                 <span style={{ color: "#7f1d1d", fontSize: 12 }}>(A IA nem seria acionada; o bot responde &quot;não autorizado&quot;.)</span>
               </div>
             )
+          )}
+
+          {clf && (
+            <div style={{ borderTop: "1px solid #e2e8f0", paddingTop: 12 }}>
+              <div style={{ fontSize: 12, fontWeight: 700, color: "#7c3aed", marginBottom: 6 }}>🤖 O bot responderia (modo seguro — não executa nada):</div>
+              <div style={{ padding: "12px 14px", background: "#faf5ff", border: "1px solid #e9d5ff", borderRadius: 10, fontSize: 14, color: "#1e293b", whiteSpace: "pre-wrap" }}>{clf.resposta}</div>
+              {clf.autorizado && (
+                <div style={{ fontSize: 12, color: "#64748b", marginTop: 8 }}>
+                  Casou com: <b>{clf.casaram && clf.casaram.length ? clf.casaram.join(", ") : "nenhuma"}</b>
+                  {clf.raciocinio && <> · <i>{clf.raciocinio}</i></>}
+                </div>
+              )}
+            </div>
           )}
         </div>
       </div>
