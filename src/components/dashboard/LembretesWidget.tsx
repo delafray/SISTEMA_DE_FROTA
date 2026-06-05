@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
 
 type Lembrete = {
   id: string;
@@ -182,7 +183,34 @@ export function LembretesWidget() {
     } catch { /* ignora */ }
   }, []);
 
-  useEffect(() => { carregar(); }, [carregar]);
+  // Atualização INSTANTÂNEA via Supabase Realtime — SEM polling. O banco empurra
+  // um evento a cada INSERT/UPDATE/DELETE em `lembretes` (o Vercel grava → o
+  // Postgres dispara → esta página recarrega na hora). Requer a tabela na
+  // publication `supabase_realtime` (ver migration_lembretes_sem_trava.sql).
+  useEffect(() => {
+    carregar();
+
+    const supabase = createClient();
+    const canal = supabase
+      .channel('lembretes-realtime')
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'lembretes' },
+        () => { carregar(); }
+      )
+      .subscribe();
+
+    // Recarrega ao voltar pra aba (rede do realtime pode cair em segundo plano).
+    const aoVoltar = () => { if (document.visibilityState === 'visible') carregar(); };
+    document.addEventListener('visibilitychange', aoVoltar);
+    window.addEventListener('focus', carregar);
+
+    return () => {
+      supabase.removeChannel(canal);
+      document.removeEventListener('visibilitychange', aoVoltar);
+      window.removeEventListener('focus', carregar);
+    };
+  }, [carregar]);
 
   const darCiente = async (id: string) => {
     setCiendoId(id);

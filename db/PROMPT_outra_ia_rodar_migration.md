@@ -59,6 +59,33 @@ WHERE conrelid = 'lembretes'::regclass AND contype = 'f';
 SELECT relrowsecurity FROM pg_class WHERE relname = 'lembretes';
 ```
 
+### Passo 1.5 — Ligar o REALTIME (push instantâneo pro painel)
+
+Faz o Postgres EMPURRAR cada mudança pro navegador, sem polling. Rode:
+
+```sql
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'lembretes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE lembretes;
+  END IF;
+END $$;
+ALTER TABLE lembretes REPLICA IDENTITY FULL;
+```
+
+Verificação (deve retornar 1 linha com a tabela `lembretes`):
+
+```sql
+SELECT schemaname, tablename FROM pg_publication_tables
+WHERE pubname = 'supabase_realtime' AND tablename = 'lembretes';
+```
+
+Se o projeto não tiver a publication `supabase_realtime` (raro em projeto Supabase),
+crie antes: `CREATE PUBLICATION supabase_realtime;` e então rode o bloco acima.
+
 ### Passo 3 — Teste de fumaça (prova que grava sem empresa nem usuário)
 
 ```sql

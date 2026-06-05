@@ -34,6 +34,20 @@ DROP POLICY IF EXISTS "gestor dá ciente"               ON lembretes;
 -- 4) Acesso total pra qualquer papel (anon, logado, service_role).
 GRANT ALL ON lembretes TO anon, authenticated, service_role;
 
+-- 5) REALTIME — faz o Postgres EMPURRAR cada mudança pro navegador (push
+--    instantâneo, sem polling). Adiciona a tabela à publication do Realtime.
+--    REPLICA IDENTITY FULL garante que UPDATE/DELETE carreguem a linha inteira.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_publication_tables
+    WHERE pubname = 'supabase_realtime' AND schemaname = 'public' AND tablename = 'lembretes'
+  ) THEN
+    ALTER PUBLICATION supabase_realtime ADD TABLE lembretes;
+  END IF;
+END $$;
+ALTER TABLE lembretes REPLICA IDENTITY FULL;
+
 -- ════════════════════════════════════════════════════════════════════════
 -- PARA RECOLOCAR AS TRAVAS DEPOIS (descomentar e ajustar quando quiser regras):
 -- ALTER TABLE lembretes ENABLE ROW LEVEL SECURITY;
