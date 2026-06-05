@@ -146,12 +146,12 @@ export default function NovoPedidoPage() {
     setErr("");
     setCheckingVeiculo(true);
 
-    const { data: mv } = await supabase.from("motorista_veiculo")
+    const { data: mv } = await supabase.from("alocacoes")
       .select("veiculo_id")
-      .eq("empresa_id", empresaId)
       .eq("motorista_id", motoristaId)
-      .eq("ativo", true)
-      .single();
+      .eq("status", "operacional")
+      .is("fim", null)
+      .maybeSingle();
 
     if (mv?.veiculo_id) {
       setVeiculoId(mv.veiculo_id);

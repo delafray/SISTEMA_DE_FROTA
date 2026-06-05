@@ -24,6 +24,7 @@ export default function VeiculosPage() {
   const [loading, setLoading]   = useState(true);
   const [busca, setBusca]       = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
+  const [motPorVeic, setMotPorVeic] = useState<Record<string, string>>({});
   const buscaDeferred = useDeferredValue(busca);
 
   useEffect(() => {
@@ -41,6 +42,19 @@ export default function VeiculosPage() {
       );
       setTodos(data);
       setLoading(false);
+
+      // motorista responsável atual (alocação ativa, status operacional)
+      const [alRes, motRes] = await Promise.all([
+        supabase.from("alocacoes").select("veiculo_id,motorista_id,status").is("fim", null),
+        supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id),
+      ]);
+      const nomeById: Record<string, string> = {};
+      for (const m of motRes.data ?? []) nomeById[m.id] = m.nome;
+      const map: Record<string, string> = {};
+      for (const a of alRes.data ?? []) {
+        if (a.status === "operacional" && a.motorista_id) map[a.veiculo_id] = nomeById[a.motorista_id] ?? "—";
+      }
+      setMotPorVeic(map);
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -300,6 +314,7 @@ export default function VeiculosPage() {
               <Th sortKey="placa" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Placa</Th>
               <Th sortKey="apelido" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Apelido</Th>
               <Th sortKey="marca" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Marca / Modelo</Th>
+              <Th>Motorista</Th>
               <Th sortKey="tipo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Tipo</Th>
               <Th sortKey="combustivel" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Combustível</Th>
               <Th sortKey="ano" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Ano</Th>
@@ -311,10 +326,10 @@ export default function VeiculosPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
+              <tr><td colSpan={11} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
             ) : filtrados.length === 0 ? (
               <tr>
-                <td colSpan={10}>
+                <td colSpan={11}>
                   {todos.length === 0
                     ? <EmptyState message="Nenhum veículo cadastrado." icon="🚛" action={<Btn href="/veiculos/novo">+ Cadastrar primeiro veículo</Btn>} />
                     : <EmptyState message="Nenhum veículo encontrado para esta busca." icon="🔍" />
@@ -332,6 +347,7 @@ export default function VeiculosPage() {
                     <Td>{v.placa}</Td>
                     <Td>{v.apelido ?? "—"}</Td>
                     <Td>{v.marca} {v.modelo}</Td>
+                    <Td>{motPorVeic[v.id] ?? <span style={{ color: "#cbd5e1" }}>—</span>}</Td>
                     <Td style={{ textTransform: "capitalize" }}>
                       {v.tipo}{v.categoria ? ` / ${v.categoria}` : ""}
                     </Td>
@@ -369,6 +385,7 @@ export default function VeiculosPage() {
               badge={<Badge variant={v.ativo ? "success" : "default"}>{v.ativo ? "Ativo" : "Inativo"}</Badge>}
               highlight={!v.ativo ? "#cbd5e1" : undefined}
               details={[
+                { label: "Motorista", value: motPorVeic[v.id] ?? "—" },
                 { label: "KM Atual", value: v.km_atual?.toLocaleString("pt-BR") ?? "—" },
                 { label: "Tipo", value: `${v.tipo}${v.categoria ? ` / ${v.categoria}` : ""}` },
               ]}

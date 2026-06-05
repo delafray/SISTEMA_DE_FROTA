@@ -119,12 +119,12 @@ export default function EditarPedidoPage() {
   useEffect(() => {
     if (!f.motorista_id || !empresaId) return;
     const supabase = createClient();
-    supabase.from("motorista_veiculo")
+    supabase.from("alocacoes")
       .select("veiculo_id")
-      .eq("empresa_id", empresaId)
       .eq("motorista_id", f.motorista_id)
-      .eq("ativo", true)
-      .single()
+      .eq("status", "operacional")
+      .is("fim", null)
+      .maybeSingle()
       .then(({ data }) => {
         if (data?.veiculo_id) setVinculoVeiculoId(data.veiculo_id);
         else setVinculoVeiculoId(null);

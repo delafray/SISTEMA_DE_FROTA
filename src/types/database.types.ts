@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      alocacoes: {
+        Row: {
+          criado_em: string
+          fim: string | null
+          id: string
+          inicio: string
+          km_evento: number | null
+          motorista_id: string | null
+          observacao: string | null
+          status: string
+          veiculo_id: string
+        }
+        Insert: {
+          criado_em?: string
+          fim?: string | null
+          id?: string
+          inicio?: string
+          km_evento?: number | null
+          motorista_id?: string | null
+          observacao?: string | null
+          status?: string
+          veiculo_id: string
+        }
+        Update: {
+          criado_em?: string
+          fim?: string | null
+          id?: string
+          inicio?: string
+          km_evento?: number | null
+          motorista_id?: string | null
+          observacao?: string | null
+          status?: string
+          veiculo_id?: string
+        }
+        Relationships: []
+      }
       telefones: {
         Row: {
           anotar: boolean
@@ -1723,6 +1759,7 @@ export type Database = {
           tipo_chave_pix: string | null
           uf: string | null
           updated_at: string | null
+          usuario_id: string | null
           valor_diaria_por_pedido: number | null
           whatsapp: string
         }
@@ -1757,6 +1794,7 @@ export type Database = {
           tipo_chave_pix?: string | null
           uf?: string | null
           updated_at?: string | null
+          usuario_id?: string | null
           valor_diaria_por_pedido?: number | null
           whatsapp: string
         }
@@ -1791,6 +1829,7 @@ export type Database = {
           tipo_chave_pix?: string | null
           uf?: string | null
           updated_at?: string | null
+          usuario_id?: string | null
           valor_diaria_por_pedido?: number | null
           whatsapp?: string
         }

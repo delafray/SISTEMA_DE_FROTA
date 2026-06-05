@@ -11,6 +11,15 @@ export default function NovoUsuarioPage() {
   const [state, formAction, pending] = useActionState(criarUsuarioAction, initialState);
   const [role, setRole] = useState<"master" | "gestor" | "motorista">("master");
   const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
+  const [loginAviso, setLoginAviso] = useState<string | null>(null);
+
+  const checarLogin = async (val: string) => {
+    const n = val.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]/g, "");
+    if (n.length < 3) { setLoginAviso(null); return; }
+    const supabase = createClient();
+    const { data } = await supabase.from("perfis").select("nome").eq("login", n).maybeSingle();
+    setLoginAviso(data ? `Já existe um usuário com o login "${n}"${data.nome ? ` (${data.nome})` : ""}. Escolha outro.` : null);
+  };
 
   useEffect(() => {
     if (role === "motorista") {
@@ -67,8 +76,10 @@ export default function NovoUsuarioPage() {
                     required
                     style={inputStyle}
                     placeholder="Ex: joaosilva"
+                    onBlur={(e) => checarLogin(e.target.value)}
                   />
                   <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>Sem espaços, acentos ou maiúsculas.</p>
+                  {loginAviso && <p style={{ fontSize: "12px", color: "#b45309", fontWeight: 600, marginTop: "4px" }}>⚠ {loginAviso}</p>}
                 </FormField>
 
                 <FormField label="Senha Provisória">

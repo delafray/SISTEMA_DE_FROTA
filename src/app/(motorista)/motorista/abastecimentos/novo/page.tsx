@@ -65,15 +65,18 @@ function NovoAbastecimentoForm() {
         const v = Array.isArray(pedido?.veiculos) ? pedido.veiculos[0] : pedido?.veiculos;
         if (v) setVeiculo(v as unknown as VeiculoInfo);
       } else if (mId) {
-        // fallback: vínculo padrão motorista↔veículo
-        const { data: vinculo } = await supabase.from("motorista_veiculo")
-          .select("veiculos(id,placa,marca,modelo)")
-          .eq("empresa_id", ue.empresa_id)
+        // fallback: veículo da alocação ativa do motorista
+        const { data: vinculo } = await supabase.from("alocacoes")
+          .select("veiculo_id")
           .eq("motorista_id", mId)
-          .eq("ativo", true)
-          .single();
-        const v = Array.isArray(vinculo?.veiculos) ? vinculo.veiculos[0] : vinculo?.veiculos;
-        if (v) setVeiculo(v as unknown as VeiculoInfo);
+          .eq("status", "operacional")
+          .is("fim", null)
+          .maybeSingle();
+        if (vinculo?.veiculo_id) {
+          const { data: v } = await supabase.from("veiculos")
+            .select("id,placa,marca,modelo").eq("id", vinculo.veiculo_id).maybeSingle();
+          if (v) setVeiculo(v as unknown as VeiculoInfo);
+        }
       }
 
       setLoading(false);

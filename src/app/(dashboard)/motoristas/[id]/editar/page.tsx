@@ -21,11 +21,7 @@ export default function EditarMotoristaPage() {
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<"dados" | "cnh" | "remuneracao" | "endereco" | "veiculo" | "acerto">("dados");
   const [veiculos, setVeiculos]         = useState<{ id: string; placa: string; marca: string; modelo: string }[]>([]);
-  const [vinculoId, setVinculoId]       = useState<string | null>(null);
-  const [vinculoVeiculoId, setVinculoVeiculoId] = useState("");
-  const [vinculoAtivo, setVinculoAtivo] = useState(true);
-  const [savingVinculo, setSavingVinculo] = useState(false);
-  const [vinculoMsg, setVinculoMsg]     = useState("");
+  const [vinculoVeiculoId, setVinculoVeiculoId] = useState("");   // veículo atual (derivado de alocacoes, read-only)
 
   const [f, setF] = useState({
     nome: "", cpf: "", whatsapp: "", rg: "", data_nascimento: "", email: "",
@@ -33,8 +29,9 @@ export default function EditarMotoristaPage() {
     cnh_numero: "", cnh_categoria: "E", cnh_validade: "", cnh_primeira_habilitacao: "", cnh_ear: false,
     salario_fixo: "", valor_diaria_por_pedido: "",
     cep: "", logradouro: "", numero: "", complemento: "", bairro: "", cidade: "", uf: "",
-    ativo: true, chave_pix: "", tipo_chave_pix: "cpf",
+    ativo: true, chave_pix: "", tipo_chave_pix: "cpf", usuario_id: "",
   });
+  const [usuarios, setUsuarios] = useState<{ id: string; nome: string | null }[]>([]);
 
   useEffect(() => {
     // Carregar veículos e vínculo atual em paralelo
@@ -44,16 +41,14 @@ export default function EditarMotoristaPage() {
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
-      const [veicRes, vincRes] = await Promise.all([
+      const [veicRes, alocRes] = await Promise.all([
         supabase.from("veiculos").select("id,placa,marca,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motorista_veiculo").select("id,veiculo_id,ativo").eq("empresa_id", ue.empresa_id).eq("motorista_id", id).single(),
+        supabase.from("alocacoes").select("veiculo_id").eq("motorista_id", id).eq("status", "operacional").is("fim", null).maybeSingle(),
       ]);
       setVeiculos(veicRes.data ?? []);
-      if (vincRes.data) {
-        setVinculoId(vincRes.data.id);
-        setVinculoVeiculoId(vincRes.data.veiculo_id ?? "");
-        setVinculoAtivo(vincRes.data.ativo ?? true);
-      }
+      const { data: pf } = await supabase.from("perfis").select("id,nome").order("nome");
+      setUsuarios(pf ?? []);
+      setVinculoVeiculoId(alocRes.data?.veiculo_id ?? "");
     };
     loadVeiculo();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -87,6 +82,7 @@ export default function EditarMotoristaPage() {
         ativo: data.ativo ?? true,
         chave_pix: data.chave_pix ?? "",
         tipo_chave_pix: data.tipo_chave_pix ?? "cpf",
+        usuario_id: data.usuario_id ?? "",
       });
       setLoading(false);
     });
@@ -133,36 +129,11 @@ export default function EditarMotoristaPage() {
       ativo: f.ativo,
       chave_pix: f.chave_pix || null,
       tipo_chave_pix: f.tipo_chave_pix,
+      usuario_id: f.usuario_id || null,
     }).eq("id", id);
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
     router.push("/motoristas"); router.refresh();
-  };
-
-  const saveVinculo = async () => {
-    setVinculoMsg("");
-    setSavingVinculo(true);
-    const { data: auth } = await supabase.auth.getUser();
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user!.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { setSavingVinculo(false); return; }
-    if (vinculoId) {
-      await supabase.from("motorista_veiculo").update({
-        veiculo_id: vinculoVeiculoId || undefined,
-        ativo: vinculoAtivo,
-      }).eq("id", vinculoId);
-    } else if (vinculoVeiculoId) {
-      const { data } = await supabase.from("motorista_veiculo").insert({
-        empresa_id:   ue.empresa_id,
-        motorista_id: id,
-        veiculo_id:   vinculoVeiculoId,
-        ativo:        vinculoAtivo,
-      }).select("id").single();
-      if (data) setVinculoId(data.id);
-    }
-    setVinculoMsg("Vínculo salvo!");
-    setSavingVinculo(false);
-    setTimeout(() => setVinculoMsg(""), 2500);
   };
 
   if (loading) return (
@@ -248,6 +219,14 @@ export default function EditarMotoristaPage() {
                       <option value="false">Inativo</option>
                     </select>
                   </FormField>
+                  <div style={{ gridColumn: "span 2" }}>
+                    <FormField label="Usuário do sistema (login)" hint="Liga o motorista a um usuário — habilita o bot e fica verde no vínculo do veículo.">
+                      <select value={f.usuario_id} onChange={set("usuario_id")} style={selectStyle}>
+                        <option value="">— Sem usuário —</option>
+                        {usuarios.map((u) => <option key={u.id} value={u.id}>{u.nome ?? "(sem nome)"}</option>)}
+                      </select>
+                    </FormField>
+                  </div>
                   <FormField label="Tipo Chave PIX">
                     <select value={f.tipo_chave_pix} onChange={set("tipo_chave_pix")} style={selectStyle}>
                       <option value="cpf">CPF/CNPJ</option>
@@ -353,35 +332,21 @@ export default function EditarMotoristaPage() {
             </div>
 
             <div style={{ display: tab === "veiculo" ? "block" : "none" }}>
-              <FormSection title="Veículo Padrão">
-                <p style={{ fontSize: "13px", color: "#64748b", marginBottom: "16px" }}>
-                  O veículo selecionado aqui é automaticamente pré-preenchido ao criar um novo pedido para este motorista.
-                  Marque como inativo quando o veículo estiver em manutenção.
-                </p>
-                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr auto", gap: "16px", alignItems: "flex-end" }}>
-                  <FormField label="Veículo">
-                    <select value={vinculoVeiculoId} onChange={e => setVinculoVeiculoId(e.target.value)} style={selectStyle}>
-                      <option value="">Sem veículo vinculado</option>
-                      {veiculos.map(v => <option key={v.id} value={v.id}>{v.placa} — {v.marca} {v.modelo}</option>)}
-                    </select>
-                  </FormField>
-                  <FormField label="Status do Vínculo">
-                    <select value={vinculoAtivo ? "true" : "false"} onChange={e => setVinculoAtivo(e.target.value === "true")} style={selectStyle}>
-                      <option value="true">Ativo</option>
-                      <option value="false">Inativo (manutenção)</option>
-                    </select>
-                  </FormField>
-                  <div style={{ paddingBottom: "8px" }}>
-                    <Btn type="button" onClick={saveVinculo} disabled={savingVinculo}>
-                      {savingVinculo ? "Salvando..." : "Salvar Vínculo"}
-                    </Btn>
-                  </div>
-                </div>
-                {vinculoMsg && (
-                  <div style={{ marginTop: "8px", fontSize: "13px", color: "#16a34a", fontWeight: 600 }}>
-                    ✓ {vinculoMsg}
-                  </div>
-                )}
+              <FormSection title="Veículo Atual">
+                {(() => {
+                  const v = veiculos.find((x) => x.id === vinculoVeiculoId);
+                  return (
+                    <div>
+                      <div style={{ fontSize: "15px", fontWeight: 700, color: v ? "#1e293b" : "#94a3b8" }}>
+                        {v ? `${v.placa} — ${v.marca} ${v.modelo}` : "Sem veículo vinculado no momento"}
+                      </div>
+                      <p style={{ fontSize: "13px", color: "#64748b", marginTop: "8px" }}>
+                        O vínculo motorista↔veículo agora é gerenciado (com histórico) na tela do <b>Veículo</b>, no bloco “Responsável / Vínculo”. Aqui é só leitura.
+                        {v && <> <a href={`/veiculos/${v.id}/editar`} style={{ color: "#2563eb", fontWeight: 600 }}>Abrir veículo →</a></>}
+                      </p>
+                    </div>
+                  );
+                })()}
               </FormSection>
             </div>
 

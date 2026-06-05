@@ -12,8 +12,11 @@ import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 type Motorista = {
   id: string; nome: string; cpf: string; cnh_numero: string | null;
   cnh_categoria: string | null; cnh_validade: string | null;
-  cargo: string | null; ativo: boolean | null;
+  cargo: string | null; ativo: boolean | null; usuario_id: string | null;
 };
+
+const dotOn: React.CSSProperties = { width: 9, height: 9, borderRadius: "50%", background: "#16a34a", display: "inline-block", flexShrink: 0 };
+const dotOff: React.CSSProperties = { width: 9, height: 9, borderRadius: "50%", background: "#f59e0b", display: "inline-block", flexShrink: 0 };
 
 export default function MotoristasPage() {
   const router = useRouter();
@@ -21,6 +24,7 @@ export default function MotoristasPage() {
   const [loading, setLoading] = useState(true);
   const [busca, setBusca]     = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
+  const [usuarioNome, setUsuarioNome] = useState<Record<string, string>>({});
   const buscaDeferred = useDeferredValue(busca);
 
   useEffect(() => {
@@ -33,11 +37,16 @@ export default function MotoristasPage() {
       if (!ue?.empresa_id) return;
 
       const data = await loadAll<Motorista>((from, to) =>
-        supabase.from("motoristas").select("id,nome,cpf,cnh_numero,cnh_categoria,cnh_validade,cargo,ativo")
+        supabase.from("motoristas").select("id,nome,cpf,cnh_numero,cnh_categoria,cnh_validade,cargo,ativo,usuario_id")
           .eq("empresa_id", ue.empresa_id).order("nome").range(from, to)
       );
       setTodos(data);
       setLoading(false);
+
+      const { data: pf } = await supabase.from("perfis").select("id,nome");
+      const map: Record<string, string> = {};
+      for (const p of pf ?? []) if (p.nome) map[p.id] = p.nome;
+      setUsuarioNome(map);
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -102,16 +111,17 @@ export default function MotoristasPage() {
               <Th>CNH</Th>
               <Th>Cat. CNH</Th>
               <Th>Vencimento CNH</Th>
+              <Th>Usuário</Th>
               <Th>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
+              <tr><td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
             ) : filtrados.length === 0 ? (
               <tr>
-                <td colSpan={7}>
+                <td colSpan={8}>
                   {todos.length === 0
                     ? <EmptyState message="Nenhum motorista cadastrado." icon="👤" action={<Btn href="/motoristas/novo">+ Cadastrar primeiro motorista</Btn>} />
                     : <EmptyState message="Nenhum motorista encontrado para esta busca." icon="🔍" />
@@ -134,6 +144,11 @@ export default function MotoristasPage() {
                       {cnhDate
                         ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge>
                         : <span style={{ color: "#cbd5e1" }}>—</span>}
+                    </Td>
+                    <Td>
+                      {m.usuario_id
+                        ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={dotOn} />{usuarioNome[m.usuario_id] ?? "vinculado"}</span>
+                        : <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#b45309" }}><span style={dotOff} />sem usuário</span>}
                     </Td>
                     <Td><Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "ATIVO" : "INATIVO"}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
@@ -165,6 +180,7 @@ export default function MotoristasPage() {
                 badge={<Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "Ativo" : "Inativo"}</Badge>}
                 highlight={!m.ativo ? "#cbd5e1" : undefined}
                 details={[
+                  { label: "Usuário", value: m.usuario_id ? (usuarioNome[m.usuario_id] ?? "vinculado") : "— sem usuário —" },
                   { label: "CNH", value: m.cnh_categoria ?? "—" },
                   { label: "Venc. CNH", value: cnhDate ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge> : "—" },
                 ]}

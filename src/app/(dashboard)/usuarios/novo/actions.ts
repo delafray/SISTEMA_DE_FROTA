@@ -87,9 +87,20 @@ export async function criarUsuarioAction(
     if (!existing)
       return { error: "Usuário já existe mas não foi encontrado. Contate o suporte." };
 
-    targetUserId = existing.id;
+    // BUGFIX: se esse login JÁ está vinculado a esta empresa, é login duplicado.
+    // NÃO sobrescrever o usuário existente (era isso que fazia os cadastros "sumirem":
+    // cada novo cadastro com login repetido recuperava e regravava o mesmo usuário).
+    const { data: jaVinculado } = await admin
+      .from("usuario_empresas")
+      .select("id")
+      .eq("usuario_id", existing.id)
+      .eq("empresa_id", ue.empresa_id)
+      .maybeSingle();
+    if (jaVinculado)
+      return { error: `Já existe um usuário com o login "${normalized}". Escolha outro nome de usuário (ou edite o usuário existente).` };
 
-    // Atualiza senha e nome caso necessário
+    // Caso contrário é um usuário órfão (Auth sem vínculo) → completa o cadastro.
+    targetUserId = existing.id;
     await admin.auth.admin.updateUserById(targetUserId, {
       password: senha,
       user_metadata: { nome },

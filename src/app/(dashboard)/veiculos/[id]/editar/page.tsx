@@ -8,6 +8,7 @@ import PlanoTab from "./_components/PlanoTab";
 import ManutencoesTab from "./_components/ManutencoesTab";
 import AvariasTab from "./_components/AvariasTab";
 import LogsTab from "./_components/LogsTab";
+import VinculoResponsavel from "./_components/VinculoResponsavel";
 
 type Abast = { id: string; created_at: string | null; km_no_abast: number | null; litros: number; valor_litro: number | null; valor_total: number; posto: string | null; confirmado: boolean | null };
 type PedidoHist = { id: string; status: string; data_inicio_prevista: string | null; km_inicial: number | null; km_final: number | null; valor_pedido: number | null };
@@ -214,7 +215,7 @@ export default function EditarVeiculoPage() {
                 {dadosSubTab === "principal" && (
                   <>
                     <FormSection title="Identificação *">
-                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
                         <FormField label="Placa *">
                           <IMaskInput mask={[{ mask: "aaa-0000" }, { mask: "aaa-0a00" }]}
                             definitions={{ a: /[a-zA-Z]/ }} prepare={(s) => s.toUpperCase()}
@@ -239,7 +240,7 @@ export default function EditarVeiculoPage() {
                     </FormSection>
 
                     <FormSection title="Dados do Veículo">
-                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="Marca *">
                             <input value={f.marca} onChange={set("marca")} style={{ ...inputStyle, textTransform: "uppercase" }} />
@@ -297,6 +298,12 @@ export default function EditarVeiculoPage() {
                         </FormField>
                       </div>
                     </FormSection>
+
+                    {empresaId && (
+                      <FormSection title="Responsável / Vínculo">
+                        <VinculoResponsavel veiculoId={id} empresaId={empresaId} kmAtual={kmAtualNum} onKm={(km) => setF((p) => ({ ...p, km_atual: String(km) }))} />
+                      </FormSection>
+                    )}
                   </>
                 )}
 
