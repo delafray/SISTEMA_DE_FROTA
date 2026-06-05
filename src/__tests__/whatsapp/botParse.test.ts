@@ -1,5 +1,31 @@
 import { describe, it, expect } from "vitest";
-import { parseSimNao, parseSelecao } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho } from "@/lib/whatsapp/botParse";
+
+describe("comecaComGatilho", () => {
+  const g = ["lembrete", "me lembra", "anota"];
+  it("dispara quando começa com o gatilho", () => {
+    expect(comecaComGatilho("lembrete comprar pneu", g)).toBe(true);
+    expect(comecaComGatilho("Lembrete: comprar pneu", g)).toBe(true);
+    expect(comecaComGatilho("me lembra de ligar", g)).toBe(true);
+    expect(comecaComGatilho("lembrete", g)).toBe(true);
+  });
+  it("NÃO dispara quando o gatilho não é a primeira palavra", () => {
+    expect(comecaComGatilho("preciso de um lembrete", g)).toBe(false);
+    expect(comecaComGatilho("qual o km do leão", g)).toBe(false);
+    expect(comecaComGatilho("comprar pneu", g)).toBe(false);
+  });
+});
+
+describe("ehReset", () => {
+  it("reconhece pedidos de limpar contexto", () => {
+    for (const s of ["novo", "Nova", "limpar", "LIMPAR", "recomeçar", "menu", "começar de novo", "do zero"])
+      expect(ehReset(s)).toBe(true);
+  });
+  it("não confunde com mensagem normal", () => {
+    for (const s of ["qual o km do leão", "novo caminhão chegou", "sim"])
+      expect(ehReset(s)).toBe(false);
+  });
+});
 
 describe("parseSimNao", () => {
   it("reconhece afirmações", () => {

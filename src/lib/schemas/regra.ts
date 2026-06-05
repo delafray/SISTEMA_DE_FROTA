@@ -56,6 +56,9 @@ export const regraSchema = z.object({
   // GATILHOS: palavras que disparam a regra (a primeira palavra no contexto).
   // Ex: "anota", "lembrete", "me lembra". Disparo direto/determinístico.
   gatilhos: z.array(z.string().min(1)).default([]),
+  // Quando true: a regra SÓ é considerada se a mensagem COMEÇAR com um gatilho.
+  // Ex: Lembrete só dispara se a frase começar com "lembrete". Evita "passar por cima".
+  gatilho_inicio: z.boolean().default(false),
   // Frases-exemplo: exemplos completos pra treino do classificador.
   frases_exemplo: z.array(z.string().min(1)).default([]),
   // Frases que NÃO devem disparar (evita falso-positivo).

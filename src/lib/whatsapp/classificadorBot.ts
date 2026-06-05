@@ -27,7 +27,7 @@ import {
   executarConsulta, acharVeiculo, commitAtualizarKm, colunasPermitidas,
   type EscopoColunas,
 } from "@/lib/whatsapp/botExecutor";
-import { parseSimNao, parseSelecao } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho } from "@/lib/whatsapp/botParse";
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
@@ -61,7 +61,7 @@ async function limparPendente(supa: SupabaseClient, telefone: string) {
 }
 
 // ─── regra carregada com escopo de colunas ─────────────────────────────
-type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas };
+type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas; gatilho_inicio: boolean };
 
 /** Executa UMA regra já resolvida. Retorna o texto a responder. */
 async function executarRegra(
@@ -166,9 +166,16 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     if (!texto) return { disparou: false }; // foto/doc/áudio-sem-transcrição → cai no lembrete
     log.info("motor_entrou", { from: msg.from, tipo: msg.tipo });
 
+    // RESET: "novo"/"nova"/"limpar" zera todo o contexto (estado pendente)
+    if (ehReset(texto)) {
+      await limparPendente(supa, msg.from);
+      await enviarTexto(msg.from, "🆕 Limpei tudo. Pode começar de novo.");
+      return { disparou: true };
+    }
+
     // carrega regras (com escopo + ações) e telefone
     const [{ data: regrasData }, { data: telRow }, { data: ctxData }] = await Promise.all([
-      supa.from("regras").select("id,nome,tipo,acoes,gatilhos,frases_exemplo,resposta,ativa,fixa,escopo_dados")
+      supa.from("regras").select("id,nome,tipo,acoes,gatilhos,frases_exemplo,resposta,ativa,fixa,escopo_dados,gatilho_inicio")
         .eq("ativa", true).order("fixa", { ascending: false }).order("prioridade", { ascending: false }),
       supa.from("telefones").select("telefone,usuario_nome,ativo,anotar,permissoes")
         .in("telefone", variacoesTelefone(msg.from)).limit(1).maybeSingle(),
@@ -179,6 +186,7 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
       id: r.id, nome: r.nome, tipo: r.tipo, gatilhos: r.gatilhos ?? [], frases_exemplo: r.frases_exemplo ?? [],
       resposta: r.resposta, ativa: r.ativa, fixa: r.fixa, acoes: r.acoes ?? [],
       escopo: ((r.escopo_dados as Record<string, unknown>)?.colunas as EscopoColunas) ?? {},
+      gatilho_inicio: r.gatilho_inicio ?? false,
     }));
 
     // 1) estado pendente?
@@ -196,8 +204,15 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     const contexto = montarContextoIA({ telefone: msg.from, tel, regras: regrasCtx, mensagem: texto });
     if (!contexto.autorizado) { log.info("nao_autorizado_cai_lembrete", { from: msg.from, motivo: contexto.motivo }); return { disparou: false }; }
 
-    // 3) classificar (timeout + fail-safe)
-    const candidatas: RegraClassif[] = contexto.regras.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, gatilhos: r.gatilhos ?? [], frases_exemplo: r.frases_exemplo ?? [] }));
+    // 3) classificar (timeout + fail-safe). Regras com gatilho_inicio só entram
+    // se a MENSAGEM COMEÇAR com um gatilho delas (ex: Lembrete exige "lembrete...").
+    const candidatas: RegraClassif[] = contexto.regras
+      .filter((r) => {
+        const full = regrasFull.find((x) => x.id === r.id);
+        if (full?.gatilho_inicio) return comecaComGatilho(texto, full.gatilhos);
+        return true;
+      })
+      .map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, gatilhos: r.gatilhos ?? [], frases_exemplo: r.frases_exemplo ?? [] }));
     const contextoGlobal = (ctxData ?? []).map((c) => c.conteudo).join("\n");
     const decisao = await Promise.race([
       classificar(texto, candidatas, contextoGlobal),

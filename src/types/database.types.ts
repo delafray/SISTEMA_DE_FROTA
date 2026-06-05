@@ -126,6 +126,7 @@ export type Database = {
           fixa: boolean
           frases_exemplo: string[]
           frases_negativas: string[]
+          gatilho_inicio: boolean
           gatilhos: string[]
           id: string
           nome: string
@@ -149,6 +150,7 @@ export type Database = {
           fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
+          gatilho_inicio?: boolean
           gatilhos?: string[]
           id?: string
           nome: string
@@ -172,6 +174,7 @@ export type Database = {
           fixa?: boolean
           frases_exemplo?: string[]
           frases_negativas?: string[]
+          gatilho_inicio?: boolean
           gatilhos?: string[]
           id?: string
           nome?: string

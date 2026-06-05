@@ -41,16 +41,16 @@ function norm(s: string): string {
   return s.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().replace(/[^a-z0-9]/g, "");
 }
 
-export type VeiculoLite = { id: string; apelido: string | null; placa: string | null; km_atual: number | null; status: string | null; updated_at: string | null };
+export type VeiculoLite = { id: string; apelido: string | null; placa: string | null; km_atual: number | null; updated_at: string | null };
 
-/** Acha o veículo da empresa pelo apelido OU placa (normalizado). */
+/** Acha o veículo da empresa pelo apelido OU placa (normalizado). veiculos usa `ativo`, NÃO `status`. */
 export async function acharVeiculo(
   sb: SupabaseClient, empresaId: string, alvo: string
 ): Promise<{ tipo: "ok"; veiculo: VeiculoLite } | { tipo: "nenhum" } | { tipo: "varios"; veiculos: VeiculoLite[] }> {
   const { data, error } = await sb.from("veiculos")
-    .select("id,apelido,placa,km_atual,status,updated_at")
+    .select("id,apelido,placa,km_atual,updated_at")
     .eq("empresa_id", empresaId).eq("ativo", true);
-  if (error) throw error;
+  if (error) throw new Error(error.message || "erro ao buscar veículos");
   const lista = (data ?? []) as VeiculoLite[];
   const a = norm(alvo);
   const exatos = lista.filter((v) => norm(v.apelido ?? "") === a || norm(v.placa ?? "") === a);
@@ -75,19 +75,24 @@ export async function executarConsulta(
   const cols = colunasPermitidas(escopo, tabela, "consultar");
   if (cols.length === 0) return "Nenhuma coluna liberada pra consulta nessa regra.";
 
-  // veiculos com alvo: tenta resolver o veículo específico
+  // veiculos com alvo: resolve o veículo e busca exatamente as colunas liberadas
   if (tabela === "veiculos" && alvo) {
     const r = await acharVeiculo(sb, ctx.empresa_id, alvo);
     if (r.tipo === "nenhum") return `Não achei o caminhão "${alvo}".`;
     if (r.tipo === "varios") return `Tem mais de um parecido com "${alvo}": ${r.veiculos.map(rotuloVeiculo).join(", ")}. Qual?`;
-    const linha = cols.map((c) => `${c}: ${(r.veiculo as Record<string, unknown>)[c] ?? "—"}`).join(" · ");
-    return `🚚 ${rotuloVeiculo(r.veiculo)}\n${linha}`;
+    const selCols = Array.from(new Set([...cols, "apelido", "placa"])).filter((c) => IDENT.test(c));
+    const { data, error } = await sb.from("veiculos")
+      .select(selCols.join(",")).eq("id", r.veiculo.id).eq("empresa_id", ctx.empresa_id).maybeSingle();
+    if (error) throw new Error(error.message || "erro ao ler o veículo");
+    const row = (data ?? {}) as unknown as Record<string, unknown>;
+    const linha = cols.map((c) => `${c}: ${row[c] ?? "—"}`).join(" · ");
+    return `🚚 ${row.apelido ?? r.veiculo.apelido} ${row.placa ? `(${row.placa})` : ""}\n${linha}`;
   }
 
   const selectCols = Array.from(new Set([...cols, "id"])).filter((c) => IDENT.test(c));
   const { data, error } = await sb.from(tabela)
     .select(selectCols.join(",")).eq("empresa_id", ctx.empresa_id).limit(LIMITE);
-  if (error) throw error;
+  if (error) throw new Error(error.message || `erro ao consultar ${tabela}`);
   const linhas = (data ?? []) as unknown as Record<string, unknown>[];
   if (linhas.length === 0) return `Nada encontrado em ${tabela}.`;
   const corpo = linhas.slice(0, 10)

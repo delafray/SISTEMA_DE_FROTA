@@ -21,6 +21,7 @@ export default function EditarRegraPage() {
     prioridade: 0,
     ativa: true,
     exige_confirmacao: false,
+    gatilho_inicio: false,
     gatilhosText: "",
     frasesText: "",
     negativasText: "",
@@ -42,6 +43,7 @@ export default function EditarRegraPage() {
         prioridade: data.prioridade ?? 0,
         ativa: !!data.ativa,
         exige_confirmacao: !!data.exige_confirmacao,
+        gatilho_inicio: !!data.gatilho_inicio,
         gatilhosText: (data.gatilhos ?? []).join("\n"),
         frasesText: (data.frases_exemplo ?? []).join("\n"),
         negativasText: (data.frases_negativas ?? []).join("\n"),
@@ -86,6 +88,7 @@ export default function EditarRegraPage() {
       quem_pode_disparar: form.quem,
       resposta: form.resposta.trim(),
       exige_confirmacao: form.exige_confirmacao,
+      gatilho_inicio: form.gatilho_inicio,
       observacao: form.observacao.trim(),
     });
     if (!parsed.success) { setErro(parsed.error.issues[0]?.message ?? "Dados inválidos"); return; }
@@ -154,6 +157,14 @@ export default function EditarRegraPage() {
             <FormField label="Gatilhos — a primeira palavra/expressão que dispara (uma por linha)">
               <textarea value={form.gatilhosText} onChange={(e) => setForm((f) => ({ ...f, gatilhosText: e.target.value }))} style={{ ...inputStyle, minHeight: 90, resize: "vertical", fontFamily: "inherit" }} placeholder={"anota\nanote\nlembrete\nme lembra"} />
             </FormField>
+            <div style={{ marginTop: 8 }}>
+              {checkbox(form.gatilho_inicio, () => setForm((f) => ({ ...f, gatilho_inicio: !f.gatilho_inicio })), "Exigir gatilho como PRIMEIRA palavra (senão pula a regra)")}
+            </div>
+            {form.gatilho_inicio && (
+              <p style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>
+                ⚠️ A regra só vai disparar se a mensagem <b>começar</b> com um dos gatilhos acima. Ex: “lembrete comprar pneu” dispara; “comprar pneu” não.
+              </p>
+            )}
           </FormSection>
 
           <FormSection title="Frases-exemplo (treino da IA)">

@@ -11,6 +11,24 @@ import { createLogger } from "@/lib/logger";
 const log = createLogger("classificador");
 const MODELO = "gemini-2.5-flash";
 
+// Erros transitórios do Gemini (503 "high demand", 429, 500, timeout) merecem retry.
+function ehTransitorio(e: unknown): boolean {
+  const m = e instanceof Error ? e.message : String(e);
+  return /\b(503|429|500)\b|overloaded|high demand|unavailable|timeout|fetch failed|ECONNRESET/i.test(m);
+}
+async function gerarComRetry(model: ReturnType<GoogleGenerativeAI["getGenerativeModel"]>, prompt: string) {
+  let ultimo: unknown;
+  for (let i = 0; i < 3; i++) {
+    try { return await model.generateContent(prompt); }
+    catch (e) {
+      ultimo = e;
+      if (!ehTransitorio(e) || i === 2) throw e;
+      await new Promise((r) => setTimeout(r, 400 * (i + 1))); // backoff 400ms, 800ms
+    }
+  }
+  throw ultimo;
+}
+
 export type RegraClassif = { id: string; nome: string; tipo: string; gatilhos: string[]; frases_exemplo: string[] };
 // alvo = veículo citado (apelido/placa); valor = número citado (ex: km novo). Ambos opcionais.
 export type Decisao = { regras: string[]; raciocinio: string; alvo?: string | null; valor?: number | null };
@@ -66,7 +84,7 @@ Extraia também (se houver na mensagem):
   });
 
   try {
-    const res = await model.generateContent(prompt);
+    const res = await gerarComRetry(model, prompt);
     const txt = res.response.text();
     const parsed = JSON.parse(txt) as Decisao;
     // normaliza: só mantém regras que existem na lista (casa por nome, case-insensitive)

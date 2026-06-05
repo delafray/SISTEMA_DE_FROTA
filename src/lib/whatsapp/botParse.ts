@@ -7,9 +7,33 @@
 export const AFIRMA = new Set(["sim", "s", "si", "claro", "confirma", "confirmo", "confirmado", "pode", "ok", "okay", "isso", "exato", "blz", "beleza", "manda", "bora", "positivo", "vai", "👍", "✅", "1"]);
 export const NEGA = new Set(["nao", "n", "nope", "cancela", "cancelar", "para", "deixa", "esquece", "errado", "nada", "negativo", "👎", "❌"]);
 export const CANCELA = new Set(["nenhuma", "nenhum", "outro", "outra", "cancela", "cancelar", "nada"]);
+// Palavras que ZERAM o contexto da conversa (estado pendente).
+export const RESET = new Set(["novo", "nova", "limpar", "limpa", "limpar", "recomecar", "reset", "resetar", "comecar de novo", "comecar denovo", "menu", "cancelar tudo", "do zero"]);
 
 export function norm(s: string): string {
   return (s ?? "").normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase().trim();
+}
+
+/** Mensagem que pede pra limpar todo o contexto ("novo", "nova", "limpar"…). */
+export function ehReset(texto: string): boolean {
+  return RESET.has(norm(texto).replace(/[.!,/]/g, "").trim());
+}
+
+/** normaliza colapsando pontuação em espaço (pra checar início). */
+function normPalavras(s: string): string {
+  return norm(s).replace(/[^a-z0-9]+/g, " ").trim();
+}
+
+/**
+ * A mensagem COMEÇA com algum gatilho? (usado quando a regra exige gatilho_inicio).
+ * Gatilho pode ter mais de uma palavra ("me lembra"). Match no PREFIXO.
+ */
+export function comecaComGatilho(mensagem: string, gatilhos: string[]): boolean {
+  const m = normPalavras(mensagem);
+  return gatilhos.some((g) => {
+    const gn = normPalavras(g);
+    return gn.length > 0 && (m === gn || m.startsWith(gn + " "));
+  });
 }
 
 /** "sim/não" → true/false/null (ambíguo → null, default seguro = não executar). */

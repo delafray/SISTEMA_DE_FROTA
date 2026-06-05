@@ -17,6 +17,7 @@ export default function NovaRegraPage() {
     prioridade: 0,
     ativa: true,
     exige_confirmacao: false,
+    gatilho_inicio: false,
     gatilhosText: "",    // uma palavra-gatilho por linha
     frasesText: "",      // uma frase por linha
     negativasText: "",   // uma frase por linha
@@ -57,6 +58,7 @@ export default function NovaRegraPage() {
       quem_pode_disparar: form.quem,
       resposta: form.resposta.trim(),
       exige_confirmacao: form.exige_confirmacao,
+      gatilho_inicio: form.gatilho_inicio,
       observacao: form.observacao.trim(),
     });
     if (!parsed.success) {
@@ -150,6 +152,9 @@ export default function NovaRegraPage() {
             <p style={{ fontSize: 12, color: "#94a3b8", marginTop: -4 }}>
               O <b>gatilho</b> é o disparo direto (ex: a frase começa com “anota…”). As <b>frases-exemplo</b> abaixo são exemplos completos pro classificador.
             </p>
+            <div style={{ marginTop: 8 }}>
+              {checkbox(form.gatilho_inicio, () => setForm((f) => ({ ...f, gatilho_inicio: !f.gatilho_inicio })), "Exigir gatilho como PRIMEIRA palavra (senão pula a regra)")}
+            </div>
           </FormSection>
 
           <FormSection title="Frases-exemplo (treino da IA)">
