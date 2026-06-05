@@ -42,6 +42,8 @@ import { processarComGemini, processarAudioComGemini } from '@/lib/whatsapp/gemi
 import { cotaGeminiDisponivel } from '@/lib/whatsapp/geminiRateLimit';
 import { tentarFastPath } from '@/lib/whatsapp/fastPath';
 import { registrarMetrica } from '@/lib/ai/metricas';
+import { extrairLembrete } from '@/lib/whatsapp/lembreteParser';
+import { criarLembrete } from '@/lib/ai/tools/frotaTools';
 
 
 const log = createLogger('router');
@@ -793,6 +795,28 @@ async function rotearComGemini(
   // usuario_id vai pro Gemini pra ferramentas que precisam saber QUEM é (ex: criar_lembrete).
   const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
 
+  // Detecção DETERMINÍSTICA de lembrete (gestor/master) — salva na hora, sem depender
+  // da IA "decidir" chamar a tool (ela às vezes só responde "ok" e guarda na conversa,
+  // sem persistir no banco). A tool do Gemini fica como reserva pras frases fora do padrão.
+  // Retorna true se tratou (caller deve dar return).
+  async function tentarLembreteDeterministico(texto: string): Promise<boolean> {
+    if (identity.tipo === 'motorista') return false;
+    const conteudo = extrairLembrete(texto);
+    if (conteudo === null) return false;
+    if (!conteudo) {
+      await enviarTexto(msg.from, '📝 O que você quer anotar? Ex: "lembrete: comprar pneu"');
+      return true;
+    }
+    const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo);
+    await enviarTexto(
+      msg.from,
+      r.ok
+        ? `✅ Anotado: ${conteudo}\n\nVai aparecer no painel até você dar ciência.`
+        : '❌ Não consegui salvar o lembrete agora. Tenta de novo em instantes.'
+    );
+    return true;
+  }
+
   // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
   // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
   // (que descriptografa) e mandar como data URL pro pipeline transcrever.
@@ -807,7 +831,10 @@ async function rotearComGemini(
     // Lembretes/anotações agora são uma TOOL do Gemini (criar_lembrete) — sem regex frágil.
     const transcricao = await transcreverAudio(dataUrl);
     if (transcricao.ok && transcricao.data.texto) {
-      const resposta = await processarComGemini(msg.from, transcricao.data.texto.trim(), nomeRemetente, empresaId, motoristaId, usuarioId);
+      const texto = transcricao.data.texto.trim();
+      // Lembrete por áudio → salva determinístico, não passa pela IA
+      if (await tentarLembreteDeterministico(texto)) return;
+      const resposta = await processarComGemini(msg.from, texto, nomeRemetente, empresaId, motoristaId, usuarioId);
       await enviarTexto(msg.from, resposta);
       return;
     }
@@ -841,6 +868,9 @@ async function rotearComGemini(
     });
     return;
   }
+
+  // Lembrete por texto → salva determinístico, não passa pela IA
+  if (await tentarLembreteDeterministico(textoParaGemini)) return;
 
   const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId, usuarioId);
   await enviarTexto(msg.from, resposta);

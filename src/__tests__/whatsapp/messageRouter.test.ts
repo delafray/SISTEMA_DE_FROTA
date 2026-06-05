@@ -43,7 +43,12 @@ vi.mock('@/lib/whatsapp/flows/gestorFlow', () => ({ processarGestorFlow: vi.fn()
 // testes de fluxo de menu continuem funcionando normalmente.
 vi.mock('@/lib/whatsapp/geminiBot', () => ({
   processarComGemini: vi.fn().mockResolvedValue('Resposta simulada do Gemini'),
+  processarAudioComGemini: vi.fn().mockResolvedValue('Resposta de audio simulada'),
   limparHistoricoGemini: vi.fn(),
+}));
+
+vi.mock('@/lib/ai/tools/frotaTools', () => ({
+  criarLembrete: vi.fn().mockResolvedValue({ ok: true, dados: { salvo: true } }),
 }));
 
 const supabaseFromMock = vi.fn();
@@ -65,6 +70,8 @@ import { enviarTexto } from '@/lib/whatsapp/messageSender';
 import { enviarMenuLista } from '@/lib/whatsapp/menuHelper';
 import { processarKmFlow } from '@/lib/whatsapp/flows/kmFlow';
 import { processarAvariaFlow } from '@/lib/whatsapp/flows/avariaFlow';
+import { processarComGemini } from '@/lib/whatsapp/geminiBot';
+import { criarLembrete } from '@/lib/ai/tools/frotaTools';
 
 // ─── HELPERS ────────────────────────────────────────────────────────────
 
@@ -162,6 +169,56 @@ describe('processarMensagem — identidade', () => {
     // GEMINI_MODE universal: gestor tambem e atendido pelo Gemini.
     expect(enviarTexto).toHaveBeenCalledOnce();
     expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toBe('Resposta simulada do Gemini');
+  });
+
+  it('gestor "lembrete: comprar pneu" → salva DETERMINÍSTICO (criarLembrete), NÃO chama Gemini', async () => {
+    (identificarRemetente as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tipo: 'gestor', usuario_id: 'u-1', empresa_id: 'e-1', nome: 'Carlos',
+    });
+    mockSessao('novo');
+
+    await processarMensagem(makeMsg({ texto: 'lembrete: comprar pneu' }));
+
+    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'comprar pneu');
+    expect(processarComGemini).not.toHaveBeenCalled();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('Anotado');
+  });
+
+  it('gestor "anota que recebi 5 mil" → salva determinístico', async () => {
+    (identificarRemetente as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tipo: 'gestor', usuario_id: 'u-1', empresa_id: 'e-1', nome: 'Carlos',
+    });
+    mockSessao('novo');
+
+    await processarMensagem(makeMsg({ texto: 'anota que recebi 5 mil' }));
+
+    expect(criarLembrete).toHaveBeenCalledWith('e-1', 'u-1', 'recebi 5 mil');
+    expect(processarComGemini).not.toHaveBeenCalled();
+  });
+
+  it('gestor "lembrete" sozinho → pede o texto, NÃO salva nem chama Gemini', async () => {
+    (identificarRemetente as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tipo: 'gestor', usuario_id: 'u-1', empresa_id: 'e-1', nome: 'Carlos',
+    });
+    mockSessao('novo');
+
+    await processarMensagem(makeMsg({ texto: 'lembrete' }));
+
+    expect(criarLembrete).not.toHaveBeenCalled();
+    expect(processarComGemini).not.toHaveBeenCalled();
+    expect((enviarTexto as ReturnType<typeof vi.fn>).mock.calls[0][1]).toContain('O que você quer anotar');
+  });
+
+  it('gestor pergunta normal "quantos motoristas?" → NÃO dispara lembrete, vai pro Gemini', async () => {
+    (identificarRemetente as ReturnType<typeof vi.fn>).mockResolvedValue({
+      tipo: 'gestor', usuario_id: 'u-1', empresa_id: 'e-1', nome: 'Carlos',
+    });
+    mockSessao('novo');
+
+    await processarMensagem(makeMsg({ texto: 'quantos motoristas tenho?' }));
+
+    expect(criarLembrete).not.toHaveBeenCalled();
+    expect(processarComGemini).toHaveBeenCalledOnce();
   });
 });
 
