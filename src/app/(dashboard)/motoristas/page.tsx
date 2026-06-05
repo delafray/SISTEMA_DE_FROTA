@@ -25,6 +25,7 @@ export default function MotoristasPage() {
   const [busca, setBusca]     = useState("");
   const [filtroAtivo, setFiltroAtivo] = useState("");
   const [usuarioNome, setUsuarioNome] = useState<Record<string, string>>({});
+  const [caminhaoPorMot, setCaminhaoPorMot] = useState<Record<string, string>>({});
   const buscaDeferred = useDeferredValue(busca);
 
   useEffect(() => {
@@ -47,6 +48,19 @@ export default function MotoristasPage() {
       const map: Record<string, string> = {};
       for (const p of pf ?? []) if (p.nome) map[p.id] = p.nome;
       setUsuarioNome(map);
+
+      // caminhão atual de cada motorista (alocação operacional ativa)
+      const [alRes, veRes] = await Promise.all([
+        supabase.from("alocacoes").select("motorista_id,veiculo_id,status").is("fim", null).eq("status", "operacional"),
+        supabase.from("veiculos").select("id,placa,apelido").eq("empresa_id", ue.empresa_id),
+      ]);
+      const veById: Record<string, { placa: string; apelido: string | null }> = {};
+      for (const v of veRes.data ?? []) veById[v.id] = v;
+      const cmap: Record<string, string> = {};
+      for (const a of alRes.data ?? []) {
+        if (a.motorista_id) { const v = veById[a.veiculo_id]; if (v) cmap[a.motorista_id] = `${v.placa}${v.apelido ? ` (${v.apelido})` : ""}`; }
+      }
+      setCaminhaoPorMot(cmap);
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -112,16 +126,17 @@ export default function MotoristasPage() {
               <Th>Cat. CNH</Th>
               <Th>Vencimento CNH</Th>
               <Th>Usuário</Th>
+              <Th>Caminhão</Th>
               <Th>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
+              <tr><td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
             ) : filtrados.length === 0 ? (
               <tr>
-                <td colSpan={8}>
+                <td colSpan={9}>
                   {todos.length === 0
                     ? <EmptyState message="Nenhum motorista cadastrado." icon="👤" action={<Btn href="/motoristas/novo">+ Cadastrar primeiro motorista</Btn>} />
                     : <EmptyState message="Nenhum motorista encontrado para esta busca." icon="🔍" />
@@ -150,6 +165,7 @@ export default function MotoristasPage() {
                         ? <span style={{ display: "inline-flex", alignItems: "center", gap: 6 }}><span style={dotOn} />{usuarioNome[m.usuario_id] ?? "vinculado"}</span>
                         : <span style={{ display: "inline-flex", alignItems: "center", gap: 6, color: "#b45309" }}><span style={dotOff} />sem usuário</span>}
                     </Td>
+                    <Td>{caminhaoPorMot[m.id] ?? <span style={{ color: "#cbd5e1" }}>—</span>}</Td>
                     <Td><Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "ATIVO" : "INATIVO"}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
@@ -181,6 +197,7 @@ export default function MotoristasPage() {
                 highlight={!m.ativo ? "#cbd5e1" : undefined}
                 details={[
                   { label: "Usuário", value: m.usuario_id ? (usuarioNome[m.usuario_id] ?? "vinculado") : "— sem usuário —" },
+                  { label: "Caminhão", value: caminhaoPorMot[m.id] ?? "—" },
                   { label: "CNH", value: m.cnh_categoria ?? "—" },
                   { label: "Venc. CNH", value: cnhDate ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge> : "—" },
                 ]}
