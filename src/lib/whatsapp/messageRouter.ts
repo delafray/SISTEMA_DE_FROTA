@@ -44,6 +44,7 @@ import { tentarFastPath } from '@/lib/whatsapp/fastPath';
 import { registrarMetrica } from '@/lib/ai/metricas';
 import { extrairLembrete } from '@/lib/whatsapp/lembreteParser';
 import { criarLembrete } from '@/lib/ai/tools/frotaTools';
+import { verificarTelefone } from '@/lib/whatsapp/autorizacao';
 
 
 const log = createLogger('router');
@@ -141,6 +142,20 @@ function limparTextoLembrete(texto: string): string {
  * dar visibilidade total no Vercel.
  */
 async function salvarComoLembrete(msg: ParsedMessage, identity: UserIdentity): Promise<void> {
+  // TRAVA do telefone (tabela `telefones` / tela /autorizacoes): só número
+  // cadastrado + Ativo + Anotar pode anotar. Não autorizado recebe aviso.
+  const auth = await verificarTelefone(msg.from);
+  if (!auth.ok) {
+    log.warn('lembrete_bloqueado', { from: msg.from, motivo: auth.motivo });
+    await enviarTexto(msg.from, 'Seu número não está autorizado a usar o sistema.');
+    return;
+  }
+  if (!auth.anotar) {
+    log.warn('lembrete_sem_permissao_anotar', { from: msg.from });
+    await enviarTexto(msg.from, 'Seu número não tem permissão para anotar lembretes.');
+    return;
+  }
+
   const empresaId = 'empresa_id' in identity ? identity.empresa_id : undefined;
   const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
   const nome = 'nome' in identity ? identity.nome : undefined;
