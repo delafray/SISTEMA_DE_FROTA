@@ -32,7 +32,12 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ autorizado: false, motivo: contexto.motivo, resposta: "Seu número não está autorizado a usar o sistema." });
 
   const candidatas: RegraClassif[] = contexto.regras.map((r) => ({ id: r.id, nome: r.nome, tipo: r.tipo, gatilhos: r.gatilhos ?? [], frases_exemplo: r.frases_exemplo ?? [] }));
-  const decisao = await classificar(mensagem, candidatas);
+
+  // contexto global da IA (config dentro do sistema — tabela contexto_ia)
+  const { data: ctxData } = await supa.from("contexto_ia").select("conteudo").eq("ativo", true).order("ordem");
+  const contextoGlobal = (ctxData ?? []).map((c) => c.conteudo).join("\n");
+
+  const decisao = await classificar(mensagem, candidatas, contextoGlobal);
   const casaram = decisao.regras;
 
   let resposta: string;

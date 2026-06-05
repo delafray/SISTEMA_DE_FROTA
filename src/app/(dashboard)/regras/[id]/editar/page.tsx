@@ -118,6 +118,7 @@ export default function EditarRegraPage() {
         actions={
           <>
             <Btn href="/regras" variant="ghost">← Voltar</Btn>
+            <Btn href={`/regras/${id}/dados`} variant="outline">📊 Tabelas e campos</Btn>
             <Btn href="/regras" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
           </>

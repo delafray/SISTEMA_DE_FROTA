@@ -95,6 +95,12 @@ export type Database = {
         }
         Relationships: []
       }
+      contexto_ia: {
+        Row: { ativo: boolean; conteudo: string; criado_em: string; id: string; ordem: number; titulo: string }
+        Insert: { ativo?: boolean; conteudo: string; criado_em?: string; id?: string; ordem?: number; titulo: string }
+        Update: { ativo?: boolean; conteudo?: string; criado_em?: string; id?: string; ordem?: number; titulo?: string }
+        Relationships: []
+      }
       regras: {
         Row: {
           acoes: string[]

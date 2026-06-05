@@ -14,7 +14,7 @@ const MODELO = "gemini-2.5-flash";
 export type RegraClassif = { id: string; nome: string; tipo: string; gatilhos: string[]; frases_exemplo: string[] };
 export type Decisao = { regras: string[]; raciocinio: string };
 
-export async function classificar(mensagem: string, regras: RegraClassif[]): Promise<Decisao> {
+export async function classificar(mensagem: string, regras: RegraClassif[], contextoGlobal = ""): Promise<Decisao> {
   if (regras.length === 0) return { regras: [], raciocinio: "Nenhuma regra disponível para este telefone." };
 
   const apiKey = process.env.GEMINI_API_KEY;
@@ -27,7 +27,7 @@ export async function classificar(mensagem: string, regras: RegraClassif[]): Pro
 
   const prompt =
 `Você classifica a mensagem de um usuário do WhatsApp contra uma lista de regras.
-
+${contextoGlobal ? `\nCONTEXTO DO SISTEMA (ajuda a entender a mensagem):\n${contextoGlobal}\n` : ""}
 MENSAGEM:
 "${mensagem}"
 

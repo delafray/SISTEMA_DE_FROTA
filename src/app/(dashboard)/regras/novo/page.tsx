@@ -106,6 +106,18 @@ export default function NovaRegraPage() {
             </div>
           )}
 
+          <div style={{ padding: "12px 14px", background: "#f0f9ff", border: "1px solid #bae6fd", borderRadius: 8, fontSize: 13, color: "#075985", lineHeight: 1.6 }}>
+            <b>📌 Como preencher (capriche — é isto que faz a IA acertar):</b>
+            <ul style={{ margin: "6px 0 0", paddingLeft: 18 }}>
+              <li><b>Acesso</b> — o que a regra PODE fazer. <i>Consultar</i> = só lê · <i>Alterar</i> = muda algo que já existe · <i>Registrar</i> = cria novo. A matriz nunca oferece uma ação que a regra não tem.</li>
+              <li><b>Gatilhos</b> — as palavras-chave que disparam (ex: “km do”, “manutenção”). É o disparo mais direto — o que mais ajuda a IA a acertar.</li>
+              <li><b>Frases-exemplo</b> — frases completas, como o usuário falaria. Quanto mais variadas e reais, melhor a IA distingue esta regra das outras (mín. 3).</li>
+              <li><b>Frases negativas</b> — frases parecidas que NÃO são esta regra (evita falso-positivo).</li>
+              <li><b>Prioridade</b> — desempate quando 2 regras casam (maior vem primeiro). <b>Exige confirmação</b> — pra ações que gravam, a IA pergunta “confirma?” antes.</li>
+            </ul>
+            <div style={{ marginTop: 6, color: "#0369a1" }}>Cadastrou? Teste em <b>🔎 Contexto IA</b> e ajuste. Se algo atrapalhar, é só <b>editar</b> ou <b>excluir</b> a regra — sem código.</div>
+          </div>
+
           <FormSection title="Identificação">
             <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "2fr 1fr 1fr", gap: "16px" }}>
               <FormField label="Nome da regra *">
