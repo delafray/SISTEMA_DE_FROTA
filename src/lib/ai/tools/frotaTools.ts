@@ -163,6 +163,25 @@ export interface ResultadoTool {
   codigo?: 'sem_permissao' | 'nao_encontrado' | 'validacao' | 'db';
 }
 
+/**
+ * SEM TRAVA: empresa default pra quando o remetente é desconhecido (não tem
+ * empresa). A tabela `lembretes.empresa_id` é NOT NULL, então todo lembrete
+ * precisa de alguma empresa — usamos a primeira cadastrada. "Depois a gente
+ * filtra" por empresa. Override explícito: env LEMBRETE_EMPRESA_DEFAULT.
+ */
+async function getEmpresaDefault(): Promise<string | null> {
+  const fromEnv = process.env.LEMBRETE_EMPRESA_DEFAULT;
+  if (fromEnv) return fromEnv;
+  const supabase = getSupabase();
+  const { data } = await supabase
+    .from('empresas')
+    .select('id')
+    .order('created_at', { ascending: true })
+    .limit(1)
+    .maybeSingle();
+  return data?.id ?? null;
+}
+
 export async function criarLembrete(
   empresaId: string,
   usuarioId: string | undefined,
@@ -170,16 +189,18 @@ export async function criarLembrete(
   criadoPorNome?: string,
   criadoPorTelefone?: string
 ): Promise<ResultadoTool> {
-  // Regra: qualquer telefone cadastrado pode anotar. Só exige empresa + texto.
-  // usuario_id é opcional (motorista pode não ter perfil vinculado) — o nome/telefone
-  // de quem criou é guardado direto pra atribuição no painel.
-  if (!empresaId) return { ok: false, erro: 'sem empresa identificada', codigo: 'sem_permissao' };
+  // SEM TRAVA: QUALQUER número (cadastrado ou não) gera lembrete. Só exige texto.
+  // empresa_id e usuario_id são OPCIONAIS aqui. Enquanto o schema ainda exigir
+  // empresa_id (NOT NULL), preenchemos com a empresa default pra não travar; após
+  // rodar `migration_lembretes_sem_trava.sql` a coluna aceita null e isso vira no-op.
+  let empId: string | null = empresaId || null;
+  if (!empId) empId = await getEmpresaDefault();
   const conteudo = typeof texto === 'string' ? texto.trim() : '';
   if (!conteudo) return { ok: false, erro: 'texto do lembrete vazio', codigo: 'validacao' };
 
   const supabase = getSupabase();
   const { error } = await supabase.from('lembretes').insert({
-    empresa_id: empresaId,
+    empresa_id: empId,
     usuario_id: usuarioId ?? null,
     texto: conteudo,
     origem: 'whatsapp',

@@ -199,17 +199,20 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
   // 1. Identificar remetente
   const identity = await identificarRemetente(msg.from);
 
-  if (identity.tipo === 'desconhecido') {
-    log.warn('remetente_desconhecido', { from: msg.from, msg_id: msg.messageId });
+  // 1.4. MODO SOMENTE LEMBRETE — atalho total: TODA mensagem vira lembrete, sem
+  // LLM, sem sessão, sem menu. SEM TRAVA: vale para QUALQUER número — cadastrado
+  // ou DESCONHECIDO. Quem manda do "celular do lixo" também gera lembrete; a
+  // empresa cai no default (ver criarLembrete) e o telefone fica registrado.
+  // Por isso esse bloco vem ANTES do filtro de desconhecido. Reverter: MODO_SOMENTE_LEMBRETE=false.
+  if (MODO_SOMENTE_LEMBRETE) {
+    log.info('modo_somente_lembrete', { from: msg.from, tipo: msg.tipo, identidade: identity.tipo });
+    await salvarComoLembrete(msg, identity);
     return;
   }
 
-  // 1.4. MODO SOMENTE LEMBRETE — atalho total: TODA mensagem vira lembrete, sem
-  // LLM, sem sessão, sem menu. É o caminho mais à prova de falha (o INSERT no
-  // Supabase já foi validado fim-a-fim). Reverter: MODO_SOMENTE_LEMBRETE=false.
-  if (MODO_SOMENTE_LEMBRETE) {
-    log.info('modo_somente_lembrete', { from: msg.from, tipo: msg.tipo });
-    await salvarComoLembrete(msg, identity);
+  // Fora do modo lembrete, os flows abaixo precisam de identidade conhecida.
+  if (identity.tipo === 'desconhecido') {
+    log.warn('remetente_desconhecido', { from: msg.from, msg_id: msg.messageId });
     return;
   }
 
