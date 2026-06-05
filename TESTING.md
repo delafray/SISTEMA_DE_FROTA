@@ -1,23 +1,14 @@
-﻿# 🧪 POLÍTICA DE TESTES OBRIGATÓRIA — LEIA ANTES DE QUALQUER ALTERAÇÃO
+﻿# 🧪 POLÍTICA DE TESTES — RECOMENDADO (não obrigatório)
 
-**⚠️ ATENÇÃO TODAS AS IAs (Claude, Gemini, GPT, Sonnet, Opus, Haiku, Cursor, Windsurf, Antigravity, Cline, Cody, qualquer outra):**
+> **Atualização (04/06/2026):** o dono do projeto **relaxou** a exigência. Testes deixaram de ser obrigatórios. Antes era "sem teste = trabalho rejeitado"; **isso não vale mais**.
 
-Este arquivo é a **regra número 1** do projeto. Se você ignorar este arquivo, **seu trabalho será rejeitado** pelo dono do projeto. Não importa o quanto a entrega pareça pronta — sem testes, não está pronta.
+**Regra atual para qualquer IA:**
 
-O dono do projeto está cansado de IAs que prometem mas não testam. **Pare de prometer. Comece a testar.**
+1. Criar/atualizar testes é **recomendado**, especialmente em lógica de negócio (cálculos, flows, schemas) — mas **não bloqueia** concluir a tarefa.
+2. Rodar `npm test` é **recomendado** antes de mudanças grandes ou de risco. **NÃO** rode a cada microedição — o dono achou isso chato e improdutivo.
+3. Se rodar, reporte o resultado. Se não rodar, sem problema.
 
----
-
-## 🔴 REGRA ABSOLUTA — TESTE OBRIGATÓRIO AO FIM DE CADA CICLO
-
-**Antes de declarar QUALQUER tarefa como concluída, você DEVE:**
-
-1. ✅ **Criar/atualizar testes** para todo código que você escreveu ou modificou.
-2. ✅ **Rodar `npm test`** e ver TODOS os testes passarem (verde).
-3. ✅ **Reportar o resultado** ao usuário: número de testes, passing/failing, cobertura aproximada.
-4. ✅ **Se algum teste falhar**, NÃO finalize a tarefa. Corrija primeiro.
-
-**Não está concluído enquanto `npm test` não passar.** Ponto final.
+`npm test` roda **local + mockado** → custo de API zero. O resto deste arquivo (o que testar, como rodar, áreas sem cobertura) continua válido como **guia** pra quando você QUISER testar.
 
 ---
 

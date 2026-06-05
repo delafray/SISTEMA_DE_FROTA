@@ -18,7 +18,7 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from('lembretes')
-    .select('id, texto, origem, criado_em, ciente_em, usuario_id, perfis(nome)')
+    .select('id, texto, origem, criado_em, ciente_em, usuario_id, criado_por_nome, perfis(nome)')
     .eq('empresa_id', ue.empresa_id)
     .order('criado_em', { ascending: false });
 

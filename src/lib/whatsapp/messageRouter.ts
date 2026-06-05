@@ -795,23 +795,23 @@ async function rotearComGemini(
   // usuario_id vai pro Gemini pra ferramentas que precisam saber QUEM é (ex: criar_lembrete).
   const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
 
-  // Detecção DETERMINÍSTICA de lembrete (gestor/master) — salva na hora, sem depender
-  // da IA "decidir" chamar a tool (ela às vezes só responde "ok" e guarda na conversa,
-  // sem persistir no banco). A tool do Gemini fica como reserva pras frases fora do padrão.
-  // Retorna true se tratou (caller deve dar return).
+  // Detecção DETERMINÍSTICA de lembrete — salva na hora, sem depender da IA "decidir"
+  // chamar a tool (ela às vezes só responde "ok" e guarda na conversa, sem persistir).
+  // QUALQUER telefone cadastrado pode anotar (motorista, gestor, master) — sem restrição
+  // de role no app; o Supabase é quem guarda os dados. A tool do Gemini fica como reserva.
+  const nomeQuemMandou = 'nome' in identity ? identity.nome : undefined;
   async function tentarLembreteDeterministico(texto: string): Promise<boolean> {
-    if (identity.tipo === 'motorista') return false;
     const conteudo = extrairLembrete(texto);
     if (conteudo === null) return false;
     if (!conteudo) {
       await enviarTexto(msg.from, '📝 O que você quer anotar? Ex: "lembrete: comprar pneu"');
       return true;
     }
-    const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo);
+    const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo, nomeQuemMandou, msg.from);
     await enviarTexto(
       msg.from,
       r.ok
-        ? `✅ Anotado: ${conteudo}\n\nVai aparecer no painel até você dar ciência.`
+        ? `✅ Anotado: ${conteudo}\n\nVai aparecer no painel até alguém dar ciência.`
         : '❌ Não consegui salvar o lembrete agora. Tenta de novo em instantes.'
     );
     return true;

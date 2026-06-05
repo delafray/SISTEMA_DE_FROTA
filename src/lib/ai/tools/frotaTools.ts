@@ -158,19 +158,25 @@ export interface ResultadoTool {
 export async function criarLembrete(
   empresaId: string,
   usuarioId: string | undefined,
-  texto: unknown
+  texto: unknown,
+  criadoPorNome?: string,
+  criadoPorTelefone?: string
 ): Promise<ResultadoTool> {
+  // Regra: qualquer telefone cadastrado pode anotar. Só exige empresa + texto.
+  // usuario_id é opcional (motorista pode não ter perfil vinculado) — o nome/telefone
+  // de quem criou é guardado direto pra atribuição no painel.
   if (!empresaId) return { ok: false, erro: 'sem empresa identificada', codigo: 'sem_permissao' };
-  if (!usuarioId) return { ok: false, erro: 'usuário não identificado', codigo: 'sem_permissao' };
   const conteudo = typeof texto === 'string' ? texto.trim() : '';
   if (!conteudo) return { ok: false, erro: 'texto do lembrete vazio', codigo: 'validacao' };
 
   const supabase = getSupabase();
   const { error } = await supabase.from('lembretes').insert({
     empresa_id: empresaId,
-    usuario_id: usuarioId,
+    usuario_id: usuarioId ?? null,
     texto: conteudo,
     origem: 'whatsapp',
+    criado_por_nome: criadoPorNome ?? null,
+    criado_por_telefone: criadoPorTelefone ?? null,
   });
 
   if (error) {

@@ -1,4 +1,4 @@
-# Política de Testes — Obrigatória
+# Política de Testes — Recomendada (não obrigatória)
 
 > 📎 Voltar ao [INDEX de Testes](INDEX.md) | [INDEX principal](../INDEX.md)
 >
@@ -6,12 +6,14 @@
 
 ---
 
-## Regras (invioláveis)
+## Regras (atualizadas 04/06/2026 — o dono relaxou a exigência)
 
-1. **Toda mudança de código exige teste novo ou atualizado** (vitest)
-2. Antes de finalizar qualquer tarefa, rodar `npm test` e ver **todos passarem**
-3. Reportar ao usuário: X passaram, Y falharam, novos testes adicionados
-4. **Sem testes = trabalho NÃO concluído.** O dono rejeita entregas sem testes.
+1. Criar/atualizar teste é **recomendado**, não exigido pra concluir a tarefa.
+2. Rodar `npm test` é **recomendado** antes de mudanças grandes — **NÃO** a cada microedição.
+3. Se rodar, reporte o resultado. Se não rodar, tudo bem.
+4. `npm test` é local + mockado → **custo de API zero**.
+
+> Antes esta regra era "inviolável / sem teste = rejeitado". **Isso não vale mais.**
 
 ---
 

@@ -7,13 +7,11 @@ Antes de pesquisar o projeto, **leia [`framework/INDEX.md`](framework/INDEX.md)*
 
 ---
 
-Política de testes obrigatória do projeto. Resumo curto:
-- Toda mudança exige teste novo/atualizado (vitest).
-- `npm test` precisa passar antes de declarar tarefa concluída.
-- Reportar resultado da suíte ao usuário no fim de cada ciclo.
-- Áreas sem cobertura estão listadas em `TESTING.md` — priorize.
-
-**Sem testes, a tarefa não está concluída. Sem exceções.**
+Política de testes do projeto (RECOMENDADO, não obrigatório):
+- Testes são **bem-vindos** mas **não exigidos** para concluir uma tarefa.
+- Rodar `npm test` é **recomendado** antes de mudanças grandes ou de risco — não a cada microalteração.
+- NÃO rodar a suíte a cada pequena edição (o dono não quer isso).
+- `npm test` roda local + mockado (custo de API = zero).
 
 ---
 

@@ -8,6 +8,7 @@ type Lembrete = {
   origem: string;
   criado_em: string;
   ciente_em: string | null;
+  criado_por_nome: string | null;
   perfis: { nome: string } | { nome: string }[] | null;
 };
 
@@ -16,8 +17,9 @@ function fmtDataHora(iso: string) {
   return `${d.toLocaleDateString("pt-BR")} às ${d.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}`;
 }
 
-function nomePerfil(perfis: Lembrete["perfis"]) {
-  const p = Array.isArray(perfis) ? perfis[0] : perfis;
+function nomePerfil(l: Pick<Lembrete, "criado_por_nome" | "perfis">) {
+  if (l.criado_por_nome) return l.criado_por_nome;
+  const p = Array.isArray(l.perfis) ? l.perfis[0] : l.perfis;
   return p?.nome ?? "—";
 }
 
@@ -109,7 +111,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                         {l.texto}
                       </div>
                       <div style={{ fontSize: "11px", color: "#92400e", marginTop: "3px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                        <span>👤 {nomePerfil(l.perfis)}</span>
+                        <span>👤 {nomePerfil(l)}</span>
                         <span>{fmtDataHora(l.criado_em)}</span>
                         <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : "via painel"}</span>
                       </div>
@@ -151,7 +153,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                       {l.texto}
                     </div>
                     <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "3px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                      <span>👤 {nomePerfil(l.perfis)}</span>
+                      <span>👤 {nomePerfil(l)}</span>
                       <span>{fmtDataHora(l.criado_em)}</span>
                       {l.ciente_em && <span>✅ Ciente em {fmtDataHora(l.ciente_em)}</span>}
                     </div>
@@ -223,7 +225,7 @@ export function LembretesWidget() {
                   {l.texto}
                 </div>
                 <div style={{ fontSize: "11px", color: "#92400e", marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
-                  <span>👤 {nomePerfil(l.perfis)}</span>
+                  <span>👤 {nomePerfil(l)}</span>
                   <span>{fmtDataHora(l.criado_em)}</span>
                   <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : "via painel"}</span>
                 </div>

@@ -1237,22 +1237,26 @@ export type Database = {
         Row: {
           id: string
           empresa_id: string
-          usuario_id: string
+          usuario_id: string | null
           texto: string
           origem: string
           criado_em: string
           ciente_em: string | null
           ciente_por: string | null
+          criado_por_nome: string | null
+          criado_por_telefone: string | null
         }
         Insert: {
           id?: string
           empresa_id: string
-          usuario_id: string
+          usuario_id?: string | null
           texto: string
           origem?: string
           criado_em?: string
           ciente_em?: string | null
           ciente_por?: string | null
+          criado_por_nome?: string | null
+          criado_por_telefone?: string | null
         }
         Update: {
           ciente_em?: string | null

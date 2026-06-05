@@ -11,18 +11,13 @@ This version has breaking changes — APIs, conventions, and file structure may 
 <!-- END:nextjs-agent-rules -->
 
 <!-- BEGIN:mandatory-testing-rule -->
-# ⚠️ REGRA OBRIGATÓRIA — TESTES AO FIM DE CADA CICLO
+# 🧪 TESTES — RECOMENDADO (não obrigatório)
 
-**LEIA `TESTING.md` ANTES DE QUALQUER ALTERAÇÃO.**
+O dono do projeto **relaxou** a exigência de testes (antes obrigatória). Regra atual:
 
-Esta regra vale para **TODAS as IAs** (Claude, Gemini, GPT, Cursor, Windsurf, Antigravity, Cline, Cody, qualquer outra):
+1. Criar/atualizar testes é **recomendado**, não exigido pra concluir uma tarefa.
+2. Rodar `npm test` é **recomendado** antes de mudanças grandes/de risco — **NÃO** a cada microalteração (o dono achou isso chato e improdutivo).
+3. Se rodar, reportar o resultado. Se não rodar, tudo bem.
 
-1. Toda mudança de código exige **teste novo ou atualizado**.
-2. Antes de finalizar a tarefa, rodar `npm test` e ver **todos passarem**.
-3. Reportar ao usuário o resultado da suíte (X passaram, Y falharam).
-4. **Sem testes = trabalho não concluído.** O dono do projeto rejeita entregas sem testes.
-
-Áreas com cobertura faltando estão listadas em `TESTING.md`. Comece por elas se for trabalhar nessas funcionalidades.
-
-Anexe sua execução no final de `TESTING_LOG.md` (o histórico foi separado de `TESTING.md` para não inflar o contexto).
+`npm test` roda local + mockado → custo de API zero. Áreas sem cobertura ainda estão em `TESTING.md` se quiser priorizar.
 <!-- END:mandatory-testing-rule -->

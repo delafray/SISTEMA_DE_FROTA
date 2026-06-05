@@ -340,12 +340,20 @@ describe('criarLembrete', () => {
     expect(insertMock).not.toHaveBeenCalled();
   });
 
-  it('sem usuarioId: erro sem_permissao, NÃO grava', async () => {
+  it('sem usuarioId: AINDA salva (qualquer telefone cadastrado pode anotar), usuario_id null', async () => {
     const insertMock = setupInsert();
     const res = await criarLembrete('emp-1', undefined, 'x');
-    expect(res.ok).toBe(false);
-    expect(res.codigo).toBe('sem_permissao');
-    expect(insertMock).not.toHaveBeenCalled();
+    expect(res.ok).toBe(true);
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ usuario_id: null }));
+  });
+
+  it('guarda nome + telefone de quem criou', async () => {
+    const insertMock = setupInsert();
+    await criarLembrete('emp-1', undefined, 'comprar pneu', 'Ronaldo', '5531999');
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      criado_por_nome: 'Ronaldo',
+      criado_por_telefone: '5531999',
+    }));
   });
 
   it('texto vazio/whitespace: erro validacao, NÃO grava', async () => {
@@ -380,10 +388,10 @@ describe('criarLembrete', () => {
     }));
   });
 
-  it('dispatcher: sem usuarioId → sem_permissao', async () => {
-    setupInsert();
+  it('dispatcher: sem usuarioId → ainda salva (usuario_id null)', async () => {
+    const insertMock = setupInsert();
     const res = await executarTool('criar_lembrete', 'emp-1', undefined, { texto: 'x' }, undefined);
-    expect(res.ok).toBe(false);
-    expect(res.codigo).toBe('sem_permissao');
+    expect(res.ok).toBe(true);
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({ usuario_id: null }));
   });
 });
