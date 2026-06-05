@@ -122,6 +122,27 @@ export const declarations: FunctionDeclaration[] = [
       required: ['km_novo'],
     },
   },
+  {
+    name: 'criar_lembrete',
+    description:
+      'Cria/salva um lembrete (anotação) que aparece no painel do gestor. ' +
+      'Use SEMPRE que o gestor pedir para ANOTAR, LEMBRAR, GUARDAR, REGISTRAR ou SALVAR uma informação — ' +
+      'em QUALQUER frase, ex: "cria um lembrete pra eu ligar pro cliente", "me lembra de pagar o fornecedor", ' +
+      '"anota aí que fechei contrato com fulano por 5 mil", "guarda esse dado: ...", "registra que a carreta voltou". ' +
+      'NÃO use para nota fiscal, número de nota ou consultas — só para anotações que o gestor quer guardar. ' +
+      'Passe no campo texto o conteúdo limpo do que ele quer lembrar (sem a palavra "lembrete"). ' +
+      'Após salvar, confirme em uma frase curta que foi anotado.',
+    parameters: {
+      type: SchemaType.OBJECT,
+      properties: {
+        texto: {
+          type: SchemaType.STRING,
+          description: 'O conteúdo do lembrete, limpo (ex: "Ligar pro cliente João amanhã de manhã").',
+        },
+      },
+      required: ['texto'],
+    },
+  },
 ];
 
 // ─── Implementacao das tools ──────────────────────────────────────────
@@ -132,6 +153,32 @@ export interface ResultadoTool {
   erro?: string;
   /** Codigo de erro tipado pra discriminar handling no caller (logging, retry, refusal). */
   codigo?: 'sem_permissao' | 'nao_encontrado' | 'validacao' | 'db';
+}
+
+export async function criarLembrete(
+  empresaId: string,
+  usuarioId: string | undefined,
+  texto: unknown
+): Promise<ResultadoTool> {
+  if (!empresaId) return { ok: false, erro: 'sem empresa identificada', codigo: 'sem_permissao' };
+  if (!usuarioId) return { ok: false, erro: 'usuário não identificado', codigo: 'sem_permissao' };
+  const conteudo = typeof texto === 'string' ? texto.trim() : '';
+  if (!conteudo) return { ok: false, erro: 'texto do lembrete vazio', codigo: 'validacao' };
+
+  const supabase = getSupabase();
+  const { error } = await supabase.from('lembretes').insert({
+    empresa_id: empresaId,
+    usuario_id: usuarioId,
+    texto: conteudo,
+    origem: 'whatsapp',
+  });
+
+  if (error) {
+    log.error('criar_lembrete_erro', { empresaId, message: error.message });
+    return { ok: false, erro: error.message, codigo: 'db' };
+  }
+
+  return { ok: true, dados: { texto: conteudo, salvo: true } };
 }
 
 export async function listarMotoristas(empresaId: string): Promise<ResultadoTool> {
@@ -535,12 +582,16 @@ export async function executarTool(
   nome: string,
   empresaId: string,
   motoristaId?: string,
-  args?: Record<string, unknown>
+  args?: Record<string, unknown>,
+  usuarioId?: string
 ): Promise<ResultadoTool> {
   // B21: NUNCA normalize undefined → ''. Tipos distintos = semantica distinta.
   // Tool valida e devolve erro 'sem_permissao' explicito quando motorista ausente.
   const motId = typeof motoristaId === 'string' && motoristaId.trim() !== '' ? motoristaId : undefined;
+  const usrId = typeof usuarioId === 'string' && usuarioId.trim() !== '' ? usuarioId : undefined;
   switch (nome) {
+    case 'criar_lembrete':
+      return criarLembrete(empresaId, usrId, args?.texto);
     case 'listar_motoristas':
       return listarMotoristas(empresaId);
     case 'listar_veiculos':

@@ -790,6 +790,9 @@ async function rotearComGemini(
   empresaId?: string,
   motoristaId?: string
 ): Promise<void> {
+  // usuario_id vai pro Gemini pra ferramentas que precisam saber QUEM é (ex: criar_lembrete).
+  const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
+
   // Áudio: WhatsApp encripta a mídia no CDN — baixar a URL HTTP direta dá bytes
   // inutilizáveis pro Deepgram. SEMPRE buscar via Evolution `getBase64FromMediaMessage`
   // (que descriptografa) e mandar como data URL pro pipeline transcrever.
@@ -800,34 +803,17 @@ async function rotearComGemini(
       return;
     }
 
-    // Transcreve primeiro para poder checar padrões antes do Gemini
+    // Transcreve primeiro (texto direto pro Gemini é mais rápido que reprocessar o áudio).
+    // Lembretes/anotações agora são uma TOOL do Gemini (criar_lembrete) — sem regex frágil.
     const transcricao = await transcreverAudio(dataUrl);
     if (transcricao.ok && transcricao.data.texto) {
-      const texto = transcricao.data.texto.trim();
-
-      // Gestor/master falou palavra de anotação → desviar pro gestorFlow, não pro Gemini
-      // Mesma regex do gestorFlow: lembrete, registro, anote, anotar, guarda, salva, nota...
-      if (identity.tipo !== 'motorista') {
-        const LEMBRETE_AUDIO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
-        const matchLembrete = texto.match(LEMBRETE_AUDIO);
-        if (matchLembrete) {
-          const conteudo = matchLembrete[2].trim();
-          await processarGestorFlow(
-            { ...msg, tipo: 'texto', texto: conteudo ? `lembrete: ${conteudo}` : 'lembrete' },
-            identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
-          );
-          return;
-        }
-      }
-
-      // Não é lembrete — segue pro Gemini com o texto já transcrito
-      const resposta = await processarComGemini(msg.from, texto, nomeRemetente, empresaId, motoristaId);
+      const resposta = await processarComGemini(msg.from, transcricao.data.texto.trim(), nomeRemetente, empresaId, motoristaId, usuarioId);
       await enviarTexto(msg.from, resposta);
       return;
     }
 
     // Transcrição falhou — tenta com o pipeline completo de áudio do Gemini
-    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId, motoristaId);
+    const resposta = await processarAudioComGemini(msg.from, dataUrl, nomeRemetente, empresaId, motoristaId, usuarioId);
     await enviarTexto(msg.from, resposta);
     return;
   }
@@ -837,20 +823,6 @@ async function rotearComGemini(
   if (!textoParaGemini) {
     await enviarTexto(msg.from, 'Nao consegui entender a mensagem. Por favor, envie um texto.');
     return;
-  }
-
-  // Gestor/master digitou palavra de anotação → desviar pro gestorFlow, não pro Gemini
-  if (identity.tipo !== 'motorista') {
-    const LEMBRETE_TEXTO = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
-    const matchLembrete = textoParaGemini.match(LEMBRETE_TEXTO);
-    if (matchLembrete) {
-      const conteudo = matchLembrete[2].trim();
-      await processarGestorFlow(
-        { ...msg, tipo: 'texto', texto: conteudo ? `lembrete: ${conteudo}` : 'lembrete' },
-        identity as Extract<UserIdentity, { tipo: 'gestor' | 'master' }>
-      );
-      return;
-    }
   }
 
   // Fast Path: regex pra comandos obvios (saudacao, ajuda, /novo).
@@ -870,7 +842,7 @@ async function rotearComGemini(
     return;
   }
 
-  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId);
+  const resposta = await processarComGemini(msg.from, textoParaGemini, nomeRemetente, empresaId, motoristaId, usuarioId);
   await enviarTexto(msg.from, resposta);
 }
 

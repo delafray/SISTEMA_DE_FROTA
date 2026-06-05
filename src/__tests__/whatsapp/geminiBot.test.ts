@@ -63,7 +63,8 @@ describe('processarComGemini — texto', () => {
         { role: 'model', text: 'ola' },
       ],
       'emp-1',
-      'mot-1'
+      'mot-1',
+      undefined
     );
     // Grava user + model (fire-and-forget)
     expect(mocks.gravarMensagem).toHaveBeenCalledWith('+5511999999999', 'user', 'quanto km tem?');
@@ -91,7 +92,7 @@ describe('processarComGemini — texto', () => {
 
     await processarComGemini('+5511999999999', 'mensagem nua');
 
-    expect(mocks.chatGemini).toHaveBeenCalledWith('mensagem nua', [], undefined, undefined);
+    expect(mocks.chatGemini).toHaveBeenCalledWith('mensagem nua', [], undefined, undefined, undefined);
   });
 });
 

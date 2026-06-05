@@ -179,54 +179,5 @@ describe('gestorFlow — erros de banco', () => {
   });
 });
 
-describe('gestorFlow — lembretes (salva imediatamente, stateless)', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    insertSpy.mockClear();
-    Object.keys(supabaseDataMap).forEach(k => delete supabaseDataMap[k]);
-  });
-  afterEach(() => vi.restoreAllMocks());
-
-  it('"lembrete: fechei contrato" → INSERT em lembretes + confirma, SEM passar pela IA', async () => {
-    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'lembrete: fechei contrato com fulano' }), makeIdentity());
-
-    expect(classificarIntentTexto).not.toHaveBeenCalled();
-    expect(insertSpy).toHaveBeenCalledOnce();
-    const [tabela, payload] = insertSpy.mock.calls[0];
-    expect(tabela).toBe('lembretes');
-    expect(payload).toMatchObject({
-      empresa_id: 'emp-1',
-      usuario_id: 'usr-1',
-      texto: 'fechei contrato com fulano',
-      origem: 'whatsapp',
-    });
-    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('Lembrete anotado'));
-  });
-
-  it('palavra alternativa "anote que recebi 5 mil" → salva', async () => {
-    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'anote que recebi 5 mil' }), makeIdentity());
-    expect(insertSpy).toHaveBeenCalledOnce();
-    expect(insertSpy.mock.calls[0][1].texto).toBe('que recebi 5 mil');
-  });
-
-  it('"lembrete" sozinho (sem conteúdo) → pede o texto, NÃO salva', async () => {
-    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'lembrete' }), makeIdentity());
-    expect(insertSpy).not.toHaveBeenCalled();
-    expect(classificarIntentTexto).not.toHaveBeenCalled();
-    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('O que você quer anotar'));
-  });
-
-  it('INSERT falha → mensagem de erro', async () => {
-    supabaseDataMap['lembretes:insert'] = { error: { message: 'DB down', code: '500' } };
-    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'lembrete: teste' }), makeIdentity());
-    expect(insertSpy).toHaveBeenCalledOnce();
-    expect(enviarTexto).toHaveBeenCalledWith('5531999', expect.stringContaining('Erro ao salvar'));
-  });
-
-  it('pergunta normal "qual o lucro?" → NÃO dispara lembrete (vai pra IA)', async () => {
-    (classificarIntentTexto as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, data: { intent: 'consulta_lucro_mensal', confianca: 90 } });
-    await processarGestorFlow(makeMsg({ tipo: 'texto', texto: 'qual o lucro?' }), makeIdentity());
-    expect(insertSpy).not.toHaveBeenCalled();
-    expect(classificarIntentTexto).toHaveBeenCalledOnce();
-  });
-});
+// NOTA: lembretes agora são uma TOOL do Gemini (criar_lembrete), testada em
+// frotaTools.test.ts. O gestorFlow não trata mais lembretes diretamente.

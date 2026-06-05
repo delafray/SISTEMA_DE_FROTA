@@ -12,7 +12,7 @@ vi.mock('@supabase/supabase-js', () => ({
   createClient: vi.fn(() => ({ from: supabaseFromMock })),
 }));
 
-import { listarMotoristas, listarVeiculos, executarTool, buscarKmCaminhao, meuCaminhao } from '@/lib/ai/tools/frotaTools';
+import { listarMotoristas, listarVeiculos, executarTool, buscarKmCaminhao, meuCaminhao, criarLembrete } from '@/lib/ai/tools/frotaTools';
 
 function setupSelect(returnData: unknown[], error: { message: string } | null = null) {
   supabaseFromMock.mockReturnValue({
@@ -308,5 +308,82 @@ describe('executarTool — novas rotas', () => {
     const res = await executarTool('buscar_km_caminhao', 'emp-1', 'mot-1', { placa_ou_apelido: 'tigrao' });
     expect(res.ok).toBe(true);
     expect((res.dados as { km_atual: number }).km_atual).toBe(50000);
+  });
+});
+
+describe('criarLembrete', () => {
+  function setupInsert(error: { message: string } | null = null) {
+    const insertMock = vi.fn(() => Promise.resolve({ error }));
+    supabaseFromMock.mockReturnValue({ insert: insertMock });
+    return insertMock;
+  }
+
+  it('sucesso: INSERT em lembretes com payload certo', async () => {
+    const insertMock = setupInsert();
+    const res = await criarLembrete('emp-1', 'usr-1', 'Ligar pro cliente João amanhã');
+
+    expect(res.ok).toBe(true);
+    expect(supabaseFromMock).toHaveBeenCalledWith('lembretes');
+    expect(insertMock).toHaveBeenCalledWith({
+      empresa_id: 'emp-1',
+      usuario_id: 'usr-1',
+      texto: 'Ligar pro cliente João amanhã',
+      origem: 'whatsapp',
+    });
+  });
+
+  it('sem empresaId: erro sem_permissao, NÃO grava', async () => {
+    const insertMock = setupInsert();
+    const res = await criarLembrete('', 'usr-1', 'x');
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('sem usuarioId: erro sem_permissao, NÃO grava', async () => {
+    const insertMock = setupInsert();
+    const res = await criarLembrete('emp-1', undefined, 'x');
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('texto vazio/whitespace: erro validacao, NÃO grava', async () => {
+    const insertMock = setupInsert();
+    const res = await criarLembrete('emp-1', 'usr-1', '   ');
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('validacao');
+    expect(insertMock).not.toHaveBeenCalled();
+  });
+
+  it('texto não-string: erro validacao', async () => {
+    setupInsert();
+    const res = await criarLembrete('emp-1', 'usr-1', 123);
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('validacao');
+  });
+
+  it('erro de DB: codigo db', async () => {
+    setupInsert({ message: 'connection refused' });
+    const res = await criarLembrete('emp-1', 'usr-1', 'teste');
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('db');
+  });
+
+  it('dispatcher: executarTool routeia criar_lembrete passando usuarioId (5º arg)', async () => {
+    const insertMock = setupInsert();
+    const res = await executarTool('criar_lembrete', 'emp-1', undefined, { texto: 'anota isso' }, 'usr-9');
+    expect(res.ok).toBe(true);
+    expect(insertMock).toHaveBeenCalledWith(expect.objectContaining({
+      usuario_id: 'usr-9',
+      texto: 'anota isso',
+    }));
+  });
+
+  it('dispatcher: sem usuarioId → sem_permissao', async () => {
+    setupInsert();
+    const res = await executarTool('criar_lembrete', 'emp-1', undefined, { texto: 'x' }, undefined);
+    expect(res.ok).toBe(false);
+    expect(res.codigo).toBe('sem_permissao');
   });
 });

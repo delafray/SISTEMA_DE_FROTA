@@ -44,12 +44,14 @@ comprovante/cupom. Para AVARIA, peça uma FOTO, ÁUDIO ou TEXTO descrevendo o pr
 Essas operações são processadas automaticamente quando ele envia a mídia — funcionam
 normalmente, então NÃO diga ao motorista que estão indisponíveis ou que serão liberadas depois.
 
-LEMBRETES (exclusivo para gestor/master):
-O sistema POSSUI função de lembretes. Qualquer mensagem que comece com "lembrete",
-"anote", "registro", "guarda", "salva" ou "nota" seguida do conteúdo é interceptada
-ANTES de chegar até você e salva automaticamente no painel. Portanto:
-- NUNCA diga que lembretes não são possíveis ou não existem — eles existem.
-- Se o gestor mencionar lembrete sem a palavra-gatilho, oriente: "Para anotar um lembrete, comece com 'lembrete: ' seguido do texto."
+LEMBRETES:
+O sistema POSSUI a ferramenta criar_lembrete. Sempre que o usuário pedir para ANOTAR,
+LEMBRAR, GUARDAR, REGISTRAR ou SALVAR uma informação (em qualquer frase, ex: "cria um
+lembrete pra eu ligar amanhã", "me lembra de pagar o fornecedor", "anota aí que fechei
+contrato por 5 mil"), CHAME a tool criar_lembrete passando o conteúdo limpo no campo texto.
+Depois confirme em uma frase curta que foi anotado.
+- NUNCA diga que não é possível criar lembretes/anotações — você TEM a ferramenta.
+- "nota fiscal", número de nota ou consultas NÃO são lembretes — não use a tool nesses casos.
 - Agendamento de manutenção via WhatsApp não existe — redirecione para o painel web.
 
 TOM:
@@ -131,7 +133,8 @@ export async function chatGemini(
   mensagemAtual: string,
   historico: HistoricoMensagem[] = [],
   empresaId?: string,
-  motoristaId?: string
+  motoristaId?: string,
+  usuarioId?: string
 ): Promise<RespostaGemini> {
   try {
     const client = getClient();
@@ -168,7 +171,7 @@ export async function chatGemini(
           log.info('gemini_tool_call', { name: call.name, round });
           toolsChamadas.push(call.name);
           const args = call.args as Record<string, unknown> | undefined;
-          const resultado = await executarTool(call.name, empresaId, motoristaId, args);
+          const resultado = await executarTool(call.name, empresaId, motoristaId, args, usuarioId);
           return {
             functionResponse: {
               name: call.name,
@@ -244,7 +247,8 @@ export async function chatGeminiComAudio(
   historico: HistoricoMensagem[] = [],
   nomeRemetente?: string,
   empresaId?: string,
-  motoristaId?: string
+  motoristaId?: string,
+  usuarioId?: string
 ): Promise<RespostaGeminiAudio> {
   // 1. Transcrever via Deepgram
   const transcricao = await transcreverComDeepgram(audioUrl);
@@ -269,7 +273,7 @@ export async function chatGeminiComAudio(
   // geminiClient e geminiBot (B8 do BOT_FRAMEWORK.md).
   const mensagemComContexto = prefixarComRemetente(transcricao.texto, nomeRemetente);
 
-  const resposta = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId);
+  const resposta = await chatGemini(mensagemComContexto, historico, empresaId, motoristaId, usuarioId);
   if (!resposta.ok) {
     return { ok: false, motivo: resposta.motivo };
   }

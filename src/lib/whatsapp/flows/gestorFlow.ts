@@ -17,10 +17,9 @@ const log = createLogger('gestorFlow');
 
 const INTENT_CONFIANCA_MINIMA = 55;
 
-// Palavras que disparam registro de lembrete — sem IA, detecção por prefixo
-// Exemplos válidos: "lembrete: fechei contrato", "anote que recebi pagamento",
-//                   "registro, viagem cancelada", "guarda esse dado"
-const LEMBRETE_REGEX = /^(lembrete|registro|anote|anotar|anota|guarda|guarde|salva|salve|nota)\b[:\s,.\-!]*(.*)/i;
+// NOTA: lembretes/anotações agora são uma TOOL do Gemini (criar_lembrete em frotaTools.ts),
+// não mais regex aqui. A IA entende qualquer frase ("cria um lembrete", "anota aí que...")
+// e chama a tool. Isso evita falso-positivo ("nota fiscal") e frases não-prefixadas.
 
 type IdentityGestor = Extract<UserIdentity, { tipo: 'gestor' | 'master' }>;
 
@@ -41,25 +40,6 @@ export async function processarGestorFlow(
   msg: ParsedMessage,
   identity: IdentityGestor
 ): Promise<void> {
-  // Fast-path: qualquer palavra de anotação seguida do conteúdo — sem IA
-  // Aceita: lembrete, registro, anote, anotar, guarda, guarde, salva, salve, nota, anota
-  if (msg.tipo === 'texto' && msg.texto) {
-    const matchLembrete = msg.texto.match(LEMBRETE_REGEX);
-    if (matchLembrete) {
-      const conteudo = matchLembrete[2].trim();
-      if (conteudo) {
-        // Salva IMEDIATAMENTE — sem passo de confirmação.
-        // Confirmação em 2 etapas quebrava em serverless (Vercel): a 2ª mensagem
-        // pode cair em outra instância, perdendo o estado em memória.
-        await processarLembrete(msg, identity, conteudo);
-      } else {
-        // Falou só "lembrete" sem conteúdo — pede o texto
-        await enviarTexto(msg.from, '📝 O que você quer anotar? Continue com:\n"lembrete: <seu texto aqui>"');
-      }
-      return;
-    }
-  }
-
   if (msg.tipo === 'foto' || msg.tipo === 'documento') {
     await enviarTexto(
       msg.from,
@@ -122,32 +102,6 @@ export async function processarGestorFlow(
       await enviarMenuGestor(msg.from, identity);
       return;
   }
-}
-
-// ─── LEMBRETES ───────────────────────────────────────────────────────
-
-// Salva o lembrete IMEDIATAMENTE no banco (sem estado em memória).
-// Stateless de propósito: cada mensagem é independente, robusto em serverless.
-async function processarLembrete(
-  msg: ParsedMessage,
-  identity: IdentityGestor,
-  texto: string
-): Promise<void> {
-  const supabase = getSupabase();
-  const { error } = await supabase.from('lembretes').insert({
-    empresa_id: identity.empresa_id,
-    usuario_id: identity.usuario_id,
-    texto,
-    origem: 'whatsapp',
-  });
-
-  if (error) {
-    log.error('lembrete_salvar_falhou', { message: error.message });
-    await enviarTexto(msg.from, '❌ Erro ao salvar o lembrete. Tente novamente.');
-    return;
-  }
-
-  await enviarTexto(msg.from, `✅ Lembrete anotado!\n\n_"${texto}"_\n\nVai aparecer no painel até você dar ciência.`);
 }
 
 // ─── HANDLERS ────────────────────────────────────────────────────────
