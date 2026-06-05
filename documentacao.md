@@ -9,6 +9,27 @@
 
 ---
 
+## 🔁 REESCRITA — "Modo Somente Lembrete" (2026-06-05)
+
+Decisão do dono após o function calling do Gemini se mostrar inconsistente: **por enquanto o bot
+faz UMA coisa só — gravar lembrete.** Reescrito do zero, determinístico, **sem LLM no caminho**.
+
+- **`MODO_SOMENTE_LEMBRETE`** (`messageRouter.ts`): quando ligado, TODA mensagem (texto ou áudio) de
+  qualquer número cadastrado vira um registro na tabela `lembretes`, interceptada no topo de
+  `processarMensagem` — antes de sessão, cota, role, menu e Gemini.
+- Texto → salva direto. Áudio → transcreve (Deepgram via `messageId`, não `mediaId`) e salva o texto.
+- **Liga/desliga:** default LIGADO em produção/dev, DESLIGADO em teste (`NODE_ENV==='test'`); override
+  por env `MODO_SOMENTE_LEMBRETE=true|false`. **Para devolver o bot completo: `MODO_SOMENTE_LEMBRETE=false`.**
+- Logs em cada etapa (`modo_somente_lembrete`, `lembrete_salvando`, `lembrete_salvo`, `lembrete_falhou`).
+- **Verificado contra o Supabase REAL:** insert/leitura funcionam fim-a-fim (a tabela estava VAZIA — nenhum
+  lembrete jamais fora salvo, confirmando que o bug era 100% o `criarLembrete` nunca ser chamado).
+- ⚠️ **PENDÊNCIA DE BANCO:** o `service_role` **não tem GRANT de DELETE** (nem provavelmente UPDATE) em
+  `lembretes` (erro `42501`). Isso quebra "dar ciência"/apagar pelo painel. Rodar no SQL editor do Supabase:
+  `GRANT DELETE, UPDATE ON public.lembretes TO service_role;` (não tenho acesso de DDL pra rodar isso).
+- Suíte: **1208/1208** ✅ (modo desligado em teste preserva o roteamento antigo).
+
+---
+
 ## ✅✅ RESOLUÇÃO FINAL — 2 bugs distintos, ambos resolvidos
 
 Foram **dois** bugs separados que produziam o mesmo sintoma ("lembrete não funciona"):

@@ -103,6 +103,96 @@ async function tentarLembreteDeterministico(
  */
 const GEMINI_MODE = true;
 
+/**
+ * MODO_SOMENTE_LEMBRETE: por decisão do dono, POR ENQUANTO o bot faz UMA coisa só
+ * — gravar lembretes. TODA mensagem (texto ou áudio) de QUALQUER número cadastrado
+ * vira um registro na tabela `lembretes`, de forma DETERMINÍSTICA, SEM passar pela
+ * LLM (que era inconsistente: respondia "ok" e não persistia). Áudio é transcrito
+ * (Deepgram) e o texto é salvo. "Depois a gente filtra" (categoria/role).
+ *
+ * Liga/desliga:
+ *  - default LIGADO em produção/dev; DESLIGADO em testes (NODE_ENV==='test'),
+ *    pra não quebrar a suíte de roteamento existente.
+ *  - override explícito: env MODO_SOMENTE_LEMBRETE = 'true' | 'false'.
+ *
+ * Para devolver o bot completo (Gemini + flows): MODO_SOMENTE_LEMBRETE=false.
+ */
+const MODO_SOMENTE_LEMBRETE =
+  process.env.MODO_SOMENTE_LEMBRETE != null
+    ? process.env.MODO_SOMENTE_LEMBRETE === 'true'
+    : process.env.NODE_ENV !== 'test';
+
+/**
+ * Limpa o texto do lembrete: tira um prefixo opcional ("lembrete:", "nota -",
+ * "anota aí", "aviso") quando há conteúdo depois. Se sobrar vazio, mantém o
+ * texto original (melhor salvar algo do que nada).
+ */
+function limparTextoLembrete(texto: string): string {
+  const t = (texto ?? '').trim();
+  const m = t.match(/^(?:lembrete|lembra|lembrar|nota|aviso|anota|anote|anotar)\b[\s:,.\-–—!]*([\s\S]*)/i);
+  const limpo = m && m[1].trim() ? m[1].trim() : t;
+  return limpo;
+}
+
+/**
+ * MODO SOMENTE LEMBRETE — grava QUALQUER mensagem como lembrete, sem LLM.
+ * Texto → salva direto. Áudio → transcreve (Deepgram) e salva. Outros tipos
+ * (foto/doc/localização) → orienta a mandar texto/áudio. Loga cada etapa pra
+ * dar visibilidade total no Vercel.
+ */
+async function salvarComoLembrete(msg: ParsedMessage, identity: UserIdentity): Promise<void> {
+  const empresaId = 'empresa_id' in identity ? identity.empresa_id : undefined;
+  const usuarioId = ('usuario_id' in identity ? identity.usuario_id : undefined) ?? undefined;
+  const nome = 'nome' in identity ? identity.nome : undefined;
+
+  let texto: string | null = null;
+
+  if (msg.tipo === 'texto' && msg.texto) {
+    texto = msg.texto;
+  } else if (msg.tipo === 'audio' && msg.messageId) {
+    // Áudio: baixa via Evolution (descriptografa) e transcreve. O download usa
+    // messageId (NÃO mediaId — a URL crua do CDN vem encriptada e inútil).
+    log.info('lembrete_audio_transcrevendo', { from: msg.from });
+    const dataUrl = await getMediaAsBase64DataUrl(msg.messageId);
+    if (dataUrl) {
+      const tr = await transcreverAudio(dataUrl);
+      if (tr.ok && tr.data.texto) texto = tr.data.texto;
+    }
+    if (!texto) {
+      log.warn('lembrete_audio_falha_transcricao', { from: msg.from });
+      await enviarTexto(msg.from, '🎤 Não consegui entender o áudio. Pode repetir ou mandar por texto?');
+      return;
+    }
+  } else {
+    await enviarTexto(
+      msg.from,
+      'Por enquanto eu só anoto lembretes por *texto* ou *áudio*. Manda assim que eu registro. 📝'
+    );
+    return;
+  }
+
+  const conteudo = limparTextoLembrete(texto).trim();
+  if (!conteudo) {
+    await enviarTexto(msg.from, '📝 Manda o que você quer que eu anote. Ex: "comprar pneu pro caminhão".');
+    return;
+  }
+
+  log.info('lembrete_salvando', {
+    from: msg.from,
+    empresa_id: empresaId,
+    origem: msg.tipo,
+    chars: conteudo.length,
+  });
+  const r = await criarLembrete(empresaId ?? '', usuarioId, conteudo, nome, msg.from);
+  if (r.ok) {
+    log.info('lembrete_salvo', { from: msg.from, empresa_id: empresaId });
+    await enviarTexto(msg.from, `✅ Anotado!\n\n"${conteudo}"\n\nJá está no painel.`);
+  } else {
+    log.error('lembrete_falhou', { from: msg.from, empresa_id: empresaId, erro: r.erro, codigo: r.codigo });
+    await enviarTexto(msg.from, '❌ Não consegui salvar agora. Tenta de novo em instantes.');
+  }
+}
+
 // ─── ROUTER PRINCIPAL ─────────────────────────────────────────────────
 
 export async function processarMensagem(msg: ParsedMessage): Promise<void> {
@@ -111,6 +201,15 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
 
   if (identity.tipo === 'desconhecido') {
     log.warn('remetente_desconhecido', { from: msg.from, msg_id: msg.messageId });
+    return;
+  }
+
+  // 1.4. MODO SOMENTE LEMBRETE — atalho total: TODA mensagem vira lembrete, sem
+  // LLM, sem sessão, sem menu. É o caminho mais à prova de falha (o INSERT no
+  // Supabase já foi validado fim-a-fim). Reverter: MODO_SOMENTE_LEMBRETE=false.
+  if (MODO_SOMENTE_LEMBRETE) {
+    log.info('modo_somente_lembrete', { from: msg.from, tipo: msg.tipo });
+    await salvarComoLembrete(msg, identity);
     return;
   }
 
