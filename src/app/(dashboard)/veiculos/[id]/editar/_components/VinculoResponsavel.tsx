@@ -128,6 +128,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
               ) : <div style={{ fontSize: 15, fontWeight: 700, color: "#b45309" }}>🔧 {STATUS_LABEL[atual.status] ?? atual.status}</div>
             ) : <div style={{ fontSize: 14, color: "#94a3b8" }}>Sem vínculo</div>}
           </div>
+          {atual && <Stat label="Pegou em" value={`${fmt(atual.inicio)} · há ${duracao(atual.inicio, null)}`} />}
           {atual?.status === "operacional" && <Stat label="Entregue com" value={`${km(atual.km_evento)} km`} />}
           <Stat label="KM atual" value={`${km(kmLocal)} km`} />
           {rodadoAtual != null && <Stat label="Rodado até agora" value={`${km(rodadoAtual)} km`} color="#16a34a" />}
