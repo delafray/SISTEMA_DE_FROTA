@@ -83,7 +83,7 @@ describe('chatGemini — config de latência', () => {
     expect(params.generationConfig?.maxOutputTokens).toBeGreaterThan(0);
   });
 
-  it('system prompt NÃO diz "em breve" e orienta mandar a foto do comprovante', async () => {
+  it('system prompt é VIRGEM: regra única = criar_lembrete, sem outras regras', async () => {
     mocks.transcrever.mockResolvedValue({ ok: true, texto: 'oi' });
     mocks.sendMessage.mockResolvedValue({ response: { text: () => 'ok' } });
 
@@ -92,8 +92,9 @@ describe('chatGemini — config de latência', () => {
     const params = mocks.getGenerativeModel.mock.calls[0][0] as { systemInstruction?: string };
     const prompt = params.systemInstruction ?? '';
     expect(prompt).not.toMatch(/em breve/i);
-    expect(prompt).toMatch(/foto/i);
-    expect(prompt).toMatch(/comprovante|cupom/i);
+    expect(prompt).toMatch(/criar_lembrete/i);
+    // IA virgem: NÃO deve mencionar tools/regras antigas removidas.
+    expect(prompt).not.toMatch(/listar_motoristas|listar_veiculos|propor_atualizacao_km|buscar_km/i);
   });
 });
 

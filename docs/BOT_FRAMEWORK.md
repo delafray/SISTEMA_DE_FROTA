@@ -1,5 +1,7 @@
 # 🤖 Framework do Bot WhatsApp — Frota Delafray
 
+> ⚠️ **ATUALIZADO 05/06/2026 — IA VIRGEM.** Todas as tools do Gemini foram removidas; sobrou só `criar_lembrete` (anota tudo no painel). Trechos abaixo que mencionam tools de KM/listar (`buscar_km_caminhao`, `propor/confirmar_atualizacao_km`, `listar_*`, `meu_caminhao`) são HISTÓRICOS — essas capacidades não existem mais. Ver `docs/LEMBRETES_SEM_TRAVA.md`.
+
 > **Documento de arquitetura, regras invioláveis, padrões obrigatórios e roadmap.**
 > Toda IA que tocar no código do bot **deve ler este arquivo antes** de qualquer alteração.
 >
@@ -115,6 +117,7 @@ Auditoria do agente identificou e PRIORIZA:
 - Arquivo: `frotaTools.ts:325-326`
 - Sintoma: `Number("abc") = NaN`. Validação `!kmNovo || kmNovo <= 0` não pega NaN. Pode gravar lixo no banco
 - Fix: `if (!Number.isFinite(kmNovo) || kmNovo <= 0)` + Zod validation upstream
+- (tool removida em 05/06/2026 — lição mantida como referência)
 
 **B3. Erro Supabase silenciado**
 - Arquivo: `messageRouter.ts:346-350, 693-709`
@@ -125,6 +128,7 @@ Auditoria do agente identificou e PRIORIZA:
 - Arquivo: `frotaTools.ts` (`atualizar_km_caminhao`)
 - Sintoma: Gemini pode chamar a tool direto sem perguntar. Risco real de motorista falar "meu km tava em 45 mil" e bot atualizar (em vez de só conversar)
 - Fix: implementar Permission Loop (§6)
+- (tool removida em 05/06/2026 — lição mantida como referência)
 
 ### 🟠 ALTO — corrigir no MVP
 
@@ -165,6 +169,7 @@ Estes só apareceram em uso real. **Toda IA que adicionar feature nova DEVE evit
 - **REGRA:** toda tool de consulta com escopo "do usuário" deve aceitar **identificador opcional**. Sem param = comportamento padrão (do usuário). Com param = busca específica. Exemplo: `buscar_km_caminhao(placa_ou_apelido?: string)`.
 - **REGRA:** descrição da tool deve dar **2-3 exemplos de cada modo** (com e sem param) pro Gemini saber quando passar.
 - Commit: `b9490bc`
+- (tool removida em 05/06/2026 — lição mantida como referência)
 
 **B14. CHECK constraints do banco não refletidas no código**
 - Sintoma vivo: `new row for relation "km_logs" violates check constraint "km_logs_tipo_check"` — insert com `tipo: 'informado'` rejeitado (banco só aceita `inicial/final/checkpoint/abastecimento/manutencao/pausa`)
@@ -201,6 +206,7 @@ Estes só apareceram em uso real. **Toda IA que adicionar feature nova DEVE evit
   ```
   Identifique campos referenciados em `IF NEW.X = ...` e **sete-os explicitamente no insert** (não confie em DEFAULTs).
 - Commit: `a7bcfab`
+- (tool removida em 05/06/2026 — lição mantida como referência)
 
 ### 🔥 §3.B — Bugs descobertos em auditoria pós-Fase 2 (Wave 2, 2026-05-31)
 
@@ -453,13 +459,6 @@ TOM:
 Português brasileiro. Corporativo, direto, texto puro. Pontuação neutra.
 Não comente sobre o formato (texto vs áudio) — só responda ao conteúdo.
 
-GATILHOS:
-- Pergunta sobre QUEM são os motoristas → tool listar_motoristas
-- Pergunta sobre QUAIS caminhões / placas / apelidos → tool listar_veiculos
-- Pergunta sobre KM atual do caminhão DO motorista → tool buscar_km_caminhao
-- Motorista INFORMA novo KM (ex: "meu km é 45000") → primeiro propor_atualizacao_km
-- Motorista CONFIRMA atualização ("sim", "confirma", "isso") → confirmar_atualizacao_km
-
 CONFIRMAÇÃO DESTRUTIVA:
 Para QUALQUER ação que modifica dado (KM, despesa, qualquer write):
 1. Use a tool "propor_*" — ela retorna preview
@@ -503,13 +502,6 @@ REPAIR (quando o motorista corrige você ou não entendeu):
 - Se motorista negar ("não, não é isso"): peça 1 dado específico ("qual o KM correto?").
 - Se você não entendeu: ofereça 2 opções concretas, não pergunta aberta.
 - Se tool retornou erro: use a mensagem_motorista dela, NÃO improvise.
-
-GATILHOS:
-- "Quem são os motoristas" / "lista de motoristas" → listar_motoristas
-- "Quais caminhões" / "lista de placas" → listar_veiculos
-- "Qual meu km" / "quanto km tem o leão" → buscar_km_caminhao
-- "Meu km é X" / "atualiza km pra X" → propor_atualizacao_km (NÃO confirmar direto)
-- "Sim", "confirma", "isso", "pode" após preview → confirmar_atualizacao_km
 
 PERMISSION LOOP:
 Toda ação que modifica dado segue: propor_* → preview → motorista confirma → confirmar_*.
@@ -609,13 +601,13 @@ Pattern adotado (consenso Anthropic + LangChain):
 
 ```ts
 // 1ª — READ-ONLY, retorna preview
-propor_atualizacao_km(km_novo)
-  → { preview: { km_anterior: 40000, km_novo: 45000, delta: +5000 },
+propor_X(valor_novo)
+  → { preview: { valor_anterior: 40000, valor_novo: 45000, delta: +5000 },
       mensagem_sugerida: "Vou registrar 45.000 km no leão (atual 40.000). Confirma?" }
 
 // 2ª — EXECUTA, exige token de confirmação
-confirmar_atualizacao_km(km_novo, km_anterior_esperado)
-  → executa SE km_anterior_esperado === km_atual atual (optimistic locking)
+confirmar_X(valor_novo, valor_anterior_esperado)
+  → executa SE valor_anterior_esperado === valor atual (optimistic locking)
   → senão devolve erro "outro motorista atualizou enquanto isso"
 ```
 
@@ -624,7 +616,7 @@ confirmar_atualizacao_km(km_novo, km_anterior_esperado)
 ```
 Motorista: "meu km é 45000"
    ↓
-Gemini chama propor_atualizacao_km(45000)
+Gemini chama propor_X(45000)
    ↓
 Tool devolve preview
    ↓
@@ -632,7 +624,7 @@ Gemini responde: "Vou registrar 45.000 km no leão (atual 40.000). Confirma?"
    ↓
 Motorista: "sim"
    ↓
-Gemini chama confirmar_atualizacao_km(45000, km_anterior_esperado=40000)
+Gemini chama confirmar_X(45000, valor_anterior_esperado=40000)
    ↓
 Tool valida (optimistic lock) + grava
    ↓
@@ -724,7 +716,7 @@ Logar por turno:
   "tokens_in": 1240,
   "tokens_out": 89,
   "cached_tokens": 1024,
-  "tool_calls": ["buscar_km_caminhao"],
+  "tool_calls": ["criar_lembrete"],
   "latency_ms": 743,
   "custo_estimado_usd": 0.000123
 }
@@ -1138,7 +1130,6 @@ Template v2 já disponível em §5.4. Implementação curta mas tem que ter test
 Plano do Code Audit 2 (Tools Surface). Hoje **5 tools**, alvo **15 tools** (cobertura 3x do domínio).
 
 **Sprint 1 — Estabilização base (semana 1, 8h)**
-- [ ] Consolidar `meu_caminhao` + `buscar_km_caminhao` → `veiculo_info` (uma tool, vários modos via param).
 - [ ] Refactor tools existentes pra usarem repos + Permission Loop genérico da Fase 3.
 - [ ] Documentar os 5 **anti-patterns proibidos** nos flows legados.
 
@@ -1169,7 +1160,6 @@ Plano do Code Audit 2 (Tools Surface). Hoje **5 tools**, alvo **15 tools** (cobe
 
 Padrão `propor_X_via_foto`: Gemini Vision extrai dados → propõe via Permission Loop → motorista confirma. Mantém Deepgram pra áudio.
 
-- [ ] **`propor_atualizacao_km_via_foto`** (1-2 dias) — foto do hodômetro → extrai KM → confirma. Começa por aqui (KM já tem Permission Loop testado).
 - [ ] **`propor_registro_abastecimento_via_foto`** (1-2 dias) — foto da nota fiscal → extrai valor + litros + posto.
 - [ ] **`relatar_avaria_via_foto`** (1-2 dias) — foto do dano → Gemini Vision descreve + categoriza gravidade.
 

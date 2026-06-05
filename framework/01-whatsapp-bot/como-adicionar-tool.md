@@ -1,8 +1,10 @@
 # Como Adicionar Nova Tool (Escrita no Banco)
 
+> ℹ️ As tools de exemplo aqui são ILUSTRATIVAS. Hoje a IA está virgem (só `criar_lembrete`) — ver `docs/LEMBRETES_SEM_TRAVA.md`. Use este guia ao criar novas tools.
+
 > 📎 Voltar ao [INDEX do Bot](INDEX.md) | [INDEX principal](../INDEX.md)
 
-Guia para tools que **MODIFICAM dados** (atualizar KM, registrar despesa, etc.).
+Guia para tools que **MODIFICAM dados** (registrar despesa, atualizar um cadastro, etc.).
 Diferente de consultas simples — aqui tem o **Permission Loop** (propor → confirmar).
 
 > Para consultas que APENAS LEEM dados, veja [como-consultar-tabela.md](como-consultar-tabela.md).
@@ -18,23 +20,23 @@ Toda tool que ESCREVE no banco segue o padrão de **duas tools**:
 2. confirmar_* → EXECUTA, exige confirmação explícita do motorista
 ```
 
-**Fluxo:**
+**Fluxo (exemplo ILUSTRATIVO `propor_X` / `confirmar_X`):**
 ```
-Motorista: "meu km é 45000"
+Motorista: "gastei 150 de pedágio"
     ↓
-Gemini chama propor_atualizacao_km(45000)
+IA chama propor_X(...)            # ex: propor_despesa({ tipo: "pedagio", valor: 150 })
     ↓
-Tool devolve preview (km_atual: 40000, km_novo: 45000, delta: +5000)
+Tool devolve preview (sem gravar): { tipo: "pedagio", valor: 150 }
     ↓
-Gemini: "Vou registrar 45.000 km no leão (atual 40.000). Confirma?"
+IA: "Vou registrar despesa: pedágio R$ 150,00. Confirma?"
     ↓
 Motorista: "sim"
     ↓
-Gemini chama confirmar_atualizacao_km(45000)
+IA chama confirmar_X(...)         # ex: confirmar_despesa({ tipo: "pedagio", valor: 150 })
     ↓
 Tool valida + grava no banco
     ↓
-Gemini: "Registrado: 45.000 km."
+IA: "Despesa registrada: pedágio R$ 150,00."
 ```
 
 ---

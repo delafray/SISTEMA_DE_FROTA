@@ -78,6 +78,17 @@
 
 ---
 
+### 📌 Decisões de produto (fora do framework)
+
+| Quero... | Vá para |
+|---|---|
+| Entender por que o bot anota lembrete de **qualquer número sem trava** + Realtime instantâneo | [docs/LEMBRETES_SEM_TRAVA.md](../docs/LEMBRETES_SEM_TRAVA.md) |
+| Plano (NÃO implementado) da IA com 3 intenções: Pergunta / Registro / Anotar | [docs/PLANO_IA_REGRAS_3_INTENCOES.md](../docs/PLANO_IA_REGRAS_3_INTENCOES.md) |
+
+> ⚠️ Decisão do dono (05/06/2026): lembretes **sem nenhuma regra** (empresa, usuário, role, RLS). **Não recolocar travas sem ordem explícita.**
+
+---
+
 ## Mapa rápido de arquivos
 
 ```
@@ -133,8 +144,9 @@ Estes **permanecem** na raiz (documentos de referência grandes):
 |---|---|
 | [docs/BOT_FRAMEWORK.md](../docs/BOT_FRAMEWORK.md) | `01-whatsapp-bot/arquitetura.md` |
 | [docs/GUIA_APIS_SETUP.md](../docs/GUIA_APIS_SETUP.md) | `02-apis-e-chaves/todas-as-apis.md` |
+| [docs/LEMBRETES_SEM_TRAVA.md](../docs/LEMBRETES_SEM_TRAVA.md) | Decisões de produto (índice acima) |
 | [ORACLE_CLOUD_SETUP.md](../ORACLE_CLOUD_SETUP.md) | `03-deploy/oracle-cloud.md` |
 
 ---
 
-*Última atualização: 04/06/2026 — Uptime Kuma instalado na Oracle VM (porta 3001); badge de status discreto na sidebar; 6 monitores configurados (Evolution, Vercel, OSRM, VROOM, Postgres, Redis)*
+*Última atualização: 05/06/2026 — Lembretes SEM TRAVA: qualquer número grava (sem empresa/usuário/role/RLS), painel com Realtime instantâneo. Doc: docs/LEMBRETES_SEM_TRAVA.md*

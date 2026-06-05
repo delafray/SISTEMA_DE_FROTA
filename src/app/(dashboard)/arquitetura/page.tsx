@@ -208,43 +208,13 @@ const SYSTEM: Record<string, ServiceData> = {
         },
       },
       {
-        id: 'tool-listar-motoristas', icon: '👥', label: 'Tool: listar_motoristas',
-        desc: 'Gemini function calling. Lista nomes e quantidade de motoristas ativos da empresa.',
+        id: 'tool-criar-lembrete', icon: '📌', label: 'Tool: criar_lembrete',
+        desc: 'ÚNICA tool da IA (virgem). Toda mensagem vira uma anotação no painel (tabela lembretes), sem regra.',
         repo: 'src/lib/ai/tools/frotaTools.ts',
         permissions: {
-          leitura: ['motoristas'],
-          escrita: [],
-          roles: ['motorista', 'gestor'],
-        },
-      },
-      {
-        id: 'tool-listar-veiculos', icon: '🚛', label: 'Tool: listar_veiculos',
-        desc: 'Gemini function calling. Lista placa, apelido, marca e modelo dos veículos ativos.',
-        repo: 'src/lib/ai/tools/frotaTools.ts',
-        permissions: {
-          leitura: ['veiculos'],
-          escrita: [],
-          roles: ['motorista', 'gestor'],
-        },
-      },
-      {
-        id: 'tool-km', icon: '📊', label: 'Tool: buscar_km / meu_caminhao',
-        desc: 'Busca KM atual. Descobre o caminhão do motorista via último km_log, com fallback no pedido ativo.',
-        repo: 'src/lib/ai/tools/frotaTools.ts',
-        permissions: {
-          leitura: ['veiculos', 'km_logs', 'pedidos'],
-          escrita: [],
-          roles: ['motorista'],
-        },
-      },
-      {
-        id: 'tool-atualizar-km', icon: '✏️', label: 'Tool: confirmar_atualizacao_km',
-        desc: 'ÚNICA escrita do bot. Grava novo KM em km_logs (tipo=checkpoint). Trigger propaga para veiculos.km_atual.',
-        repo: 'src/lib/ai/tools/frotaTools.ts',
-        permissions: {
-          leitura: ['veiculos', 'km_logs'],
-          escrita: ['km_logs'],
-          roles: ['motorista'],
+          leitura: [],
+          escrita: ['lembretes'],
+          roles: ['sistema'],
         },
       },
       {

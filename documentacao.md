@@ -194,10 +194,9 @@ mas são pontos de fragilidade pra revisar depois:
    mensagem de lembrete vai pro fluxo e não é salva. (Comportamento provavelmente intencional, mas
    anotado.)
 
-4. **Schema vazio nas tools sem parâmetro** (`frotaTools.ts`): `listar_motoristas`, `listar_veiculos`,
-   `meu_caminhao` declaram `parameters: { type: OBJECT, properties: {}, required: [] }`. O diagnóstico
-   original alegava que isso quebra o Gemini com `properties` vazio. **Não confirmado como ativo** —
-   anotar e validar se realmente causa erro no SDK atual antes de mexer.
+4. **Schema vazio nas tools sem parâmetro** — ✅ RESOLVIDO/OBSOLETO (05/06/2026): essas tools
+   (`listar_motoristas`, `listar_veiculos`, `meu_caminhao` e as de KM) foram **removidas** — IA virgem,
+   só `criar_lembrete`. O achado não se aplica mais. Ver `docs/LEMBRETES_SEM_TRAVA.md`.
 
 ---
 
@@ -234,11 +233,11 @@ fiscal" antes de chegar na IA.
 > com gatilhos unívocos ("lembrete", "me lembra", "anota") que **não** dispara em "nota/registra/guarda"
 > ambíguos. Não é mais a causa.
 
-### B. O Bug Silencioso no `frotaTools.ts` que quebra o Gemini — ⚠️ NÃO CONFIRMADO
+### B. O Bug Silencioso no `frotaTools.ts` que quebra o Gemini — ✅ RESOLVIDO/OBSOLETO
 Alegava que `parameters: { properties: {}, required: [] }` em tools sem parâmetro quebra o Gemini.
-> **Status atual:** o código ainda tem `properties: {}` em `listar_motoristas`/`listar_veiculos`/
-> `meu_caminhao`, mas **não há evidência** de que isso esteja derrubando as tools hoje. Validar antes
-> de mexer (ver "Achados secundários" #4).
+> **Status atual (05/06/2026):** OBSOLETO. As tools que tinham `properties: {}`
+> (`listar_motoristas`/`listar_veiculos`/`meu_caminhao` e as de KM) foram **removidas** — IA virgem,
+> só `criar_lembrete`. O ponto deixou de existir. Ver `docs/LEMBRETES_SEM_TRAVA.md`.
 
 ### C. Ausência de Tabela de Pagamentos e Ferramenta de Texto — ℹ️ ESCOPO SEPARADO
 Sobre a IA recusar registrar pagamentos só com texto (políticas financeiras).
@@ -250,6 +249,6 @@ Sobre a IA recusar registrar pagamentos só com texto (políticas financeiras).
 > criada, regex substituído). **Não executar cegamente** — a causa do bug atual é a URL do webhook.
 
 ### Passo 1: Ajustar o Regex em `messageRouter.ts` e `gestorFlow.ts` — ✅ feito (virou parser/tool)
-### Passo 2: Corrigir o Schema Vazio em `frotaTools.ts` — ⚠️ pendente/não confirmado necessário
+### Passo 2: Corrigir o Schema Vazio em `frotaTools.ts` — ✅ OBSOLETO (05/06/2026): tools removidas (IA virgem, só `criar_lembrete`). Ver `docs/LEMBRETES_SEM_TRAVA.md`.
 ### Passo 3: Implementar Fluxo de "Despesa/Pagamento" via Texto (Permission Loop) — ℹ️ escopo separado
 ### Passo 4: Atualizar `TESTING.md` / testes — recomendado ao mexer no parser (política RECOMENDADA, não obrigatória)
