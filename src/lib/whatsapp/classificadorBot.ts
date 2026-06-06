@@ -82,6 +82,13 @@ async function salvarContexto(supa: SupabaseClient, telefone: string, veiculo: {
 async function limparContexto(supa: SupabaseClient, telefone: string) {
   await supa.from("bot_contexto_conversa").delete().eq("telefone", telefoneCanonico(telefone));
 }
+// Registra o uso do caminhão: NOMEADO zera turns (assunto novo); REUSO por referência
+// incrementa de forma ATÔMICA no banco (anti-race, auditoria #2) e renova o TTL.
+async function registrarUso(supa: SupabaseClient, telefone: string, veiculo: { id: string; apelido: string | null }, doContexto: boolean) {
+  if (!doContexto) { await salvarContexto(supa, telefone, veiculo, 0); return; }
+  const { error } = await supa.rpc("ctx_incrementar_turns", { p_telefone: telefoneCanonico(telefone) });
+  if (error) await salvarContexto(supa, telefone, veiculo, 0); // fallback se a RPC ainda não existe (migration)
+}
 
 // R3: chave SEMPRE canônica (mesmo formato em salvar/ler/limpar). Evita o estado
 // pendente "sumir" por variação de telefone e o "1" executar a ação errada.
@@ -137,10 +144,9 @@ async function executarRegra(
   // ALVO EFETIVO: nomeado (não-genérico) OU o caminhão do CONTEXTO ("esse caminhão", "ele").
   let alvoEff = alvo && !ehReferenciaGenerica(alvo) ? alvo : null;
   let doContexto = false; // o caminhão veio do contexto (não da frase atual)?
-  let turnsCtx = 0;       // dual-gate: nº de usos por referência sem renomear
   if (!alvoEff && usaVeiculo) {
     const ctxConv = await lerContexto(supa, telefone);
-    if (ctxConv && ctxConv.turns < CTX_MAX_TURNS) { alvoEff = ctxConv.apelido; doContexto = true; turnsCtx = ctxConv.turns + 1; }
+    if (ctxConv && ctxConv.turns < CTX_MAX_TURNS) { alvoEff = ctxConv.apelido; doContexto = true; }
   }
   // Domínio diferente (não usa caminhão: motoristas, financeiro…) → esquece o assunto anterior.
   if (!usaVeiculo) await limparContexto(supa, telefone);
@@ -153,7 +159,7 @@ async function executarRegra(
     const v = await acharVeiculo(supa, empresaId, alvoEff);
     if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
     if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
-    await salvarContexto(supa, telefone, v.veiculo, turnsCtx); // o caminhão vira o assunto atual
+    await registrarUso(supa, telefone, v.veiculo, doContexto); // assunto atual (incremento atômico se reuso)
     const kmAtual = Number(v.veiculo.km_atual ?? 0);
     if (valor < kmAtual) return `⚠️ O KM informado (${valor}) é menor que o atual (${kmAtual}). KM não pode diminuir. Confere?`;
     const rotulo = `${v.veiculo.apelido ?? "?"}${v.veiculo.placa ? ` (${v.veiculo.placa})` : ""}`;
@@ -175,7 +181,7 @@ async function executarRegra(
         const v = await acharVeiculo(supa, empresaId, alvoEff);
         if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
-        await salvarContexto(supa, telefone, v.veiculo, turnsCtx);
+        await registrarUso(supa, telefone, v.veiculo, doContexto);
         veiculoId = v.veiculo.id;
       }
       return await executarConsulta(supa, regra.escopo, ctx, alvoEff, veiculoId);
