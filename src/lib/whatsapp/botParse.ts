@@ -36,18 +36,32 @@ export function comecaComGatilho(mensagem: string, gatilhos: string[]): boolean 
   });
 }
 
-/** "sim/não" → true/false/null (ambíguo → null, default seguro = não executar). */
+/**
+ * "sim/não" → true/false/null. null = NÃO é resposta sim/não → o chamador abandona
+ * a pergunta pendente e processa a mensagem nova. Aceita a 1ª palavra ("sim, pode").
+ */
 export function parseSimNao(texto: string): boolean | null {
-  const t = norm(texto).replace(/[.!,]/g, "");
-  if (NEGA.has(t)) return false;
+  const t = norm(texto).replace(/[.!,?]/g, "").trim();
+  if (!t) return null;
   if (AFIRMA.has(t)) return true;
+  if (NEGA.has(t)) return false;
+  const w = t.split(/\s+/)[0];
+  if (NEGA.has(w)) return false;
+  if (AFIRMA.has(w)) return true;
   return null;
 }
 
-/** Resposta → índice da opção, -1 = cancelar ("nenhuma"), null = não entendi. */
+const ORDINAIS: Record<string, number> = {
+  primeiro: 0, primeira: 0, "1o": 0, "1a": 0, segundo: 1, segunda: 1, "2o": 1, "2a": 1, terceiro: 2, terceira: 2, "3o": 2, "3a": 2,
+};
+
+/** Resposta → índice da opção, -1 = cancelar ("nenhuma"), null = não é seleção. */
 export function parseSelecao(texto: string, opcoes: string[]): number | null | -1 {
-  const t = norm(texto).replace(/[.!,]/g, "");
+  let t = norm(texto).replace(/[.!,?]/g, "").trim();
   if (CANCELA.has(t)) return -1;
+  t = t.replace(/^(o|a)\s+/, ""); // "o primeiro" → "primeiro"
+  if (t === "ultimo" || t === "ultima") return opcoes.length ? opcoes.length - 1 : null;
+  if (t in ORDINAIS) { const i = ORDINAIS[t]; return i < opcoes.length ? i : null; }
   const num = t.match(/^(\d{1,2})$/);
   if (num) { const i = Number(num[1]) - 1; return i >= 0 && i < opcoes.length ? i : null; }
   const idx = opcoes.findIndex((o) => norm(o).includes(t) && t.length >= 3);

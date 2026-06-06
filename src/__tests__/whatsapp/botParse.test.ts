@@ -44,6 +44,14 @@ describe("parseSimNao", () => {
     expect(parseSimNao("Sim!")).toBe(true);
     expect(parseSimNao("não.")).toBe(false);
   });
+  it("aceita a 1ª palavra (sim/não com complemento)", () => {
+    expect(parseSimNao("sim, pode anotar")).toBe(true);
+    expect(parseSimNao("não quero")).toBe(false);
+  });
+  it("frase nova (sem sim/não) → null (abandona a pergunta)", () => {
+    expect(parseSimNao("pagar o frentista amanhã")).toBeNull();
+    expect(parseSimNao("lembrete comprar pneu")).toBeNull();
+  });
 });
 
 describe("parseSelecao", () => {
@@ -63,6 +71,11 @@ describe("parseSelecao", () => {
   it("casa por nome (substring, mín 3 chars)", () => {
     expect(parseSelecao("manutenções", ops)).toBe(1);
     expect(parseSelecao("status", ops)).toBe(0);
+  });
+  it("aceita ordinais (primeiro/segundo/último)", () => {
+    expect(parseSelecao("primeiro", ops)).toBe(0);
+    expect(parseSelecao("o segundo", ops)).toBe(1);
+    expect(parseSelecao("último", ops)).toBe(2);
   });
   it("não entendeu → null", () => {
     expect(parseSelecao("xyz qualquer coisa", ops)).toBeNull();

@@ -143,10 +143,7 @@ async function resolverPendente(
 ): Promise<string | null> {
   if (pend.tipo === "confirmacao") {
     const sn = parseSimNao(texto);
-    if (sn === null) {
-      const oque = pend.acao === "km" ? `a alteração do KM do ${pend.rotulo}` : "anotar isso como lembrete";
-      return `Responda *sim* pra confirmar ou *não* pra cancelar ${oque}.`;
-    }
+    if (sn === null) return null; // não é sim/não → abandona a pergunta e processa a msg nova
     await limparPendente(supa, telefone);
     if (sn === false) return "Ok, cancelado. 👍";
     // SIM:
@@ -166,12 +163,7 @@ async function resolverPendente(
   }
   // desambiguacao
   const sel = parseSelecao(texto, pend.opcoes);
-  if (sel === null) {
-    const tent = (pend.tentativas ?? 0) + 1;
-    if (tent >= 3) { await limparPendente(supa, telefone); return "Não consegui entender. Cancelei — manda de novo do seu jeito."; }
-    await salvarPendente(supa, telefone, { ...pend, tentativas: tent });
-    return `Não entendi. Responda o número:\n${pend.opcoes.map((o, i) => `${i + 1}️⃣ ${o}`).join("\n")}`;
-  }
+  if (sel === null) return null; // não é seleção → abandona e processa a msg nova
   await limparPendente(supa, telefone);
   if (sel === -1) return "Ok, cancelei. Pode mandar de outro jeito.";
   const escolhida = pend.opcoes[sel];
@@ -234,11 +226,14 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
       gatilho_inicio: r.gatilho_inicio ?? false,
     }));
 
-    // 1) estado pendente?
+    // 1) estado pendente? Resolve sim/não ou seleção. Se a resposta NÃO resolve
+    // (você falou outra coisa), abandona a pergunta e processa a msg nova do zero —
+    // não fica preso no "sim ou não" nem acumula.
     const pend = await lerPendente(supa, msg.from);
     if (pend) {
       const resp = await resolverPendente(supa, msg.from, pend, texto, regrasFull, identity);
-      if (resp) { await enviarTexto(msg.from, resp); return { disparou: true }; }
+      if (resp !== null) { await enviarTexto(msg.from, resp); return { disparou: true }; }
+      await limparPendente(supa, msg.from); // não resolveu → larga o cache e segue
     }
 
     // 2) contexto + autorização (sem trava: não autorizado → cai no lembrete)
