@@ -169,14 +169,16 @@ async function executarRegra(
   // CONSULTAR
   if (colunasPermitidas(regra.escopo, Object.keys(regra.escopo)[0] ?? "", "consultar").length > 0 || regra.acoes.includes("consultar")) {
     try {
-      // se a consulta é sobre um caminhão, resolve e guarda como assunto atual
+      // se a consulta é sobre um caminhão, resolve, guarda como assunto atual E filtra por ele
+      let veiculoId: string | undefined;
       if (usaVeiculo && alvoEff) {
         const v = await acharVeiculo(supa, empresaId, alvoEff);
         if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
         await salvarContexto(supa, telefone, v.veiculo, turnsCtx);
+        veiculoId = v.veiculo.id;
       }
-      return await executarConsulta(supa, regra.escopo, ctx, alvoEff);
+      return await executarConsulta(supa, regra.escopo, ctx, alvoEff, veiculoId);
     } catch (e) {
       log.error("consulta_erro", { regra: regra.nome, message: e instanceof Error ? e.message : String(e) });
       return "❌ Tive um problema ao consultar agora. Tenta de novo.";

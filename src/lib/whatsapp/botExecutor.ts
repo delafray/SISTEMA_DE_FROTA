@@ -15,6 +15,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 
 const IDENT = /^[a-z_][a-z0-9_]*$/;
 const LIMITE = 20;
+// Tabelas de EVENTOS que têm FK veiculo_id — consulta sobre um caminhão específico FILTRA por ela.
+const TABELAS_COM_VEICULO = new Set(["alocacoes", "abastecimentos", "manutencoes", "avarias", "pedidos"]);
 
 export type EscopoColunas = Record<string, Record<string, string[]>>; // { tabela: { coluna: acao[] } }
 
@@ -67,7 +69,7 @@ const rotuloVeiculo = (v: VeiculoLite) => `${v.apelido ?? "?"}${v.placa ? ` (${v
  * (+ opcional alvo em veiculos), formatado pra WhatsApp.
  */
 export async function executarConsulta(
-  sb: SupabaseClient, escopo: EscopoColunas, ctx: { empresa_id: string }, alvo: string | null
+  sb: SupabaseClient, escopo: EscopoColunas, ctx: { empresa_id: string }, alvo: string | null, veiculoId?: string | null
 ): Promise<string> {
   const tabela = tabelaDaAcao(escopo, "consultar");
   if (!tabela) return "Essa regra não tem colunas de consulta definidas (veja Tabelas e campos).";
@@ -90,8 +92,11 @@ export async function executarConsulta(
   }
 
   const selectCols = Array.from(new Set([...cols, "id"])).filter((c) => IDENT.test(c));
-  const { data, error } = await sb.from(tabela)
-    .select(selectCols.join(",")).eq("empresa_id", ctx.empresa_id).limit(LIMITE);
+  let q = sb.from(tabela).select(selectCols.join(",")).eq("empresa_id", ctx.empresa_id);
+  // FURO #1: se há um caminhão (nomeado ou do contexto) e a tabela é de eventos, FILTRA por ele.
+  // Sem isso, "o status DESSE" devolvia eventos de TODOS os caminhões da empresa.
+  if (veiculoId && TABELAS_COM_VEICULO.has(tabela)) q = q.eq("veiculo_id", veiculoId);
+  const { data, error } = await q.limit(LIMITE);
   if (error) throw new Error(error.message || `erro ao consultar ${tabela}`);
   const linhas = (data ?? []) as unknown as Record<string, unknown>[];
   if (linhas.length === 0) return `Nada encontrado em ${tabela}.`;
