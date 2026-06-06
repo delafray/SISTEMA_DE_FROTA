@@ -5,8 +5,10 @@ CREATE TABLE IF NOT EXISTS bot_contexto_conversa (
   telefone      TEXT PRIMARY KEY,
   veiculo_id    UUID,
   apelido       TEXT,
+  turns         INTEGER NOT NULL DEFAULT 0,  -- dual-gate: usos por referência sem renomear
   expira_em     TIMESTAMPTZ NOT NULL,
   atualizado_em TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+ALTER TABLE bot_contexto_conversa ADD COLUMN IF NOT EXISTS turns INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE bot_contexto_conversa DISABLE ROW LEVEL SECURITY;
 GRANT ALL ON bot_contexto_conversa TO anon, authenticated, service_role;

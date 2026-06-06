@@ -114,9 +114,9 @@ export type Database = {
         Relationships: []
       }
       bot_contexto_conversa: {
-        Row: { apelido: string | null; atualizado_em: string; expira_em: string; telefone: string; veiculo_id: string | null }
-        Insert: { apelido?: string | null; atualizado_em?: string; expira_em: string; telefone: string; veiculo_id?: string | null }
-        Update: { apelido?: string | null; atualizado_em?: string; expira_em?: string; telefone?: string; veiculo_id?: string | null }
+        Row: { apelido: string | null; atualizado_em: string; expira_em: string; telefone: string; turns: number; veiculo_id: string | null }
+        Insert: { apelido?: string | null; atualizado_em?: string; expira_em: string; telefone: string; turns?: number; veiculo_id?: string | null }
+        Update: { apelido?: string | null; atualizado_em?: string; expira_em?: string; telefone?: string; turns?: number; veiculo_id?: string | null }
         Relationships: []
       }
       regras: {

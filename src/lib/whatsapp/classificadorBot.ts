@@ -31,7 +31,8 @@ import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, e
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
-const CTX_TTL_MIN = 10; // "assunto atual" (caminhão da conversa) dura 10 min
+const CTX_TTL_MIN = 10;   // "assunto atual" dura 10 min (renovado a cada uso)
+const CTX_MAX_TURNS = 6;  // ...OU 6 usos por referência ("esse caminhão") sem renomear — dual-gate (Dialogflow)
 const CLASSIFY_TIMEOUT_MS = 9000;
 
 function sb(): SupabaseClient {
@@ -62,18 +63,19 @@ async function marcarWamidOk(supa: SupabaseClient, wamid: string) {
 }
 
 // ─── contexto de conversa: o "caminhão atual" (cache, não na IA) ───────
-type ContextoConversa = { veiculo_id: string; apelido: string };
+type ContextoConversa = { veiculo_id: string; apelido: string; turns: number };
 async function lerContexto(supa: SupabaseClient, telefone: string): Promise<ContextoConversa | null> {
   const { data } = await supa.from("bot_contexto_conversa")
-    .select("veiculo_id,apelido,expira_em").eq("telefone", telefoneCanonico(telefone)).maybeSingle();
+    .select("veiculo_id,apelido,turns,expira_em").eq("telefone", telefoneCanonico(telefone)).maybeSingle();
   if (!data || !data.veiculo_id) return null;
-  if (new Date(data.expira_em).getTime() < Date.now()) return null; // expirou → esquece
-  return { veiculo_id: data.veiculo_id, apelido: data.apelido ?? "" };
+  if (new Date(data.expira_em).getTime() < Date.now()) return null; // expirou por TEMPO → esquece
+  return { veiculo_id: data.veiculo_id, apelido: data.apelido ?? "", turns: data.turns ?? 0 };
 }
-async function salvarContexto(supa: SupabaseClient, telefone: string, veiculo: { id: string; apelido: string | null }) {
+// turns=0 quando o caminhão é NOMEADO (renova de vez); turns=N+1 quando usado por referência.
+async function salvarContexto(supa: SupabaseClient, telefone: string, veiculo: { id: string; apelido: string | null }, turns = 0) {
   const expira = new Date(Date.now() + CTX_TTL_MIN * 60_000).toISOString();
   await supa.from("bot_contexto_conversa").upsert(
-    { telefone: telefoneCanonico(telefone), veiculo_id: veiculo.id, apelido: veiculo.apelido ?? "", expira_em: expira, atualizado_em: new Date().toISOString() },
+    { telefone: telefoneCanonico(telefone), veiculo_id: veiculo.id, apelido: veiculo.apelido ?? "", turns, expira_em: expira, atualizado_em: new Date().toISOString() },
     { onConflict: "telefone" }
   );
 }
@@ -134,9 +136,11 @@ async function executarRegra(
 
   // ALVO EFETIVO: nomeado (não-genérico) OU o caminhão do CONTEXTO ("esse caminhão", "ele").
   let alvoEff = alvo && !ehReferenciaGenerica(alvo) ? alvo : null;
+  let doContexto = false; // o caminhão veio do contexto (não da frase atual)?
+  let turnsCtx = 0;       // dual-gate: nº de usos por referência sem renomear
   if (!alvoEff && usaVeiculo) {
     const ctxConv = await lerContexto(supa, telefone);
-    if (ctxConv) alvoEff = ctxConv.apelido;
+    if (ctxConv && ctxConv.turns < CTX_MAX_TURNS) { alvoEff = ctxConv.apelido; doContexto = true; turnsCtx = ctxConv.turns + 1; }
   }
   // Domínio diferente (não usa caminhão: motoristas, financeiro…) → esquece o assunto anterior.
   if (!usaVeiculo) await limparContexto(supa, telefone);
@@ -149,7 +153,7 @@ async function executarRegra(
     const v = await acharVeiculo(supa, empresaId, alvoEff);
     if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
     if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
-    await salvarContexto(supa, telefone, v.veiculo); // o caminhão vira o assunto atual
+    await salvarContexto(supa, telefone, v.veiculo, turnsCtx); // o caminhão vira o assunto atual
     const kmAtual = Number(v.veiculo.km_atual ?? 0);
     if (valor < kmAtual) return `⚠️ O KM informado (${valor}) é menor que o atual (${kmAtual}). KM não pode diminuir. Confere?`;
     const rotulo = `${v.veiculo.apelido ?? "?"}${v.veiculo.placa ? ` (${v.veiculo.placa})` : ""}`;
@@ -157,7 +161,9 @@ async function executarRegra(
       tipo: "confirmacao", acao: "km", veiculo_id: v.veiculo.id,
       km_novo: valor, km_atual: kmAtual, updated_at: v.veiculo.updated_at, rotulo,
     });
-    return `✏️ Alterar KM do ${rotulo}\nDe:   ${kmAtual.toLocaleString("pt-BR")} km\nPara: ${valor.toLocaleString("pt-BR")} km  (+${(valor - kmAtual).toLocaleString("pt-BR")})\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
+    // ECO: se o caminhão veio do CONTEXTO (você não nomeou), deixa explícito antes de gravar.
+    const aviso = doContexto ? `💡 _Assumindo o ${rotulo} (do contexto). Se for outro, me corrige._\n\n` : "";
+    return `${aviso}✏️ Alterar KM do ${rotulo}\nDe:   ${kmAtual.toLocaleString("pt-BR")} km\nPara: ${valor.toLocaleString("pt-BR")} km  (+${(valor - kmAtual).toLocaleString("pt-BR")})\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
   }
 
   // CONSULTAR
@@ -168,7 +174,7 @@ async function executarRegra(
         const v = await acharVeiculo(supa, empresaId, alvoEff);
         if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
-        await salvarContexto(supa, telefone, v.veiculo);
+        await salvarContexto(supa, telefone, v.veiculo, turnsCtx);
       }
       return await executarConsulta(supa, regra.escopo, ctx, alvoEff);
     } catch (e) {
