@@ -99,7 +99,7 @@ Extraia também (se houver na mensagem):
       // @ts-expect-error thinkingConfig é repassado direto ao REST pelo SDK legado
       thinkingConfig: { thinkingBudget: 0 },
     },
-  });
+  }, { timeout: 8000 }); // R10: o SDK CANCELA o fetch em 8s (não só "espera")
 
   try {
     const res = await gerarComRetry(model, prompt);

@@ -134,7 +134,7 @@ describe('transcreverComDeepgram', () => {
     }
   });
 
-  it('Deepgram retorna JSON sem transcript → texto vazio (ok=true)', async () => {
+  it('Deepgram retorna JSON sem transcript → ok=false (R11: vazio não é sucesso)', async () => {
     global.fetch = vi.fn()
       .mockResolvedValueOnce({
         ok: true,
@@ -148,8 +148,8 @@ describe('transcreverComDeepgram', () => {
 
     const res = await transcreverComDeepgram('https://audio');
 
-    expect(res.ok).toBe(true);
-    if (res.ok) expect(res.texto).toBe('');
+    expect(res.ok).toBe(false);
+    if (!res.ok) expect(res.motivo).toMatch(/vazio|entend/i);
   });
 
   it('aceita data URL com parametro codecs (real do Evolution API: audio/ogg; codecs=opus)', async () => {

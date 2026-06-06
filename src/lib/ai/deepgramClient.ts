@@ -88,7 +88,8 @@ export async function transcreverComDeepgram(
       audioBuffer = buf.buffer.slice(buf.byteOffset, buf.byteOffset + buf.byteLength) as ArrayBuffer;
       log.info('deepgram_audio_data_url', { mime: contentTypeHeader, bytes: audioBuffer.byteLength });
     } else {
-      const respHttp = await fetch(audioUrl);
+      // R10: cancela o download se travar (15s) — não pendurar a função serverless.
+      const respHttp = await fetch(audioUrl, { signal: AbortSignal.timeout(15000) });
       if (!respHttp.ok) {
         return { ok: false, motivo: `Falha ao baixar áudio da Evolution API: ${respHttp.status}` };
       }
@@ -169,6 +170,7 @@ export async function transcreverComDeepgram(
             'Content-Type': contentType,
           },
           body: Buffer.from(audioBuffer),
+          signal: AbortSignal.timeout(15000), // R10: cancela em 15s (SDK travaria em 5min)
         }).then(async (r) => {
           if (!r.ok && r.status >= 500) {
             // Forca throw em 5xx pra acionar retry
@@ -187,10 +189,23 @@ export async function transcreverComDeepgram(
     }
 
     const data = await response.json();
-    const transcript = data?.results?.channels?.[0]?.alternatives?.[0]?.transcript ?? '';
+    const alt = data?.results?.channels?.[0]?.alternatives?.[0];
+    const transcript = (alt?.transcript ?? '').trim();
+    const confidence = typeof alt?.confidence === 'number' ? alt.confidence : 1;
 
-    log.info('deepgram_transcricao_ok', { chars: transcript.length });
-    return { ok: true, texto: transcript.trim() };
+    // R11: transcrição VAZIA ou de confiança muito baixa NÃO é sucesso — pedir reenvio.
+    // (Áudio truncado/silêncio viraria string vazia e a IA "alucinaria" sobre nada.)
+    if (!transcript) {
+      log.warn('deepgram_transcricao_vazia', { confidence });
+      return { ok: false, motivo: 'Não entendi o áudio (veio vazio). Manda de novo?' };
+    }
+    if (confidence < 0.4) {
+      log.warn('deepgram_baixa_confianca', { confidence, chars: transcript.length });
+      return { ok: false, motivo: 'O áudio ficou pouco claro. Pode repetir ou mandar por texto?' };
+    }
+
+    log.info('deepgram_transcricao_ok', { chars: transcript.length, confidence });
+    return { ok: true, texto: transcript };
   } catch (err) {
     const motivo = err instanceof Error ? err.message : String(err);
     log.error('deepgram_erro_excecao', {
