@@ -5,7 +5,7 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
-import { empresaDoVeiculo } from "@/lib/utils/empresaDe";
+import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
 
 type Veiculo = { id: string; placa: string; modelo: string; marca: string; km_atual: number | null };
@@ -77,9 +77,11 @@ export default function NovoPedidoPage() {
     // Frete HERDA a empresa do CAMINHÃO usado.
     const empresa_id = await empresaDoVeiculo(supabase, f.veiculo_id);
     if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
+    const empresa_motorista_id = await empresaDoMotorista(supabase, f.motorista_id); // foto: detecta "emprestado"
 
     const { error: dbErr } = await supabase.from("pedidos").insert({
       empresa_id,
+      empresa_motorista_id,
       veiculo_id: f.veiculo_id,
       motorista_id: f.motorista_id,
       valor_pedido: f.valor_pedido ? parseFloat(f.valor_pedido) : null,

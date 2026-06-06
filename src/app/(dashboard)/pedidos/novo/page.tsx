@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { empresaDoVeiculo } from "@/lib/utils/empresaDe";
+import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
   PageHeader, FormField, inputStyle, selectStyle,
   Btn, Alert, DataTable, Th, Td, Tr, EmptyState,
@@ -265,9 +265,11 @@ export default function NovoPedidoPage() {
     // Frete HERDA a empresa do CAMINHÃO usado (o CNPJ dono do veículo fatura o frete).
     const empresa_id = await empresaDoVeiculo(supabase, veiculoId);
     if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
+    const empresa_motorista_id = await empresaDoMotorista(supabase, motoristaId); // foto: detecta "emprestado"
 
     const { data: pedido, error } = await supabase.from("pedidos").insert({
       empresa_id,
+      empresa_motorista_id,
       motorista_id:          motoristaId,
       veiculo_id:            veiculoId,
       status:                f.status,

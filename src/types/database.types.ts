@@ -1966,6 +1966,7 @@ export type Database = {
           data_inicio_real: string | null
           data_pagamento: string | null
           empresa_id: string
+          empresa_motorista_id: string | null
           forma_pagamento: string | null
           id: string
           km_final: number | null
@@ -1987,6 +1988,7 @@ export type Database = {
           data_inicio_real?: string | null
           data_pagamento?: string | null
           empresa_id: string
+          empresa_motorista_id?: string | null
           forma_pagamento?: string | null
           id?: string
           km_final?: number | null
@@ -2008,6 +2010,7 @@ export type Database = {
           data_inicio_real?: string | null
           data_pagamento?: string | null
           empresa_id?: string
+          empresa_motorista_id?: string | null
           forma_pagamento?: string | null
           id?: string
           km_final?: number | null
