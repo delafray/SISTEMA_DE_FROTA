@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { empresaDoVeiculo } from "@/lib/utils/empresaDe";
 import {
   PageHeader, FormField, inputStyle, selectStyle,
   Btn, Alert, DataTable, Th, Td, Tr, EmptyState,
@@ -39,7 +40,6 @@ export default function NovoPedidoPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  const [empresaId, setEmpresaId] = useState("");
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [entregasDisp, setEntregasDisp] = useState<EntregaDisp[]>([]);
@@ -109,17 +109,13 @@ export default function NovoPedidoPage() {
     const load = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) return;
-      setEmpresaId(ue.empresa_id);
 
+      // Disponibilidade COMPARTILHADA entre os sócios → todos os motoristas/veículos/entregas pendentes.
       const [motRes, veicRes, entRes] = await Promise.all([
-        supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
-        supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
+        supabase.from("motoristas").select("id,nome").eq("ativo", true).order("nome"),
+        supabase.from("veiculos").select("id,placa,marca,modelo,km_atual").eq("ativo", true).order("placa"),
         supabase.from("entregas")
           .select("id,origem,destino,data_coleta_prevista,data_entrega_prevista,status,clientes(nome_fantasia)")
-          .eq("empresa_id", ue.empresa_id)
           .is("pedido_id", null)
           .in("status", ["agendado"])
           .order("data_coleta_prevista", { ascending: true }),
@@ -132,7 +128,7 @@ export default function NovoPedidoPage() {
 
       // Carrega o status operacional de todos os veículos de uma vez
       if (veicsList.length > 0) {
-        await carregarStatusVeiculos(veicsList.map(v => v.id), ue.empresa_id);
+        await carregarStatusVeiculos(veicsList.map(v => v.id), "");
       }
     };
     load();
@@ -266,8 +262,12 @@ export default function NovoPedidoPage() {
 
     setSaving(true);
 
+    // Frete HERDA a empresa do CAMINHÃO usado (o CNPJ dono do veículo fatura o frete).
+    const empresa_id = await empresaDoVeiculo(supabase, veiculoId);
+    if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
+
     const { data: pedido, error } = await supabase.from("pedidos").insert({
-      empresa_id:            empresaId,
+      empresa_id,
       motorista_id:          motoristaId,
       veiculo_id:            veiculoId,
       status:                f.status,

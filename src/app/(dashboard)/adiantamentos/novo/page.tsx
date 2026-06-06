@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { empresaDoMotorista } from "@/lib/utils/empresaDe";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 type Motorista = { id: string; nome: string };
@@ -30,12 +31,9 @@ export default function NovoAdiantamentoPage() {
     const loadMotoristas = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return;
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) return;
+      // Motoristas COMPARTILHADOS na seleção → todos os ativos.
       const { data } = await supabase.from("motoristas")
         .select("id,nome")
-        .eq("empresa_id", ue.empresa_id)
         .eq("ativo", true)
         .order("nome");
       if (data) setMotoristas(data);
@@ -50,14 +48,12 @@ export default function NovoAdiantamentoPage() {
     if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
     if (!f.valor || parseFloat(f.valor) <= 0) { setErr("Informe um valor válido"); return; }
     setSaving(true);
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
+    // Pagamento HERDA a empresa do MOTORISTA (o adiantamento é do funcionário da empresa).
+    const empresa_id = await empresaDoMotorista(supabase, f.motorista_id);
+    if (!empresa_id) { setSaving(false); setErr("Motorista sem empresa definida"); return; }
 
     const { error: dbErr } = await supabase.from("adiantamentos").insert({
-      empresa_id: ue.empresa_id,
+      empresa_id,
       motorista_id: f.motorista_id,
       tipo: f.tipo,
       valor: parseFloat(f.valor),

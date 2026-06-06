@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { empresaDoVeiculo } from "@/lib/utils/empresaDe";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 type Veiculo  = { id: string; placa: string; modelo: string };
@@ -40,13 +41,10 @@ export default function NovoAbastecimentoPage() {
     const load = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) return;
-
+      // Disponibilidade COMPARTILHADA entre os sócios → mostra TODOS os caminhões/motoristas ativos.
       const [{ data: v }, { data: m }] = await Promise.all([
-        supabase.from("veiculos").select("id,placa,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motoristas").select("id,nome").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome"),
+        supabase.from("veiculos").select("id,placa,modelo").eq("ativo", true).order("placa"),
+        supabase.from("motoristas").select("id,nome").eq("ativo", true).order("nome"),
       ]);
       setVeiculos(v ?? []);
       setMotoristas(m ?? []);
@@ -62,14 +60,12 @@ export default function NovoAbastecimentoPage() {
       setErr("Preencha os campos obrigatórios: Veículo, Motorista, Litros e Valor Total"); return;
     }
     setSaving(true);
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
+    // Custo HERDA a empresa do CAMINHÃO (o gasto cai na empresa dona do veículo).
+    const empresa_id = await empresaDoVeiculo(supabase, f.veiculo_id);
+    if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
 
     const { error: dbErr } = await supabase.from("abastecimentos").insert({
-      empresa_id:   ue.empresa_id,
+      empresa_id,
       veiculo_id:   f.veiculo_id,
       motorista_id: f.motorista_id,
       km_no_abast:  f.km_no_abast  ? parseFloat(f.km_no_abast)  : null,
