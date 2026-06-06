@@ -4,12 +4,14 @@ import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
+import { EmpresaSelect } from "@/components/ui/EmpresaSelect";
 
 export default function NovoVeiculoPage() {
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [empresaId, setEmpresaId] = useState("");
 
   const [f, setF] = useState({
     placa: "", marca: "", modelo: "", ano: "", chassi: "", renavam: "",
@@ -31,12 +33,10 @@ export default function NovoVeiculoPage() {
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
+    if (!empresaId) { setSaving(false); setErr("Selecione a empresa"); return; }
 
     const { error: dbErr } = await supabase.from("veiculos").insert({
-      empresa_id: ue.empresa_id,
+      empresa_id: empresaId,
       placa: f.placa.replace(/[-\s]/g, "").toUpperCase(),
       marca: f.marca.toUpperCase(), modelo: f.modelo.toUpperCase(),
       ano: parseInt(f.ano), chassi: f.chassi.toUpperCase(), renavam: f.renavam,
@@ -81,7 +81,13 @@ export default function NovoVeiculoPage() {
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
-            
+
+            <FormSection title="Empresa">
+              <div style={{ maxWidth: 320 }}>
+                <EmpresaSelect value={empresaId} onChange={setEmpresaId} />
+              </div>
+            </FormSection>
+
             <FormSection title="Identificação *">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "16px" }}>
                 <FormField label="Placa *">

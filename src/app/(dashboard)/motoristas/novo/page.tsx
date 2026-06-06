@@ -6,12 +6,14 @@ import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
+import { EmpresaSelect } from "@/components/ui/EmpresaSelect";
 
 export default function NovoMotoristaPage() {
   const router = useRouter();
   const supabase = createClient();
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [empresaId, setEmpresaId] = useState("");
   const [tab, setTab] = useState<"dados" | "cnh" | "remuneracao" | "endereco">("dados");
 
   const [f, setF] = useState({
@@ -41,12 +43,10 @@ export default function NovoMotoristaPage() {
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { setSaving(false); setErr("Empresa não encontrada"); return; }
+    if (!empresaId) { setSaving(false); setErr("Selecione a empresa"); return; }
 
     const { error: dbErr } = await supabase.from("motoristas").insert({
-      empresa_id: ue.empresa_id,
+      empresa_id: empresaId,
       nome: f.nome.toUpperCase(),
       cpf: f.cpf.replace(/\D/g, ""),
       whatsapp: f.whatsapp.replace(/\D/g, "").replace(/^(55)?/, "55").slice(0, 13),
@@ -104,6 +104,10 @@ export default function NovoMotoristaPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ width: "100%" }}>
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
+
+          <div style={{ maxWidth: 320, marginBottom: 24 }}>
+            <EmpresaSelect value={empresaId} onChange={setEmpresaId} />
+          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 

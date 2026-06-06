@@ -82,9 +82,10 @@ export default function NovoClientePage() {
   const onSubmit = async (data: ClienteComContatosData) => {
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return;
-    const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id").eq("usuario_id", authData.user.id).eq("is_padrao", true).single();
-    if (!ue?.empresa_id) { alert("Empresa não encontrada."); return; }
-    const empresa_id = ue.empresa_id;
+    // Cliente é COMPARTILHADO entre os sócios (não pertence a uma empresa) — usa a padrão.
+    const { data: emp } = await supabase.from("empresas").select("id").limit(1).maybeSingle();
+    if (!emp?.id) { alert("Nenhuma empresa cadastrada."); return; }
+    const empresa_id = emp.id;
 
     const { data: clienteSalvo, error: clienteError } = await supabase
       .from("clientes")
