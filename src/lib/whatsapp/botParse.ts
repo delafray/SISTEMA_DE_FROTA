@@ -30,6 +30,12 @@ export function limparLembrete(texto: string): string {
   return m && m[1].trim() ? m[1].trim() : t;
 }
 
+const REF_GENERICA = /^(esse|este|aquele|ele|ela|mesmo|o mesmo|esse caminhao|este caminhao|o caminhao|aquele caminhao|esse veiculo|este veiculo|o veiculo)$/;
+/** O "alvo" é uma referência genérica ("esse caminhão", "ele") em vez de um apelido/placa? */
+export function ehReferenciaGenerica(alvo: string): boolean {
+  return REF_GENERICA.test(norm(alvo).replace(/[.!,?]/g, "").trim());
+}
+
 /** normaliza colapsando pontuação em espaço (pra checar início). */
 function normPalavras(s: string): string {
   return norm(s).replace(/[^a-z0-9]+/g, " ").trim();

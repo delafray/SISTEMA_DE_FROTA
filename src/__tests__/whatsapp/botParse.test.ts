@@ -1,5 +1,16 @@
 import { describe, it, expect } from "vitest";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica } from "@/lib/whatsapp/botParse";
+
+describe("ehReferenciaGenerica", () => {
+  it("reconhece referência ao caminhão do contexto", () => {
+    for (const s of ["esse caminhão", "este caminhão", "ele", "o caminhão", "esse", "aquele caminhão"])
+      expect(ehReferenciaGenerica(s)).toBe(true);
+  });
+  it("apelido/placa real NÃO é genérico", () => {
+    for (const s of ["leão", "ABC0001", "trovão"])
+      expect(ehReferenciaGenerica(s)).toBe(false);
+  });
+});
 
 describe("limparLembrete", () => {
   it("remove o prefixo-gatilho e mantém o conteúdo", () => {

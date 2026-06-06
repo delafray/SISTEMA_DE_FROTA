@@ -27,10 +27,11 @@ import {
   executarConsulta, acharVeiculo, commitAtualizarKm, colunasPermitidas,
   type EscopoColunas,
 } from "@/lib/whatsapp/botExecutor";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica } from "@/lib/whatsapp/botParse";
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
+const CTX_TTL_MIN = 10; // "assunto atual" (caminhão da conversa) dura 10 min
 const CLASSIFY_TIMEOUT_MS = 9000;
 
 function sb(): SupabaseClient {
@@ -58,6 +59,26 @@ async function reservarWamid(supa: SupabaseClient, wamid: string): Promise<"rese
 }
 async function marcarWamidOk(supa: SupabaseClient, wamid: string) {
   await supa.from("bot_msgs_processadas").update({ status: "ok", processado_em: new Date().toISOString() }).eq("wamid", wamid);
+}
+
+// ─── contexto de conversa: o "caminhão atual" (cache, não na IA) ───────
+type ContextoConversa = { veiculo_id: string; apelido: string };
+async function lerContexto(supa: SupabaseClient, telefone: string): Promise<ContextoConversa | null> {
+  const { data } = await supa.from("bot_contexto_conversa")
+    .select("veiculo_id,apelido,expira_em").eq("telefone", telefoneCanonico(telefone)).maybeSingle();
+  if (!data || !data.veiculo_id) return null;
+  if (new Date(data.expira_em).getTime() < Date.now()) return null; // expirou → esquece
+  return { veiculo_id: data.veiculo_id, apelido: data.apelido ?? "" };
+}
+async function salvarContexto(supa: SupabaseClient, telefone: string, veiculo: { id: string; apelido: string | null }) {
+  const expira = new Date(Date.now() + CTX_TTL_MIN * 60_000).toISOString();
+  await supa.from("bot_contexto_conversa").upsert(
+    { telefone: telefoneCanonico(telefone), veiculo_id: veiculo.id, apelido: veiculo.apelido ?? "", expira_em: expira, atualizado_em: new Date().toISOString() },
+    { onConflict: "telefone" }
+  );
+}
+async function limparContexto(supa: SupabaseClient, telefone: string) {
+  await supa.from("bot_contexto_conversa").delete().eq("telefone", telefoneCanonico(telefone));
 }
 
 // R3: chave SEMPRE canônica (mesmo formato em salvar/ler/limpar). Evita o estado
@@ -95,8 +116,9 @@ async function executarRegra(
   const usuarioId = ("usuario_id" in identity ? identity.usuario_id : undefined) ?? undefined;
   const nome = "nome" in identity ? identity.nome : undefined;
 
-  // ANOTAR → salva o TEXTO REAL (sem o "lembrete/anota" do começo) e SEMPRE devolve o conteúdo.
+  // ANOTAR → salva o TEXTO REAL e SEMPRE devolve o conteúdo. Anotar = mudou de assunto → esquece o caminhão.
   if (regra.tipo === "anotar") {
+    await limparContexto(supa, telefone);
     const conteudo = limparLembrete(texto);
     const r = await criarLembrete(empresaId ?? "", usuarioId, conteudo, nome, telefone);
     return r.ok ? `✅ Anotado!\n\n"${conteudo}"\n\nJá está no painel.` : "❌ Não consegui anotar agora.";
@@ -105,14 +127,29 @@ async function executarRegra(
   if (!empresaId) return "Pra consultar/alterar dados eu preciso te identificar. Seu número precisa estar vinculado a um usuário ou motorista.";
   const ctx = { empresa_id: empresaId };
 
+  // A regra usa o caminhão? (escopo toca veiculos ou alocacoes)
+  const usaVeiculo = ["veiculos", "alocacoes"].some(
+    (t) => colunasPermitidas(regra.escopo, t, "consultar").length > 0 || colunasPermitidas(regra.escopo, t, "alterar").length > 0
+  );
+
+  // ALVO EFETIVO: nomeado (não-genérico) OU o caminhão do CONTEXTO ("esse caminhão", "ele").
+  let alvoEff = alvo && !ehReferenciaGenerica(alvo) ? alvo : null;
+  if (!alvoEff && usaVeiculo) {
+    const ctxConv = await lerContexto(supa, telefone);
+    if (ctxConv) alvoEff = ctxConv.apelido;
+  }
+  // Domínio diferente (não usa caminhão: motoristas, financeiro…) → esquece o assunto anterior.
+  if (!usaVeiculo) await limparContexto(supa, telefone);
+
   const podeAlterarKm = colunasPermitidas(regra.escopo, "veiculos", "alterar").includes("km_atual");
 
   // ALTERAR KM (valor presente + permissão) → propose→confirm
   if (valor != null && podeAlterarKm) {
-    if (!alvo) return "Qual caminhão? Me diz o apelido ou a placa.";
-    const v = await acharVeiculo(supa, empresaId, alvo);
-    if (v.tipo === "nenhum") return `Não achei o caminhão "${alvo}".`;
-    if (v.tipo === "varios") return `Tem mais de um parecido com "${alvo}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
+    if (!alvoEff) return "Qual caminhão? Me diz o apelido ou a placa.";
+    const v = await acharVeiculo(supa, empresaId, alvoEff);
+    if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
+    if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
+    await salvarContexto(supa, telefone, v.veiculo); // o caminhão vira o assunto atual
     const kmAtual = Number(v.veiculo.km_atual ?? 0);
     if (valor < kmAtual) return `⚠️ O KM informado (${valor}) é menor que o atual (${kmAtual}). KM não pode diminuir. Confere?`;
     const rotulo = `${v.veiculo.apelido ?? "?"}${v.veiculo.placa ? ` (${v.veiculo.placa})` : ""}`;
@@ -126,7 +163,14 @@ async function executarRegra(
   // CONSULTAR
   if (colunasPermitidas(regra.escopo, Object.keys(regra.escopo)[0] ?? "", "consultar").length > 0 || regra.acoes.includes("consultar")) {
     try {
-      return await executarConsulta(supa, regra.escopo, ctx, alvo);
+      // se a consulta é sobre um caminhão, resolve e guarda como assunto atual
+      if (usaVeiculo && alvoEff) {
+        const v = await acharVeiculo(supa, empresaId, alvoEff);
+        if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
+        if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
+        await salvarContexto(supa, telefone, v.veiculo);
+      }
+      return await executarConsulta(supa, regra.escopo, ctx, alvoEff);
     } catch (e) {
       log.error("consulta_erro", { regra: regra.nome, message: e instanceof Error ? e.message : String(e) });
       return "❌ Tive um problema ao consultar agora. Tenta de novo.";
@@ -204,9 +248,10 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     }
     log.info("motor_entrou", { from: msg.from, tipo: msg.tipo });
 
-    // RESET: "novo"/"nova"/"limpar" zera todo o contexto (estado pendente)
+    // RESET: "novo"/"nova"/"limpar" zera todo o contexto (pendente + assunto atual)
     if (ehReset(texto)) {
       await limparPendente(supa, msg.from);
+      await limparContexto(supa, msg.from);
       await enviarTexto(msg.from, "🆕 Limpei tudo. Pode começar de novo.");
       return { disparou: true };
     }
@@ -268,6 +313,7 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     if (casaram.length === 0) {
       // "NÃO ENTENDI": não anota sozinho. Mostra o que entendeu e PERGUNTA.
       // (Áudio com ruído transcreve em algo → aqui o usuário responde "não".)
+      await limparContexto(supa, msg.from); // mudou de assunto / não entendi → esquece o caminhão
       await salvarPendente(supa, msg.from, { tipo: "confirmacao", acao: "anotar", texto });
       await enviarTexto(msg.from, `🤔 Não entendi o que você quer. Entendi:\n"${texto}"\n\nQuer que eu *anote como lembrete*? (responda *sim* ou *não*)`);
       return { disparou: true };

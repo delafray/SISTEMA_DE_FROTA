@@ -113,6 +113,12 @@ export type Database = {
         Update: { criado_em?: string; dados?: Json; expira_em?: string; telefone?: string; tipo?: string }
         Relationships: []
       }
+      bot_contexto_conversa: {
+        Row: { apelido: string | null; atualizado_em: string; expira_em: string; telefone: string; veiculo_id: string | null }
+        Insert: { apelido?: string | null; atualizado_em?: string; expira_em: string; telefone: string; veiculo_id?: string | null }
+        Update: { apelido?: string | null; atualizado_em?: string; expira_em?: string; telefone?: string; veiculo_id?: string | null }
+        Relationships: []
+      }
       regras: {
         Row: {
           acoes: string[]
