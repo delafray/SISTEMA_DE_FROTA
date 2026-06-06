@@ -6,10 +6,27 @@
  */
 
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 
 const log = createLogger("classificador");
 const MODELO = "gemini-2.5-flash";
+
+// R15: valida a saída do Gemini em runtime (não confiar em `as Decisao`).
+const DecisaoSchema = z.object({
+  regras: z.array(z.string()).default([]),
+  raciocinio: z.string().default(""),
+  alvo: z.string().nullable().optional(),
+  valor: z.number().nullable().optional(),
+});
+
+// R14: parse defensivo — remove cercas ```json e extrai do 1º { ao último }.
+function limparJson(txt: string): string {
+  let t = (txt ?? "").trim();
+  t = t.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/i, "").trim();
+  const i = t.indexOf("{"), j = t.lastIndexOf("}");
+  return i >= 0 && j > i ? t.slice(i, j + 1) : t;
+}
 
 // Erros transitórios do Gemini (503 "high demand", 429, 500, timeout) merecem retry.
 function ehTransitorio(e: unknown): boolean {
@@ -78,6 +95,7 @@ Extraia também (se houver na mensagem):
         required: ["regras", "raciocinio"],
       },
       temperature: 0,
+      maxOutputTokens: 2048, // R13: >=1024 pra thinking off não devolver vazio (MAX_TOKENS)
       // @ts-expect-error thinkingConfig é repassado direto ao REST pelo SDK legado
       thinkingConfig: { thinkingBudget: 0 },
     },
@@ -85,8 +103,17 @@ Extraia também (se houver na mensagem):
 
   try {
     const res = await gerarComRetry(model, prompt);
-    const txt = res.response.text();
-    const parsed = JSON.parse(txt) as Decisao;
+    let txt = "";
+    try { txt = res.response.text(); } catch { /* sem candidato/texto */ }
+    if (!txt.trim()) { log.warn("classificar_resposta_vazia"); return { regras: [], raciocinio: "Resposta vazia do modelo." }; }
+
+    let bruto: unknown;
+    try { bruto = JSON.parse(limparJson(txt)); }
+    catch { log.warn("classificar_json_invalido", { amostra: txt.slice(0, 200) }); return { regras: [], raciocinio: "JSON inválido." }; }
+
+    const val = DecisaoSchema.safeParse(bruto);
+    if (!val.success) { log.warn("classificar_schema_invalido", { erro: val.error.message }); return { regras: [], raciocinio: "Formato inesperado." }; }
+    const parsed = val.data;
     // normaliza: só mantém regras que existem na lista (casa por nome, case-insensitive)
     const validos = new Map(regras.map((r) => [r.nome.toLowerCase(), r.nome]));
     const regrasOk = (parsed.regras ?? []).map((n) => validos.get(String(n).toLowerCase())).filter((x): x is string => !!x);

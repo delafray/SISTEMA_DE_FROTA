@@ -17,7 +17,7 @@ import type { ParsedMessage } from "@/lib/whatsapp/messageParser";
 import { getMediaAsBase64DataUrl } from "@/lib/whatsapp/messageParser";
 import type { UserIdentity } from "@/lib/whatsapp/auth";
 import { transcreverAudio } from "@/services/aiService";
-import { variacoesTelefone } from "@/lib/utils/telefone";
+import { variacoesTelefone, telefoneCanonico } from "@/lib/utils/telefone";
 import { montarContextoIA, type RegraCtx, type TelCtx } from "@/lib/whatsapp/montarContexto";
 import { classificar, type RegraClassif } from "@/lib/whatsapp/classificador";
 import { enviarTexto } from "@/lib/whatsapp/messageSender";
@@ -42,22 +42,26 @@ type Pendente =
   | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null }
   | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string };
 
+// R3: chave SEMPRE canônica (mesmo formato em salvar/ler/limpar). Evita o estado
+// pendente "sumir" por variação de telefone e o "1" executar a ação errada.
 async function lerPendente(supa: SupabaseClient, telefone: string): Promise<Pendente | null> {
   const { data } = await supa.from("bot_estado_pendente")
-    .select("dados,expira_em").in("telefone", variacoesTelefone(telefone)).limit(1).maybeSingle();
+    .select("dados,expira_em").eq("telefone", telefoneCanonico(telefone)).maybeSingle();
   if (!data) return null;
   if (new Date(data.expira_em).getTime() < Date.now()) return null; // expirado → ignora
-  return data.dados as Pendente;
+  const d = data.dados as Pendente;
+  if (d?.tipo !== "desambiguacao" && d?.tipo !== "confirmacao") return null; // R15: guard de formato
+  return d;
 }
 async function salvarPendente(supa: SupabaseClient, telefone: string, dados: Pendente) {
   const expira = new Date(Date.now() + TTL_MIN * 60_000).toISOString();
   await supa.from("bot_estado_pendente").upsert(
-    { telefone, tipo: dados.tipo, dados, expira_em: expira },
+    { telefone: telefoneCanonico(telefone), tipo: dados.tipo, dados, expira_em: expira },
     { onConflict: "telefone" }
   );
 }
 async function limparPendente(supa: SupabaseClient, telefone: string) {
-  await supa.from("bot_estado_pendente").delete().in("telefone", variacoesTelefone(telefone));
+  await supa.from("bot_estado_pendente").delete().eq("telefone", telefoneCanonico(telefone));
 }
 
 // ─── regra carregada com escopo de colunas ─────────────────────────────

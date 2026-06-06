@@ -39,7 +39,14 @@ export async function POST(request: NextRequest) {
       log.warn('signature_skipped', { reason: 'EVOLUTION_WEBHOOK_SECRET not set' });
     }
 
-    const body = JSON.parse(rawBody) as EvolutionWebhookPayload;
+    // R15: valida o envelope antes do cast (não confiar em `as`). Schema estrito
+    // seria arriscado (Evolution varia o payload por evento) — guard mínimo: é objeto?
+    const raw: unknown = JSON.parse(rawBody);
+    if (!raw || typeof raw !== 'object') {
+      log.warn('payload_nao_objeto');
+      return NextResponse.json({ status: 'ok', skipped: true });
+    }
+    const body = raw as EvolutionWebhookPayload;
     log.info('payload_event', { event: body.event, instance: body.instance });
 
     // Ignorar eventos que não sejam mensagens recebidas
