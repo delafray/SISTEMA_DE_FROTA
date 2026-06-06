@@ -40,7 +40,8 @@ function sb(): SupabaseClient {
 // ─── estado pendente (tabela bot_estado_pendente) ──────────────────────
 type Pendente =
   | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null; tentativas?: number }
-  | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string };
+  | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string }
+  | { tipo: "confirmacao"; acao: "anotar"; texto: string };
 
 // R4: reserva idempotente com status. 'duplicada' = já processada (ok) ou em curso recente.
 async function reservarWamid(supa: SupabaseClient, wamid: string): Promise<"reservado" | "duplicada"> {
@@ -142,9 +143,20 @@ async function resolverPendente(
 ): Promise<string | null> {
   if (pend.tipo === "confirmacao") {
     const sn = parseSimNao(texto);
-    if (sn === null) return `Responda *sim* pra confirmar ou *não* pra cancelar a alteração do KM do ${pend.rotulo}.`;
+    if (sn === null) {
+      const oque = pend.acao === "km" ? `a alteração do KM do ${pend.rotulo}` : "anotar isso como lembrete";
+      return `Responda *sim* pra confirmar ou *não* pra cancelar ${oque}.`;
+    }
     await limparPendente(supa, telefone);
-    if (sn === false) return "Ok, cancelado. Nada foi alterado. ✅";
+    if (sn === false) return "Ok, cancelado. 👍";
+    // SIM:
+    if (pend.acao === "anotar") {
+      const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
+      const usuarioId = ("usuario_id" in identity ? identity.usuario_id : undefined) ?? undefined;
+      const nome = "nome" in identity ? identity.nome : undefined;
+      const r = await criarLembrete(empresaId ?? "", usuarioId, pend.texto, nome, telefone);
+      return r.ok ? `✅ Anotado!\n\n"${pend.texto}"` : "❌ Não consegui anotar agora.";
+    }
     const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
     if (!empresaId) return "Não consegui confirmar sua empresa.";
     const r = await commitAtualizarKm(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.km_novo, pend.km_atual);
@@ -192,7 +204,11 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
       }
       log.info("motor_audio_transcrito", { from: msg.from, ok: !!texto, texto: texto.slice(0, 80) });
     }
-    if (!texto) return { disparou: false }; // foto/doc/áudio-sem-transcrição → cai no lembrete
+    if (!texto) {
+      // áudio que não transcreveu: pede reenvio (NÃO deixa o plano B anotar ruído).
+      if (msg.tipo === "audio") { await enviarTexto(msg.from, "🎤 Não consegui entender o áudio. Manda de novo ou escreve?"); return { disparou: true }; }
+      return { disparou: false }; // foto/doc → fluxo normal
+    }
     log.info("motor_entrou", { from: msg.from, tipo: msg.tipo });
 
     // RESET: "novo"/"nova"/"limpar" zera todo o contexto (estado pendente)
@@ -253,7 +269,13 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     log.info("classificou", { from: msg.from, casaram, alvo: decisao.alvo, valor: decisao.valor });
 
     // 4) rotear
-    if (casaram.length === 0) return { disparou: false }; // nada casou → lembrete
+    if (casaram.length === 0) {
+      // "NÃO ENTENDI": não anota sozinho. Mostra o que entendeu e PERGUNTA.
+      // (Áudio com ruído transcreve em algo → aqui o usuário responde "não".)
+      await salvarPendente(supa, msg.from, { tipo: "confirmacao", acao: "anotar", texto });
+      await enviarTexto(msg.from, `🤔 Não entendi o que você quer. Entendi:\n"${texto}"\n\nQuer que eu *anote como lembrete*? (responda *sim* ou *não*)`);
+      return { disparou: true };
+    }
 
     if (casaram.length === 1) {
       const regra = regrasFull.find((r) => r.nome === casaram[0]);
