@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { empresasDoUsuario } from "@/lib/utils/empresaDe";
 import { PageHeader, Tabs, Alert } from "@/components/ui/ds";
 import FluxoTab from "./_components/FluxoTab";
 import AReceberTab from "./_components/AReceberTab";
@@ -12,19 +13,22 @@ type TabId = "fluxo" | "receber" | "pagar" | "avulsas" | "recorrencias";
 
 export default function FinanceiroPage() {
   const [tab, setTab] = useState<TabId>("fluxo");
-  const [empresaId, setEmpresaId] = useState("");
+  const [empresas, setEmpresas] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) return;
-      const { data: ue } = await supabase.from("usuario_empresas")
-        .select("empresa_id").eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) { setErr("Empresa não encontrada"); setLoading(false); return; }
-      setEmpresaId(ue.empresa_id);
+      // Empresas do gestor (de usuario_empresas). Vazio = TODAS (secretária/sem trava).
+      const emps = await empresasDoUsuario(supabase);
+      let lista = emps;
+      if (!lista) {
+        const { data } = await supabase.from("empresas").select("id");
+        lista = (data ?? []).map((e) => e.id);
+      }
+      if (lista.length === 0) { setErr("Nenhuma empresa cadastrada."); setLoading(false); return; }
+      setEmpresas(lista);
       setLoading(false);
     };
     load();
@@ -56,13 +60,13 @@ export default function FinanceiroPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
-        {empresaId && (
+        {empresas.length > 0 && (
           <>
-            {tab === "fluxo" && <FluxoTab empresaId={empresaId} />}
-            {tab === "receber" && <AReceberTab empresaId={empresaId} />}
-            {tab === "pagar" && <APagarTab empresaId={empresaId} />}
-            {tab === "avulsas" && <AvulsasTab empresaId={empresaId} />}
-            {tab === "recorrencias" && <RecorrenciasTab empresaId={empresaId} />}
+            {tab === "fluxo" && <FluxoTab empresas={empresas} />}
+            {tab === "receber" && <AReceberTab empresas={empresas} />}
+            {tab === "pagar" && <APagarTab empresas={empresas} />}
+            {tab === "avulsas" && <AvulsasTab empresas={empresas} />}
+            {tab === "recorrencias" && <RecorrenciasTab empresas={empresas} />}
           </>
         )}
       </div>

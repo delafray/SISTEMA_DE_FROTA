@@ -62,7 +62,7 @@ const formVazio = (): Form => ({
   data_pagamento: "",
 });
 
-export default function AvulsasTab({ empresaId }: { empresaId: string }) {
+export default function AvulsasTab({ empresas }: { empresas: string[] }) {
   const supabase = createClient();
   const [despesas, setDespesas] = useState<Despesa[]>([]);
   const [loading, setLoading] = useState(true);
@@ -79,13 +79,13 @@ export default function AvulsasTab({ empresaId }: { empresaId: string }) {
     const { data, error } = await supabase
       .from("despesas_avulsas")
       .select("*")
-      .eq("empresa_id", empresaId)
+      .in("empresa_id", empresas)
       .order("data_vencimento", { ascending: false });
 
     if (error) setErro(error.message);
     else setDespesas((data as Despesa[]) ?? []);
     setLoading(false);
-  }, [empresaId, supabase]);
+  }, [empresas, supabase]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -138,7 +138,7 @@ export default function AvulsasTab({ empresaId }: { empresaId: string }) {
     setErro("");
 
     const payload = {
-      empresa_id: empresaId,
+      empresa_id: empresas[0], // despesa avulsa: grava na 1ª empresa do gestor
       descricao: form.descricao.trim(),
       categoria: form.categoria,
       valor: parseFloat(form.valor),

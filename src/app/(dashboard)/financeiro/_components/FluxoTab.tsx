@@ -25,7 +25,7 @@ const addDays = (iso: string, d: number) => {
 
 type Periodo = "7d" | "30d" | "60d" | "90d";
 
-export default function FluxoTab({ empresaId }: { empresaId: string }) {
+export default function FluxoTab({ empresas }: { empresas: string[] }) {
   const supabase = createClient();
   const [eventos, setEventos] = useState<EventoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -34,7 +34,7 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
   const [incluirProvisao, setIncluirProvisao] = useState(true);
 
   // Saldo do banco (persistido em localStorage por empresa)
-  const lsKey = `saldoBanco:${empresaId}`;
+  const lsKey = `saldoBanco:${[...empresas].sort().join("_")}`;
   const [saldoBanco, setSaldoBanco] = useState<number>(0);
   const [editandoSaldo, setEditandoSaldo] = useState(false);
   const [saldoInput, setSaldoInput] = useState("");
@@ -57,7 +57,7 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
   const carregar = async () => {
     setErro("");
     const evs = await coletarEventos(supabase, {
-      empresaId,
+      empresas,
       inicio: range.inicio,
       fim: range.fim,
       incluirProvisaoManutencao: incluirProvisao,
@@ -71,7 +71,7 @@ export default function FluxoTab({ empresaId }: { empresaId: string }) {
     setLoading(true);
     carregar();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, periodo, incluirProvisao]);
+  }, [empresas, periodo, incluirProvisao]);
 
   const salvarSaldo = () => {
     const num = parseFloat(saldoInput);

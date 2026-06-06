@@ -59,7 +59,7 @@ const formVazio = (): Form => ({
   ativo: true,
 });
 
-export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
+export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
   const supabase = createClient();
   const [recorrencias, setRecorrencias] = useState<Recorrencia[]>([]);
   const [loading, setLoading] = useState(true);
@@ -75,13 +75,13 @@ export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
     const { data, error } = await supabase
       .from("recorrencias_financeiras")
       .select("*")
-      .eq("empresa_id", empresaId)
+      .in("empresa_id", empresas)
       .order("descricao");
 
     if (error) setErro(error.message);
     else setRecorrencias((data as Recorrencia[]) ?? []);
     setLoading(false);
-  }, [empresaId, supabase]);
+  }, [empresas, supabase]);
 
   useEffect(() => {
     // eslint-disable-next-line react-hooks/set-state-in-effect
@@ -131,7 +131,7 @@ export default function RecorrenciasTab({ empresaId }: { empresaId: string }) {
     setErro("");
 
     const payload = {
-      empresa_id: empresaId,
+      empresa_id: empresas[0], // recorrência: grava na 1ª empresa do gestor
       descricao: form.descricao.trim(),
       categoria: form.categoria,
       tipo: form.tipo,

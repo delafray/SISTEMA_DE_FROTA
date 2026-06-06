@@ -16,3 +16,17 @@ export async function empresaDoMotorista(sb: SupabaseClient, motoristaId: string
   const { data } = await sb.from("motoristas").select("empresa_id").eq("id", motoristaId).maybeSingle();
   return data?.empresa_id ?? null;
 }
+
+/**
+ * Empresas que o usuário logado (gestor) acessa, de usuario_empresas.
+ * Retorna `null` quando NÃO há marcação → vê TODAS (sem trava, padrão do sistema).
+ * Retorna a lista quando o gestor está restrito a empresas específicas.
+ * Use pra filtrar fluxo de caixa / listas: `if (emps) q = q.in("empresa_id", emps)`.
+ */
+export async function empresasDoUsuario(sb: SupabaseClient): Promise<string[] | null> {
+  const { data: auth } = await sb.auth.getUser();
+  if (!auth.user) return null;
+  const { data } = await sb.from("usuario_empresas").select("empresa_id").eq("usuario_id", auth.user.id);
+  const ids = (data ?? []).map((x) => x.empresa_id).filter((x): x is string => !!x);
+  return ids.length ? ids : null; // vazio = todas
+}

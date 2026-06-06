@@ -39,7 +39,7 @@ type ModalBaixa = {
   dataPagamento: string;
 };
 
-export default function AReceberTab({ empresaId }: { empresaId: string }) {
+export default function AReceberTab({ empresas }: { empresas: string[] }) {
   const supabase = createClient();
   const [pedidos, setPedidos] = useState<Pedido[]>([]);
   const [loading, setLoading] = useState(true);
@@ -53,7 +53,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
     const { data, error } = await supabase
       .from("pedidos")
       .select("id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,forma_pagamento,status,motoristas(nome),veiculos(placa)")
-      .eq("empresa_id", empresaId)
+      .in("empresa_id", empresas)
       .not("valor_pedido", "is", null)
       .gt("valor_pedido", 0)
       .order("data_inicio_prevista", { ascending: false });
@@ -67,7 +67,7 @@ export default function AReceberTab({ empresaId }: { empresaId: string }) {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando empresaId muda; incluir `carregar` (não memoizado) causaria loop
-  }, [empresaId]);
+  }, [empresas]);
 
   const hoje_ = hoje();
   const filtrados = useMemo(() => {

@@ -31,7 +31,7 @@ type ModalBaixa = {
   dataPagamento: string;
 };
 
-export default function APagarTab({ empresaId }: { empresaId: string }) {
+export default function APagarTab({ empresas }: { empresas: string[] }) {
   const supabase = createClient();
   const [eventos, setEventos] = useState<EventoFinanceiro[]>([]);
   const [loading, setLoading] = useState(true);
@@ -50,7 +50,7 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
     const fim = addDays(hoje_, dias);
 
     const evs = await coletarEventos(supabase, {
-      empresaId,
+      empresas,
       inicio,
       fim,
       incluirProvisaoManutencao: false,
@@ -65,7 +65,7 @@ export default function APagarTab({ empresaId }: { empresaId: string }) {
     setLoading(true);
     carregar();
     // eslint-disable-next-line react-hooks/exhaustive-deps -- recarrega quando empresaId/periodo mudam; incluir `carregar` (não memoizado) causaria loop
-  }, [empresaId, periodo]);
+  }, [empresas, periodo]);
 
   const filtrados = useMemo(() => {
     return eventos.filter(ev => {

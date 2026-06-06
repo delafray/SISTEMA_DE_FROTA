@@ -32,7 +32,7 @@ export type EventoFinanceiro = {
 };
 
 export type ColetorOpts = {
-  empresaId: string;
+  empresas: string[];      // empresas do gestor (1+); fluxo soma todas
   inicio: string;          // ISO date inclusivo
   fim: string;             // ISO date inclusivo
   incluirProvisaoManutencao: boolean;
@@ -61,14 +61,14 @@ export async function coletarEventos(
   supabase: SupabaseClient,
   opts: ColetorOpts
 ): Promise<EventoFinanceiro[]> {
-  const { empresaId, inicio, fim, incluirProvisaoManutencao } = opts;
+  const { empresas, inicio, fim, incluirProvisaoManutencao } = opts;
   const eventos: EventoFinanceiro[] = [];
 
   // ─── PEDIDOS (entrada: valor do pedido) ──────────────────────────────────
   const { data: pedidos, error: pedidosErr } = await supabase
     .from("pedidos")
     .select("id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)")
-    .eq("empresa_id", empresaId);
+    .in("empresa_id", empresas);
 
   if (pedidosErr) {
     console.error("Erro ao coletar pedidos:", pedidosErr);
@@ -102,7 +102,7 @@ export async function coletarEventos(
   const { data: abasts, error: abastsErr } = await supabase
     .from("abastecimentos")
     .select("id,valor_total,pago,data_pagamento,data_vencimento,created_at,posto,veiculos(placa)")
-    .eq("empresa_id", empresaId);
+    .in("empresa_id", empresas);
 
   if (abastsErr) {
     console.error("Erro ao coletar abastecimentos:", abastsErr);
@@ -134,7 +134,7 @@ export async function coletarEventos(
   const { data: despVeic, error: despVeicErr } = await supabase
     .from("despesas_veiculo")
     .select("id,tipo,valor,data_despesa,local,veiculos(placa)")
-    .eq("empresa_id", empresaId);
+    .in("empresa_id", empresas);
 
   if (despVeicErr) {
     console.error("Erro ao coletar despesas do veículo:", despVeicErr);
@@ -163,7 +163,7 @@ export async function coletarEventos(
   const { data: manuts, error: manutsErr } = await supabase
     .from("manutencoes")
     .select("id,custo_total,pago,data_pagamento,data_vencimento,data_realizada,fornecedor,veiculos(placa),tipos_manutencao(nome)")
-    .eq("empresa_id", empresaId);
+    .in("empresa_id", empresas);
 
   if (manutsErr) {
     console.error("Erro ao coletar manutenções:", manutsErr);
@@ -197,7 +197,7 @@ export async function coletarEventos(
     const { data: prox, error: proxErr } = await supabase
       .from("proxima_manutencao_veiculo")
       .select("veiculo_id,tipo_id,tipo_nome,data_proxima,km_proxima,placa,intervalo_meses,status")
-      .eq("empresa_id", empresaId);
+      .in("empresa_id", empresas);
 
     if (proxErr) {
       console.error("Erro ao coletar previsões de manutenção:", proxErr);
@@ -262,7 +262,7 @@ export async function coletarEventos(
   const { data: adts, error: adtsErr } = await supabase
     .from("adiantamentos")
     .select("id,valor,status,data_pagamento,created_at,motoristas(nome)")
-    .eq("empresa_id", empresaId)
+    .in("empresa_id", empresas)
     .in("status", ["aprovado", "pago", "prestado_contas"]);
 
   if (adtsErr) {
@@ -293,7 +293,7 @@ export async function coletarEventos(
   const { data: despesas, error: despesasErr } = await supabase
     .from("despesas_avulsas")
     .select("id,descricao,categoria,valor,data_vencimento,data_pagamento,pago,fornecedor")
-    .eq("empresa_id", empresaId);
+    .in("empresa_id", empresas);
 
   if (despesasErr) {
     console.error("Erro ao coletar despesas avulsas:", despesasErr);
@@ -322,7 +322,7 @@ export async function coletarEventos(
   const { data: recs, error: recsErr } = await supabase
     .from("recorrencias_financeiras")
     .select("id,descricao,categoria,tipo,valor,dia_vencimento,data_inicio,data_fim,ativo")
-    .eq("empresa_id", empresaId)
+    .in("empresa_id", empresas)
     .eq("ativo", true);
 
   if (recsErr) {
