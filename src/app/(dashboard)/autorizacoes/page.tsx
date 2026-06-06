@@ -115,7 +115,10 @@ export default function AutorizacoesPage() {
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#f8fafc", fontSize: 11 }}>
       <div style={{ padding: "8px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
-        <div style={{ fontSize: 15, fontWeight: 800 }}>🛡️ Autorizações — Telefones × Permissões</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
+          <div style={{ fontSize: 15, fontWeight: 800 }}>🛡️ Autorizações — Telefones × Permissões</div>
+          <a href="/autorizacoes/empresas" style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8", textDecoration: "none", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", background: "#eff6ff", whiteSpace: "nowrap" }}>🏢 Empresas × Gestor →</a>
+        </div>
         <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", alignItems: "center", color: "#64748b" }}>
           {(["consultar", "alterar", "registrar"] as Nivel[]).map((n) => (
             <span key={n} style={{ display: "inline-flex", alignItems: "center", gap: 5 }}>
