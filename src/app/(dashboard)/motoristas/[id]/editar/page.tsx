@@ -6,6 +6,8 @@ import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, Tabs } from "@/components/ui/ds";
+import { EmpresaSelect } from "@/components/ui/EmpresaSelect";
+import { TransferenciaEmpresaModal } from "@/components/ui/TransferenciaEmpresaModal";
 import { AcertoMensalTab } from "./_components/AcertoMensalTab";
 
 const fmtCpf = (v: string) => v.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
@@ -22,6 +24,9 @@ export default function EditarMotoristaPage() {
   const [tab, setTab] = useState<"dados" | "cnh" | "remuneracao" | "endereco" | "veiculo" | "acerto">("dados");
   const [veiculos, setVeiculos]         = useState<{ id: string; placa: string; marca: string; modelo: string }[]>([]);
   const [vinculoVeiculoId, setVinculoVeiculoId] = useState("");   // veículo atual (derivado de alocacoes, read-only)
+  const [empresaId, setEmpresaId] = useState("");
+  const [empresaOriginal, setEmpresaOriginal] = useState("");
+  const [mostrarTransfer, setMostrarTransfer] = useState(false);
 
   const [f, setF] = useState({
     nome: "", cpf: "", whatsapp: "", rg: "", data_nascimento: "", email: "",
@@ -38,11 +43,9 @@ export default function EditarMotoristaPage() {
     const loadVeiculo = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) return;
-      const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
-      if (!ue?.empresa_id) return;
+      // Veículos COMPARTILHADOS → todos os ativos.
       const [veicRes, alocRes] = await Promise.all([
-        supabase.from("veiculos").select("id,placa,marca,modelo").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("placa"),
+        supabase.from("veiculos").select("id,placa,marca,modelo").eq("ativo", true).order("placa"),
         supabase.from("alocacoes").select("veiculo_id").eq("motorista_id", id).eq("status", "operacional").is("fim", null).maybeSingle(),
       ]);
       setVeiculos(veicRes.data ?? []);
@@ -84,6 +87,7 @@ export default function EditarMotoristaPage() {
         tipo_chave_pix: data.tipo_chave_pix ?? "cpf",
         usuario_id: data.usuario_id ?? "",
       });
+      if (data) { setEmpresaId(data.empresa_id ?? ""); setEmpresaOriginal(data.empresa_id ?? ""); }
       setLoading(false);
     });
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,6 +137,7 @@ export default function EditarMotoristaPage() {
     }).eq("id", id);
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
+    if (empresaId && empresaId !== empresaOriginal) { setMostrarTransfer(true); return; } // empresa mudou → modal
     router.push("/motoristas"); router.refresh();
   };
 
@@ -175,6 +180,13 @@ export default function EditarMotoristaPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ width: "100%" }}>
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
+
+          <div style={{ display: tab === "dados" ? "block" : "none", maxWidth: 320, marginBottom: 24 }}>
+            <EmpresaSelect value={empresaId} onChange={setEmpresaId} />
+            {empresaOriginal && empresaId !== empresaOriginal && (
+              <p style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>⚠️ Empresa alterada — ao salvar, vou perguntar o que fazer com o histórico (pagamentos).</p>
+            )}
+          </div>
 
           <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
@@ -363,6 +375,14 @@ export default function EditarMotoristaPage() {
           </div>
         </div>
       </div>
+
+      {mostrarTransfer && (
+        <TransferenciaEmpresaModal
+          tipo="motorista" alvoId={id} novaEmpresa={empresaId}
+          onDone={() => { router.push("/motoristas"); router.refresh(); }}
+          onCancel={() => setMostrarTransfer(false)}
+        />
+      )}
     </form>
   );
 }

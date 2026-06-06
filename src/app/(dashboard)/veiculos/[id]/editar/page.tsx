@@ -4,6 +4,8 @@ import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, DataTable, Th, Td, Tr, Tabs } from "@/components/ui/ds";
+import { EmpresaSelect } from "@/components/ui/EmpresaSelect";
+import { TransferenciaEmpresaModal } from "@/components/ui/TransferenciaEmpresaModal";
 import PlanoTab from "./_components/PlanoTab";
 import ManutencoesTab from "./_components/ManutencoesTab";
 import AvariasTab from "./_components/AvariasTab";
@@ -31,6 +33,8 @@ export default function EditarVeiculoPage() {
   const [tab, setTab] = useState<TabId>("dados");
   const [dadosSubTab, setDadosSubTab] = useState<DadosSubTabId>("principal");
   const [empresaId, setEmpresaId] = useState<string>("");
+  const [empresaOriginal, setEmpresaOriginal] = useState<string>("");
+  const [mostrarTransfer, setMostrarTransfer] = useState(false);
 
   const [f, setF] = useState({
     placa: "", marca: "", modelo: "", ano: "", chassi: "", renavam: "",
@@ -57,6 +61,7 @@ export default function EditarVeiculoPage() {
     supabase.from("veiculos").select("*").eq("id", id).single().then(({ data }) => {
       if (data) {
         setEmpresaId(data.empresa_id ?? "");
+        setEmpresaOriginal(data.empresa_id ?? "");
         setF({
           placa: fmtPlaca(data.placa ?? ""),
           marca: data.marca ?? "",
@@ -121,6 +126,8 @@ export default function EditarVeiculoPage() {
     }).eq("id", id);
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
+    // Empresa mudou → pergunta o que fazer com o histórico (modal) antes de sair.
+    if (empresaId && empresaId !== empresaOriginal) { setMostrarTransfer(true); return; }
     router.push("/veiculos"); router.refresh();
   };
 
@@ -299,6 +306,15 @@ export default function EditarVeiculoPage() {
                       </div>
                     </FormSection>
 
+                    <FormSection title="Empresa">
+                      <div style={{ maxWidth: 320 }}>
+                        <EmpresaSelect value={empresaId} onChange={setEmpresaId} />
+                      </div>
+                      {empresaOriginal && empresaId !== empresaOriginal && (
+                        <p style={{ fontSize: 12, color: "#b45309", marginTop: 6 }}>⚠️ Empresa alterada — ao salvar, vou perguntar o que fazer com o histórico.</p>
+                      )}
+                    </FormSection>
+
                     {empresaId && (
                       <FormSection title="Responsável / Vínculo">
                         <VinculoResponsavel veiculoId={id} empresaId={empresaId} kmAtual={kmAtualNum} onKm={(km) => setF((p) => ({ ...p, km_atual: String(km) }))} />
@@ -431,6 +447,14 @@ export default function EditarVeiculoPage() {
           </FormSection>
         )}
       </div>
+
+      {mostrarTransfer && (
+        <TransferenciaEmpresaModal
+          tipo="veiculo" alvoId={id} novaEmpresa={empresaId}
+          onDone={() => { router.push("/veiculos"); router.refresh(); }}
+          onCancel={() => setMostrarTransfer(false)}
+        />
+      )}
     </div>
   );
 }
