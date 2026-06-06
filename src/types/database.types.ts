@@ -102,9 +102,9 @@ export type Database = {
         Relationships: []
       }
       bot_msgs_processadas: {
-        Row: { processado_em: string; wamid: string }
-        Insert: { processado_em?: string; wamid: string }
-        Update: { processado_em?: string; wamid?: string }
+        Row: { processado_em: string; status: string; wamid: string }
+        Insert: { processado_em?: string; status?: string; wamid: string }
+        Update: { processado_em?: string; status?: string; wamid?: string }
         Relationships: []
       }
       bot_estado_pendente: {

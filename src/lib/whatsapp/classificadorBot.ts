@@ -39,8 +39,25 @@ function sb(): SupabaseClient {
 
 // ─── estado pendente (tabela bot_estado_pendente) ──────────────────────
 type Pendente =
-  | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null }
+  | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null; tentativas?: number }
   | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string };
+
+// R4: reserva idempotente com status. 'duplicada' = já processada (ok) ou em curso recente.
+async function reservarWamid(supa: SupabaseClient, wamid: string): Promise<"reservado" | "duplicada"> {
+  const { error } = await supa.from("bot_msgs_processadas").insert({ wamid, status: "processando" });
+  if (!error) return "reservado";
+  if (error.code !== "23505") return "reservado"; // erro de infra → fail-open (processa)
+  const { data } = await supa.from("bot_msgs_processadas").select("status,processado_em").eq("wamid", wamid).maybeSingle();
+  if (!data) return "reservado";
+  const recente = Date.now() - new Date(data.processado_em).getTime() < 120_000;
+  if (data.status === "ok" || recente) return "duplicada";
+  // 'processando' antigo → tentativa anterior morreu (timeout) → reprocessa
+  await supa.from("bot_msgs_processadas").update({ processado_em: new Date().toISOString() }).eq("wamid", wamid);
+  return "reservado";
+}
+async function marcarWamidOk(supa: SupabaseClient, wamid: string) {
+  await supa.from("bot_msgs_processadas").update({ status: "ok", processado_em: new Date().toISOString() }).eq("wamid", wamid);
+}
 
 // R3: chave SEMPRE canônica (mesmo formato em salvar/ler/limpar). Evita o estado
 // pendente "sumir" por variação de telefone e o "1" executar a ação errada.
@@ -137,7 +154,12 @@ async function resolverPendente(
   }
   // desambiguacao
   const sel = parseSelecao(texto, pend.opcoes);
-  if (sel === null) return `Não entendi. Responda o número:\n${pend.opcoes.map((o, i) => `${i + 1}️⃣ ${o}`).join("\n")}`;
+  if (sel === null) {
+    const tent = (pend.tentativas ?? 0) + 1;
+    if (tent >= 3) { await limparPendente(supa, telefone); return "Não consegui entender. Cancelei — manda de novo do seu jeito."; }
+    await salvarPendente(supa, telefone, { ...pend, tentativas: tent });
+    return `Não entendi. Responda o número:\n${pend.opcoes.map((o, i) => `${i + 1}️⃣ ${o}`).join("\n")}`;
+  }
   await limparPendente(supa, telefone);
   if (sel === -1) return "Ok, cancelei. Pode mandar de outro jeito.";
   const escolhida = pend.opcoes[sel];
@@ -151,11 +173,14 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
   try {
     const supa = sb();
 
-    // idempotência: não processa o mesmo wamid 2x (antes de transcrever, p/ economizar)
+    // idempotência (R4): reserva o wamid como 'processando'; só vira 'ok' no finally.
+    // Se a função morrer no meio (timeout), fica 'processando' e a reentrega reprocessa.
+    let marcarOk = false;
     if (msg.messageId) {
-      const { error } = await supa.from("bot_msgs_processadas").insert({ wamid: msg.messageId });
-      if (error && error.code === "23505") { log.info("msg_duplicada", { wamid: msg.messageId }); return { disparou: true }; }
+      if ((await reservarWamid(supa, msg.messageId)) === "duplicada") { log.info("msg_duplicada", { wamid: msg.messageId }); return { disparou: true }; }
+      marcarOk = true;
     }
+    try {
 
     // resolve o texto: texto direto OU transcrição do áudio (Deepgram/Whisper)
     let texto = (msg.texto ?? "").trim();
@@ -243,6 +268,11 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     await salvarPendente(supa, msg.from, { tipo: "desambiguacao", opcoes, alvo: decisao.alvo ?? null, valor: decisao.valor ?? null });
     await enviarTexto(msg.from, `🤔 Não tenho certeza do que você quer. Qual é?\n${opcoes.map((o, i) => `${i + 1}️⃣ ${o}`).join("\n")}\n\nResponda o número.`);
     return { disparou: true };
+
+    } finally {
+      // marca 'ok' em QUALQUER saída pós-reserva (sucesso, ou erro tratado pelo lembrete).
+      if (marcarOk && msg.messageId) await marcarWamidOk(supa, msg.messageId).catch(() => {});
+    }
   } catch (e) {
     log.error("classificarERotear_erro", { message: e instanceof Error ? e.message : String(e) });
     return { disparou: false }; // fail-safe total → lembrete
