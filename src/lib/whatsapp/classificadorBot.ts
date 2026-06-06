@@ -27,7 +27,7 @@ import {
   executarConsulta, acharVeiculo, commitAtualizarKm, colunasPermitidas,
   type EscopoColunas,
 } from "@/lib/whatsapp/botExecutor";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete } from "@/lib/whatsapp/botParse";
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
@@ -89,16 +89,17 @@ type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas; gatilho_in
 async function executarRegra(
   supa: SupabaseClient, telefone: string, regra: RegraFull,
   alvo: string | null, valor: number | null,
-  identity: UserIdentity
+  identity: UserIdentity, texto: string
 ): Promise<string> {
   const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
   const usuarioId = ("usuario_id" in identity ? identity.usuario_id : undefined) ?? undefined;
   const nome = "nome" in identity ? identity.nome : undefined;
 
-  // ANOTAR → lembrete (não precisa de empresa; criarLembrete tem default)
+  // ANOTAR → salva o TEXTO REAL (sem o "lembrete/anota" do começo) e SEMPRE devolve o conteúdo.
   if (regra.tipo === "anotar") {
-    const r = await criarLembrete(empresaId ?? "", usuarioId, alvo ? `${regra.nome}: ${alvo}` : `(${regra.nome})`, nome, telefone);
-    return r.ok ? "✅ Anotado! Já está no painel." : "❌ Não consegui anotar agora.";
+    const conteudo = limparLembrete(texto);
+    const r = await criarLembrete(empresaId ?? "", usuarioId, conteudo, nome, telefone);
+    return r.ok ? `✅ Anotado!\n\n"${conteudo}"\n\nJá está no painel.` : "❌ Não consegui anotar agora.";
   }
 
   if (!empresaId) return "Pra consultar/alterar dados eu preciso te identificar. Seu número precisa estar vinculado a um usuário ou motorista.";
@@ -152,7 +153,7 @@ async function resolverPendente(
       const usuarioId = ("usuario_id" in identity ? identity.usuario_id : undefined) ?? undefined;
       const nome = "nome" in identity ? identity.nome : undefined;
       const r = await criarLembrete(empresaId ?? "", usuarioId, pend.texto, nome, telefone);
-      return r.ok ? `✅ Anotado!\n\n"${pend.texto}"` : "❌ Não consegui anotar agora.";
+      return r.ok ? `✅ Anotado!\n\n"${pend.texto}"\n\nJá está no painel.` : "❌ Não consegui anotar agora.";
     }
     const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
     if (!empresaId) return "Não consegui confirmar sua empresa.";
@@ -169,7 +170,7 @@ async function resolverPendente(
   const escolhida = pend.opcoes[sel];
   const regra = regrasFull.find((r) => r.nome === escolhida);
   if (!regra) return "Essa opção não está mais disponível.";
-  return executarRegra(supa, telefone, regra, pend.alvo, pend.valor, identity);
+  return executarRegra(supa, telefone, regra, pend.alvo, pend.valor, identity, texto);
 }
 
 // ─── entrada principal ─────────────────────────────────────────────────
@@ -275,7 +276,7 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
     if (casaram.length === 1) {
       const regra = regrasFull.find((r) => r.nome === casaram[0]);
       if (!regra) return { disparou: false };
-      const resp = await executarRegra(supa, msg.from, regra, decisao.alvo ?? null, decisao.valor ?? null, identity);
+      const resp = await executarRegra(supa, msg.from, regra, decisao.alvo ?? null, decisao.valor ?? null, identity, texto);
       await enviarTexto(msg.from, resp);
       return { disparou: true };
     }

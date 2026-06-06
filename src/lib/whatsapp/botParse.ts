@@ -19,6 +19,17 @@ export function ehReset(texto: string): boolean {
   return RESET.has(norm(texto).replace(/[.!,/]/g, "").trim());
 }
 
+/**
+ * Remove o prefixo-gatilho do lembrete ("lembrete", "anota", "me lembra de"…)
+ * pra salvar só o CONTEÚDO. Se sobrar vazio, mantém o texto original (salvar algo).
+ * Ex: "lembrete colocar o caminhão em manutenção" → "colocar o caminhão em manutenção".
+ */
+export function limparLembrete(texto: string): string {
+  const t = (texto ?? "").trim();
+  const m = t.match(/^(?:me\s+lembra(?:r)?(?:\s+de)?|lembrete|lembrar|lembra|anotar|anote|anota|nota|aviso|guarda)\b[\s:,.\-–—!]*([\s\S]*)/i);
+  return m && m[1].trim() ? m[1].trim() : t;
+}
+
 /** normaliza colapsando pontuação em espaço (pra checar início). */
 function normPalavras(s: string): string {
   return norm(s).replace(/[^a-z0-9]+/g, " ").trim();

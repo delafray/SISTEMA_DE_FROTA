@@ -1,5 +1,19 @@
 import { describe, it, expect } from "vitest";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete } from "@/lib/whatsapp/botParse";
+
+describe("limparLembrete", () => {
+  it("remove o prefixo-gatilho e mantém o conteúdo", () => {
+    expect(limparLembrete("lembrete colocar o caminhão em manutenção")).toBe("colocar o caminhão em manutenção");
+    expect(limparLembrete("anota: comprar pneu")).toBe("comprar pneu");
+    expect(limparLembrete("me lembra de pagar o frentista")).toBe("pagar o frentista");
+  });
+  it("sem prefixo → mantém o texto inteiro", () => {
+    expect(limparLembrete("pagar o frentista amanhã")).toBe("pagar o frentista amanhã");
+  });
+  it("só o gatilho (sem conteúdo) → mantém original", () => {
+    expect(limparLembrete("lembrete")).toBe("lembrete");
+  });
+});
 
 describe("comecaComGatilho", () => {
   const g = ["lembrete", "me lembra", "anota"];
