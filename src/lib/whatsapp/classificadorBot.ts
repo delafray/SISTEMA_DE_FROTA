@@ -126,7 +126,7 @@ async function resolverPendente(
     if (sn === false) return "Ok, cancelado. Nada foi alterado. ✅";
     const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
     if (!empresaId) return "Não consegui confirmar sua empresa.";
-    const r = await commitAtualizarKm(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.km_novo, pend.updated_at);
+    const r = await commitAtualizarKm(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.km_novo, pend.km_atual);
     return r.ok
       ? `✅ KM do ${pend.rotulo} atualizado para ${r.km.toLocaleString("pt-BR")}.`
       : `❌ ${r.motivo}`;

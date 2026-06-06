@@ -107,21 +107,26 @@ export async function executarConsulta(
  * km nunca pode decrescer. Se o registro mudou desde a proposta → conflito.
  */
 export async function commitAtualizarKm(
-  sb: SupabaseClient, ctx: { empresa_id: string }, veiculoId: string, kmNovo: number, updatedAtEsperado: string | null
+  sb: SupabaseClient, ctx: { empresa_id: string }, veiculoId: string, kmNovo: number, kmAtualEsperado: number | null
 ): Promise<{ ok: true; km: number } | { ok: false; motivo: string }> {
+  if (!Number.isFinite(kmNovo)) return { ok: false, motivo: "KM inválido." };
+  // R2: sem referência de lock (km lido na proposta) não dá pra garantir — recusa.
+  if (kmAtualEsperado == null || !Number.isFinite(kmAtualEsperado)) return { ok: false, motivo: "Perdi a referência da proposta. Manda de novo." };
+
   const { data: atual, error } = await sb.from("veiculos")
-    .select("km_atual,updated_at,apelido").eq("id", veiculoId).eq("empresa_id", ctx.empresa_id).maybeSingle();
+    .select("km_atual,apelido").eq("id", veiculoId).eq("empresa_id", ctx.empresa_id).maybeSingle();
   if (error) return { ok: false, motivo: "Erro ao reler o veículo." };
   if (!atual) return { ok: false, motivo: "Veículo não encontrado." };
   const kmAtual = Number(atual.km_atual ?? 0);
-  if (!Number.isFinite(kmNovo)) return { ok: false, motivo: "KM inválido." };
-  if (kmNovo < kmAtual) return { ok: false, motivo: `O KM informado (${kmNovo}) é menor que o atual (${kmAtual}). KM não pode diminuir.` };
+  if (kmNovo <= kmAtual) return { ok: false, motivo: `O KM informado (${kmNovo}) não é maior que o atual (${kmAtual}). KM só aumenta.` };
 
-  let q = sb.from("veiculos").update({ km_atual: kmNovo, updated_at: new Date().toISOString() })
-    .eq("id", veiculoId).eq("empresa_id", ctx.empresa_id);
-  if (updatedAtEsperado) q = q.eq("updated_at", updatedAtEsperado);
-  const { data: upd, error: e2 } = await q.select("id");
+  // R1: lock por VALOR de negócio — só grava se o km ainda for o que vimos na proposta.
+  // (updated_at agora é mantido por trigger no banco; não dependemos dele aqui.)
+  const { data: upd, error: e2 } = await sb.from("veiculos")
+    .update({ km_atual: kmNovo })
+    .eq("id", veiculoId).eq("empresa_id", ctx.empresa_id).eq("km_atual", kmAtualEsperado)
+    .select("id");
   if (e2) return { ok: false, motivo: "Erro ao gravar." };
-  if (!upd || upd.length === 0) return { ok: false, motivo: "O veículo mudou enquanto eu confirmava. Tenta de novo." };
+  if (!upd || upd.length === 0) return { ok: false, motivo: "O KM do veículo mudou enquanto eu confirmava. Tenta de novo." };
   return { ok: true, km: kmNovo };
 }

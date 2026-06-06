@@ -1,6 +1,8 @@
 # 🤖 Framework do Bot WhatsApp — Frota Delafray
 
-> ⚠️ **ATUALIZADO 05/06/2026 — IA VIRGEM.** Todas as tools do Gemini foram removidas; sobrou só `criar_lembrete` (anota tudo no painel). Trechos abaixo que mencionam tools de KM/listar (`buscar_km_caminhao`, `propor/confirmar_atualizacao_km`, `listar_*`, `meu_caminhao`) são HISTÓRICOS — essas capacidades não existem mais. Ver `docs/LEMBRETES_SEM_TRAVA.md`.
+> 🟢 **FONTE DE VERDADE ATUAL (06/06/2026): [BOT_CLASSIFICADOR_INTEGRACAO.md](./BOT_CLASSIFICADOR_INTEGRACAO.md).** O bot hoje roda em **modo classificador** (regras + Gemini structured output) atrás de `MODO_CLASSIFICADOR`: consulta/altera-KM/anota com allowlist de colunas, propose→confirm e optimistic lock — **sem function calling**. Os trechos abaixo que ensinam **tools do Gemini** (`buscar_km_caminhao`, `propor/confirmar_atualizacao_km`, `listar_*`, `meu_caminhao`) são **HISTÓRICOS** — não existem mais; quem monta o SQL é o `botExecutor.ts`, não a IA. Auditoria de 24 agentes (06/06/2026) com riscos/bugs pré-detectados está no doc do classificador.
+
+> ⚠️ **05/06/2026 — IA VIRGEM.** Tools antigas do Gemini removidas; ver `docs/LEMBRETES_SEM_TRAVA.md`.
 
 > **Documento de arquitetura, regras invioláveis, padrões obrigatórios e roadmap.**
 > Toda IA que tocar no código do bot **deve ler este arquivo antes** de qualquer alteração.

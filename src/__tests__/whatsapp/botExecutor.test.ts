@@ -39,16 +39,22 @@ describe("commitAtualizarKm — validação km não decresce", () => {
     },
   });
 
-  it("recusa km menor que o atual", async () => {
+  it("recusa km menor ou igual ao atual", async () => {
     // @ts-expect-error mock parcial
-    const r = await commitAtualizarKm(fakeSb(150000), { empresa_id: "e1" }, "v1", 140000, null);
+    const r = await commitAtualizarKm(fakeSb(150000), { empresa_id: "e1" }, "v1", 140000, 150000);
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.motivo).toMatch(/menor|diminuir/i);
+    if (!r.ok) expect(r.motivo).toMatch(/maior|aumenta/i);
   });
 
-  it("aceita km maior", async () => {
+  it("recusa sem referência de lock (km da proposta nulo)", async () => {
     // @ts-expect-error mock parcial
     const r = await commitAtualizarKm(fakeSb(150000), { empresa_id: "e1" }, "v1", 160000, null);
+    expect(r.ok).toBe(false);
+  });
+
+  it("aceita km maior (com lock por valor)", async () => {
+    // @ts-expect-error mock parcial
+    const r = await commitAtualizarKm(fakeSb(150000), { empresa_id: "e1" }, "v1", 160000, 150000);
     expect(r.ok).toBe(true);
     if (r.ok) expect(r.km).toBe(160000);
   });
