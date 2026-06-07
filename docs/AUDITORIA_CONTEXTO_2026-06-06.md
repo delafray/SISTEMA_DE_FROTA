@@ -45,7 +45,15 @@ o dual-gate desincroniza. Não corrompe dado de negócio, mas fura a proteção 
 **Como corrigir:** incremento atômico no banco — RPC/SQL `UPDATE ... SET turns = turns + 1 RETURNING`,
 ou `pg_advisory_xact_lock(hashtext(telefone))` pra serializar por telefone. (classificadorBot.ts:142-143,156,177)
 
-### 3. Cache sem `empresa_id` → vazamento cross-tenant (CONDICIONAL)
+### 3. Cache sem `empresa_id` → ❌ NÃO CORRIGIR (decisão de negócio, 06/06/2026)
+> **O DONO DECIDIU:** as várias "empresas" cadastradas são **CNPJs fiscais de UMA empresa real**
+> (ex: 10 empresas × 7 caminhões = todos da mesma operação). O sistema **NÃO é SaaS** e **NÃO deve
+> travar por empresa** — o contexto e tudo mais devem ler **todas as empresas como uma só**.
+> Portanto **não adicionar `empresa_id`** ao cache/pendente — isso fragmentaria uma empresa só.
+> Watch-item futuro: se um dia houver múltiplos `empresa_id` (split fiscal de fato), o bot deve
+> ler ACROSS todos eles (tratar como um), e não isolar. Hoje há 1 só `empresa_id` — nada a fazer.
+
+~~Descrição original do "risco" (mantida só como histórico da auditoria):~~ Cache sem `empresa_id` (CONDICIONAL)
 `bot_contexto_conversa` e `bot_estado_pendente` têm **PK só telefone**, sem `empresa_id`. Se um número
 estiver em 2 empresas, vaza o "assunto atual" e o pendente (o pior: o pendente "anotar" **não revalida
 empresa**). **Mitigação parcial JÁ existe:** `acharVeiculo` e `commitAtualizarKm` re-resolvem por

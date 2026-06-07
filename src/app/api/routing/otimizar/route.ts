@@ -23,6 +23,7 @@ import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { otimizarRota } from '@/lib/routing/vroom';
 import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
+import { geocodar } from '@/lib/routing/geocoding';
 import {
   indexarJobs,
   notaParaJob,
@@ -31,6 +32,7 @@ import {
   montarParadasPersistir,
 } from '@/lib/routing/restricoes';
 import type { Coordenada, NotaCapturada } from '@/lib/routing/types';
+import type { Job } from '@/lib/routing/vroom';
 
 const log = createLogger('api_routing_otimizar');
 
@@ -49,6 +51,24 @@ interface OtimizarRequest {
   data?: string;                       // YYYY-MM-DD, default = hoje
   origem: Coordenada;                  // ponto de partida do veiculo
   destino?: Coordenada;                // ponto de chegada (default = origem)
+  // EMPRESA 1: quando presente, otimiza as ENTREGAS deste pedido (ramo novo),
+  // em vez das notas_capturadas soltas do motorista. Ver otimizarPorPedido().
+  pedido_id?: string;
+}
+
+// Subset de `entregas` usado no ramo do pedido. `destino` e endereco-texto
+// (geocodado por texto livre); `origem` e o ponto de coleta (nao roteirizado:
+// a parada e o DESTINO da entrega — decisao validada com o dono).
+interface EntregaRoteavel {
+  id: string;
+  empresa_id: string | null;
+  motorista_id: string | null;
+  destino: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  status: string | null;
+  service_time_seg: number | null;
+  observacoes: string | null;
 }
 
 interface OtimizarResponse {
@@ -142,6 +162,222 @@ async function geocodarPendentes(
   return { geocodificadas, sem_geocoding };
 }
 
+// ─── RAMO PEDIDO (EMPRESA 1) ────────────────────────────────────────
+// Otimiza as ENTREGAS nao-finalizadas de um pedido. Reusa o core VROOM
+// (indexarJobs/otimizarRota) mas NAO o pipeline de notas: entregas tem
+// `destino` como texto livre, geocodado por `geocodar()` (Nominatim, confianca
+// sempre 'baixa'). Persiste pedido_id em rotas_otimizadas e pedido_id+entrega_id
+// em paradas, e grava entregas.sequencia. Sem tocar no ramo de notas.
+
+async function buscarEntregasDoPedido(
+  supabase: ReturnType<typeof getSupabase>,
+  pedidoId: string
+): Promise<EntregaRoteavel[]> {
+  const { data, error } = await supabase
+    .from('entregas')
+    .select('id, empresa_id, motorista_id, destino, latitude, longitude, status, service_time_seg, observacoes')
+    .eq('pedido_id', pedidoId);
+
+  if (error) throw new Error(`buscar_entregas_failed: ${error.message}`);
+  // "Todas nao-finalizadas" (decisao do dono): fora concluida/entregue/cancelada.
+  const FINALIZADAS = new Set(['concluida', 'entregue', 'cancelada']);
+  return ((data ?? []) as EntregaRoteavel[]).filter(
+    (e) => !FINALIZADAS.has((e.status ?? '').toLowerCase())
+  );
+}
+
+async function geocodarEntregas(
+  supabase: ReturnType<typeof getSupabase>,
+  entregas: EntregaRoteavel[]
+): Promise<{ geocodificadas: EntregaRoteavel[]; sem_geocoding: string[] }> {
+  const geocodificadas: EntregaRoteavel[] = [];
+  const sem_geocoding: string[] = [];
+
+  for (const ent of entregas) {
+    if (ent.latitude !== null && ent.longitude !== null) {
+      geocodificadas.push(ent);
+      continue;
+    }
+    const texto = (ent.destino ?? '').trim();
+    const geo = texto ? await geocodar(texto) : ({ ok: false } as const);
+    if (!geo.ok) {
+      await supabase.from('entregas').update({ geocode_status: 'falhou' }).eq('id', ent.id);
+      sem_geocoding.push(ent.id);
+      continue;
+    }
+    const { error: errUp } = await supabase
+      .from('entregas')
+      .update({
+        latitude: geo.resultado.lat,
+        longitude: geo.resultado.lng,
+        geocode_status: 'geocodificado',
+      })
+      .eq('id', ent.id);
+    if (errUp) {
+      log.warn('update_entrega_coord_falhou', { entrega_id: ent.id, message: errUp.message });
+      sem_geocoding.push(ent.id);
+      continue;
+    }
+    geocodificadas.push({ ...ent, latitude: geo.resultado.lat, longitude: geo.resultado.lng });
+  }
+
+  return { geocodificadas, sem_geocoding };
+}
+
+async function otimizarPorPedido(
+  supabase: ReturnType<typeof getSupabase>,
+  body: OtimizarRequest,
+  dataRota: string
+): Promise<NextResponse> {
+  const pedidoId = body.pedido_id!;
+
+  // 1. Buscar entregas do pedido
+  let entregas: EntregaRoteavel[];
+  try {
+    entregas = await buscarEntregasDoPedido(supabase, pedidoId);
+  } catch (err) {
+    log.error('buscar_entregas_erro', { message: (err as Error).message });
+    return NextResponse.json({ error: 'db_query_failed' }, { status: 500 });
+  }
+  if (entregas.length === 0) {
+    return NextResponse.json({ error: 'sem_entregas' }, { status: 400 });
+  }
+
+  // 2. Geocodificar destinos (texto livre) e gravar de volta em entregas
+  const { geocodificadas, sem_geocoding } = await geocodarEntregas(supabase, entregas);
+  log.info('entregas_geocodificadas', {
+    pedido_id: pedidoId,
+    total: entregas.length,
+    com_coords: geocodificadas.length,
+    sem_geocoding: sem_geocoding.length,
+  });
+  if (geocodificadas.length === 0) {
+    return NextResponse.json({ error: 'todas_geocoding_falharam', sem_geocoding }, { status: 500 });
+  }
+
+  // 3. Otimizar com VROOM (parada = destino da entrega)
+  const { mapping, items } = indexarJobs(geocodificadas);
+  const jobs: Job[] = items.map((e) => ({
+    id: e._idVroom,
+    localizacao: { lat: e.latitude as number, lng: e.longitude as number },
+    tempo_descarga_s: e.service_time_seg ?? 600,
+  }));
+  const veiculo = montarVeiculo({ id: 1, inicio: body.origem, fim: body.destino });
+
+  const otim = await otimizarRota({ veiculos: [veiculo], jobs });
+  if (!otim.ok) {
+    log.warn('vroom_falhou_pedido', { pedido_id: pedidoId, motivo: otim.motivo });
+    return NextResponse.json(
+      { error: 'otimizacao_falhou', motivo: otim.motivo },
+      { status: otim.motivo === 'config_faltando' ? 503 : 500 }
+    );
+  }
+
+  // 4. Persistir rota (com pedido_id)
+  const { data: rotaInserida, error: errRota } = await supabase
+    .from('rotas_otimizadas')
+    .insert({
+      motorista_id: body.motorista_id,
+      empresa_id: body.empresa_id,
+      pedido_id: pedidoId,
+      data: dataRota,
+      distancia_total_km: otim.resultado.distancia_total_km,
+      tempo_total_min: Math.round(otim.resultado.tempo_total_min),
+      status: 'otimizada',
+      otimizada_em: new Date().toISOString(),
+    })
+    .select('id')
+    .single();
+  if (errRota || !rotaInserida) {
+    log.error('insert_rota_pedido_failed', { message: errRota?.message });
+    return NextResponse.json({ error: 'db_insert_rota_failed' }, { status: 500 });
+  }
+
+  // 5. Persistir paradas (pedido_id + entrega_id; nota_id = null)
+  const paradasTraduzidas = traduzirParadasComMapping(otim.resultado.paradas, mapping);
+  const entregasMap = new Map(geocodificadas.map((e) => [e.id, e]));
+  const paradasPayload = paradasTraduzidas.map((p) => {
+    const ent = entregasMap.get(p.nota_id_local)!;
+    return {
+      rota_id: rotaInserida.id as string,
+      nota_id: null,
+      pedido_id: pedidoId,
+      entrega_id: ent.id,
+      ordem: p.ordem,
+      // Snapshot minimo: destino-texto + selo de confianca (sempre baixa p/
+      // entrega geocodada por texto). A tela do motorista navega por endereco.
+      endereco: { logradouro: ent.destino ?? '', coord_confianca: 'baixa', coord_fonte: 'nominatim' },
+      latitude: ent.latitude as number,
+      longitude: ent.longitude as number,
+      fixada: false,
+      janela_horario: null,
+      tempo_descarga_min: Math.round((ent.service_time_seg ?? 600) / 60),
+      observacao: ent.observacoes ?? null,
+    };
+  });
+
+  const { data: paradasInseridas, error: errParadas } = await supabase
+    .from('paradas')
+    .insert(paradasPayload)
+    .select('*');
+  if (errParadas) {
+    log.error('insert_paradas_pedido_failed', { message: errParadas.message });
+    return NextResponse.json({ error: 'db_insert_paradas_failed' }, { status: 500 });
+  }
+
+  // 6. Gravar entregas.sequencia (= ordem na rota) — testavel sem a UI do Passo 3
+  await Promise.all(
+    paradasTraduzidas.map((p) =>
+      supabase.from('entregas').update({ sequencia: p.ordem }).eq('id', p.nota_id_local)
+    )
+  );
+
+  // 7. nao_atendidas: geocoding falho + VROOM nao encaixou
+  const naoAtendidasVROOM = otim.resultado.paradas_nao_atendidas
+    .map((idVroom) => mapping.get(Number(idVroom)))
+    .filter((id): id is string => Boolean(id));
+  const entregasMapTodas = new Map(entregas.map((e) => [e.id, e]));
+  const naoAtendidasDetalhe = [
+    ...sem_geocoding.map((id) => ({
+      id,
+      motivo: 'geocoding_falhou' as const,
+      endereco: entregasMapTodas.get(id)?.destino ?? null,
+    })),
+    ...naoAtendidasVROOM.map((id) => ({
+      id,
+      motivo: 'vroom_nao_encaixou' as const,
+      endereco: entregasMapTodas.get(id)?.destino ?? null,
+    })),
+  ];
+
+  const response = {
+    rota_id: rotaInserida.id as string,
+    paradas: (paradasInseridas ?? []).map((p) => ({
+      nota_id: p.entrega_id as string, // p/ entregas: o id da entrega
+      entrega_id: p.entrega_id as string,
+      ordem: p.ordem as number,
+      endereco: p.endereco,
+      latitude: p.latitude as number,
+      longitude: p.longitude as number,
+      chegada_estimada:
+        paradasTraduzidas.find((pt) => pt.ordem === (p.ordem as number))?.chegada_estimada ?? '',
+    })),
+    distancia_total_km: otim.resultado.distancia_total_km,
+    tempo_total_min: Math.round(otim.resultado.tempo_total_min),
+    nao_atendidas: naoAtendidasDetalhe.map((n) => n.id),
+    nao_atendidas_detalhe: naoAtendidasDetalhe,
+  };
+
+  log.info('rota_pedido_otimizada', {
+    pedido_id: pedidoId,
+    rota_id: response.rota_id,
+    paradas: response.paradas.length,
+    nao_atendidas: response.nao_atendidas.length,
+  });
+
+  return NextResponse.json(response, { status: 201 });
+}
+
 // ─── HANDLER ────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
@@ -161,6 +397,12 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const supabase = getSupabase();
   const dataRota = body.data ?? new Date().toISOString().slice(0, 10);
+
+  // EMPRESA 1: pedido_id presente → otimiza as ENTREGAS do pedido (ramo novo),
+  // sem tocar no fluxo de notas_capturadas abaixo (captura solta segue igual).
+  if (body.pedido_id) {
+    return otimizarPorPedido(supabase, body as OtimizarRequest, dataRota);
+  }
 
   // 1. Buscar notas
   let notas: NotaCapturada[];

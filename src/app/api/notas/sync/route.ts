@@ -29,6 +29,9 @@ interface SyncRequest {
   id_local: string;
   motorista_id: string;
   empresa_id: string;
+  /** EMPRESA 1: pedido ao qual a nota pertence. Opcional — default null
+   *  mantem o comportamento atual de captura solta (Modo B). */
+  pedido_id?: string | null;
   cep: string;
   numero: string;
   endereco: { logradouro: string; bairro: string; cidade: string; uf: string };
@@ -78,6 +81,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .insert({
       motorista_id: body.motorista_id!,
       empresa_id: body.empresa_id!,
+      pedido_id: body.pedido_id ?? null,
       cep: body.cep ?? '',
       numero: body.numero!,
       endereco: body.endereco!,

@@ -39,6 +39,9 @@ export interface NotaCapturada {
   id: string;
   motorista_id: string;
   empresa_id: string;
+  /** EMPRESA 1: pedido ao qual esta nota pertence. NULL = captura solta (Modo B
+   *  / fluxo offline atual). Preenchido quando a nota nasce de um pedido. */
+  pedido_id?: string | null;
   cep: string;                       // 8 digitos sem hifen
   numero: string;
   endereco: EnderecoCEP;
@@ -68,6 +71,8 @@ export interface RotaOtimizada {
   id: string;
   motorista_id: string;
   empresa_id: string;
+  /** EMPRESA 1: pedido que originou a rota. NULL = rota da captura solta. */
+  pedido_id?: string | null;
   data: string;                      // YYYY-MM-DD
   distancia_total_km: number | null;
   tempo_total_min: number | null;
@@ -99,6 +104,11 @@ export interface Parada {
   id: string;
   rota_id: string;
   nota_id: string | null;
+  /** EMPRESA 1: pedido da rota (denormalizado p/ filtrar parada por pedido). */
+  pedido_id?: string | null;
+  /** EMPRESA 1: entrega que originou a parada quando a rota veio de um pedido
+   *  (ramo `entregas`). NULL quando a parada veio de `notas_capturadas`. */
+  entrega_id?: string | null;
   ordem: number;                     // posicao na rota (1, 2, 3, ...)
   endereco: EnderecoParada;          // snapshot — nao muda se a nota for editada
   latitude: number;

@@ -156,7 +156,10 @@ export function traduzirParadasComMapping(
 export function montarParadasPersistir(
   paradasOrdenadas: Array<{ nota_id_local: string; ordem: number; chegada_estimada: string }>,
   notasIndexadas: Map<string, NotaCapturada>,
-  rotaId: string
+  rotaId: string,
+  // EMPRESA 1: quando a rota nasce de um pedido, carimba pedido_id na parada.
+  // Default undefined = captura solta (comportamento atual, parada sem pedido).
+  pedidoId?: string | null
 ): Omit<Parada, 'id' | 'concluida_em'>[] {
   return paradasOrdenadas.map((p) => {
     const nota = notasIndexadas.get(p.nota_id_local);
@@ -166,6 +169,7 @@ export function montarParadasPersistir(
     return {
       rota_id: rotaId,
       nota_id: nota.id,
+      pedido_id: pedidoId ?? nota.pedido_id ?? null,
       ordem: p.ordem,
       // Snapshot completo: copia o numero da casa + a confianca da coordenada
       // pra dentro do endereco jsonb. Sem isso a parada mostraria so "Rua Piata"
