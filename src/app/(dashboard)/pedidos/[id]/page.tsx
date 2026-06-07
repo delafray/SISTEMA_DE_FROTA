@@ -4,12 +4,18 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  PageHeader, FormSection, Btn, Badge,
+  PageHeader, FormSection, Btn, Badge, Alert,
   DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
+import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
+
+// Parada como o MapaRota consome (subset). Reusa o tipo do componente pra nao
+// divergir do snapshot `endereco` jsonb que ele renderiza.
+type ParadaMapa = MapaRotaProps["paradas"][number];
 
 type Pedido = {
   id: string;
+  empresa_id: string | null;
   status: string;
   data_inicio_prevista: string | null;
   data_fim_prevista: string | null;
@@ -32,6 +38,8 @@ type EntregaPedido = {
   origem: string | null;
   destino: string | null;
   status: string;
+  sequencia: number | null;
+  geocode_status: string | null;
   data_coleta_prevista: string | null;
   clientes: { nome_fantasia: string } | null;
 };
@@ -78,23 +86,34 @@ export default function PedidoDetalhePage() {
   const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  // Roteirizacao (Passo 3)
+  const [paradas, setParadas] = useState<ParadaMapa[]>([]);
+  const [roteirizando, setRoteirizando] = useState(false);
+  const [rotaMsg, setRotaMsg] = useState<{ tipo: "success" | "error" | "info"; texto: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [pedidoRes, entregasRes] = await Promise.all([
+      const [pedidoRes, entregasRes, paradasRes] = await Promise.all([
         supabase.from("pedidos")
-          .select("id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
+          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
           .eq("id", id)
           .single(),
         supabase.from("entregas")
-          .select("id,origem,destino,status,data_coleta_prevista,clientes(nome_fantasia)")
+          .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,clientes(nome_fantasia)")
           .eq("pedido_id", id)
+          .order("sequencia", { ascending: true, nullsFirst: false })
           .order("data_coleta_prevista", { ascending: true }),
+        // Paradas ja roteirizadas (se houver) — pra desenhar o mapa ao abrir.
+        supabase.from("paradas")
+          .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
+          .eq("pedido_id", id)
+          .order("ordem", { ascending: true }),
       ]);
       const pedidoData = pedidoRes.data as unknown as Pedido | null;
       setPedido(pedidoData);
       setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
+      setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
 
       // Carrega resultado financeiro: receita do pedido + custos via veiculos_resultado_periodo
       if (pedidoData) {
@@ -153,6 +172,70 @@ export default function PedidoDetalhePage() {
     const supabase = createClient();
     await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
     setEntregas(p => p.filter(f => f.id !== entregaId));
+  };
+
+  const recarregarRota = async () => {
+    if (!pedido) return;
+    const supabase = createClient();
+    const [paradasRes, entregasRes] = await Promise.all([
+      supabase.from("paradas")
+        .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
+        .eq("pedido_id", pedido.id).order("ordem", { ascending: true }),
+      supabase.from("entregas")
+        .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,clientes(nome_fantasia)")
+        .eq("pedido_id", pedido.id)
+        .order("sequencia", { ascending: true, nullsFirst: false })
+        .order("data_coleta_prevista", { ascending: true }),
+    ]);
+    setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
+    setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
+  };
+
+  const roteirizar = async () => {
+    if (!pedido) return;
+    const mot = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
+    if (!mot?.id || !pedido.empresa_id) {
+      setRotaMsg({ tipo: "error", texto: "Pedido sem motorista ou empresa definidos — não dá pra roteirizar." });
+      return;
+    }
+    if (entregas.length === 0) {
+      setRotaMsg({ tipo: "error", texto: "Pedido sem entregas pra roteirizar." });
+      return;
+    }
+    setRoteirizando(true);
+    setRotaMsg({ tipo: "info", texto: "Geocodificando os destinos e otimizando a rota… (pode levar alguns segundos)" });
+    try {
+      const res = await fetch("/api/routing/otimizar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        // origem omitida de proposito: o servidor usa o deposito (endereco da empresa).
+        body: JSON.stringify({ motorista_id: mot.id, empresa_id: pedido.empresa_id, pedido_id: pedido.id }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        const motivo = json?.motivo ? ` (${json.motivo})` : "";
+        const dica = json?.error === "otimizacao_falhou"
+          ? " — verifique se o VROOM_URL está configurado."
+          : json?.error === "todas_geocoding_falharam"
+          ? " — nenhum destino pôde ser geocodificado (endereços muito vagos?)."
+          : "";
+        setRotaMsg({ tipo: "error", texto: `Falha ao roteirizar: ${json?.error ?? res.status}${motivo}${dica}` });
+        return;
+      }
+      await recarregarRota();
+      const naoAtend = Array.isArray(json?.nao_atendidas) ? json.nao_atendidas.length : 0;
+      const nParadas = Array.isArray(json?.paradas) ? json.paradas.length : 0;
+      const km = typeof json?.distancia_total_km === "number" ? json.distancia_total_km.toFixed(1) : "?";
+      setRotaMsg(
+        naoAtend > 0
+          ? { tipo: "info", texto: `Rota gerada com ${nParadas} parada(s). ${naoAtend} entrega(s) ficaram de fora (endereço não geocodificado).` }
+          : { tipo: "success", texto: `✓ Rota otimizada: ${nParadas} parada(s), ${km} km.` }
+      );
+    } catch (e) {
+      setRotaMsg({ tipo: "error", texto: `Erro de rede ao roteirizar: ${(e as Error).message}` });
+    } finally {
+      setRoteirizando(false);
+    }
   };
 
   if (loading) return (
@@ -292,6 +375,41 @@ export default function PedidoDetalhePage() {
           )}
 
           <div style={{ gridColumn: "span 2" }}>
+            <FormSection title="🗺️ Rota Otimizada">
+              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
+                <Btn
+                  variant="primary"
+                  disabled={roteirizando || entregas.length === 0}
+                  onClick={roteirizar}
+                >
+                  {roteirizando ? "Roteirizando…" : paradas.length > 0 ? "🔄 Re-roteirizar" : "🧭 Roteirizar"}
+                </Btn>
+                <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                  {entregas.length === 0
+                    ? "Adicione entregas ao pedido para roteirizar."
+                    : "Parte do depósito (endereço da empresa) e ordena os destinos das entregas."}
+                </span>
+              </div>
+
+              {rotaMsg && (
+                <div style={{ marginBottom: "12px" }}>
+                  <Alert variant={rotaMsg.tipo === "success" ? "success" : rotaMsg.tipo === "error" ? "error" : "info"}>
+                    {rotaMsg.texto}
+                  </Alert>
+                </div>
+              )}
+
+              {paradas.length > 0 ? (
+                <MapaRota paradas={paradas} altura={380} />
+              ) : (
+                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
+                  Nenhuma rota gerada ainda. Clique em <strong>Roteirizar</strong> para calcular a ordem ótima das entregas.
+                </p>
+              )}
+            </FormSection>
+          </div>
+
+          <div style={{ gridColumn: "span 2" }}>
             <FormSection title={`Entregas deste Pedido (${entregas.length})`}>
               {entregas.length === 0 ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
@@ -314,7 +432,20 @@ export default function PedidoDetalhePage() {
                       const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
                       return (
                         <Tr key={fr.id}>
-                          <Td style={{ fontWeight: 600 }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
+                          <Td style={{ fontWeight: 600 }}>
+                            {fr.sequencia != null && (
+                              <span style={{
+                                display: "inline-flex", alignItems: "center", justifyContent: "center",
+                                minWidth: "20px", height: "20px", marginRight: "8px", padding: "0 5px",
+                                borderRadius: "10px", background: "#2563eb", color: "#fff",
+                                fontSize: "11px", fontWeight: 700,
+                              }}>{fr.sequencia}</span>
+                            )}
+                            {fr.origem ?? "—"} → {fr.destino ?? "—"}
+                            {fr.geocode_status === "falhou" && (
+                              <span title="Destino não pôde ser geocodificado — ficou fora da rota" style={{ marginLeft: "6px", fontSize: "11px", color: "#dc2626" }}>⚠ sem coordenada</span>
+                            )}
+                          </Td>
                           <Td>{cliente?.nome_fantasia ?? "—"}</Td>
                           <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
                           <Td>

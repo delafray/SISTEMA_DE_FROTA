@@ -224,6 +224,44 @@ async function geocodarEntregas(
   return { geocodificadas, sem_geocoding };
 }
 
+/**
+ * Resolve o ponto de partida do caminhao no modo pedido, em ordem:
+ *  1. body.origem (se o chamador mandou) — ex: GPS do motorista.
+ *  2. Deposito = endereco da empresa (geocodado por resolverCoordenada).
+ *  3. Fallback: 1a entrega geocodificada (a rota so reordena os destinos).
+ * Devolve null so quando nem isso ha (sem origem possivel).
+ */
+async function resolverOrigemPedido(
+  supabase: ReturnType<typeof getSupabase>,
+  body: OtimizarRequest,
+  geocodificadas: EntregaRoteavel[]
+): Promise<Coordenada | null> {
+  if (body.origem) return body.origem;
+
+  const { data: emp } = await supabase
+    .from('empresas')
+    .select('logradouro, numero, bairro, cidade, uf, cep')
+    .eq('id', body.empresa_id)
+    .maybeSingle();
+
+  if (emp?.logradouro && emp?.cidade) {
+    const c = await resolverCoordenada({
+      empresa_id: body.empresa_id,
+      logradouro: emp.logradouro ?? undefined,
+      numero: emp.numero ?? undefined,
+      bairro: emp.bairro ?? undefined,
+      cidade: emp.cidade ?? undefined,
+      uf: emp.uf ?? undefined,
+      cep: emp.cep ?? undefined,
+    });
+    if (c) return { lat: c.lat, lng: c.lng };
+  }
+
+  const primeira = geocodificadas.find((e) => e.latitude !== null && e.longitude !== null);
+  if (primeira) return { lat: primeira.latitude as number, lng: primeira.longitude as number };
+  return null;
+}
+
 async function otimizarPorPedido(
   supabase: ReturnType<typeof getSupabase>,
   body: OtimizarRequest,
@@ -256,13 +294,17 @@ async function otimizarPorPedido(
   }
 
   // 3. Otimizar com VROOM (parada = destino da entrega)
+  const origemCoord = await resolverOrigemPedido(supabase, body, geocodificadas);
+  if (!origemCoord) {
+    return NextResponse.json({ error: 'sem_origem' }, { status: 400 });
+  }
   const { mapping, items } = indexarJobs(geocodificadas);
   const jobs: Job[] = items.map((e) => ({
     id: e._idVroom,
     localizacao: { lat: e.latitude as number, lng: e.longitude as number },
     tempo_descarga_s: e.service_time_seg ?? 600,
   }));
-  const veiculo = montarVeiculo({ id: 1, inicio: body.origem, fim: body.destino });
+  const veiculo = montarVeiculo({ id: 1, inicio: origemCoord, fim: body.destino ?? origemCoord });
 
   const otim = await otimizarRota({ veiculos: [veiculo], jobs });
   if (!otim.ok) {
@@ -273,7 +315,12 @@ async function otimizarPorPedido(
     );
   }
 
-  // 4. Persistir rota (com pedido_id)
+  // 4. Re-roteirizar SUBSTITUI: limpa rota/paradas anteriores do pedido pra nao
+  //    acumular pinos duplicados a cada clique. Sem FK, delete direto por pedido.
+  await supabase.from('paradas').delete().eq('pedido_id', pedidoId);
+  await supabase.from('rotas_otimizadas').delete().eq('pedido_id', pedidoId);
+
+  // 4b. Persistir rota (com pedido_id)
   const { data: rotaInserida, error: errRota } = await supabase
     .from('rotas_otimizadas')
     .insert({
@@ -388,9 +435,17 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     return NextResponse.json({ error: 'json_invalido' }, { status: 400 });
   }
 
-  if (!body.motorista_id || !body.empresa_id || !body.origem) {
+  if (!body.motorista_id || !body.empresa_id) {
     return NextResponse.json(
-      { error: 'campos_obrigatorios', detail: 'motorista_id, empresa_id, origem' },
+      { error: 'campos_obrigatorios', detail: 'motorista_id, empresa_id' },
+      { status: 400 }
+    );
+  }
+  // origem so e obrigatoria fora do modo pedido. No modo pedido ela e derivada
+  // do deposito (endereco da empresa) — ver resolverOrigemPedido().
+  if (!body.pedido_id && !body.origem) {
+    return NextResponse.json(
+      { error: 'campos_obrigatorios', detail: 'origem' },
       { status: 400 }
     );
   }
@@ -440,7 +495,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   const jobs = notasIndexadas.map((n) => notaParaJob(n, n._idVroom));
   const veiculo = montarVeiculo({
     id: 1,
-    inicio: body.origem,
+    // origem garantida pela validacao do POST (obrigatoria fora do modo pedido).
+    inicio: body.origem!,
     fim: body.destino,
   });
 

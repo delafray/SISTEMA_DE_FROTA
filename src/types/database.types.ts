@@ -1879,6 +1879,57 @@ export type Database = {
           },
         ]
       }
+      paradas: {
+        Row: {
+          concluida_em: string | null
+          endereco: Json | null
+          entrega_id: string | null
+          fixada: boolean | null
+          id: string
+          janela_horario: Json | null
+          latitude: number | null
+          longitude: number | null
+          nota_id: string | null
+          observacao: string | null
+          ordem: number | null
+          pedido_id: string | null
+          rota_id: string | null
+          tempo_descarga_min: number | null
+        }
+        Insert: {
+          concluida_em?: string | null
+          endereco?: Json | null
+          entrega_id?: string | null
+          fixada?: boolean | null
+          id?: string
+          janela_horario?: Json | null
+          latitude?: number | null
+          longitude?: number | null
+          nota_id?: string | null
+          observacao?: string | null
+          ordem?: number | null
+          pedido_id?: string | null
+          rota_id?: string | null
+          tempo_descarga_min?: number | null
+        }
+        Update: {
+          concluida_em?: string | null
+          endereco?: Json | null
+          entrega_id?: string | null
+          fixada?: boolean | null
+          id?: string
+          janela_horario?: Json | null
+          latitude?: number | null
+          longitude?: number | null
+          nota_id?: string | null
+          observacao?: string | null
+          ordem?: number | null
+          pedido_id?: string | null
+          rota_id?: string | null
+          tempo_descarga_min?: number | null
+        }
+        Relationships: []
+      }
       pedido_motoristas: {
         Row: {
           ativo: boolean
