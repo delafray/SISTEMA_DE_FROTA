@@ -15,6 +15,25 @@ Política de testes do projeto (RECOMENDADO, não obrigatório):
 
 ---
 
+# 🤖 Política de delegação a subagentes (Claude Code) — REGRA DO DONO
+
+Ao delegar trabalho a subagentes (Agent/Workflow), escolher o modelo pela natureza da tarefa:
+
+| Tarefa | Quem faz |
+|---|---|
+| **Pesquisa em massa** (web, fóruns, GitHub, fan-out de buscas) | Subagentes **haiku** (`model: 'haiku'`) — sempre baratos |
+| **Código simples e bem especificado** (telas CRUD seguindo padrão existente, renomes, formulários) | Subagentes **sonnet** |
+| **Coisas difíceis** (arquitetura, migrations, lógica de cálculo/dinheiro, refactors amplos, debugging cabeludo) | **Opus** ou o **modelo principal da sessão** — nunca sonnet/haiku |
+| **Validação/revisão** do que os subagentes produziram | **Modelo principal da sessão** (não delegar a revisão) |
+| **Coisa IMPORTANTE** (qualquer mudança crítica pro negócio, dados financeiros, auth, banco de produção) | **Modelo principal ou Opus** — proibido delegar a sonnet/haiku |
+
+Regras de bolso:
+- Em dúvida se é "simples" ou "importante" → trate como importante (faça você mesmo ou pergunte ao dono).
+- Todo código entregue por subagente passa por revisão do modelo principal (typecheck + leitura do diff) antes de reportar ao dono.
+- O dono faz commit/push/testes manuais — entregar com os comandos prontos, nunca commitar por conta.
+
+---
+
 # Como Chamar os Agentes do Antigravity
 
 ## Modos de Acesso

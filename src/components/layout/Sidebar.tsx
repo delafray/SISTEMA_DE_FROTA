@@ -161,8 +161,8 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <SectionLabel>Operação</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <NavItem href="/"               label="Início"         icon={HomeIcon}  onNavigate={onNavigate} />
-            <NavItem href="/pedidos"        label="Viagens"        icon={RouteIcon} onNavigate={onNavigate} />
-            <NavItem href="/entregas"         label="Fretes"         icon={FreteIcon} onNavigate={onNavigate} />
+            <NavItem href="/pedidos"        label="Pedidos"        icon={RouteIcon} onNavigate={onNavigate} />
+            <NavItem href="/despacho"       label="Despacho"       icon={FreteIcon} onNavigate={onNavigate} />
             <NavItem href="/roteirizacao"   label="Roteirização"   icon={RouteIcon} onNavigate={onNavigate} />
             <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon}  onNavigate={onNavigate} />
           </div>
@@ -170,6 +170,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
           <SectionLabel>Financeiro</SectionLabel>
           <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
             <NavItem href="/financeiro"    label="Fluxo de Caixa" icon={MoneyIcon} onNavigate={onNavigate} />
+            <NavItem href="/entregas"      label="A Receber"     icon={MoneyIcon} onNavigate={onNavigate} />
             <NavItem href="/adiantamentos" label="Adiantamentos" icon={MoneyIcon} onNavigate={onNavigate} />
             <NavItem href="/relatorios"    label="Relatórios"    icon={ChartIcon} onNavigate={onNavigate} />
           </div>

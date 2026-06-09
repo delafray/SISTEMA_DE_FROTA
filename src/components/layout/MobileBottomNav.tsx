@@ -13,8 +13,8 @@ const IcoMenu  = (p: SvgP) => <svg {...p} fill="none" viewBox="0 0 24 24" stroke
 
 const NAV_ITEMS = [
   { href: "/",         label: "Início",   icon: IcoHome },
-  { href: "/pedidos",  label: "Viagens",  icon: IcoRoute },
-  { href: "/entregas",   label: "Fretes",   icon: IcoFrete },
+  { href: "/pedidos",  label: "Pedidos",  icon: IcoRoute },
+  { href: "/despacho", label: "Despacho", icon: IcoFrete },
   { href: "/veiculos", label: "Veículos", icon: IcoTruck },
 ] as const;
 

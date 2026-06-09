@@ -179,8 +179,13 @@ async function buscarEntregasDoPedido(
     .eq('pedido_id', pedidoId);
 
   if (error) throw new Error(`buscar_entregas_failed: ${error.message}`);
-  // "Todas nao-finalizadas" (decisao do dono): fora concluida/entregue/cancelada.
-  const FINALIZADAS = new Set(['concluida', 'entregue', 'cancelada']);
+  // "Todas nao-finalizadas" (decisao do dono). `entregas.status` usa os valores
+  // masculinos (agendado/concluido/cancelado + 'ocorrencia' do POD); as formas
+  // femininas ficam por seguranca contra dados antigos.
+  const FINALIZADAS = new Set([
+    'concluido', 'cancelado', 'ocorrencia',
+    'concluida', 'cancelada', 'entregue',
+  ]);
   return ((data ?? []) as EntregaRoteavel[]).filter(
     (e) => !FINALIZADAS.has((e.status ?? '').toLowerCase())
   );
@@ -372,7 +377,10 @@ async function otimizarPorPedido(
     return NextResponse.json({ error: 'db_insert_paradas_failed' }, { status: 500 });
   }
 
-  // 6. Gravar entregas.sequencia (= ordem na rota) — testavel sem a UI do Passo 3
+  // 6. Gravar entregas.sequencia (= ordem na rota) — testavel sem a UI do Passo 3.
+  //    Zera antes: entrega que caiu fora desta rota (geocoding falhou / VROOM
+  //    nao encaixou / ja finalizada) nao pode ficar com sequencia da rota velha.
+  await supabase.from('entregas').update({ sequencia: null }).eq('pedido_id', pedidoId);
   await Promise.all(
     paradasTraduzidas.map((p) =>
       supabase.from('entregas').update({ sequencia: p.ordem }).eq('id', p.nota_id_local)
