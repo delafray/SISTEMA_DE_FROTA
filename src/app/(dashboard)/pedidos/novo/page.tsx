@@ -9,6 +9,7 @@ import {
 } from "@/components/ui/ds";
 
 type Cliente = { id: string; nome_fantasia: string };
+type LocalCarreg = { id: string; nome: string; endereco: string; principal: boolean };
 
 const hoje = () => new Date().toISOString().slice(0, 10);
 
@@ -28,6 +29,17 @@ export default function NovoPedidoSimplePage() {
   const [buscaCliente, setBuscaCliente] = useState("");
   const [mostrarSugestoes, setMostrarSugestoes] = useState(false);
   const buscaRef = useRef<HTMLDivElement>(null);
+
+  // Locais de carregamento
+  const [locaisCliente, setLocaisCliente] = useState<LocalCarreg[]>([]);
+  const [localSelecionadoId, setLocalSelecionadoId] = useState<string | null>(null);
+  const [localAvulsoTexto, setLocalAvulsoTexto] = useState("");
+  const [usarLocalAvulso, setUsarLocalAvulso] = useState(false);
+  const [locaisAvulsos, setLocaisAvulsos] = useState<string[]>([""]); // para cliente avulso
+  // Modal para salvar local no cadastro
+  const [modalSalvarLocal, setModalSalvarLocal] = useState(false);
+  const [nomeLocalNovo, setNomeLocalNovo] = useState("");
+  const [salvandoLocal, setSalvandoLocal] = useState(false);
 
   // Dados do pedido
   const [valorPedido, setValorPedido] = useState("");
@@ -83,15 +95,40 @@ export default function NovoPedidoSimplePage() {
 
   const clienteSelecionado = clientes.find(c => c.id === clienteId);
 
+  // Carrega locais quando seleciona cliente
+  const carregarLocais = async (cId: string) => {
+    const { data } = await supabase
+      .from("locais_carregamento")
+      .select("id,nome,endereco,principal")
+      .eq("cliente_id", cId)
+      .eq("ativo", true)
+      .order("principal", { ascending: false });
+    const locs = (data ?? []) as LocalCarreg[];
+    setLocaisCliente(locs);
+    // Pré-seleciona o principal
+    const princ = locs.find(l => l.principal);
+    if (princ) {
+      setLocalSelecionadoId(princ.id);
+      setUsarLocalAvulso(false);
+    } else {
+      setLocalSelecionadoId(null);
+    }
+  };
+
   const selecionarCliente = (c: Cliente) => {
     setClienteId(c.id);
     setBuscaCliente(c.nome_fantasia);
     setMostrarSugestoes(false);
+    carregarLocais(c.id);
   };
 
   const limparCliente = () => {
     setClienteId("");
     setBuscaCliente("");
+    setLocaisCliente([]);
+    setLocalSelecionadoId(null);
+    setLocalAvulsoTexto("");
+    setUsarLocalAvulso(false);
   };
 
   // Gestão da lista de endereços
@@ -129,16 +166,41 @@ export default function NovoPedidoSimplePage() {
 
     setSaving(true);
 
+    // Determinar local de carregamento
+    let localCarregamento: string | null = null;
+    let localCarregamentoId: string | null = null;
+
+    if (avulso) {
+      // Cliente avulso: junta os locais avulsos
+      const locsFilled = locaisAvulsos.filter(l => l.trim());
+      localCarregamento = locsFilled.join(" | ") || null;
+    } else if (usarLocalAvulso && localAvulsoTexto.trim()) {
+      localCarregamento = localAvulsoTexto.trim();
+    } else if (localSelecionadoId) {
+      const loc = locaisCliente.find(l => l.id === localSelecionadoId);
+      if (loc) {
+        localCarregamento = `${loc.nome} — ${loc.endereco}`;
+        localCarregamentoId = loc.id;
+      }
+    }
+
     // INSERT pedido
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const pedidoPayload: any = {
+      empresa_id:             empresaId,
+      status:                 "agendada",
+      data_inicio_prevista:   dataPrevista || null,
+      valor_pedido:           valorPedido ? parseFloat(valorPedido) : null,
+      observacoes:            observacoes.trim() || null,
+      local_carregamento:     localCarregamento,
+      local_carregamento_id:  localCarregamentoId,
+    };
+    // Vincular cliente_id se for cadastrado
+    if (!avulso && clienteId) pedidoPayload.cliente_id = clienteId;
+
     const { data: pedido, error: errPedido } = await supabase
       .from("pedidos")
-      .insert({
-        empresa_id:           empresaId,
-        status:               "agendada",
-        data_inicio_prevista: dataPrevista || null,
-        valor_pedido:         valorPedido ? parseFloat(valorPedido) : null,
-        observacoes:          observacoes.trim() || null,
-      })
+      .insert(pedidoPayload)
       .select("id")
       .single();
 
@@ -155,7 +217,7 @@ export default function NovoPedidoSimplePage() {
       empresa_id:          empresaId,
       pedido_id:           pedido.id,
       status:              "agendado",
-      origem:              "Depósito",
+      origem:              localCarregamento || "Depósito",
       destino,
       ...(avulso
         ? { nome_cliente_avulso: nomeAvulso.trim() }
@@ -178,7 +240,33 @@ export default function NovoPedidoSimplePage() {
       return;
     }
 
-    router.push(`/pedidos/${pedido.id}`);
+    // Se local avulso foi usado com cliente cadastrado, oferecer salvar
+    if (!avulso && clienteId && usarLocalAvulso && localAvulsoTexto.trim()) {
+      setModalSalvarLocal(true);
+      // Mas o pedido já foi criado, redireciona após fechar modal
+    } else {
+      router.push(`/pedidos/${pedido.id}`);
+      router.refresh();
+    }
+  };
+
+  // Salvar local avulso no cadastro do cliente
+  const handleSalvarLocalNoCadastro = async (salvar: boolean) => {
+    if (salvar && nomeLocalNovo.trim() && empresaId && clienteId) {
+      setSalvandoLocal(true);
+      await supabase.from("locais_carregamento").insert({
+        empresa_id: empresaId,
+        cliente_id: clienteId,
+        nome: nomeLocalNovo.trim(),
+        endereco: localAvulsoTexto.trim(),
+        principal: locaisCliente.length === 0, // principal se é o primeiro
+      });
+      setSalvandoLocal(false);
+    }
+    setModalSalvarLocal(false);
+    // Pega o pedido recém-criado do DOM (submit já rodou)
+    // Como o pedido já foi criado, redireciona
+    router.push("/pedidos");
     router.refresh();
   };
 
@@ -300,6 +388,147 @@ export default function NovoPedidoSimplePage() {
                   )}
                 </div>
               </FormField>
+            )}
+          </div>
+
+          {/* ── BLOCO LOCAL DE CARREGAMENTO ── */}
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px 0" }}>
+              Local de Carregamento <span style={{ fontWeight: 400, color: "#94a3b8", fontSize: "13px" }}>(opcional)</span>
+            </h2>
+
+            {avulso ? (
+              /* CLIENTE AVULSO: campos de texto livre */
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
+                {locaisAvulsos.map((loc, idx) => (
+                  <div key={idx} style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                    <div style={{
+                      width: "24px", height: "24px", borderRadius: "50%",
+                      background: "#059669", color: "#fff",
+                      display: "flex", alignItems: "center", justifyContent: "center",
+                      fontSize: "11px", fontWeight: 700, flexShrink: 0,
+                    }}>
+                      {idx + 1}
+                    </div>
+                    <input
+                      type="text"
+                      value={loc}
+                      onChange={e => setLocaisAvulsos(prev => prev.map((l, i) => i === idx ? e.target.value : l))}
+                      placeholder="Ex: Galpão São Paulo, Rua X, 123"
+                      style={{ ...inputStyle, flex: 1 }}
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setLocaisAvulsos(prev => prev.length > 1 ? prev.filter((_, i) => i !== idx) : prev)}
+                      disabled={locaisAvulsos.length === 1}
+                      style={{
+                        width: "32px", height: "32px", borderRadius: "6px",
+                        border: "1px solid #e2e8f0",
+                        background: locaisAvulsos.length === 1 ? "#f8fafc" : "#fff",
+                        cursor: locaisAvulsos.length === 1 ? "not-allowed" : "pointer",
+                        color: locaisAvulsos.length === 1 ? "#cbd5e1" : "#ef4444",
+                        fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
+                        flexShrink: 0,
+                      }}
+                      title="Remover local"
+                    >
+                      −
+                    </button>
+                  </div>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setLocaisAvulsos(prev => [...prev, ""])}
+                  style={{
+                    marginTop: "8px", padding: "8px 16px",
+                    background: "#f8fafc", border: "1px dashed #cbd5e1",
+                    borderRadius: "8px", cursor: "pointer",
+                    fontSize: "13px", color: "#059669", fontWeight: 500,
+                    display: "flex", alignItems: "center", gap: "6px",
+                    width: "100%", justifyContent: "center",
+                  }}
+                >
+                  + Adicionar local
+                </button>
+              </div>
+            ) : clienteSelecionado ? (
+              /* CLIENTE CADASTRADO: chips dos locais + opção avulso */
+              <div>
+                {locaisCliente.length > 0 && !usarLocalAvulso && (
+                  <div style={{ display: "flex", flexWrap: "wrap", gap: "8px", marginBottom: "12px" }}>
+                    {locaisCliente.map(loc => {
+                      const selected = localSelecionadoId === loc.id;
+                      return (
+                        <button
+                          key={loc.id}
+                          type="button"
+                          onClick={() => { setLocalSelecionadoId(loc.id); setUsarLocalAvulso(false); }}
+                          style={{
+                            padding: "10px 16px",
+                            borderRadius: "10px",
+                            border: selected ? "2px solid #059669" : "1px solid #e2e8f0",
+                            background: selected ? "#ecfdf5" : "#fff",
+                            cursor: "pointer",
+                            textAlign: "left",
+                            transition: "all 150ms",
+                          }}
+                        >
+                          <div style={{ fontSize: "13px", fontWeight: 600, color: selected ? "#059669" : "#1e293b" }}>
+                            {loc.principal && <span style={{ marginRight: "4px" }}>⭐</span>}
+                            {loc.nome}
+                          </div>
+                          <div style={{ fontSize: "11px", color: "#64748b", marginTop: "2px" }}>
+                            {loc.endereco}
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
+                {/* Botão para usar local avulso */}
+                {!usarLocalAvulso ? (
+                  <button
+                    type="button"
+                    onClick={() => { setUsarLocalAvulso(true); setLocalSelecionadoId(null); }}
+                    style={{
+                      padding: "8px 14px",
+                      background: "#f8fafc", border: "1px dashed #cbd5e1",
+                      borderRadius: "8px", cursor: "pointer",
+                      fontSize: "13px", color: "#64748b", fontWeight: 500,
+                      width: "100%", textAlign: "center",
+                    }}
+                  >
+                    {locaisCliente.length > 0 ? "Outro local (não cadastrado)" : "Informar local de carregamento"}
+                  </button>
+                ) : (
+                  <div>
+                    <FormField label="Local de carregamento (avulso)">
+                      <input
+                        type="text"
+                        value={localAvulsoTexto}
+                        onChange={e => setLocalAvulsoTexto(e.target.value)}
+                        placeholder="Ex: Galpão São Paulo, Rua X, 123"
+                        style={inputStyle}
+                        autoFocus
+                      />
+                    </FormField>
+                    {locaisCliente.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => { setUsarLocalAvulso(false); setLocalAvulsoTexto(""); const p = locaisCliente.find(l => l.principal); if (p) setLocalSelecionadoId(p.id); }}
+                        style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", marginTop: "8px" }}
+                      >
+                        ← Voltar para locais cadastrados
+                      </button>
+                    )}
+                  </div>
+                )}
+              </div>
+            ) : (
+              <p style={{ color: "#94a3b8", fontSize: "13px", fontStyle: "italic" }}>
+                Selecione um cliente para ver os locais de carregamento.
+              </p>
             )}
           </div>
 
@@ -429,6 +658,67 @@ export default function NovoPedidoSimplePage() {
           </p>
         </form>
       </div>
+
+      {/* ── MODAL: SALVAR LOCAL NO CADASTRO DO CLIENTE ── */}
+      {modalSalvarLocal && (
+        <div
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div style={{
+            background: "#fff", borderRadius: "12px", padding: "28px",
+            width: "100%", maxWidth: "440px",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+          }}>
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>
+              Salvar local no cadastro?
+            </h3>
+            <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
+              Você usou o local <strong>"{localAvulsoTexto}"</strong> para o pedido de{" "}
+              <strong>{clienteSelecionado?.nome_fantasia}</strong>. Deseja salvar este local no cadastro do cliente para uso futuro?
+            </p>
+
+            <FormField label="Nome do local (ex: Galpão Central)">
+              <input
+                type="text"
+                value={nomeLocalNovo}
+                onChange={e => setNomeLocalNovo(e.target.value)}
+                placeholder="Dê um nome curto para identificar"
+                style={inputStyle}
+                autoFocus
+              />
+            </FormField>
+
+            <div style={{ fontSize: "12px", color: "#94a3b8", margin: "8px 0 20px" }}>
+              Endereço: {localAvulsoTexto}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <Btn
+                type="button"
+                variant="ghost"
+                onClick={() => handleSalvarLocalNoCadastro(false)}
+                disabled={salvandoLocal}
+              >
+                Não, obrigado
+              </Btn>
+              <Btn
+                type="button"
+                variant="primary"
+                onClick={() => handleSalvarLocalNoCadastro(true)}
+                disabled={salvandoLocal || !nomeLocalNovo.trim()}
+                style={{ background: "#059669" }}
+              >
+                {salvandoLocal ? "Salvando..." : "Sim, salvar no cadastro"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

@@ -8,7 +8,7 @@ import { z } from "zod";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
-import { Plus, Trash2, User } from "lucide-react";
+import { Plus, Trash2, User, MapPin } from "lucide-react";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 const fmtDoc = (v: string) => {
@@ -47,13 +47,23 @@ const clienteSchema = z.object({
 
 type ClienteData = z.infer<typeof clienteSchema>;
 
+type LocalCarregamento = {
+  id?: string;
+  nome: string;
+  endereco: string;
+  principal: boolean;
+};
+
 export default function EditarClientePage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
   const supabase = createClient();
-  const [activeTab, setActiveTab] = useState<"dados" | "contatos">("dados");
+  const [activeTab, setActiveTab] = useState<"dados" | "contatos" | "locais">("dados");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+
+  // Locais de Carregamento (gerenciado fora do react-hook-form)
+  const [locais, setLocais] = useState<LocalCarregamento[]>([]);
 
   const { register, handleSubmit, setValue, control, reset, formState: { errors, isSubmitting } } =
     useForm<ClienteData>({
@@ -65,9 +75,10 @@ export default function EditarClientePage() {
 
   useEffect(() => {
     const load = async () => {
-      const [{ data: cliente }, { data: contatos }] = await Promise.all([
+      const [{ data: cliente }, { data: contatos }, { data: locaisData }] = await Promise.all([
         supabase.from("clientes").select("*").eq("id", id).single(),
         supabase.from("cliente_contatos").select("*").eq("cliente_id", id).order("principal", { ascending: false }),
+        supabase.from("locais_carregamento").select("*").eq("cliente_id", id).eq("ativo", true).order("principal", { ascending: false }),
       ]);
       if (cliente) {
         reset({
@@ -95,6 +106,12 @@ export default function EditarClientePage() {
           })),
         });
       }
+      setLocais((locaisData ?? []).map(l => ({
+        id: l.id,
+        nome: l.nome ?? "",
+        endereco: l.endereco ?? "",
+        principal: l.principal ?? false,
+      })));
       setLoading(false);
     };
     load();
@@ -156,6 +173,20 @@ export default function EditarClientePage() {
       if (contatosError) console.warn("Erro ao salvar contatos:", contatosError.message);
     }
 
+    // Salvar locais de carregamento (delete + reinsert)
+    await supabase.from("locais_carregamento").delete().eq("cliente_id", id);
+    if (locais.length > 0) {
+      const locaisPayload = locais.map(l => ({
+        empresa_id: ue.empresa_id,
+        cliente_id: id,
+        nome: l.nome,
+        endereco: l.endereco,
+        principal: l.principal,
+      }));
+      const { error: locaisError } = await supabase.from("locais_carregamento").insert(locaisPayload);
+      if (locaisError) console.warn("Erro ao salvar locais:", locaisError.message);
+    }
+
     router.push("/clientes"); router.refresh();
   };
 
@@ -197,6 +228,10 @@ export default function EditarClientePage() {
             <button type="button" onClick={() => setActiveTab("contatos")} style={tabStyle(activeTab === "contatos")}>
               Contatos
               {fields.length > 0 && <span style={{ marginLeft: "8px", background: "#2563eb", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "10px" }}>{fields.length}</span>}
+            </button>
+            <button type="button" onClick={() => setActiveTab("locais")} style={tabStyle(activeTab === "locais")}>
+              Locais de Carregamento
+              {locais.length > 0 && <span style={{ marginLeft: "8px", background: "#059669", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "10px" }}>{locais.length}</span>}
             </button>
           </div>
 
@@ -330,6 +365,72 @@ export default function EditarClientePage() {
                             <input {...register(`contatos.${index}.email`)} type="email" style={inputStyle} />
                           </FormField>
                         </div>
+                      </div>
+                    </FormSection>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* ── ABA LOCAIS DE CARREGAMENTO ── */}
+            <div style={{ display: activeTab === "locais" ? "block" : "none" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+                <p style={{ color: "#64748b", fontSize: "14px" }}>Galpões, depósitos ou locais de carregamento do cliente.</p>
+                <button type="button"
+                  onClick={() => setLocais(prev => [...prev, { nome: "", endereco: "", principal: false }])}
+                  style={{ display: "flex", alignItems: "center", gap: "8px", background: "#059669", color: "#fff", border: "none", padding: "8px 16px", borderRadius: "8px", fontSize: "13px", fontWeight: 600, cursor: "pointer" }}>
+                  <Plus size={16} /> Adicionar Local
+                </button>
+              </div>
+
+              {locais.length === 0 ? (
+                <div style={{ padding: "48px", background: "#f8fafc", border: "1px dashed #cbd5e1", borderRadius: "12px", textAlign: "center" }}>
+                  <MapPin size={32} style={{ margin: "0 auto 12px", color: "#94a3b8" }} />
+                  <p style={{ color: "#475569", fontSize: "14px", fontWeight: 500 }}>Nenhum local de carregamento cadastrado.</p>
+                  <p style={{ color: "#94a3b8", fontSize: "12px", marginTop: "4px" }}>Ex: Galpão Central, CD São Paulo, Filial Ribeirão...</p>
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+                  {locais.map((local, idx) => (
+                    <FormSection key={idx} title={`Local #${idx + 1}`}>
+                      <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "-36px", marginBottom: "16px" }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: "16px" }}>
+                          <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                            <input
+                              type="checkbox"
+                              checked={local.principal}
+                              onChange={e => {
+                                setLocais(prev => prev.map((l, i) => ({
+                                  ...l,
+                                  principal: i === idx ? e.target.checked : (e.target.checked ? false : l.principal),
+                                })));
+                              }}
+                              style={{ accentColor: "#059669" }}
+                            />
+                            <span style={{ fontSize: "13px", color: "#475569" }}>Principal</span>
+                          </label>
+                          <button type="button" onClick={() => setLocais(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                      </div>
+                      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: "16px" }}>
+                        <FormField label="Nome do Local">
+                          <input
+                            value={local.nome}
+                            onChange={e => setLocais(prev => prev.map((l, i) => i === idx ? { ...l, nome: e.target.value } : l))}
+                            placeholder="Ex: Galpão Central"
+                            style={{ ...inputStyle, textTransform: "uppercase" }}
+                          />
+                        </FormField>
+                        <FormField label="Endereço">
+                          <input
+                            value={local.endereco}
+                            onChange={e => setLocais(prev => prev.map((l, i) => i === idx ? { ...l, endereco: e.target.value } : l))}
+                            placeholder="Rua, número, bairro, cidade - UF"
+                            style={{ ...inputStyle, textTransform: "uppercase" }}
+                          />
+                        </FormField>
                       </div>
                     </FormSection>
                   ))}

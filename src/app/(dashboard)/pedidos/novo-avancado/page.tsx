@@ -63,6 +63,7 @@ export default function NovoPedidoAvancadoPage() {
     km_inicial: "",
     valor_pedido: "",
     observacoes: "",
+    local_carregamento: "",
   });
 
   // Carrega status de todos os veículos em paralelo (pedido ativo + manutenção ativa)
@@ -277,6 +278,7 @@ export default function NovoPedidoAvancadoPage() {
       km_inicial:            f.km_inicial ? parseFloat(f.km_inicial) : null,
       valor_pedido:          f.valor_pedido ? parseFloat(f.valor_pedido) : null,
       observacoes:           f.observacoes || null,
+      local_carregamento:    f.local_carregamento || null,
     }).select("id").single();
 
     if (error || !pedido) {
@@ -585,6 +587,16 @@ export default function NovoPedidoAvancadoPage() {
                       value={f.km_inicial}
                       onChange={setFVal("km_inicial")}
                       placeholder={veiculos.find(v => v.id === veiculoId)?.km_atual != null ? String(veiculos.find(v => v.id === veiculoId)?.km_atual) : "Ex: 125000"}
+                      style={inputStyle}
+                    />
+                  </FormField>
+
+                  <FormField label="Local de Carregamento">
+                    <input
+                      type="text"
+                      value={f.local_carregamento}
+                      onChange={setFVal("local_carregamento")}
+                      placeholder="Ex: Galpão Central, Rua X, 123 - Cidade/UF"
                       style={inputStyle}
                     />
                   </FormField>
