@@ -134,7 +134,7 @@ export default function NovoPedidoSimplePage() {
       .from("pedidos")
       .insert({
         empresa_id:           empresaId,
-        status:               "agendado",
+        status:               "agendada",
         data_inicio_prevista: dataPrevista || null,
         valor_pedido:         valorPedido ? parseFloat(valorPedido) : null,
         observacoes:          observacoes.trim() || null,

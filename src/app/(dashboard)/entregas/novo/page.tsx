@@ -90,7 +90,7 @@ export default function NovoPedidoPage() {
       data_fim_prevista: f.data_fim_prevista || null,
       forma_pagamento: f.forma_pagamento || null,
       observacoes: f.observacoes || null,
-      status: "agendado",
+      status: "agendada",
     });
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
