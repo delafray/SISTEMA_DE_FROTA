@@ -25,6 +25,7 @@ const clienteComContatosSchema = z.object({
   cnpj_cpf: z.string().min(14, "Documento inválido"),
   razao_social: z.string().min(3, "Razão Social obrigatória").toUpperCase(),
   nome_fantasia: z.string().optional(),
+  apelido: z.string().optional(),
   telefone: z.string().optional(),
   email: z.string().email("E-mail inválido").optional().or(z.literal("")),
   cep: z.string().optional(),
@@ -87,6 +88,7 @@ export default function NovoClientePage() {
     if (!emp?.id) { alert("Nenhuma empresa cadastrada."); return; }
     const empresa_id = emp.id;
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: clienteSalvo, error: clienteError } = await supabase
       .from("clientes")
       .insert({
@@ -94,6 +96,7 @@ export default function NovoClientePage() {
         documento: data.cnpj_cpf.replace(/\D/g, ""),
         razao_social: data.razao_social,
         nome_fantasia: data.nome_fantasia || data.razao_social,
+        apelido: data.apelido || null,
         tipo_pessoa: data.cnpj_cpf.replace(/\D/g, "").length === 11 ? "fisica" : "juridica",
         telefone: data.telefone?.replace(/\D/g, "") || null,
         email: data.email || null,
@@ -105,7 +108,7 @@ export default function NovoClientePage() {
         cidade: data.cidade || null,
         uf: data.uf || null,
         ativo: data.status === "ATIVO",
-      })
+      } as any)
       .select("id")
       .single();
 
@@ -196,6 +199,11 @@ export default function NovoClientePage() {
                     <div style={{ gridColumn: "span 2" }}>
                       <FormField label="Nome Fantasia">
                         <input {...register("nome_fantasia")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
+                      </FormField>
+                    </div>
+                    <div style={{ gridColumn: "span 2" }}>
+                      <FormField label="Apelido (para busca pela IA)">
+                        <input {...register("apelido")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="Ex: Boi Nobre, Dona Maria..." />
                       </FormField>
                     </div>
                     <FormField label="Telefone">

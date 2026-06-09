@@ -8,7 +8,7 @@ import {
   Btn, Alert,
 } from "@/components/ui/ds";
 
-type Cliente = { id: string; nome_fantasia: string };
+type Cliente = { id: string; nome_fantasia: string; apelido: string | null };
 type LocalCarreg = { id: string; nome: string; endereco: string; principal: boolean };
 
 const hoje = () => new Date().toISOString().slice(0, 10);
@@ -63,13 +63,14 @@ export default function NovoPedidoSimplePage() {
 
       if (ue?.empresa_id) {
         setEmpresaId(ue.empresa_id);
-        const { data: cli } = await supabase
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const { data: cli } = await (supabase as any)
           .from("clientes")
-          .select("id,nome_fantasia")
+          .select("id,nome_fantasia,apelido")
           .eq("empresa_id", ue.empresa_id)
           .eq("ativo", true)
           .order("nome_fantasia");
-        setClientes(cli ?? []);
+        setClientes((cli ?? []) as Cliente[]);
       }
     };
     load();
@@ -88,16 +89,19 @@ export default function NovoPedidoSimplePage() {
   }, []);
 
   const clientesFiltrados = buscaCliente.trim()
-    ? clientes.filter(c =>
-        c.nome_fantasia.toLowerCase().includes(buscaCliente.toLowerCase())
-      )
+    ? clientes.filter(c => {
+        const q = buscaCliente.toLowerCase();
+        return c.nome_fantasia.toLowerCase().includes(q)
+          || (c.apelido && c.apelido.toLowerCase().includes(q));
+      })
     : clientes.slice(0, 8);
 
   const clienteSelecionado = clientes.find(c => c.id === clienteId);
 
   // Carrega locais quando seleciona cliente
   const carregarLocais = async (cId: string) => {
-    const { data } = await supabase
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data } = await (supabase as any)
       .from("locais_carregamento")
       .select("id,nome,endereco,principal")
       .eq("cliente_id", cId)
@@ -254,7 +258,8 @@ export default function NovoPedidoSimplePage() {
   const handleSalvarLocalNoCadastro = async (salvar: boolean) => {
     if (salvar && nomeLocalNovo.trim() && empresaId && clienteId) {
       setSalvandoLocal(true);
-      await supabase.from("locais_carregamento").insert({
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      await (supabase as any).from("locais_carregamento").insert({
         empresa_id: empresaId,
         cliente_id: clienteId,
         nome: nomeLocalNovo.trim(),

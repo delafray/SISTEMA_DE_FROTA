@@ -268,6 +268,7 @@ export default function NovoPedidoAvancadoPage() {
     if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
     const empresa_motorista_id = await empresaDoMotorista(supabase, motoristaId); // foto: detecta "emprestado"
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const { data: pedido, error } = await supabase.from("pedidos").insert({
       empresa_id,
       empresa_motorista_id,
@@ -279,7 +280,7 @@ export default function NovoPedidoAvancadoPage() {
       valor_pedido:          f.valor_pedido ? parseFloat(f.valor_pedido) : null,
       observacoes:           f.observacoes || null,
       local_carregamento:    f.local_carregamento || null,
-    }).select("id").single();
+    } as any).select("id").single();
 
     if (error || !pedido) {
       const msgErr = error?.message?.includes("VEICULO_EM_MANUTENCAO")
