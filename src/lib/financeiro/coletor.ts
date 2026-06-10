@@ -13,6 +13,7 @@
  */
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 
 export type CategoriaEvento =
   | "pedido" | "combustivel" | "despesa_veiculo" | "manutencao"
@@ -69,7 +70,7 @@ export async function coletarEventos(
   // antes entrava a bolada inteira numa data só, errando o fluxo de caixa.
   // Acréscimos/descontos: colunas da migration_pedido_acrescimos_descontos —
   // tenta com elas e cai pro select antigo se a migration não rodou ainda.
-  const selPedidosBase = "id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)";
+  const selPedidosBase = "id,numero,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)";
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   let pedidosRes: { data: any[] | null; error: { message: string } | null } = await supabase
     .from("pedidos")
@@ -123,7 +124,7 @@ export async function coletarEventos(
         eventos.push({
           id: `pedido_parcela_in:${par.id}`,
           data: dataRaw.slice(0, 10),
-          descricao: `Pedido #${p.id.slice(0, 8)} — parcela ${par.numero}/${pars.length}`,
+          descricao: `Pedido ${rotuloPedido(p.numero, p.id)} — parcela ${par.numero}/${pars.length}`,
           categoria: "pedido",
           valor: par.valor,
           tipo: "entrada",
@@ -144,7 +145,7 @@ export async function coletarEventos(
       eventos.push({
         id: `pedido_in:${p.id}`,
         data: dataEntradaRaw.slice(0, 10),
-        descricao: `Pedido #${p.id.slice(0, 8)}`,
+        descricao: `Pedido ${rotuloPedido(p.numero, p.id)}`,
         categoria: "pedido",
         valor: totalPedido,
         tipo: "entrada",

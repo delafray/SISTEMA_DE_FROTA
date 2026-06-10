@@ -23,6 +23,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   PageHeader, Btn, Badge, KpiCard, EmptyState, SearchInput,
 } from "@/components/ui/ds";
@@ -30,6 +31,7 @@ import { FinanceiroPedido, type EmpresaOpcao } from "./_components/FinanceiroPed
 
 type PedidoFin = {
   id: string;
+  numero: string | null;
   cliente_id: string | null;
   valor_pedido: number | null;
   pago: boolean | null;
@@ -92,7 +94,7 @@ export default function FaturamentoPage() {
 
     // agregação por cliente precisa de todas as linhas; payload mínimo até existir RPC.
     // Pedidos: tenta com acréscimos/descontos (migration nova); sem ela, recarrega sem.
-    const selBase = "id,cliente_id,valor_pedido,pago,status,data_inicio_prevista,data_fim_prevista,forma_pagamento";
+    const selBase = "id,numero,cliente_id,valor_pedido,pago,status,data_inicio_prevista,data_fim_prevista,forma_pagamento";
     const buscarPedidos = (sel: string) =>
       loadAll<PedidoFin>((from, to) =>
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -320,7 +322,7 @@ export default function FaturamentoPage() {
                               display: "flex", alignItems: "center", gap: "10px",
                               padding: "8px 0", flexWrap: "wrap",
                             }}>
-                              <span style={{ fontSize: "12px", fontFamily: "monospace", color: "#64748b" }}>#{p.id.slice(0, 8)}</span>
+                              <span style={{ fontSize: "12px", fontFamily: "monospace", fontWeight: 700, color: "#1e293b" }}>{rotuloPedido(p.numero, p.id)}</span>
                               <span style={{ fontSize: "12px", color: "#64748b" }}>{fmtDate(p.data_inicio_prevista)}</span>
                               <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }} title={
                                 (p.acrescimos ?? 0) > 0 || (p.descontos ?? 0) > 0

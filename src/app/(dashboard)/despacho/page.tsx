@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { normalizar } from "@/lib/utils/normalizar";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
   PageHeader, DataTable, Th, Td, Tr, Badge, Btn,
@@ -24,6 +25,7 @@ type EntregaLite = {
 
 type Pedido = {
   id: string;
+  numero?: string | null;
   status: string;
   valor_pedido: number | null;
   created_at: string | null;
@@ -251,12 +253,15 @@ export default function DespachoPage() {
       const termo = buscaServidor.replace(/[%,()]/g, "").trim();
       if (termo) {
         const like = `%${termo}%`;
-        const [entsTexto, clis] = await Promise.all([
+        const [entsTexto, clis, pedsNumero] = await Promise.all([
           supabase.from("entregas").select("pedido_id").eq("empresa_id", empresaId)
             .or(`destino.ilike.${like},nome_cliente_avulso.ilike.${like}`)
             .not("pedido_id", "is", null).limit(500),
           supabase.from("clientes").select("id").eq("empresa_id", empresaId)
             .or(`nome_fantasia.ilike.${like},apelido.ilike.${like}`).limit(200),
+          // busca direta pelo nº do pedido (AAAA.SSSS)
+          supabase.from("pedidos").select("id").eq("empresa_id", empresaId)
+            .ilike("numero", like).limit(200),
         ]);
         const cliIds = (clis.data ?? []).map(c => c.id);
         const entsCli = cliIds.length > 0
@@ -266,6 +271,7 @@ export default function DespachoPage() {
         idsBusca = Array.from(new Set([
           ...(entsTexto.data ?? []).map(e => e.pedido_id),
           ...(entsCli.data ?? []).map(e => e.pedido_id),
+          ...((pedsNumero.data ?? []) as { id: string }[]).map(p => p.id),
         ].filter((x): x is string => !!x)));
         if (idsBusca.length === 0) {
           setPedidos([]); setTotal(0); setLoading(false);
@@ -276,7 +282,7 @@ export default function DespachoPage() {
       // SEM FILTRO NENHUM: mostra todos os pedidos (qualquer status, com ou
       // sem caminhão). Só busca + paginação.
       const selectFields =
-        "id,status,valor_pedido,created_at,data_inicio_prevista,veiculo_id,motorista_id,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
+        "id,numero,status,valor_pedido,created_at,data_inicio_prevista,veiculo_id,motorista_id,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
 
       let q = supabase
         .from("pedidos")
@@ -571,7 +577,7 @@ export default function DespachoPage() {
         {/* Busca no mobile */}
         <div className="mobile-only" style={{ marginBottom: "4px" }}>
           <SearchInput
-            placeholder="Buscar por cliente ou destino..."
+            placeholder="Buscar nº do pedido, cliente ou destino..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
@@ -585,7 +591,7 @@ export default function DespachoPage() {
             toolbar={
               <>
                 <SearchInput
-                  placeholder="Buscar por cliente ou destino..."
+                  placeholder="Buscar nº do pedido, cliente ou destino..."
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                 />
@@ -613,6 +619,7 @@ export default function DespachoPage() {
                     title="Selecionar todos"
                   />
                 </Th>
+                <Th>Nº</Th>
                 <Th>Cliente</Th>
                 <Th>Previsto</Th>
                 <Th>Destinos</Th>
@@ -624,13 +631,13 @@ export default function DespachoPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  <Td colSpan={8} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                     Carregando...
                   </Td>
                 </tr>
               ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={8}>
                     <EmptyState
                       icon="🚚"
                       message={
@@ -663,6 +670,9 @@ export default function DespachoPage() {
                         onChange={() => toggleSelecionado(p.id)}
                         style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
                       />
+                    </Td>
+                    <Td style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap" }}>
+                      {rotuloPedido(p.numero, p.id)}
                     </Td>
                     <Td>
                       <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
@@ -758,7 +768,7 @@ export default function DespachoPage() {
             return (
               <MobileCard
                 key={p.id}
-                title={cliente}
+                title={`${rotuloPedido(p.numero, p.id)} · ${cliente}`}
                 subtitle={resumoDestinos(entregas)}
                 badge={
                   <Badge variant={STATUS_VAR[p.status] ?? "default"}>

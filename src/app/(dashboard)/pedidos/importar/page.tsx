@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   PageHeader, DataTable, Th, Td, Tr, Badge, Btn, Alert,
   inputStyle, selectStyle, FormField,
@@ -43,6 +44,7 @@ type LinhaPreview = {
 
 type PedidoAlvo = {
   id: string;
+  numero?: string | null;
   status: string;
   data_inicio_prevista: string | null;
   local_carregamento: string | null;
@@ -54,6 +56,7 @@ type PedidoAlvo = {
 
 type PedidoOpcao = {
   id: string;
+  numero?: string | null;
   status: string;
   data_inicio_prevista: string | null;
   entregas: { id: string; destino: string | null; nome_cliente_avulso: string | null }[];
@@ -73,7 +76,7 @@ function chunks<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-/** Retorna os 8 primeiros caracteres do UUID como ID curto */
+/** Retorna os 8 primeiros caracteres do UUID como ID curto (fallback sem numero) */
 function idCurto(id: string): string {
   return id.slice(0, 8);
 }
@@ -84,7 +87,7 @@ function labelPedido(p: PedidoOpcao): string {
   const primeiraEnt = p.entregas[0];
   const clienteOuDestino =
     primeiraEnt?.nome_cliente_avulso || primeiraEnt?.destino || "sem entregas";
-  return `#${idCurto(p.id)} · ${clienteOuDestino} · ${nEnt} entrega${nEnt !== 1 ? "s" : ""}`;
+  return `${rotuloPedido(p.numero, p.id)} · ${clienteOuDestino} · ${nEnt} entrega${nEnt !== 1 ? "s" : ""}`;
 }
 
 const STATUS_FINALIZADOS = ["concluido", "concluida", "cancelado", "cancelada"];
@@ -171,7 +174,7 @@ function ImportarNotasInner() {
       setErrPedido("");
       const { data, error } = await supabase
         .from("pedidos")
-        .select("id,status,data_inicio_prevista,local_carregamento,veiculo_id,motorista_id,motoristas(nome),entregas(id)")
+        .select("id,numero,status,data_inicio_prevista,local_carregamento,veiculo_id,motorista_id,motoristas(nome),entregas(id)")
         .eq("id", pedidoAlvoId)
         .eq("empresa_id", empresaId)
         .single();
@@ -182,7 +185,7 @@ function ImportarNotasInner() {
       }
       const p = data as unknown as PedidoAlvo;
       if (STATUS_FINALIZADOS.includes(p.status)) {
-        setErrPedido(`O pedido #${idCurto(p.id)} está finalizado (${p.status}) e não pode receber novas entregas.`);
+        setErrPedido(`O pedido ${rotuloPedido(p.numero, p.id)} está finalizado (${p.status}) e não pode receber novas entregas.`);
         setPedidoAlvo(p);
         return;
       }
@@ -199,7 +202,7 @@ function ImportarNotasInner() {
       setCarregandoOpcoes(true);
       const { data } = await supabase
         .from("pedidos")
-        .select("id,status,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso)")
+        .select("id,numero,status,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso)")
         .eq("empresa_id", empresaId)
         .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
         .order("data_inicio_prevista", { ascending: false })
@@ -454,7 +457,7 @@ function ImportarNotasInner() {
       }}>
         <div>
           <span style={{ fontSize: "13px", fontWeight: 700, color: "#1d4ed8" }}>
-            Importando para o pedido #{idCurto(pedidoAlvo.id)}
+            Importando para o pedido {rotuloPedido(pedidoAlvo.numero, pedidoAlvo.id)}
           </span>
           {pedidoAlvo.data_inicio_prevista && (
             <span style={{ fontSize: "12px", color: "#3b82f6", marginLeft: "12px" }}>

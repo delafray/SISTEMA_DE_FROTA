@@ -22,6 +22,7 @@ import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
 import { FluxoStepper } from "./_components/FluxoStepper";
 import { ModalDespacho, type VeiculoOpcao, type MotoristaOpcao } from "../_components/ModalDespacho";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 
 /** Constraint do banco aceita só as formas FEMININAS (ver ../page.tsx) */
 const STATUS_FEMININO: Record<string, string> = {
@@ -34,6 +35,7 @@ type ParadaMapa = MapaRotaProps["paradas"][number];
 
 type Pedido = {
   id: string;
+  numero: string | null;
   empresa_id: string | null;
   status: string;
   data_inicio_prevista: string | null;
@@ -196,7 +198,7 @@ export default function DespachoDetalhePage() {
       const supabase = createClient();
       const [pedidoRes, entregasRes, paradasRes, rotaRes] = await Promise.all([
         supabase.from("pedidos")
-          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,local_carregamento,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)" as never)
+          .select("id,numero,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,local_carregamento,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)" as never)
           .eq("id", id)
           .single(),
         supabase.from("entregas")
@@ -422,8 +424,8 @@ export default function DespachoDetalhePage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title={`Despacho — ${cliente}`}
-        subtitle={`Pedido criado em ${fmtDT(pedido.created_at)}`}
+        title={`Pedido ${rotuloPedido(pedido.numero, pedido.id)} — ${cliente}`}
+        subtitle={`Criado em ${fmtDT(pedido.created_at)}`}
         actions={
           <>
             <Btn href="/despacho" variant="ghost">← Voltar</Btn>
@@ -484,6 +486,7 @@ export default function DespachoDetalhePage() {
             cor={COR_PEDIDO}
             acoes={<Btn href={`/pedidos/${id}/editar`} variant="outline" size="xs">✏️ Editar pedido</Btn>}
           >
+            <Row label="Nº do pedido" value={<span style={{ fontFamily: "ui-monospace, monospace" }}>{rotuloPedido(pedido.numero, pedido.id)}</span>} />
             <Row label="Cliente" value={cliente} />
             <Row label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
             <Row label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
@@ -276,7 +277,7 @@ export default function PedidosPage() {
       const from = paginaAtual * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
       const dataQ = supabase.from("pedidos")
-        .select("id,status,valor_pedido,km_inicial,km_final,data_inicio_prevista,pago,data_pagamento,veiculos(placa,modelo),motoristas(nome)")
+        .select("id,numero,status,valor_pedido,km_inicial,km_final,data_inicio_prevista,pago,data_pagamento,veiculos(placa,modelo),motoristas(nome)")
         .eq("empresa_id", empId)
         .order("created_at", { ascending: false })
         .order("id",         { ascending: true })
@@ -551,7 +552,7 @@ export default function PedidosPage() {
               <MobileCard
                 key={pedido.id}
                 href={`/entregas/${pedido.id}/editar`}
-                title={`Pedido #${pedido.id.slice(0, 8)}`}
+                title={`Pedido ${rotuloPedido((pedido as { numero?: string | null }).numero, pedido.id)}`}
                 subtitle={motorista?.nome ?? "Sem motorista"}
                 badge={<Badge variant={STATUS_VAR[pedido.status] ?? "default"}>{STATUS_LABEL[pedido.status] ?? pedido.status}</Badge>}
                 highlight={statusColor}

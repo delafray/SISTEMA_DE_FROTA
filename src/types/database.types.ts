@@ -2370,6 +2370,21 @@ export type Database = {
           },
         ]
       }
+      pedido_numeracao: {
+        Row: {
+          ano: number
+          proximo: number
+        }
+        Insert: {
+          ano: number
+          proximo: number
+        }
+        Update: {
+          ano?: number
+          proximo?: number
+        }
+        Relationships: []
+      }
       pedido_parcelas: {
         Row: {
           created_at: string
@@ -2411,6 +2426,7 @@ export type Database = {
       }
       pedidos: {
         Row: {
+          acrescimos: number
           cliente_id: string | null
           created_at: string
           data_fim_prevista: string | null
@@ -2418,6 +2434,7 @@ export type Database = {
           data_inicio_prevista: string | null
           data_inicio_real: string | null
           data_pagamento: string | null
+          descontos: number
           empresa_faturamento_id: string | null
           empresa_id: string
           empresa_motorista_id: string | null
@@ -2430,6 +2447,7 @@ export type Database = {
           local_carregamento_id: string | null
           modo: string | null
           motorista_id: string | null
+          numero: string | null
           observacoes: string | null
           observacoes_financeiras: string | null
           origem_demanda: string | null
@@ -2442,6 +2460,7 @@ export type Database = {
           veiculo_id: string | null
         }
         Insert: {
+          acrescimos?: number
           cliente_id?: string | null
           created_at?: string
           data_fim_prevista?: string | null
@@ -2449,6 +2468,7 @@ export type Database = {
           data_inicio_prevista?: string | null
           data_inicio_real?: string | null
           data_pagamento?: string | null
+          descontos?: number
           empresa_faturamento_id?: string | null
           empresa_id: string
           empresa_motorista_id?: string | null
@@ -2461,6 +2481,7 @@ export type Database = {
           local_carregamento_id?: string | null
           modo?: string | null
           motorista_id?: string | null
+          numero?: string | null
           observacoes?: string | null
           observacoes_financeiras?: string | null
           origem_demanda?: string | null
@@ -2473,6 +2494,7 @@ export type Database = {
           veiculo_id?: string | null
         }
         Update: {
+          acrescimos?: number
           cliente_id?: string | null
           created_at?: string
           data_fim_prevista?: string | null
@@ -2480,6 +2502,7 @@ export type Database = {
           data_inicio_prevista?: string | null
           data_inicio_real?: string | null
           data_pagamento?: string | null
+          descontos?: number
           empresa_faturamento_id?: string | null
           empresa_id?: string
           empresa_motorista_id?: string | null
@@ -2492,6 +2515,7 @@ export type Database = {
           local_carregamento_id?: string | null
           modo?: string | null
           motorista_id?: string | null
+          numero?: string | null
           observacoes?: string | null
           observacoes_financeiras?: string | null
           origem_demanda?: string | null

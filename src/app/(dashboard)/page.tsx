@@ -3,11 +3,12 @@ import { redirect } from "next/navigation";
 import Link from "next/link";
 import { PageHeader, KpiCard } from "@/components/ui/ds";
 import { LembretesWidget } from "@/components/dashboard/LembretesWidget";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 
 export const dynamic = "force-dynamic";
 
 type PedidoRecente = {
-  id: string; status: string;
+  id: string; numero: string | null; status: string;
   valor_pedido: number | null; created_at: string;
   data_inicio_prevista: string | null; data_fim_prevista: string | null;
   motoristas: { nome: string } | null;
@@ -104,7 +105,7 @@ export default async function DashboardPage() {
     supabase.from("adiantamentos").select("*", { count: "exact", head: true })
       .eq("empresa_id", empresaId).eq("status", "solicitado"),
     supabase.from("pedidos")
-      .select("id,status,valor_pedido,created_at,data_inicio_prevista,data_fim_prevista,motoristas(nome),veiculos(placa,modelo)")
+      .select("id,numero,status,valor_pedido,created_at,data_inicio_prevista,data_fim_prevista,motoristas(nome),veiculos(placa,modelo)")
       .eq("empresa_id", empresaId)
       .order("created_at", { ascending: false })
       .limit(8),
@@ -186,7 +187,8 @@ export default async function DashboardPage() {
     alertas.push({ tipo, msg, href: `/veiculos/${m.veiculo_id}/editar` });
   }
 
-  const pedidosRecentesArr = (pedidosRecentes as PedidoRecente[]) ?? [];
+  // `numero` é coluna nova (migration_numero_pedido) — regenerar database.types.ts
+  const pedidosRecentesArr = (pedidosRecentes as unknown as PedidoRecente[]) ?? [];
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -314,7 +316,7 @@ export default async function DashboardPage() {
                     <Link key={p.id} href={`/pedidos/${p.id}`} style={{ textDecoration: "none" }}>
                       <div style={{ background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "10px", padding: "12px 14px" }}>
                         <div style={{ fontWeight: 700, fontSize: "14px", color: "#1e40af", marginBottom: "4px" }}>
-                          Pedido #{p.id.slice(0, 8)}
+                          Pedido {rotuloPedido(p.numero, p.id)}
                         </div>
                         <div style={{ fontSize: "12px", color: "#3b82f6", display: "flex", gap: "12px", flexWrap: "wrap" }}>
                           {v && <span>🚚 {v.placa} {v.modelo}</span>}
@@ -351,7 +353,7 @@ export default async function DashboardPage() {
                     return (
                       <tr key={p.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
                         <td style={{ padding: "8px 16px", fontSize: "12px", fontWeight: 600, color: "#1e293b" }}>
-                          Pedido #{p.id.slice(0, 8)}
+                          Pedido {rotuloPedido(p.numero, p.id)}
                         </td>
                         <td style={{ padding: "8px 8px", fontSize: "12px", color: "#64748b" }}>{m?.nome ?? "—"}</td>
                         <td style={{ padding: "8px 8px", fontSize: "12px", color: "#64748b" }}>{v?.placa ?? "—"}</td>
@@ -384,7 +386,7 @@ export default async function DashboardPage() {
                   <Link key={p.id} href={`/pedidos/${p.id}`} style={{ textDecoration: "none" }}>
                     <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", flexDirection: "column", gap: "6px" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>Pedido #{p.id.slice(0, 8)}</span>
+                        <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>Pedido {rotuloPedido(p.numero, p.id)}</span>
                         <span style={{ background: STATUS_BG[p.status] ?? "#f1f5f9", color: STATUS_VAR[p.status] ?? "#475569", borderRadius: "9999px", padding: "2px 8px", fontSize: "10px", fontWeight: 700, flexShrink: 0 }}>
                           {STATUS_LABEL[p.status] ?? p.status}
                         </span>

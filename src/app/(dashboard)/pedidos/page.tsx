@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { normalizar } from "@/lib/utils/normalizar";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   PageHeader, DataTable, Th, Td, Tr, Badge, Btn,
   KpiCard, EmptyState, SearchInput, selectStyle,
@@ -20,6 +21,7 @@ type EntregaLite = {
 
 type Pedido = {
   id: string;
+  numero: string | null;
   status: string;
   valor_pedido: number | null;
   pago: boolean | null;
@@ -179,22 +181,17 @@ export default function PedidosListPage() {
         const motIds  = (mots.data ?? []).map(m => m.id);
         const veicIds = (veics.data ?? []).map(v => v.id);
 
-        const partes: string[] = [];
+        const partes: string[] = [`numero.ilike.${like}`]; // busca direta pelo nº do pedido
         if (pedidoIds.length > 0) partes.push(`id.in.(${pedidoIds.join(",")})`);
         if (motIds.length > 0)    partes.push(`motorista_id.in.(${motIds.join(",")})`);
         if (veicIds.length > 0)   partes.push(`veiculo_id.in.(${veicIds.join(",")})`);
-        if (partes.length === 0) {
-          // termo não casou nada em lugar nenhum → resultado vazio sem consultar
-          setPedidos([]); setTotal(0); setLoading(false);
-          return;
-        }
         orBusca = partes.join(",");
       }
 
       let q = supabase
         .from("pedidos")
         .select(
-          "id,status,valor_pedido,pago,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))",
+          "id,numero,status,valor_pedido,pago,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))",
           { count: "exact" }
         )
         .eq("empresa_id", empresaId)
@@ -328,7 +325,7 @@ export default function PedidosListPage() {
             toolbar={
               <>
                 <SearchInput
-                  placeholder="Buscar cliente, destino, motorista ou placa..."
+                  placeholder="Buscar nº do pedido, cliente, destino, motorista ou placa..."
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                 />
@@ -345,6 +342,7 @@ export default function PedidosListPage() {
           >
             <thead>
               <tr>
+                <Th>Nº</Th>
                 <Th>Cliente</Th>
                 <Th>Previsto</Th>
                 <Th>Destinos</Th>
@@ -357,14 +355,17 @@ export default function PedidosListPage() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><Td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
+                <tr><Td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
               ) : filtradas.length === 0 ? (
-                <tr><td colSpan={8}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
+                <tr><td colSpan={9}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
               ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
                 const veicLabel = veiculo ? (veiculo.apelido?.trim() || `${veiculo.placa} · ${veiculo.modelo}`) : null;
                 const cancelado = p.status === "cancelada" || p.status === "cancelado";
                 return (
                   <Tr key={p.id}>
+                    <Td style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap" }}>
+                      {rotuloPedido(p.numero, p.id)}
+                    </Td>
                     <Td>
                       <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
                       <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
@@ -414,7 +415,7 @@ export default function PedidosListPage() {
         {/* ── Busca Mobile ────────────────────────────────────────────────── */}
         <div className="mobile-only" style={{ marginBottom: "4px" }}>
           <SearchInput
-            placeholder="Buscar cliente, destino, motorista ou placa..."
+            placeholder="Buscar nº do pedido, cliente, destino, motorista ou placa..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
@@ -435,6 +436,7 @@ export default function PedidosListPage() {
                 badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}
                 highlight={statusColor}
                 details={[
+                  { label: "Pedido",     value: rotuloPedido(p.numero, p.id) },
                   { label: "Previsto",   value: fmtDataPrevista(p.data_inicio_prevista) },
                   { label: "Valor",      value: p.valor_pedido != null ? `R$ ${fmtMoeda(p.valor_pedido)}` : "—" },
                   { label: "Pagamento",  value: cancelado ? "—" : p.pago ? "✅ Pago" : "⏳ Em aberto" },

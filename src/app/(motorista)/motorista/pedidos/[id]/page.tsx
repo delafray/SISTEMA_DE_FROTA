@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { rotuloPedido } from "@/lib/utils/numeroPedido";
 
 type Pedido = {
   id: string;
@@ -64,7 +65,7 @@ export default function MotoristaPedidoDetalhePage() {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
       const { data } = await supabase.from("pedidos")
-        .select("id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,valor_pedido,pago,veiculos(placa,marca,modelo),entregas(id,origem,destino,status,tipo_carga,clientes(nome_fantasia))")
+        .select("id,numero,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,valor_pedido,pago,veiculos(placa,marca,modelo),entregas(id,origem,destino,status,tipo_carga,clientes(nome_fantasia))")
         .eq("id", id)
         .single();
       setPedido(data as unknown as Pedido | null);
@@ -107,7 +108,7 @@ export default function MotoristaPedidoDetalhePage() {
           ← Voltar
         </button>
         <div style={{ fontSize: "11px", color: "rgba(147,197,253,0.6)", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.08em" }}>
-          Detalhes do Pedido
+          Pedido {rotuloPedido((pedido as { numero?: string | null }).numero, pedido.id)}
         </div>
         {veiculo && (
           <h1 style={{ fontSize: "18px", fontWeight: 700, color: "#fff", margin: "4px 0 8px", lineHeight: 1.2 }}>
