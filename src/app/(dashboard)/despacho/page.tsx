@@ -26,7 +26,11 @@ type Pedido = {
   valor_pedido: number | null;
   created_at: string | null;
   data_inicio_prevista: string | null;
+  veiculo_id?: string | null;
+  motorista_id?: string | null;
   entregas: EntregaLite[];
+  motoristas?: { nome: string } | null;
+  veiculos?: { placa: string; apelido: string | null; modelo: string } | null;
 };
 
 type Veiculo = {
@@ -41,6 +45,8 @@ type Motorista = {
   id: string;
   nome: string;
 };
+
+type Aba = "fila" | "despachados";
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
@@ -125,9 +131,11 @@ type ModalProps = {
   onClose: () => void;
   saving: boolean;
   err: string;
+  /** Quando true: título e botão trocam para "Trocar caminhão/motorista" */
+  modoTroca?: boolean;
 };
 
-function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, saving, err }: ModalProps) {
+function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, saving, err, modoTroca }: ModalProps) {
   const supabase = createClient();
   const [veiculoId, setVeiculoId] = useState("");
   const [motoristaId, setMotoristaId] = useState("");
@@ -152,6 +160,18 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
     setLoadingMotorista(false);
   };
 
+  const titulo = modoTroca
+    ? "Trocar Caminhão / Motorista"
+    : `Despachar Pedido${pedidosIds.length > 1 ? `s (${pedidosIds.length})` : ""}`;
+
+  const descricao = modoTroca
+    ? "Selecione o novo caminhão e motorista. O status do pedido não será alterado."
+    : `Selecione o caminhão e o motorista para este despacho.${pedidosIds.length > 1 ? " Todos os pedidos selecionados receberão o mesmo caminhão/motorista." : ""}`;
+
+  const labelBtn = modoTroca
+    ? (saving ? "Salvando..." : "Confirmar Troca")
+    : (saving ? "Despachando..." : "Confirmar Despacho");
+
   return (
     <div
       style={{
@@ -171,11 +191,10 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
         boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
       }}>
         <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>
-          Despachar Pedido{pedidosIds.length > 1 ? `s (${pedidosIds.length})` : ""}
+          {titulo}
         </h2>
         <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 20px" }}>
-          Selecione o caminhão e o motorista para este despacho.
-          {pedidosIds.length > 1 && " Todos os pedidos selecionados receberão o mesmo caminhão/motorista."}
+          {descricao}
         </p>
 
         {err && (
@@ -233,7 +252,7 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
             disabled={saving || !veiculoId || !motoristaId}
             onClick={() => onConfirm(veiculoId, motoristaId)}
           >
-            {saving ? "Despachando..." : "Confirmar Despacho"}
+            {labelBtn}
           </Btn>
         </div>
       </div>
@@ -251,6 +270,13 @@ export default function DespachoPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  // ── Abas ────────────────────────────────────────────────────────────────────
+  const [aba, setAba] = useState<Aba>("fila");
+
+  // Contagens de cada aba (cabeçalho)
+  const [contFila, setContFila]             = useState<number | null>(null);
+  const [contDespachados, setContDespachados] = useState<number | null>(null);
+
   // Dados paginados
   const [pedidos, setPedidos]       = useState<Pedido[]>([]);
   const [total, setTotal]           = useState(0);
@@ -260,16 +286,23 @@ export default function DespachoPage() {
   const [loading, setLoading]       = useState(true);
   const [empresaId, setEmpresaId]   = useState<string | null>(null);
 
-  // Busca
+  // Busca — aplicada no SERVIDOR (regra do CLAUDE.md), com debounce de 350ms
   const [busca, setBusca] = useState("");
   const buscaDeferred = useDeferredValue(busca);
+  const [buscaServidor, setBuscaServidor] = useState("");
 
-  // Seleção múltipla
+  useEffect(() => {
+    const t = setTimeout(() => { setBuscaServidor(busca); setPagina(0); }, 350);
+    return () => clearTimeout(t);
+  }, [busca]);
+
+  // Seleção múltipla (apenas na aba Fila)
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   // Modal
   const [modalAberto, setModalAberto]       = useState(false);
   const [modalPedidosIds, setModalPedidosIds] = useState<string[]>([]);
+  const [modalModoTroca, setModalModoTroca]   = useState(false);
   const [saving, setSaving]                 = useState(false);
   const [modalErr, setModalErr]             = useState("");
   const [sucesso, setSucesso]               = useState("");
@@ -306,7 +339,35 @@ export default function DespachoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Carrega página de pedidos (reexecuta ao mudar pagina ou empresa) ──────
+  // ── Contagens de cada aba (head queries, sem baixar linhas) ───────────────
+
+  const carregarContagens = async (eId: string) => {
+    const [{ count: cFila }, { count: cDesp }] = await Promise.all([
+      supabase
+        .from("pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", eId)
+        .is("veiculo_id", null)
+        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`),
+      supabase
+        .from("pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", eId)
+        .not("veiculo_id", "is", null)
+        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`),
+    ]);
+    setContFila(cFila ?? 0);
+    setContDespachados(cDesp ?? 0);
+  };
+
+  useEffect(() => {
+    if (!empresaId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    carregarContagens(empresaId);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId]);
+
+  // ── Carrega página de pedidos (reexecuta ao mudar pagina, empresa ou aba) ──
 
   useEffect(() => {
     if (!empresaId) return;
@@ -315,16 +376,60 @@ export default function DespachoPage() {
       const from = pagina * PAGE_SIZE_DESPACHO;
       const to   = from + PAGE_SIZE_DESPACHO - 1;
 
-      const { data, count } = await (supabase
+      // Busca no SERVIDOR: o termo casa cliente/destino/nome avulso, que moram
+      // nas ENTREGAS — prefetch dos pedido_ids que casam e filtra com .in().
+      // (ilike não funciona em join; regra de listagens do CLAUDE.md.)
+      let idsBusca: string[] | null = null;
+      const termo = buscaServidor.replace(/[%,()]/g, "").trim();
+      if (termo) {
+        const like = `%${termo}%`;
+        const [entsTexto, clis] = await Promise.all([
+          supabase.from("entregas").select("pedido_id").eq("empresa_id", empresaId)
+            .or(`destino.ilike.${like},nome_cliente_avulso.ilike.${like}`)
+            .not("pedido_id", "is", null).limit(500),
+          supabase.from("clientes").select("id").eq("empresa_id", empresaId)
+            .or(`nome_fantasia.ilike.${like},apelido.ilike.${like}`).limit(200),
+        ]);
+        const cliIds = (clis.data ?? []).map(c => c.id);
+        const entsCli = cliIds.length > 0
+          ? await supabase.from("entregas").select("pedido_id").eq("empresa_id", empresaId)
+              .in("cliente_id", cliIds).not("pedido_id", "is", null).limit(500)
+          : { data: [] as { pedido_id: string }[] };
+        idsBusca = Array.from(new Set([
+          ...(entsTexto.data ?? []).map(e => e.pedido_id),
+          ...(entsCli.data ?? []).map(e => e.pedido_id),
+        ].filter((x): x is string => !!x)));
+        if (idsBusca.length === 0) {
+          setPedidos([]); setTotal(0); setLoading(false);
+          return;
+        }
+      }
+
+      // Monta query conforme aba
+      let selectFields =
+        "id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
+      if (aba === "despachados") {
+        selectFields =
+          "id,status,valor_pedido,created_at,data_inicio_prevista,veiculo_id,motorista_id,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
+      }
+
+      let q = supabase
         .from("pedidos")
-        .select(
-          "id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))",
-          { count: "exact" }
-        )
+        .select(selectFields, { count: "exact" })
         .eq("empresa_id", empresaId)
-        .is("veiculo_id", null)
-        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
+        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`);
+
+      if (aba === "fila") {
+        q = q.is("veiculo_id", null);
+      } else {
+        q = q.not("veiculo_id", "is", null);
+      }
+
+      if (idsBusca) q = q.in("id", idsBusca);
+
+      const { data, count } = await (q
         .order("data_inicio_prevista", { ascending: true })
+        .order("id", { ascending: true })
         .range(from, to) as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
 
       setPedidos(data ?? []);
@@ -333,9 +438,21 @@ export default function DespachoPage() {
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, pagina]);
+  }, [empresaId, pagina, buscaServidor, aba]);
 
-  // ── Índice de busca + filtro (cliente / destino) ────────────────────────────
+  // ── Trocar aba ────────────────────────────────────────────────────────────
+
+  const trocarAba = (novaAba: Aba) => {
+    if (novaAba === aba) return;
+    setAba(novaAba);
+    setPagina(0);
+    setSelecionados(new Set());
+    setBusca("");
+    setBuscaServidor("");
+  };
+
+  // ── Refinamento client-side instantâneo (a busca REAL roda no servidor via
+  //    buscaServidor; isto só filtra a página atual enquanto digita) ───────────
 
   const pedidosIndexados = useMemo(() =>
     pedidos.map(p => {
@@ -385,13 +502,14 @@ export default function DespachoPage() {
 
   // ── Abrir modal ────────────────────────────────────────────────────────────
 
-  const abrirModal = (ids: string[]) => {
+  const abrirModal = (ids: string[], troca = false) => {
     setModalPedidosIds(ids);
+    setModalModoTroca(troca);
     setModalErr("");
     setModalAberto(true);
   };
 
-  // ── Confirmar despacho ─────────────────────────────────────────────────────
+  // ── Confirmar despacho (novo despacho OU troca) ────────────────────────────
 
   const confirmarDespacho = async (veiculoId: string, motoristaId: string) => {
     setSaving(true);
@@ -410,73 +528,134 @@ export default function DespachoPage() {
         return;
       }
 
-      // Agrupa os pedidos por status JÁ NORMALIZADO (feminino), pra gravar um
-      // status válido na mesma operação e não tropeçar na constraint.
-      const statusPorId = new Map(pedidos.map(p => [p.id, normalizarStatus(p.status)]));
-      const grupos = new Map<string, string[]>();
-      for (const pid of modalPedidosIds) {
-        const st = statusPorId.get(pid) ?? "agendada";
-        if (!grupos.has(st)) grupos.set(st, []);
-        grupos.get(st)!.push(pid);
-      }
-
-      for (const [statusNorm, ids] of grupos) {
-                const pedidoPayload: any = {
+      if (modalModoTroca) {
+        // ── MODO TROCA: apenas veículo/motorista, NÃO mexe no status ──────────
+        const pedidoPayload: any = {
           veiculo_id:           veiculoId,
           motorista_id:         motoristaId,
           empresa_motorista_id: empresa_motorista_id,
-          status:               statusNorm, // normaliza gênero → constraint feliz
         };
-        const { error: errPedidos } = await supabase
+        const { error: errPedido } = await supabase
           .from("pedidos")
           .update(pedidoPayload)
-          .in("id", ids);
+          .in("id", modalPedidosIds);
 
-        if (errPedidos) {
-          setModalErr(fmtErroSupabase(errPedidos, "Erro ao despachar o pedido"));
+        if (errPedido) {
+          setModalErr(fmtErroSupabase(errPedido, "Erro ao trocar caminhão/motorista"));
           setSaving(false);
           return;
         }
+
+        // Propaga às entregas
+        const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
+        const { error: errEntregas } = await supabase
+          .from("entregas")
+          .update(entregaPayload)
+          .in("pedido_id", modalPedidosIds);
+
+        if (errEntregas) {
+          setModalErr(fmtErroSupabase(errEntregas, "Pedido atualizado, mas houve erro ao atualizar as entregas"));
+          setSaving(false);
+          return;
+        }
+
+        // Atualiza linha localmente (sem reload) — busca veículo/motorista da lista
+        const vObj = veiculos.find(v => v.id === veiculoId);
+        const mObj = motoristas.find(m => m.id === motoristaId);
+        setPedidos(prev => prev.map(p => {
+          if (!modalPedidosIds.includes(p.id)) return p;
+          return {
+            ...p,
+            veiculo_id: veiculoId,
+            motorista_id: motoristaId,
+            veiculos: vObj ? { placa: vObj.placa, apelido: vObj.apelido, modelo: vObj.modelo } : p.veiculos,
+            motoristas: mObj ? { nome: mObj.nome } : p.motoristas,
+          };
+        }));
+
+        setModalAberto(false);
+        setSucesso("Caminhão/motorista trocados com sucesso!");
+        setTimeout(() => setSucesso(""), 4000);
+
+        // Atualiza contagens (a troca não muda os totais de fila/despachados)
+      } else {
+        // ── MODO DESPACHO NORMAL ──────────────────────────────────────────────
+
+        // Agrupa os pedidos por status JÁ NORMALIZADO (feminino), pra gravar um
+        // status válido na mesma operação e não tropeçar na constraint.
+        const statusPorId = new Map(pedidos.map(p => [p.id, normalizarStatus(p.status)]));
+        const grupos = new Map<string, string[]>();
+        for (const pid of modalPedidosIds) {
+          const st = statusPorId.get(pid) ?? "agendada";
+          if (!grupos.has(st)) grupos.set(st, []);
+          grupos.get(st)!.push(pid);
+        }
+
+        for (const [statusNorm, ids] of grupos) {
+          const pedidoPayload: any = {
+            veiculo_id:           veiculoId,
+            motorista_id:         motoristaId,
+            empresa_motorista_id: empresa_motorista_id,
+            status:               statusNorm, // normaliza gênero → constraint feliz
+          };
+          const { error: errPedidos } = await supabase
+            .from("pedidos")
+            .update(pedidoPayload)
+            .in("id", ids);
+
+          if (errPedidos) {
+            setModalErr(fmtErroSupabase(errPedidos, "Erro ao despachar o pedido"));
+            setSaving(false);
+            return;
+          }
+        }
+
+        // Atualiza entregas dos pedidos despachados (caminhão + motorista).
+        const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
+        const { error: errEntregas } = await supabase
+          .from("entregas")
+          .update(entregaPayload)
+          .in("pedido_id", modalPedidosIds);
+
+        if (errEntregas) {
+          setModalErr(fmtErroSupabase(errEntregas, "Pedido despachado, mas houve erro ao atualizar as entregas"));
+          setSaving(false);
+          return;
+        }
+
+        // Remove da fila local (sem reload de página)
+        setPedidos(prev => prev.filter(p => !modalPedidosIds.includes(p.id)));
+        setTotal(prev => Math.max(0, prev - modalPedidosIds.length));
+        setSelecionados(new Set());
+        setModalAberto(false);
+
+        const qtd = modalPedidosIds.length;
+        setSucesso(
+          qtd === 1
+            ? "Pedido despachado com sucesso!"
+            : `${qtd} pedidos despachados com sucesso!`
+        );
+        setTimeout(() => setSucesso(""), 4000);
+
+        // Refresca contagens após despacho
+        if (empresaId) carregarContagens(empresaId);
       }
-
-      // Atualiza entregas dos pedidos despachados (caminhão + motorista).
-            const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
-      const { error: errEntregas } = await supabase
-        .from("entregas")
-        .update(entregaPayload)
-        .in("pedido_id", modalPedidosIds);
-
-      if (errEntregas) {
-        setModalErr(fmtErroSupabase(errEntregas, "Pedido despachado, mas houve erro ao atualizar as entregas"));
-        setSaving(false);
-        return;
-      }
-
-      // Remove da fila local (sem reload de página)
-      setPedidos(prev => prev.filter(p => !modalPedidosIds.includes(p.id)));
-      setTotal(prev => Math.max(0, prev - modalPedidosIds.length));
-      setSelecionados(new Set());
-      setModalAberto(false);
-
-      const qtd = modalPedidosIds.length;
-      setSucesso(
-        qtd === 1
-          ? "Pedido despachado com sucesso!"
-          : `${qtd} pedidos despachados com sucesso!`
-      );
-      setTimeout(() => setSucesso(""), 4000);
     } catch (e) {
-      setModalErr(fmtErroSupabase(e, "Erro inesperado ao despachar"));
+      setModalErr(fmtErroSupabase(e, "Erro inesperado"));
     } finally {
       setSaving(false);
     }
   };
 
-  // ── KPIs ───────────────────────────────────────────────────────────────────
+  // ── KPIs e controles ───────────────────────────────────────────────────────
 
   const totalAguardando  = total;
   const totalPaginas     = Math.ceil(total / PAGE_SIZE_DESPACHO);
-  const algumselecionado = selecionados.size > 0;
+  const algumselecionado = aba === "fila" && selecionados.size > 0;
+
+  // Rótulos das abas
+  const labelFila        = contFila        != null ? `Fila (${contFila})`               : "Fila";
+  const labelDespachados = contDespachados != null ? `Despachados (${contDespachados})` : "Despachados";
 
   // Controles de paginação (reutilizáveis desktop/mobile)
   const Paginacao = ({ mobile = false }: { mobile?: boolean }) =>
@@ -488,7 +667,7 @@ export default function DespachoPage() {
       }}>
         {!mobile && (
           <span style={{ fontSize: "13px", color: "#64748b" }}>
-            Página {pagina + 1} de {totalPaginas} · {total} aguardando
+            Página {pagina + 1} de {totalPaginas} · {total} {aba === "fila" ? "aguardando" : "despachados"}
           </span>
         )}
         <Btn
@@ -517,7 +696,7 @@ export default function DespachoPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
         title="Despacho"
-        subtitle="Fila de pedidos aguardando caminhão e motorista"
+        subtitle={aba === "fila" ? "Fila de pedidos aguardando caminhão e motorista" : "Pedidos já despachados"}
         count={totalAguardando}
         actions={
           algumselecionado ? (
@@ -533,9 +712,37 @@ export default function DespachoPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
+        {/* Abas pill */}
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
+          {(["fila", "despachados"] as Aba[]).map(a => (
+            <button
+              key={a}
+              type="button"
+              onClick={() => trocarAba(a)}
+              style={{
+                padding: "6px 16px",
+                borderRadius: "20px",
+                fontSize: "13px",
+                fontWeight: 600,
+                cursor: "pointer",
+                border: aba === a ? "none" : "1px solid #cbd5e1",
+                background: aba === a ? "#2563eb" : "#fff",
+                color: aba === a ? "#fff" : "#475569",
+                transition: "all 0.15s",
+              }}
+            >
+              {a === "fila" ? labelFila : labelDespachados}
+            </button>
+          ))}
+        </div>
+
         {/* KPI */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "320px" }}>
-          <KpiCard label="Aguardando Despacho" value={loading ? "..." : totalAguardando} color="warning" />
+          <KpiCard
+            label={aba === "fila" ? "Aguardando Despacho" : "Despachados (ativos)"}
+            value={loading ? "..." : totalAguardando}
+            color={aba === "fila" ? "warning" : "info"}
+          />
         </div>
 
         {/* Alerta de sucesso */}
@@ -556,7 +763,7 @@ export default function DespachoPage() {
         <div className="m-hide">
           <DataTable
             count={filtrados.length}
-            label="pedidos aguardando despacho"
+            label={aba === "fila" ? "pedidos aguardando despacho" : "pedidos despachados"}
             toolbar={
               <>
                 <SearchInput
@@ -564,7 +771,8 @@ export default function DespachoPage() {
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                 />
-                {algumselecionado && (
+                {/* Botão de despachar múltiplos — só na aba Fila */}
+                {aba === "fila" && algumselecionado && (
                   <Btn
                     variant="primary"
                     size="sm"
@@ -578,18 +786,22 @@ export default function DespachoPage() {
           >
             <thead>
               <tr>
-                <Th style={{ width: "36px", textAlign: "center" }}>
-                  <input
-                    type="checkbox"
-                    checked={todosSelecionados}
-                    onChange={toggleTodos}
-                    style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
-                    title="Selecionar todos"
-                  />
-                </Th>
+                {/* Checkbox só na aba Fila */}
+                {aba === "fila" && (
+                  <Th style={{ width: "36px", textAlign: "center" }}>
+                    <input
+                      type="checkbox"
+                      checked={todosSelecionados}
+                      onChange={toggleTodos}
+                      style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                      title="Selecionar todos"
+                    />
+                  </Th>
+                )}
                 <Th>Cliente</Th>
                 <Th>Data Prevista</Th>
                 <Th>Destinos</Th>
+                {aba === "despachados" && <Th>Caminhão / Motorista</Th>}
                 <Th>Valor</Th>
                 <Th>Status</Th>
                 <Th></Th>
@@ -598,40 +810,63 @@ export default function DespachoPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  <Td colSpan={aba === "fila" ? 7 : 7} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                     Carregando...
                   </Td>
                 </tr>
               ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={7}>
+                  <td colSpan={aba === "fila" ? 7 : 7}>
                     <EmptyState
                       icon="🚚"
-                      message={busca ? "Nenhum pedido encontrado para essa busca." : "Nenhum pedido aguardando despacho. Lance um pedido primeiro."}
-                      action={busca ? undefined : <Btn href="/pedidos/novo">Criar Novo Pedido</Btn>}
+                      message={
+                        busca
+                          ? "Nenhum pedido encontrado para essa busca."
+                          : aba === "fila"
+                            ? "Nenhum pedido aguardando despacho. Lance um pedido primeiro."
+                            : "Nenhum pedido despachado no momento."
+                      }
+                      action={busca ? undefined : aba === "fila" ? <Btn href="/pedidos/novo">Criar Novo Pedido</Btn> : undefined}
                     />
                   </td>
                 </tr>
               ) : filtrados.map(({ p, entregas, cliente }) => {
-                const sel = selecionados.has(p.id);
+                const sel = aba === "fila" && selecionados.has(p.id);
+                // Dados do veículo/motorista para aba Despachados
+                const veicObj = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
+                const motObj  = one<{ nome: string }>(p.motoristas);
+                const veicLabel = veicObj
+                  ? (veicObj.apelido?.trim() ? `${veicObj.apelido} (${veicObj.placa})` : `${veicObj.placa} — ${veicObj.modelo}`)
+                  : "—";
+                const motLabel = motObj?.nome ?? "—";
+
                 return (
                   <Tr
                     key={p.id}
                     style={{ background: sel ? "#eff6ff" : undefined }}
                   >
-                    <Td style={{ textAlign: "center" }}>
-                      <input
-                        type="checkbox"
-                        checked={sel}
-                        onChange={() => toggleSelecionado(p.id)}
-                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
-                      />
-                    </Td>
+                    {/* Checkbox só na aba Fila */}
+                    {aba === "fila" && (
+                      <Td style={{ textAlign: "center" }}>
+                        <input
+                          type="checkbox"
+                          checked={sel}
+                          onChange={() => toggleSelecionado(p.id)}
+                          style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                        />
+                      </Td>
+                    )}
                     <Td style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</Td>
                     <Td>{fmtDate(p.data_inicio_prevista)}</Td>
                     <Td style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                       {resumoDestinos(entregas)}
                     </Td>
+                    {aba === "despachados" && (
+                      <Td style={{ fontSize: "12px", color: "#475569" }}>
+                        <div style={{ fontWeight: 600, color: "#1e293b" }}>{veicLabel}</div>
+                        <div>{motLabel}</div>
+                      </Td>
+                    )}
                     <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
                     <Td>
                       <Badge variant={STATUS_VAR[p.status] ?? "default"}>
@@ -641,13 +876,33 @@ export default function DespachoPage() {
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
                         <Btn href={`/pedidos/${p.id}`} variant="ghost" size="xs">Ver</Btn>
-                        <Btn
-                          variant="primary"
-                          size="xs"
-                          onClick={() => abrirModal([p.id])}
-                        >
-                          Despachar
-                        </Btn>
+                        {aba === "fila" ? (
+                          <>
+                            <Btn
+                              variant="primary"
+                              size="xs"
+                              onClick={() => abrirModal([p.id])}
+                            >
+                              Despachar
+                            </Btn>
+                            <Btn
+                              href={`/pedidos/importar?pedido_id=${p.id}`}
+                              variant="ghost"
+                              size="xs"
+                              title="Importar notas (XML) para este pedido"
+                            >
+                              📥 Notas
+                            </Btn>
+                          </>
+                        ) : (
+                          <Btn
+                            variant="outline"
+                            size="xs"
+                            onClick={() => abrirModal([p.id], true)}
+                          >
+                            Trocar
+                          </Btn>
+                        )}
                       </div>
                     </Td>
                   </Tr>
@@ -661,12 +916,18 @@ export default function DespachoPage() {
         {/* Lista Mobile */}
         <MobileList
           count={filtrados.length}
-          label="pedidos aguardando despacho"
-          emptyMessage="Nenhum pedido aguardando despacho."
+          label={aba === "fila" ? "pedidos aguardando despacho" : "pedidos despachados"}
+          emptyMessage={aba === "fila" ? "Nenhum pedido aguardando despacho." : "Nenhum pedido despachado."}
           emptyIcon="🚚"
         >
           {loading ? null : filtrados.map(({ p, entregas, cliente }) => {
-            const sel = selecionados.has(p.id);
+            const sel = aba === "fila" && selecionados.has(p.id);
+            const veicObj = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
+            const motObj  = one<{ nome: string }>(p.motoristas);
+            const veicLabel = veicObj
+              ? (veicObj.apelido?.trim() ? `${veicObj.apelido} (${veicObj.placa})` : `${veicObj.placa} — ${veicObj.modelo}`)
+              : null;
+
             return (
               <MobileCard
                 key={p.id}
@@ -681,26 +942,50 @@ export default function DespachoPage() {
                 details={[
                   { label: "Previsto", value: fmtDate(p.data_inicio_prevista) },
                   { label: "Valor",    value: fmtMoeda(p.valor_pedido) },
+                  ...(aba === "despachados" && veicLabel ? [{ label: "Caminhão", value: veicLabel }] : []),
+                  ...(aba === "despachados" && motObj?.nome ? [{ label: "Motorista", value: motObj.nome }] : []),
                 ]}
                 actions={
-                  <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                    <Btn href={`/pedidos/${p.id}`} variant="outline" size="sm">Ver</Btn>
-                    <Btn
-                      variant="primary"
-                      size="sm"
-                      onClick={() => abrirModal([p.id])}
-                      style={{ flex: 1, justifyContent: "center" }}
-                    >
-                      Despachar
-                    </Btn>
-                    <Btn
-                      variant={sel ? "outline" : "ghost"}
-                      size="sm"
-                      onClick={() => toggleSelecionado(p.id)}
-                    >
-                      {sel ? "Tirar" : "Marcar"}
-                    </Btn>
-                  </div>
+                  aba === "fila" ? (
+                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                      <Btn href={`/pedidos/${p.id}`} variant="outline" size="sm">Ver</Btn>
+                      <Btn
+                        variant="primary"
+                        size="sm"
+                        onClick={() => abrirModal([p.id])}
+                        style={{ flex: 1, justifyContent: "center" }}
+                      >
+                        Despachar
+                      </Btn>
+                      <Btn
+                        href={`/pedidos/importar?pedido_id=${p.id}`}
+                        variant="ghost"
+                        size="sm"
+                        title="Importar notas (XML)"
+                      >
+                        📥
+                      </Btn>
+                      <Btn
+                        variant={sel ? "outline" : "ghost"}
+                        size="sm"
+                        onClick={() => toggleSelecionado(p.id)}
+                      >
+                        {sel ? "Tirar" : "Marcar"}
+                      </Btn>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: "8px", width: "100%" }}>
+                      <Btn href={`/pedidos/${p.id}`} variant="outline" size="sm">Ver</Btn>
+                      <Btn
+                        variant="outline"
+                        size="sm"
+                        onClick={() => abrirModal([p.id], true)}
+                        style={{ flex: 1, justifyContent: "center" }}
+                      >
+                        Trocar
+                      </Btn>
+                    </div>
+                  )
                 }
               />
             );
@@ -708,7 +993,7 @@ export default function DespachoPage() {
         </MobileList>
         <div className="mobile-only"><Paginacao mobile /></div>
 
-        {/* FAB Mobile para despachar selecionados */}
+        {/* FAB Mobile para despachar selecionados — só na aba Fila */}
         {algumselecionado && (
           <button
             type="button"
@@ -733,6 +1018,7 @@ export default function DespachoPage() {
           onClose={() => { if (!saving) setModalAberto(false); }}
           saving={saving}
           err={modalErr}
+          modoTroca={modalModoTroca}
         />
       )}
     </div>

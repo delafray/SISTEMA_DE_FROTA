@@ -60,6 +60,8 @@ export default function AReceberTab({ empresas }: { empresas: string[] }) {
   const [totalPendente, setTotalPendente] = useState(0);
   const [totalRecebido, setTotalRecebido] = useState(0);
   const [qtdAtrasados, setQtdAtrasados] = useState(0);
+  /** pedido_id → progresso de parcelas (pedido parcelado dá baixa POR PARCELA, dentro do pedido) */
+  const [parcelado, setParcelado] = useState<Map<string, { total: number; pagas: number }>>(new Map());
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const hoje_ = hoje();
@@ -171,6 +173,27 @@ export default function AReceberTab({ empresas }: { empresas: string[] }) {
       } else {
         const lista = (data as Pedido[]) ?? [];
         setPedidos(prev => append ? [...prev, ...lista] : lista);
+        // Pedidos PARCELADOS: a baixa é por parcela (no pedido) — aqui só sinaliza.
+        // tabela nova (migration_pedido_faturamento_parcelas); regenerar database.types.ts
+        if (lista.length > 0) {
+          try {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            const { data: pars } = await (supabase as any)
+              .from("pedido_parcelas")
+              .select("pedido_id,pago")
+              .in("pedido_id", lista.map(p => p.id));
+            const mapa = new Map<string, { total: number; pagas: number }>();
+            for (const r of (pars ?? []) as { pedido_id: string; pago: boolean }[]) {
+              const m = mapa.get(r.pedido_id) ?? { total: 0, pagas: 0 };
+              m.total += 1;
+              if (r.pago) m.pagas += 1;
+              mapa.set(r.pedido_id, m);
+            }
+            setParcelado(prev => append ? new Map([...prev, ...mapa]) : mapa);
+          } catch { /* antes da migration a tabela não existe — segue sem badge */ }
+        } else if (!append) {
+          setParcelado(new Map());
+        }
       }
 
       if (pag === 0) setLoading(false);
@@ -367,7 +390,11 @@ export default function AReceberTab({ empresas }: { empresas: string[] }) {
                       }
                     </Td>
                     <Td>
-                      {pe.pago
+                      {parcelado.has(pe.id)
+                        ? <Btn size="xs" variant="outline" href={`/pedidos/${pe.id}`} title="Pedido parcelado — baixa por parcela no pedido">
+                            {parcelado.get(pe.id)!.pagas}/{parcelado.get(pe.id)!.total} parcelas
+                          </Btn>
+                        : pe.pago
                         ? <ActionBtn title="Desfazer baixa" variant="default" onClick={() => desfazerBaixa(pe.id)}>↩</ActionBtn>
                         : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(pe)}>Baixar</Btn>
                       }
@@ -401,7 +428,11 @@ export default function AReceberTab({ empresas }: { empresas: string[] }) {
                     { label: "Valor", value: fmtBRL(pe.valor_pedido ?? 0) },
                   ]}
                   actions={
-                    pe.pago
+                    parcelado.has(pe.id)
+                      ? <Btn size="xs" variant="outline" href={`/pedidos/${pe.id}`}>
+                          {parcelado.get(pe.id)!.pagas}/{parcelado.get(pe.id)!.total} parcelas
+                        </Btn>
+                      : pe.pago
                       ? <ActionBtn title="Desfazer" variant="default" onClick={() => desfazerBaixa(pe.id)}>↩</ActionBtn>
                       : <Btn size="xs" variant="primary" onClick={() => abrirBaixa(pe)}>Baixar</Btn>
                   }

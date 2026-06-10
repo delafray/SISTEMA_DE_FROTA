@@ -1,7 +1,7 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect, useRef, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -24,8 +24,7 @@ import {
 // ─── tipos internos ───────────────────────────────────────────────────────────
 
 type Modo = "xml" | "planilha";
-type Etapa = "upload" | "preview" | "resultado";
-type Agrupamento = "unico" | "por_nota";
+type Etapa = "selecionar_pedido" | "upload" | "preview" | "resultado";
 
 /** Linha unificada para a tabela de preview */
 type LinhaPreview = {
@@ -42,11 +41,25 @@ type LinhaPreview = {
   jaImportada: boolean;
 };
 
-type LocalCarreg = { id: string; nome: string; endereco: string; principal: boolean };
+type PedidoAlvo = {
+  id: string;
+  status: string;
+  data_inicio_prevista: string | null;
+  local_carregamento: string | null;
+  veiculo_id: string | null;
+  motorista_id: string | null;
+  motoristas: { nome: string } | null;
+  entregas: { id: string }[];
+};
+
+type PedidoOpcao = {
+  id: string;
+  status: string;
+  data_inicio_prevista: string | null;
+  entregas: { id: string; destino: string | null; nome_cliente_avulso: string | null }[];
+};
 
 // ─── helpers ─────────────────────────────────────────────────────────────────
-
-const hoje = () => new Date().toISOString().slice(0, 10);
 
 function fmtValor(v: number | null): string {
   if (v === null) return "—";
@@ -60,21 +73,46 @@ function chunks<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-// ─── página ──────────────────────────────────────────────────────────────────
+/** Retorna os 8 primeiros caracteres do UUID como ID curto */
+function idCurto(id: string): string {
+  return id.slice(0, 8);
+}
 
-export default function ImportarNotasPage() {
+/** Determina o destino/cliente principal de um pedido para o rótulo do seletor */
+function labelPedido(p: PedidoOpcao): string {
+  const nEnt = p.entregas.length;
+  const primeiraEnt = p.entregas[0];
+  const clienteOuDestino =
+    primeiraEnt?.nome_cliente_avulso || primeiraEnt?.destino || "sem entregas";
+  return `#${idCurto(p.id)} · ${clienteOuDestino} · ${nEnt} entrega${nEnt !== 1 ? "s" : ""}`;
+}
+
+const STATUS_FINALIZADOS = ["concluido", "concluida", "cancelado", "cancelada"];
+
+// ─── Componente interno (usa useSearchParams) ─────────────────────────────────
+
+function ImportarNotasInner() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const pedidoIdUrl = searchParams.get("pedido_id");
   const supabase = createClient();
 
   // auth
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // locais de carregamento
-  const [locais, setLocais] = useState<LocalCarreg[]>([]);
-  const [localId, setLocalId] = useState<string>("");
+  // pedido alvo
+  const [pedidoAlvo, setPedidoAlvo] = useState<PedidoAlvo | null>(null);
+  const [pedidoAlvoId, setPedidoAlvoId] = useState<string>(pedidoIdUrl ?? "");
+  const [carregandoPedido, setCarregandoPedido] = useState(false);
+  const [errPedido, setErrPedido] = useState("");
+
+  // seletor de pedido (quando sem pedido_id na URL)
+  const [opcoesPedido, setOpcoesPedido] = useState<PedidoOpcao[]>([]);
+  const [carregandoOpcoes, setCarregandoOpcoes] = useState(false);
+  const [pedidoSelecionadoId, setPedidoSelecionadoId] = useState<string>("");
 
   // controle de etapa
-  const [etapa, setEtapa] = useState<Etapa>("upload");
+  const [etapa, setEtapa] = useState<Etapa>(pedidoIdUrl ? "upload" : "selecionar_pedido");
   const [modo, setModo] = useState<Modo>("xml");
 
   // upload / parse
@@ -96,21 +134,16 @@ export default function ImportarNotasPage() {
   const [selecionadas, setSelecionadas] = useState<Set<number>>(new Set());
   const [carregandoDedupe, setCarregandoDedupe] = useState(false);
 
-  // opções do pedido
-  const [agrupamento, setAgrupamento] = useState<Agrupamento>("unico");
-  const [dataPrevista, setDataPrevista] = useState(hoje());
-  const [valorPedido, setValorPedido] = useState("");
-
   // resultado
   const [importando, setImportando] = useState(false);
   const [errImport, setErrImport] = useState("");
-  const [resultado, setResultado] = useState<{ pedidos: number; entregas: number } | null>(null);
+  const [resultado, setResultado] = useState<{ entregas: number; pedidoId: string } | null>(null);
 
   // refs para inputs de arquivo
   const inputXmlRef = useRef<HTMLInputElement>(null);
   const inputPlanilhaRef = useRef<HTMLInputElement>(null);
 
-  // ── carrega empresa + locais ────────────────────────────────────────────────
+  // ── carrega empresa ────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
       const { data: auth } = await supabase.auth.getUser();
@@ -125,22 +158,65 @@ export default function ImportarNotasPage() {
 
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
-
-      // locais_carregamento (sem filtro de cliente — lista global da empresa)
-            const { data: locs } = await supabase
-        .from("locais_carregamento")
-        .select("id,nome,endereco,principal")
-        .eq("empresa_id", ue.empresa_id)
-        .eq("ativo", true)
-        .order("principal", { ascending: false });
-      const locsArr = (locs ?? []) as LocalCarreg[];
-      setLocais(locsArr);
-      const princ = locsArr.find((l) => l.principal);
-      if (princ) setLocalId(princ.id);
     };
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // ── carrega pedido alvo quando temos empresaId + pedidoAlvoId ──────────────
+  useEffect(() => {
+    if (!empresaId || !pedidoAlvoId) return;
+    const load = async () => {
+      setCarregandoPedido(true);
+      setErrPedido("");
+      const { data, error } = await supabase
+        .from("pedidos")
+        .select("id,status,data_inicio_prevista,local_carregamento,veiculo_id,motorista_id,motoristas(nome),entregas(id)")
+        .eq("id", pedidoAlvoId)
+        .eq("empresa_id", empresaId)
+        .single();
+      setCarregandoPedido(false);
+      if (error || !data) {
+        setErrPedido("Pedido não encontrado ou sem permissão.");
+        return;
+      }
+      const p = data as unknown as PedidoAlvo;
+      if (STATUS_FINALIZADOS.includes(p.status)) {
+        setErrPedido(`O pedido #${idCurto(p.id)} está finalizado (${p.status}) e não pode receber novas entregas.`);
+        setPedidoAlvo(p);
+        return;
+      }
+      setPedidoAlvo(p);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, pedidoAlvoId]);
+
+  // ── carrega opções de pedido (quando sem pedido_id na URL) ─────────────────
+  useEffect(() => {
+    if (!empresaId || pedidoIdUrl) return;
+    const load = async () => {
+      setCarregandoOpcoes(true);
+      const { data } = await supabase
+        .from("pedidos")
+        .select("id,status,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso)")
+        .eq("empresa_id", empresaId)
+        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
+        .order("data_inicio_prevista", { ascending: false })
+        .range(0, 99);
+      setOpcoesPedido((data ?? []) as unknown as PedidoOpcao[]);
+      setCarregandoOpcoes(false);
+    };
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [empresaId, pedidoIdUrl]);
+
+  // ── confirmar seleção de pedido (etapa selecionar_pedido) ─────────────────
+  const confirmarSelecaoPedido = () => {
+    if (!pedidoSelecionadoId) return;
+    setPedidoAlvoId(pedidoSelecionadoId);
+    setEtapa("upload");
+  };
 
   // ── processamento XML ───────────────────────────────────────────────────────
   const processarXml = async (files: FileList) => {
@@ -152,7 +228,6 @@ export default function ImportarNotasPage() {
     for (const file of Array.from(files)) {
       const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
       if (ext === "zip") {
-        // descompactar com jszip
         try {
           const buf = await file.arrayBuffer();
           const zip = await JSZip.loadAsync(buf);
@@ -172,7 +247,6 @@ export default function ImportarNotasPage() {
           return;
         }
       } else {
-        // XML direto
         const conteudo = await file.text();
         arquivos.push({ nome: file.name, conteudo });
       }
@@ -245,7 +319,6 @@ export default function ImportarNotasPage() {
     }
     setCarregandoDedupe(true);
 
-    // dedupe contra banco (só XML tem chave)
     const chaves = linhasBase
       .map((l) => l.nfeChave)
       .filter((c): c is string => !!c);
@@ -274,7 +347,6 @@ export default function ImportarNotasPage() {
     }));
 
     setLinhasPreview(preview);
-    // pré-seleciona todas exceto já importadas
     setSelecionadas(
       new Set(preview.filter((l) => !l.jaImportada).map((l) => l.idx))
     );
@@ -307,7 +379,7 @@ export default function ImportarNotasPage() {
 
   // ── importar ───────────────────────────────────────────────────────────────
   const importar = async () => {
-    if (!empresaId) return;
+    if (!empresaId || !pedidoAlvo) return;
     const linhasSelecionadas = linhasPreview.filter((l) => selecionadas.has(l.idx));
     if (linhasSelecionadas.length === 0) {
       setErrImport("Selecione ao menos uma entrega para importar.");
@@ -317,117 +389,40 @@ export default function ImportarNotasPage() {
     setImportando(true);
     setErrImport("");
 
-    // local de carregamento
-    const localSel = locais.find((l) => l.id === localId);
-    const localCarregamento = localSel ? `${localSel.nome} — ${localSel.endereco}` : null;
-    const localCarregamentoId = localSel ? localSel.id : null;
-    const origemEntrega = localCarregamento || "Depósito";
+    const origemEntrega = pedidoAlvo.local_carregamento ?? "Depósito";
 
     try {
-      if (agrupamento === "unico") {
-        // ── modo: 1 pedido, N entregas ──────────────────────────────────────
-                const pedidoPayload: any = {
-          empresa_id: empresaId,
-          status: "agendada",
-          data_inicio_prevista: dataPrevista || null,
-          valor_pedido: valorPedido ? parseFloat(valorPedido) : null,
-          local_carregamento: localCarregamento,
-          local_carregamento_id: localCarregamentoId,
-        };
+      const rowsEntregas = linhasSelecionadas.map((l) => ({
+        empresa_id: empresaId,
+        pedido_id: pedidoAlvo.id,
+        status: "agendado",
+        // pedido já despachado → entregas novas herdam caminhão/motorista
+        veiculo_id: pedidoAlvo.veiculo_id ?? null,
+        motorista_id: pedidoAlvo.motorista_id ?? null,
+        origem: origemEntrega,
+        destino: l.endereco,
+        nome_cliente_avulso: l.destinatario || null,
+        observacoes: l.observacoes || null,
+        origem_demanda: "importacao_massa",
+        nfe_chave: l.nfeChave ?? null,
+        nfe_numero: l.numeroNota || null,
+        nfe_valor: l.valorNota ?? null,
+      }));
 
-        const { data: pedido, error: errPedido } = await supabase
-          .from("pedidos")
-                    .insert(pedidoPayload)
-          .select("id")
-          .single();
+      const { error: errEnt } = await supabase
+        .from("entregas")
+        .insert(rowsEntregas);
 
-        if (errPedido || !pedido) {
-          throw new Error(errPedido?.message ?? "Erro ao criar pedido.");
-        }
+      if (errEnt) throw new Error(errEnt.message);
 
-        const rowsEntregas = linhasSelecionadas.map((l) => ({
-          empresa_id: empresaId,
-          pedido_id: pedido.id,
-          status: "agendado",
-          origem: origemEntrega,
-          destino: l.endereco,
-          nome_cliente_avulso: l.destinatario || null,
-          observacoes: l.observacoes || null,
-          origem_demanda: "importacao_massa",
-          // colunas novas da migration_import_notas; regenerar database.types.ts
-          nfe_chave: l.nfeChave ?? null,
-          nfe_numero: l.numeroNota || null,
-          nfe_valor: l.valorNota ?? null,
-        }));
+      // geocoding fire-and-forget
+      fetch("/api/routing/geocodar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pedido_id: pedidoAlvo.id }),
+      }).catch(() => {});
 
-        const { error: errEnt } = await supabase
-          .from("entregas")
-                    .insert(rowsEntregas );
-
-        if (errEnt) throw new Error(errEnt.message);
-
-        // geocoding fire-and-forget
-        fetch("/api/routing/geocodar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ pedido_id: pedido.id }),
-        }).catch(() => {});
-
-        setResultado({ pedidos: 1, entregas: linhasSelecionadas.length });
-
-      } else {
-        // ── modo: 1 pedido por nota ─────────────────────────────────────────
-        const pedidosPayload = linhasSelecionadas.map(() => ({
-          empresa_id: empresaId,
-          status: "agendada",
-          data_inicio_prevista: dataPrevista || null,
-          valor_pedido: null,
-          local_carregamento: localCarregamento,
-          local_carregamento_id: localCarregamentoId,
-        }));
-
-        const { data: pedidosCriados, error: errPeds } = await supabase
-          .from("pedidos")
-                    .insert(pedidosPayload )
-          .select("id");
-
-        if (errPeds || !pedidosCriados || pedidosCriados.length === 0) {
-          throw new Error(errPeds?.message ?? "Erro ao criar pedidos.");
-        }
-
-        const rowsEntregas = linhasSelecionadas.map((l, i) => ({
-          empresa_id: empresaId,
-          pedido_id: pedidosCriados[i].id,
-          status: "agendado",
-          origem: origemEntrega,
-          destino: l.endereco,
-          nome_cliente_avulso: l.destinatario || null,
-          observacoes: l.observacoes || null,
-          origem_demanda: "importacao_massa",
-          // colunas novas da migration_import_notas; regenerar database.types.ts
-          nfe_chave: l.nfeChave ?? null,
-          nfe_numero: l.numeroNota || null,
-          nfe_valor: l.valorNota ?? null,
-        }));
-
-        const { error: errEnt } = await supabase
-          .from("entregas")
-                    .insert(rowsEntregas );
-
-        if (errEnt) throw new Error(errEnt.message);
-
-        // geocoding fire-and-forget por pedido
-        pedidosCriados.forEach((p) => {
-          fetch("/api/routing/geocodar", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ pedido_id: p.id }),
-          }).catch(() => {});
-        });
-
-        setResultado({ pedidos: pedidosCriados.length, entregas: linhasSelecionadas.length });
-      }
-
+      setResultado({ entregas: linhasSelecionadas.length, pedidoId: pedidoAlvo.id });
       setEtapa("resultado");
     } catch (e: unknown) {
       setErrImport(e instanceof Error ? e.message : "Erro desconhecido na importação.");
@@ -437,13 +432,45 @@ export default function ImportarNotasPage() {
   };
 
   // ─────────────────────────────────────────────────────────────────────────────
-  // Falhas combinadas: parse XML + planilha
   const todasFalhas = [
     ...(relatorioLote?.falhas ?? []).map((f) => ({ origem: f.arquivo, motivo: f.motivo })),
     ...falhasPlanilha.map((f) => ({ origem: `Linha ${f.linha}`, motivo: f.motivo })),
   ];
 
   const countSelecionadas = selecionadas.size;
+
+  const pedidoFinalizado = pedidoAlvo ? STATUS_FINALIZADOS.includes(pedidoAlvo.status) : false;
+
+  // ── cabeçalho-resumo do pedido alvo (JSX em variável: componente criado no
+  //    render remontaria a cada digitação — regra react-hooks) ───────────────
+  const cabecalhoPedido = (() => {
+    if (!pedidoAlvo) return null;
+    const nEnt = Array.isArray(pedidoAlvo.entregas) ? pedidoAlvo.entregas.length : 0;
+    return (
+      <div style={{
+        background: "#eff6ff", borderRadius: "12px", padding: "16px 20px",
+        border: "1px solid #bfdbfe", display: "flex", alignItems: "center",
+        justifyContent: "space-between", flexWrap: "wrap", gap: "8px",
+      }}>
+        <div>
+          <span style={{ fontSize: "13px", fontWeight: 700, color: "#1d4ed8" }}>
+            Importando para o pedido #{idCurto(pedidoAlvo.id)}
+          </span>
+          {pedidoAlvo.data_inicio_prevista && (
+            <span style={{ fontSize: "12px", color: "#3b82f6", marginLeft: "12px" }}>
+              {new Date(pedidoAlvo.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR")}
+            </span>
+          )}
+          {pedidoAlvo.motoristas?.nome && (
+            <span style={{ fontSize: "12px", color: "#475569", marginLeft: "12px" }}>
+              Motorista: {pedidoAlvo.motoristas.nome}
+            </span>
+          )}
+        </div>
+        <Badge variant="info">{nEnt} entrega{nEnt !== 1 ? "s" : ""} atual{nEnt !== 1 ? "is" : ""}</Badge>
+      </div>
+    );
+  })();
 
   // ══════════════════════════════════════════════════════════════════════════════
   // RENDER
@@ -452,260 +479,328 @@ export default function ImportarNotasPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%", background: "#f1f5f9" }}>
       <PageHeader
-        title="Importar Notas em Massa"
-        actions={<Btn href="/pedidos" variant="outline">Voltar para Lista</Btn>}
+        title="Importar Notas para Pedido"
+        actions={<Btn href="/despacho" variant="outline">Voltar</Btn>}
       />
 
       <div style={{ flex: 1, overflowY: "auto", padding: "24px" }}>
         <div style={{ maxWidth: "900px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}>
 
+          {/* ── ETAPA: SELECIONAR PEDIDO ── */}
+          {etapa === "selecionar_pedido" && (
+            <div style={{ background: "#fff", borderRadius: "12px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+              <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>
+                Selecionar pedido de destino
+              </h2>
+              <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 20px" }}>
+                Escolha o pedido ao qual as notas serão anexadas como entregas.
+              </p>
+
+              {carregandoOpcoes && (
+                <p style={{ fontSize: "13px", color: "#2563eb" }}>Carregando pedidos...</p>
+              )}
+
+              {!carregandoOpcoes && opcoesPedido.length === 0 && (
+                <Alert variant="warning">
+                  Nenhum pedido ativo encontrado. Crie um pedido antes de importar notas.
+                </Alert>
+              )}
+
+              {!carregandoOpcoes && opcoesPedido.length > 0 && (
+                <>
+                  <FormField label="Pedido">
+                    <select
+                      value={pedidoSelecionadoId}
+                      onChange={(e) => setPedidoSelecionadoId(e.target.value)}
+                      style={selectStyle}
+                    >
+                      <option value="">— Selecione um pedido —</option>
+                      {opcoesPedido.map((p) => (
+                        <option key={p.id} value={p.id}>
+                          {labelPedido(p)}
+                        </option>
+                      ))}
+                    </select>
+                  </FormField>
+
+                  <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-end" }}>
+                    <Btn
+                      type="button"
+                      variant="primary"
+                      disabled={!pedidoSelecionadoId}
+                      onClick={confirmarSelecaoPedido}
+                    >
+                      Continuar com este pedido
+                    </Btn>
+                  </div>
+                </>
+              )}
+            </div>
+          )}
+
           {/* ── ETAPA: UPLOAD ── */}
           {etapa === "upload" && (
             <>
-              {/* Seletor de modo */}
-              <div style={{ display: "flex", gap: "12px" }}>
-                {(["xml", "planilha"] as Modo[]).map((m) => (
-                  <button
-                    key={m}
-                    type="button"
-                    onClick={() => {
-                      setModo(m);
-                      setErrUpload("");
-                      setRelatorioLote(null);
-                      setFalhasPlanilha([]);
-                      setPlanilhaLida(null);
-                      setMapColunas({});
-                      setLinhasBase([]);
-                      if (inputXmlRef.current) inputXmlRef.current.value = "";
-                      if (inputPlanilhaRef.current) inputPlanilhaRef.current.value = "";
-                    }}
-                    style={{
-                      flex: 1, padding: "16px 20px", borderRadius: "12px", cursor: "pointer",
-                      border: modo === m ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                      background: modo === m ? "#eff6ff" : "#fff",
-                      boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
-                      textAlign: "left",
-                    }}
-                  >
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: modo === m ? "#1d4ed8" : "#1e293b" }}>
-                      {m === "xml" ? "XML de NFe" : "Planilha"}
-                    </div>
-                    <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
-                      {m === "xml"
-                        ? "Arquivos .xml individuais ou .zip com vários XMLs"
-                        : "Arquivo .xlsx, .xls ou .csv com endereços"}
-                    </div>
-                  </button>
-                ))}
-              </div>
-
-              {/* Upload XML */}
-              {modo === "xml" && (
-                <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
-                    Selecionar arquivos XML
-                  </h2>
-                  <input
-                    ref={inputXmlRef}
-                    type="file"
-                    multiple
-                    accept=".xml,.zip"
-                    style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
-                    onChange={async (e) => {
-                      if (!e.target.files || e.target.files.length === 0) return;
-                      setRelatorioLote(null);
-                      setLinhasBase([]);
-                      await processarXml(e.target.files);
-                    }}
-                  />
-                  <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
-                    Selecione um ou mais arquivos .xml ou um .zip contendo os XMLs.
-                  </p>
-
-                  {carregando && (
-                    <p style={{ fontSize: "13px", color: "#2563eb", marginTop: "12px" }}>Lendo arquivos...</p>
-                  )}
-
-                  {errUpload && (
-                    <div style={{ marginTop: "12px" }}>
-                      <Alert variant="error">{errUpload}</Alert>
-                    </div>
-                  )}
-
-                  {relatorioLote && (
-                    <div style={{ marginTop: "16px" }}>
-                      <div style={{
-                        padding: "12px 16px", background: "#f0fdf4", borderRadius: "8px",
-                        border: "1px solid #bbf7d0", fontSize: "14px", color: "#166534",
-                      }}>
-                        <strong>{relatorioLote.notas.length}</strong> nota(s) lida(s) com sucesso
-                        {relatorioLote.falhas.length > 0 && (
-                          <>, <strong style={{ color: "#dc2626" }}>{relatorioLote.falhas.length}</strong> falha(s)</>
-                        )}
-                      </div>
-
-                      {relatorioLote.falhas.length > 0 && (
-                        <div style={{ marginTop: "10px" }}>
-                          <button
-                            type="button"
-                            onClick={() => setFalhasExpandidas(!falhasExpandidas)}
-                            style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
-                          >
-                            {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
-                          </button>
-                          {falhasExpandidas && (
-                            <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                              {relatorioLote.falhas.map((f, i) => (
-                                <div key={i} style={{
-                                  padding: "8px 12px", background: "#fef2f2", borderRadius: "6px",
-                                  fontSize: "12px", color: "#991b1b",
-                                }}>
-                                  <strong>{f.arquivo}</strong>: {f.motivo}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </div>
+              {/* Cabeçalho do pedido alvo */}
+              {carregandoPedido && (
+                <p style={{ fontSize: "13px", color: "#2563eb" }}>Carregando pedido...</p>
               )}
-
-              {/* Upload planilha */}
-              {modo === "planilha" && (
-                <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                  <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
-                    Selecionar planilha
-                  </h2>
-                  <input
-                    ref={inputPlanilhaRef}
-                    type="file"
-                    accept=".xlsx,.xls,.csv"
-                    style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
-                    onChange={async (e) => {
-                      if (!e.target.files?.[0]) return;
-                      setPlanilhaLida(null);
-                      setLinhasBase([]);
-                      setFalhasPlanilha([]);
-                      await processarPlanilha(e.target.files[0]);
-                    }}
-                  />
-                  <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
-                    A coluna de <strong>Endereço</strong> é obrigatória. Demais colunas são opcionais.
-                  </p>
-
-                  {carregando && (
-                    <p style={{ fontSize: "13px", color: "#2563eb", marginTop: "12px" }}>Lendo planilha...</p>
-                  )}
-
-                  {errUpload && <Alert variant="error">{errUpload}</Alert>}
-
-                  {/* Mapeamento de colunas */}
-                  {planilhaLida && (
-                    <div style={{ marginTop: "20px" }}>
-                      <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#475569", marginBottom: "12px" }}>
-                        Mapeamento de colunas
-                      </h3>
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
-                        {(
-                          [
-                            { key: "endereco", label: "Endereço *", obrigatorio: true },
-                            { key: "nome", label: "Cliente / Destinatário", obrigatorio: false },
-                            { key: "valor", label: "Valor", obrigatorio: false },
-                            { key: "numeroNota", label: "Nº da Nota", obrigatorio: false },
-                            { key: "observacoes", label: "Observações", obrigatorio: false },
-                          ] as { key: keyof MapeamentoColunas; label: string; obrigatorio: boolean }[]
-                        ).map(({ key, label, obrigatorio }) => (
-                          <FormField key={key} label={label}>
-                            <select
-                              value={mapColunas[key] ?? ""}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setMapColunas((prev) => ({
-                                  ...prev,
-                                  [key]: val === "" ? undefined : Number(val),
-                                }));
-                              }}
-                              style={selectStyle}
-                            >
-                              {!obrigatorio && <option value="">— Não usar —</option>}
-                              {obrigatorio && mapColunas[key] === undefined && (
-                                <option value="" disabled>Selecione a coluna</option>
-                              )}
-                              {planilhaLida.headers.map((h, i) => (
-                                <option key={i} value={i}>{h || `(Coluna ${i + 1})`}</option>
-                              ))}
-                            </select>
-                          </FormField>
-                        ))}
-                      </div>
-
-                      {linhasBase.length > 0 && (
-                        <div style={{
-                          marginTop: "14px", padding: "12px 16px", background: "#f0fdf4",
-                          borderRadius: "8px", border: "1px solid #bbf7d0",
-                          fontSize: "14px", color: "#166534",
-                        }}>
-                          <strong>{linhasBase.length}</strong> linha(s) válida(s)
-                          {falhasPlanilha.length > 0 && (
-                            <>, <strong style={{ color: "#dc2626" }}>{falhasPlanilha.length}</strong> falha(s)</>
-                          )}
-                        </div>
-                      )}
-
-                      {falhasPlanilha.length > 0 && (
-                        <div style={{ marginTop: "10px" }}>
-                          <button
-                            type="button"
-                            onClick={() => setFalhasExpandidas(!falhasExpandidas)}
-                            style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
-                          >
-                            {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
-                          </button>
-                          {falhasExpandidas && (
-                            <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
-                              {falhasPlanilha.map((f, i) => (
-                                <div key={i} style={{
-                                  padding: "8px 12px", background: "#fef2f2", borderRadius: "6px",
-                                  fontSize: "12px", color: "#991b1b",
-                                }}>
-                                  <strong>Linha {f.linha}</strong>: {f.motivo}
-                                </div>
-                              ))}
-                            </div>
-                          )}
-                        </div>
-                      )}
-
-                      <div style={{ marginTop: "16px" }}>
-                        <Btn
-                          type="button"
-                          variant="outline"
-                          onClick={confirmarMapeamento}
-                          disabled={mapColunas.endereco === undefined}
-                        >
-                          Confirmar mapeamento
-                        </Btn>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              )}
-
-              {/* Avançar */}
-              {linhasBase.length > 0 && (
+              {errPedido && <Alert variant="error">{errPedido}</Alert>}
+              {pedidoFinalizado && (
                 <div style={{ display: "flex", justifyContent: "flex-end" }}>
-                  <Btn
-                    type="button"
-                    variant="primary"
-                    disabled={carregandoDedupe}
-                    onClick={avancarPreview}
-                    style={{ minWidth: "180px" }}
-                  >
-                    {carregandoDedupe ? "Verificando duplicatas..." : `Avançar (${linhasBase.length} entregas)`}
-                  </Btn>
+                  <Btn href="/despacho" variant="outline">Voltar ao Despacho</Btn>
                 </div>
+              )}
+              {!pedidoFinalizado && cabecalhoPedido}
+
+              {/* Seletor de modo */}
+              {!pedidoFinalizado && (
+                <>
+                  <div style={{ display: "flex", gap: "12px" }}>
+                    {(["xml", "planilha"] as Modo[]).map((m) => (
+                      <button
+                        key={m}
+                        type="button"
+                        onClick={() => {
+                          setModo(m);
+                          setErrUpload("");
+                          setRelatorioLote(null);
+                          setFalhasPlanilha([]);
+                          setPlanilhaLida(null);
+                          setMapColunas({});
+                          setLinhasBase([]);
+                          if (inputXmlRef.current) inputXmlRef.current.value = "";
+                          if (inputPlanilhaRef.current) inputPlanilhaRef.current.value = "";
+                        }}
+                        style={{
+                          flex: 1, padding: "16px 20px", borderRadius: "12px", cursor: "pointer",
+                          border: modo === m ? "2px solid #2563eb" : "1px solid #e2e8f0",
+                          background: modo === m ? "#eff6ff" : "#fff",
+                          boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                          textAlign: "left",
+                        }}
+                      >
+                        <div style={{ fontSize: "15px", fontWeight: 700, color: modo === m ? "#1d4ed8" : "#1e293b" }}>
+                          {m === "xml" ? "XML de NFe" : "Planilha"}
+                        </div>
+                        <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                          {m === "xml"
+                            ? "Arquivos .xml individuais ou .zip com vários XMLs"
+                            : "Arquivo .xlsx, .xls ou .csv com endereços"}
+                        </div>
+                      </button>
+                    ))}
+                  </div>
+
+                  {/* Upload XML */}
+                  {modo === "xml" && (
+                    <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                      <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
+                        Selecionar arquivos XML
+                      </h2>
+                      <input
+                        ref={inputXmlRef}
+                        type="file"
+                        multiple
+                        accept=".xml,.zip"
+                        style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
+                        onChange={async (e) => {
+                          if (!e.target.files || e.target.files.length === 0) return;
+                          setRelatorioLote(null);
+                          setLinhasBase([]);
+                          await processarXml(e.target.files);
+                        }}
+                      />
+                      <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
+                        Selecione um ou mais arquivos .xml ou um .zip contendo os XMLs.
+                      </p>
+
+                      {carregando && (
+                        <p style={{ fontSize: "13px", color: "#2563eb", marginTop: "12px" }}>Lendo arquivos...</p>
+                      )}
+
+                      {errUpload && (
+                        <div style={{ marginTop: "12px" }}>
+                          <Alert variant="error">{errUpload}</Alert>
+                        </div>
+                      )}
+
+                      {relatorioLote && (
+                        <div style={{ marginTop: "16px" }}>
+                          <div style={{
+                            padding: "12px 16px", background: "#f0fdf4", borderRadius: "8px",
+                            border: "1px solid #bbf7d0", fontSize: "14px", color: "#166534",
+                          }}>
+                            <strong>{relatorioLote.notas.length}</strong> nota(s) lida(s) com sucesso
+                            {relatorioLote.falhas.length > 0 && (
+                              <>, <strong style={{ color: "#dc2626" }}>{relatorioLote.falhas.length}</strong> falha(s)</>
+                            )}
+                          </div>
+
+                          {relatorioLote.falhas.length > 0 && (
+                            <div style={{ marginTop: "10px" }}>
+                              <button
+                                type="button"
+                                onClick={() => setFalhasExpandidas(!falhasExpandidas)}
+                                style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                              >
+                                {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
+                              </button>
+                              {falhasExpandidas && (
+                                <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  {relatorioLote.falhas.map((f, i) => (
+                                    <div key={i} style={{
+                                      padding: "8px 12px", background: "#fef2f2", borderRadius: "6px",
+                                      fontSize: "12px", color: "#991b1b",
+                                    }}>
+                                      <strong>{f.arquivo}</strong>: {f.motivo}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Upload planilha */}
+                  {modo === "planilha" && (
+                    <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
+                      <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
+                        Selecionar planilha
+                      </h2>
+                      <input
+                        ref={inputPlanilhaRef}
+                        type="file"
+                        accept=".xlsx,.xls,.csv"
+                        style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
+                        onChange={async (e) => {
+                          if (!e.target.files?.[0]) return;
+                          setPlanilhaLida(null);
+                          setLinhasBase([]);
+                          setFalhasPlanilha([]);
+                          await processarPlanilha(e.target.files[0]);
+                        }}
+                      />
+                      <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
+                        A coluna de <strong>Endereço</strong> é obrigatória. Demais colunas são opcionais.
+                      </p>
+
+                      {carregando && (
+                        <p style={{ fontSize: "13px", color: "#2563eb", marginTop: "12px" }}>Lendo planilha...</p>
+                      )}
+
+                      {errUpload && <Alert variant="error">{errUpload}</Alert>}
+
+                      {/* Mapeamento de colunas */}
+                      {planilhaLida && (
+                        <div style={{ marginTop: "20px" }}>
+                          <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#475569", marginBottom: "12px" }}>
+                            Mapeamento de colunas
+                          </h3>
+                          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                            {(
+                              [
+                                { key: "endereco", label: "Endereço *", obrigatorio: true },
+                                { key: "nome", label: "Cliente / Destinatário", obrigatorio: false },
+                                { key: "valor", label: "Valor", obrigatorio: false },
+                                { key: "numeroNota", label: "Nº da Nota", obrigatorio: false },
+                                { key: "observacoes", label: "Observações", obrigatorio: false },
+                              ] as { key: keyof MapeamentoColunas; label: string; obrigatorio: boolean }[]
+                            ).map(({ key, label, obrigatorio }) => (
+                              <FormField key={key} label={label}>
+                                <select
+                                  value={mapColunas[key] ?? ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setMapColunas((prev) => ({
+                                      ...prev,
+                                      [key]: val === "" ? undefined : Number(val),
+                                    }));
+                                  }}
+                                  style={selectStyle}
+                                >
+                                  {!obrigatorio && <option value="">— Não usar —</option>}
+                                  {obrigatorio && mapColunas[key] === undefined && (
+                                    <option value="" disabled>Selecione a coluna</option>
+                                  )}
+                                  {planilhaLida.headers.map((h, i) => (
+                                    <option key={i} value={i}>{h || `(Coluna ${i + 1})`}</option>
+                                  ))}
+                                </select>
+                              </FormField>
+                            ))}
+                          </div>
+
+                          {linhasBase.length > 0 && (
+                            <div style={{
+                              marginTop: "14px", padding: "12px 16px", background: "#f0fdf4",
+                              borderRadius: "8px", border: "1px solid #bbf7d0",
+                              fontSize: "14px", color: "#166534",
+                            }}>
+                              <strong>{linhasBase.length}</strong> linha(s) válida(s)
+                              {falhasPlanilha.length > 0 && (
+                                <>, <strong style={{ color: "#dc2626" }}>{falhasPlanilha.length}</strong> falha(s)</>
+                              )}
+                            </div>
+                          )}
+
+                          {falhasPlanilha.length > 0 && (
+                            <div style={{ marginTop: "10px" }}>
+                              <button
+                                type="button"
+                                onClick={() => setFalhasExpandidas(!falhasExpandidas)}
+                                style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                              >
+                                {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
+                              </button>
+                              {falhasExpandidas && (
+                                <div style={{ marginTop: "8px", display: "flex", flexDirection: "column", gap: "4px" }}>
+                                  {falhasPlanilha.map((f, i) => (
+                                    <div key={i} style={{
+                                      padding: "8px 12px", background: "#fef2f2", borderRadius: "6px",
+                                      fontSize: "12px", color: "#991b1b",
+                                    }}>
+                                      <strong>Linha {f.linha}</strong>: {f.motivo}
+                                    </div>
+                                  ))}
+                                </div>
+                              )}
+                            </div>
+                          )}
+
+                          <div style={{ marginTop: "16px" }}>
+                            <Btn
+                              type="button"
+                              variant="outline"
+                              onClick={confirmarMapeamento}
+                              disabled={mapColunas.endereco === undefined}
+                            >
+                              Confirmar mapeamento
+                            </Btn>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Avançar */}
+                  {linhasBase.length > 0 && (
+                    <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                      <Btn
+                        type="button"
+                        variant="primary"
+                        disabled={carregandoDedupe}
+                        onClick={avancarPreview}
+                        style={{ minWidth: "180px" }}
+                      >
+                        {carregandoDedupe ? "Verificando duplicatas..." : `Avançar (${linhasBase.length} entregas)`}
+                      </Btn>
+                    </div>
+                  )}
+                </>
               )}
             </>
           )}
@@ -715,95 +810,14 @@ export default function ImportarNotasPage() {
             <>
               {errImport && <Alert variant="error">{errImport}</Alert>}
 
-              {/* Falhas do parse (informativo) */}
               {todasFalhas.length > 0 && (
                 <Alert variant="warning">
                   {todasFalhas.length} arquivo(s)/linha(s) não puderam ser importados (veja abaixo).
                 </Alert>
               )}
 
-              {/* Opções do pedido */}
-              <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-                <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
-                  Opções do Pedido
-                </h2>
-
-                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                  <div>
-                    <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "8px" }}>
-                      Agrupamento
-                    </label>
-                    <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-                      {(
-                        [
-                          { val: "unico", label: "1 pedido com todas as entregas", sublabel: "Recomendado para uma única rota" },
-                          { val: "por_nota", label: "1 pedido por nota / linha", sublabel: "Cada nota vira um pedido independente" },
-                        ] as { val: Agrupamento; label: string; sublabel: string }[]
-                      ).map(({ val, label, sublabel }) => (
-                        <label key={val} style={{ display: "flex", gap: "10px", cursor: "pointer", alignItems: "flex-start" }}>
-                          <input
-                            type="radio"
-                            name="agrupamento"
-                            value={val}
-                            checked={agrupamento === val}
-                            onChange={() => setAgrupamento(val)}
-                            style={{ marginTop: "3px", accentColor: "#2563eb" }}
-                          />
-                          <div>
-                            <div style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>{label}</div>
-                            <div style={{ fontSize: "11px", color: "#64748b" }}>{sublabel}</div>
-                          </div>
-                        </label>
-                      ))}
-                    </div>
-                  </div>
-
-                  <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
-                    <FormField label="Data prevista">
-                      <input
-                        type="date"
-                        value={dataPrevista}
-                        onChange={(e) => setDataPrevista(e.target.value)}
-                        style={inputStyle}
-                      />
-                    </FormField>
-
-                    {locais.length > 0 && (
-                      <FormField label="Local de carregamento (opcional)">
-                        <select
-                          value={localId}
-                          onChange={(e) => setLocalId(e.target.value)}
-                          style={selectStyle}
-                        >
-                          <option value="">— Nenhum (usa &quot;Depósito&quot;) —</option>
-                          {locais.map((l) => (
-                            <option key={l.id} value={l.id}>
-                              {l.nome} — {l.endereco}
-                            </option>
-                          ))}
-                        </select>
-                      </FormField>
-                    )}
-
-                    {agrupamento === "unico" && (
-                      <FormField
-                        label="Valor do frete (R$)"
-                        hint="Valor cobrado do cliente pelo frete — não é a soma das notas"
-                      >
-                        <input
-                          type="number"
-                          min="0"
-                          step="0.01"
-                          value={valorPedido}
-                          onChange={(e) => setValorPedido(e.target.value)}
-                          placeholder="Ex: 1500.00"
-                          style={inputStyle}
-                        />
-                      </FormField>
-                    )}
-                  </div>
-                </div>
-              </div>
+              {/* Cabeçalho do pedido alvo */}
+              {cabecalhoPedido}
 
               {/* Tabela de preview */}
               <DataTable
@@ -910,7 +924,7 @@ export default function ImportarNotasPage() {
                 >
                   {importando
                     ? "Importando..."
-                    : `Importar ${countSelecionadas} entrega${countSelecionadas !== 1 ? "s" : ""}`}
+                    : `Anexar ${countSelecionadas} entrega${countSelecionadas !== 1 ? "s" : ""} ao pedido`}
                 </Btn>
               </div>
             </>
@@ -924,8 +938,8 @@ export default function ImportarNotasPage() {
                 Importação concluída!
               </h2>
               <p style={{ fontSize: "15px", color: "#475569", margin: "0 0 24px" }}>
-                <strong>{resultado.pedidos}</strong> pedido{resultado.pedidos !== 1 ? "s" : ""} e{" "}
-                <strong>{resultado.entregas}</strong> entrega{resultado.entregas !== 1 ? "s" : ""} criados.
+                <strong>{resultado.entregas}</strong> entrega{resultado.entregas !== 1 ? "s" : ""} anexada{resultado.entregas !== 1 ? "s" : ""} ao pedido{" "}
+                <strong>#{idCurto(resultado.pedidoId)}</strong>.
               </p>
 
               {todasFalhas.length > 0 && (
@@ -944,8 +958,8 @@ export default function ImportarNotasPage() {
               </p>
 
               <div style={{ display: "flex", gap: "12px", justifyContent: "center" }}>
-                <Btn href="/pedidos" variant="outline">Ver Pedidos</Btn>
-                <Btn href="/despacho" variant="primary">Ir para o Despacho</Btn>
+                <Btn href={`/pedidos/${resultado.pedidoId}`} variant="outline">Ver pedido</Btn>
+                <Btn href="/despacho" variant="primary">Voltar ao Despacho</Btn>
               </div>
             </div>
           )}
@@ -953,5 +967,19 @@ export default function ImportarNotasPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+// ─── Wrapper com Suspense (exigido pelo App Router para useSearchParams) ────────
+
+export default function ImportarNotasPage() {
+  return (
+    <Suspense fallback={
+      <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
+        Carregando...
+      </div>
+    }>
+      <ImportarNotasInner />
+    </Suspense>
   );
 }

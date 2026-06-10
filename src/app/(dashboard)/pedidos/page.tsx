@@ -105,6 +105,18 @@ export default function PedidosListPage() {
   const [busca, setBusca]   = useState("");
   const [filtro, setFiltro] = useState("");
   const buscaDeferred = useDeferredValue(busca);
+  // Busca aplicada no SERVIDOR (regra do CLAUDE.md) — debounce de 350ms
+  const [buscaServidor, setBuscaServidor] = useState("");
+
+  // KPIs globais por status (head-count; não dependem da página visível)
+  const [kpiAgendadas, setKpiAgendadas]   = useState<number | null>(null);
+  const [kpiAndamento, setKpiAndamento]   = useState<number | null>(null);
+  const [kpiConcluidas, setKpiConcluidas] = useState<number | null>(null);
+
+  useEffect(() => {
+    const t = setTimeout(() => { setBuscaServidor(busca); setPagina(0); }, 350);
+    return () => clearTimeout(t);
+  }, [busca]);
 
   // ── Carrega empresa do usuário uma única vez ──────────────────────────────
   useEffect(() => {
@@ -120,7 +132,7 @@ export default function PedidosListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Carrega página do servidor sempre que pagina/filtro/empresa muda ──────
+  // ── Carrega página do servidor sempre que pagina/filtro/busca/empresa muda ──
   useEffect(() => {
     if (!empresaId) return;
     const load = async () => {
@@ -128,6 +140,48 @@ export default function PedidosListPage() {
       const supabase = createClient();
       const from = pagina * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
+
+      // Busca no SERVIDOR: ilike não funciona em join nem em uuid, então
+      // prefetch dos IDs que casam (cadastros pequenos + entregas por termo)
+      // e filtra a query principal com .or(in). Regra de listagens do CLAUDE.md.
+      let orBusca: string | null = null;
+      const termo = buscaServidor.replace(/[%,()]/g, "").trim();
+      if (termo) {
+        const like = `%${termo}%`;
+        const [mots, veics, clis, entsTexto] = await Promise.all([
+          supabase.from("motoristas").select("id").eq("empresa_id", empresaId).ilike("nome", like).limit(200),
+          supabase.from("veiculos").select("id").eq("empresa_id", empresaId)
+            .or(`placa.ilike.${like},apelido.ilike.${like},modelo.ilike.${like}`).limit(200),
+          supabase.from("clientes").select("id").eq("empresa_id", empresaId)
+            .or(`nome_fantasia.ilike.${like},apelido.ilike.${like}`).limit(200),
+          supabase.from("entregas").select("pedido_id").eq("empresa_id", empresaId)
+            .or(`destino.ilike.${like},nome_cliente_avulso.ilike.${like}`)
+            .not("pedido_id", "is", null).limit(500),
+        ]);
+        const cliIds = (clis.data ?? []).map(c => c.id);
+        // entregas de clientes cadastrados que casaram com o termo → pedido_ids
+        const entsCli = cliIds.length > 0
+          ? await supabase.from("entregas").select("pedido_id").eq("empresa_id", empresaId)
+              .in("cliente_id", cliIds).not("pedido_id", "is", null).limit(500)
+          : { data: [] as { pedido_id: string }[] };
+        const pedidoIds = Array.from(new Set([
+          ...(entsTexto.data ?? []).map(e => e.pedido_id),
+          ...(entsCli.data ?? []).map(e => e.pedido_id),
+        ].filter(Boolean)));
+        const motIds  = (mots.data ?? []).map(m => m.id);
+        const veicIds = (veics.data ?? []).map(v => v.id);
+
+        const partes: string[] = [];
+        if (pedidoIds.length > 0) partes.push(`id.in.(${pedidoIds.join(",")})`);
+        if (motIds.length > 0)    partes.push(`motorista_id.in.(${motIds.join(",")})`);
+        if (veicIds.length > 0)   partes.push(`veiculo_id.in.(${veicIds.join(",")})`);
+        if (partes.length === 0) {
+          // termo não casou nada em lugar nenhum → resultado vazio sem consultar
+          setPedidos([]); setTotal(0); setLoading(false);
+          return;
+        }
+        orBusca = partes.join(",");
+      }
 
       let q = supabase
         .from("pedidos")
@@ -137,9 +191,11 @@ export default function PedidosListPage() {
         )
         .eq("empresa_id", empresaId)
         .order("created_at", { ascending: false })
+        .order("id", { ascending: true })
         .range(from, to);
 
       if (filtro) q = q.eq("status", filtro);
+      if (orBusca) q = q.or(orBusca);
 
       const { data, count } = await (q as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
       setPedidos(data ?? []);
@@ -147,13 +203,31 @@ export default function PedidosListPage() {
       setLoading(false);
     };
     load();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, pagina, filtro]);
+  }, [empresaId, pagina, filtro, buscaServidor]);
+
+  // ── KPIs globais por status (head-count; corretos em qualquer página) ─────
+  useEffect(() => {
+    if (!empresaId) return;
+    const supabase = createClient();
+    const contar = (statuses: string[]) =>
+      supabase.from("pedidos").select("id", { count: "exact", head: true })
+        .eq("empresa_id", empresaId).in("status", statuses);
+    Promise.all([
+      contar(["agendada", "agendado"]),
+      contar(["em_andamento"]),
+      contar(["concluida", "concluido"]),
+    ]).then(([ag, an, co]) => {
+      setKpiAgendadas(ag.count ?? 0);
+      setKpiAndamento(an.count ?? 0);
+      setKpiConcluidas(co.count ?? 0);
+    });
+  }, [empresaId]);
 
   // Ao mudar o filtro de status, volta para a primeira página
   useEffect(() => { setPagina(0); }, [filtro]);
 
-  // ── Busca client-side nos 100 registros da página atual ───────────────────
+  // ── Refinamento client-side instantâneo (a busca REAL roda no servidor
+  //    via buscaServidor; isto só filtra a página atual enquanto digita) ──────
   const indexado = useMemo(() =>
     pedidos.map(p => {
       const entregas = Array.isArray(p.entregas) ? p.entregas : [];
@@ -179,13 +253,13 @@ export default function PedidosListPage() {
     return indexado.filter(row => row.hay.includes(q));
   }, [indexado, buscaDeferred]);
 
-  // ── KPIs — contam apenas os pedidos da página visível ────────────────────
+  // ── KPIs — total da query atual + contagens GLOBAIS por status (head-count) ─
   const kpis = useMemo(() => ({
     total:      total,
-    agendadas:  pedidos.filter(v => v.status === "agendada" || v.status === "agendado").length,
-    andamento:  pedidos.filter(v => v.status === "em_andamento").length,
-    concluidas: pedidos.filter(v => v.status === "concluida" || v.status === "concluido").length,
-  }), [pedidos, total]);
+    agendadas:  kpiAgendadas ?? "...",
+    andamento:  kpiAndamento ?? "...",
+    concluidas: kpiConcluidas ?? "...",
+  }), [total, kpiAgendadas, kpiAndamento, kpiConcluidas]);
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE);
 
@@ -227,12 +301,7 @@ export default function PedidosListPage() {
       <PageHeader
         title="Pedidos"
         count={total}
-        actions={
-          <>
-            <Btn href="/pedidos/importar" variant="outline">Importar notas</Btn>
-            <Btn href="/pedidos/novo">+ Novo Pedido</Btn>
-          </>
-        }
+        actions={<Btn href="/pedidos/novo">+ Novo Pedido</Btn>}
       />
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>

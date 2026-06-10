@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
@@ -600,14 +599,9 @@ export default function NovoPedidoSimplePage() {
               <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: 0 }}>
                 Endereços de entrega
               </h2>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                <Link href="/pedidos/importar" style={{ fontSize: "12px", color: "#2563eb", textDecoration: "underline" }}>
-                  Importar XML/planilha
-                </Link>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-                  {enderecos.filter(e => e.trim()).length} endereço(s)
-                </span>
-              </div>
+              <span style={{ fontSize: "12px", color: "#94a3b8" }}>
+                {enderecos.filter(e => e.trim()).length} endereço(s)
+              </span>
             </div>
 
             <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>

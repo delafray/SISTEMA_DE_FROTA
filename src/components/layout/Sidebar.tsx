@@ -163,6 +163,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             <NavItem href="/"               label="Início"         icon={HomeIcon}  onNavigate={onNavigate} />
             <NavItem href="/pedidos"        label="Pedidos"        icon={RouteIcon} onNavigate={onNavigate} />
             <NavItem href="/despacho"       label="Despacho"       icon={FreteIcon} onNavigate={onNavigate} />
+            <NavItem href="/faturamento"    label="Financeiro"     icon={MoneyIcon} onNavigate={onNavigate} />
             <NavItem href="/roteirizacao"   label="Roteirização"   icon={RouteIcon} onNavigate={onNavigate} />
             <NavItem href="/abastecimentos" label="Abastecimentos" icon={FuelIcon}  onNavigate={onNavigate} />
           </div>

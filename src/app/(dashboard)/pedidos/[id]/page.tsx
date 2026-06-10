@@ -8,6 +8,7 @@ import {
   DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
 import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
+import { PagamentoSection } from "./_components/PagamentoSection";
 
 // Parada como o MapaRota consome (subset). Reusa o tipo do componente pra nao
 // divergir do snapshot `endereco` jsonb que ele renderiza.
@@ -29,6 +30,8 @@ type Pedido = {
   pago: boolean | null;
   forma_pagamento: string | null;
   data_pagamento: string | null;
+  local_carregamento: string | null;
+  empresa_faturamento_id: string | null; // coluna nova (migration_pedido_faturamento_parcelas)
   motoristas: { id: string; nome: string } | null;
   veiculos: { id: string; placa: string; apelido: string | null; marca: string; modelo: string } | null;
 };
@@ -114,6 +117,13 @@ export default function PedidoDetalhePage() {
   const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  // Edição inline: local de carregamento (pedido) e destino (entrega)
+  const [editandoLocal, setEditandoLocal] = useState(false);
+  const [localEdit, setLocalEdit] = useState("");
+  const [salvandoLocal, setSalvandoLocal] = useState(false);
+  const [editandoDestino, setEditandoDestino] = useState<string | null>(null);
+  const [destinoEdit, setDestinoEdit] = useState("");
+  const [salvandoDestino, setSalvandoDestino] = useState(false);
   // Roteirizacao (Passo 3)
   const [paradas, setParadas] = useState<ParadaMapa[]>([]);
   const [roteirizando, setRoteirizando] = useState(false);
@@ -124,7 +134,7 @@ export default function PedidoDetalhePage() {
       const supabase = createClient();
       const [pedidoRes, entregasRes, paradasRes] = await Promise.all([
         supabase.from("pedidos")
-          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)")
+          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,local_carregamento,empresa_faturamento_id,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)" as never)
           .eq("id", id)
           .single(),
         supabase.from("entregas")
@@ -200,6 +210,44 @@ export default function PedidoDetalhePage() {
     const supabase = createClient();
     await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
     setEntregas(p => p.filter(f => f.id !== entregaId));
+  };
+
+  /** Salva o local de carregamento no pedido e propaga como origem das entregas. */
+  const salvarLocal = async () => {
+    if (!pedido) return;
+    setSalvandoLocal(true);
+    const supabase = createClient();
+    const novo = localEdit.trim() || null;
+    await supabase.from("pedidos").update({ local_carregamento: novo }).eq("id", pedido.id);
+    await supabase.from("entregas").update({ origem: novo ?? "Depósito" }).eq("pedido_id", pedido.id);
+    setPedido(p => p ? { ...p, local_carregamento: novo } : p);
+    setEntregas(prev => prev.map(e => ({ ...e, origem: novo ?? "Depósito" })));
+    setEditandoLocal(false);
+    setSalvandoLocal(false);
+  };
+
+  /** Salva o novo destino da entrega, zera a coordenada e re-geocoda o pedido. */
+  const salvarDestino = async (entregaId: string) => {
+    if (!pedido) return;
+    const novo = destinoEdit.trim();
+    if (!novo) return;
+    setSalvandoDestino(true);
+    const supabase = createClient();
+    await supabase.from("entregas").update({
+      destino: novo,
+      latitude: null,
+      longitude: null,
+      geocode_status: "pendente",
+    }).eq("id", entregaId);
+    setEntregas(prev => prev.map(e => e.id === entregaId ? { ...e, destino: novo, geocode_status: "pendente" } : e));
+    setEditandoDestino(null);
+    setSalvandoDestino(false);
+    // re-geocoda em background (mesma cascata da criação)
+    fetch("/api/routing/geocodar", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ pedido_id: pedido.id }),
+    }).catch(() => {});
   };
 
   const recarregarRota = async () => {
@@ -339,13 +387,36 @@ export default function PedidoDetalhePage() {
           <FormSection title="📦 Pedido">
             <Row label="Cliente" value={<strong>{cliente}</strong>} />
             <Row label="Valor" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</strong>} />
-            <Row label="Pagamento" value={pedido.pago
-              ? <span style={{ color: "#16a34a" }}>✓ Pago {pedido.data_pagamento ? `em ${fmtDate(pedido.data_pagamento)}` : ""}</span>
-              : <span style={{ color: "#eab308" }}>Pendente</span>}
-            />
             <Row label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
             <Row label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />
             <Row label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} />
+            {/* Local de carregamento editável AQUI (decisão do dono: pedido se trata no pedido) */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0" }}>
+              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500, whiteSpace: "nowrap" }}>Local de carregamento</span>
+              {editandoLocal ? (
+                <span style={{ display: "flex", gap: "4px", flex: 1, justifyContent: "flex-end" }}>
+                  <input
+                    style={{ fontSize: "12px", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", flex: 1, maxWidth: "260px" }}
+                    value={localEdit}
+                    onChange={e => setLocalEdit(e.target.value)}
+                    placeholder="Endereço de coleta"
+                  />
+                  <Btn variant="primary" size="xs" disabled={salvandoLocal} onClick={salvarLocal}>{salvandoLocal ? "..." : "OK"}</Btn>
+                  <Btn variant="ghost" size="xs" onClick={() => setEditandoLocal(false)}>✕</Btn>
+                </span>
+              ) : (
+                <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 500, display: "flex", alignItems: "center", gap: "6px" }}>
+                  {pedido.local_carregamento || "—"}
+                  {!finalizado && (
+                    <button
+                      onClick={() => { setLocalEdit(pedido.local_carregamento ?? ""); setEditandoLocal(true); }}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#2563eb", padding: 0 }}
+                      title="Editar local de carregamento"
+                    >✏️</button>
+                  )}
+                </span>
+              )}
+            </div>
           </FormSection>
 
           <FormSection title="🚚 Despacho e Execução">
@@ -419,6 +490,16 @@ export default function PedidoDetalhePage() {
               </p>
             )}
           </FormSection>
+
+          <PagamentoSection
+            pedidoId={pedido.id}
+            empresaId={pedido.empresa_id}
+            valorPedido={pedido.valor_pedido}
+            pago={pedido.pago}
+            dataPagamento={pedido.data_pagamento}
+            formaPagamento={pedido.forma_pagamento}
+            empresaFaturamentoId={pedido.empresa_faturamento_id}
+          />
 
           {pedido.observacoes && (
             <FormSection title="Observações">
@@ -495,9 +576,36 @@ export default function PedidoDetalhePage() {
                                 fontSize: "11px", fontWeight: 700,
                               }}>{fr.sequencia}</span>
                             )}
-                            {fr.origem ?? "—"} → {fr.destino ?? "—"}
-                            {fr.geocode_status === "falhou" && (
-                              <span title="Destino não pôde ser geocodificado — ficou fora da rota" style={{ marginLeft: "6px", fontSize: "11px", color: "#dc2626" }}>⚠ sem coordenada</span>
+                            {editandoDestino === fr.id ? (
+                              <span style={{ display: "inline-flex", gap: "4px", alignItems: "center" }}>
+                                <input
+                                  style={{ fontSize: "12px", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", width: "320px" }}
+                                  value={destinoEdit}
+                                  onChange={e => setDestinoEdit(e.target.value)}
+                                  autoFocus
+                                />
+                                <Btn variant="primary" size="xs" disabled={salvandoDestino} onClick={() => salvarDestino(fr.id)}>
+                                  {salvandoDestino ? "..." : "OK"}
+                                </Btn>
+                                <Btn variant="ghost" size="xs" onClick={() => setEditandoDestino(null)}>✕</Btn>
+                              </span>
+                            ) : (
+                              <>
+                                {fr.origem ?? "—"} → {fr.destino ?? "—"}
+                                {!finalizado && (
+                                  <button
+                                    onClick={() => { setDestinoEdit(fr.destino ?? ""); setEditandoDestino(fr.id); }}
+                                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#2563eb", marginLeft: "6px", padding: 0 }}
+                                    title="Editar endereço de entrega (re-geocoda automaticamente)"
+                                  >✏️</button>
+                                )}
+                                {fr.geocode_status === "falhou" && (
+                                  <span title="Destino não pôde ser geocodificado — ficou fora da rota" style={{ marginLeft: "6px", fontSize: "11px", color: "#dc2626" }}>⚠ sem coordenada</span>
+                                )}
+                                {fr.geocode_status === "pendente" && (
+                                  <span title="Aguardando geocodificação" style={{ marginLeft: "6px", fontSize: "11px", color: "#d97706" }}>⏳</span>
+                                )}
+                              </>
                             )}
                           </Td>
                           <Td>{cli?.nome_fantasia ?? fr.nome_cliente_avulso?.trim() ?? "—"}</Td>
