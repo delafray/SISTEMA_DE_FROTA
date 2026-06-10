@@ -15,6 +15,19 @@ Política de testes do projeto (RECOMENDADO, não obrigatório):
 
 ---
 
+# 📜 Listagens — REGRA DO DONO (09/06/2026)
+
+Telas de listagem que crescem com a operação (pedidos, entregas, despacho, históricos) NÃO podem baixar tudo de uma vez:
+
+1. **Paginação incremental de 100 em 100** via `.range()`, carregando mais conforme o scroll desce (infinite scroll) ou botão "carregar mais".
+2. **Busca e filtros no SERVIDOR** (`.ilike()`/`.or()` no Supabase), não filtrando um array gigante no cliente.
+3. **NÃO usar `loadAll`** nessas telas (ele varre o banco inteiro — só serve para tabelas pequenas tipo cadastros).
+4. Mostrar contagem total (`{ count: 'exact', head: true }`) sem baixar as linhas.
+
+Motivo: o Supabase corta em ~1000 linhas por chamada e o dono projeta 10.000+ pedidos. Resolver ANTES de acontecer.
+
+---
+
 # 🤖 Política de delegação a subagentes (Claude Code) — REGRA DO DONO
 
 Ao delegar trabalho a subagentes (Agent/Workflow), escolher o modelo pela natureza da tarefa:
