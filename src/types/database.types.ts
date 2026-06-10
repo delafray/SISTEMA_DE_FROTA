@@ -2370,6 +2370,45 @@ export type Database = {
           },
         ]
       }
+      pedido_parcelas: {
+        Row: {
+          created_at: string
+          data_pagamento: string | null
+          empresa_id: string
+          id: string
+          numero: number
+          pago: boolean
+          pedido_id: string
+          updated_at: string
+          valor: number
+          vencimento: string | null
+        }
+        Insert: {
+          created_at?: string
+          data_pagamento?: string | null
+          empresa_id: string
+          id?: string
+          numero: number
+          pago?: boolean
+          pedido_id: string
+          updated_at?: string
+          valor: number
+          vencimento?: string | null
+        }
+        Update: {
+          created_at?: string
+          data_pagamento?: string | null
+          empresa_id?: string
+          id?: string
+          numero?: number
+          pago?: boolean
+          pedido_id?: string
+          updated_at?: string
+          valor?: number
+          vencimento?: string | null
+        }
+        Relationships: []
+      }
       pedidos: {
         Row: {
           cliente_id: string | null
@@ -2379,6 +2418,7 @@ export type Database = {
           data_inicio_prevista: string | null
           data_inicio_real: string | null
           data_pagamento: string | null
+          empresa_faturamento_id: string | null
           empresa_id: string
           empresa_motorista_id: string | null
           executor_tipo: string | null
@@ -2409,6 +2449,7 @@ export type Database = {
           data_inicio_prevista?: string | null
           data_inicio_real?: string | null
           data_pagamento?: string | null
+          empresa_faturamento_id?: string | null
           empresa_id: string
           empresa_motorista_id?: string | null
           executor_tipo?: string | null
@@ -2439,6 +2480,7 @@ export type Database = {
           data_inicio_prevista?: string | null
           data_inicio_real?: string | null
           data_pagamento?: string | null
+          empresa_faturamento_id?: string | null
           empresa_id?: string
           empresa_motorista_id?: string | null
           executor_tipo?: string | null
