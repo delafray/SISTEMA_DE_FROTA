@@ -18,6 +18,10 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('api_paradas_patch');
 
+// Reordenacao faz varios passes de UPDATE sequenciais (1 por parada). Em rotas
+// grandes isso passa do timeout default da Vercel. Margem confortavel.
+export const maxDuration = 30;
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,

@@ -5,6 +5,9 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('whatsapp-reconectar');
 
+// Faz vários chamados sequenciais à Evolution (logout, delete, create) + espera.
+export const maxDuration = 30;
+
 function getEvoBase() {
   return process.env.EVOLUTION_API_URL ?? 'http://129.80.27.159:8080';
 }
@@ -13,11 +16,19 @@ function getEvoKey() {
 }
 
 async function evoFetch(path: string, opts: RequestInit = {}) {
-  const res = await fetch(`${getEvoBase()}${path}`, {
-    ...opts,
-    headers: { 'Content-Type': 'application/json', apikey: getEvoKey(), ...(opts.headers ?? {}) },
-  });
-  return res;
+  // Timeout: a Evolution na VM Oracle pode estar fora do ar; sem AbortController
+  // o reconectar fica pendurado até o timeout default da Vercel.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 12000);
+  try {
+    return await fetch(`${getEvoBase()}${path}`, {
+      ...opts,
+      headers: { 'Content-Type': 'application/json', apikey: getEvoKey(), ...(opts.headers ?? {}) },
+      signal: controller.signal,
+    });
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 // GET — retorna estado atual da conexão

@@ -35,6 +35,10 @@ import type { EnderecoCEP } from '@/lib/cep/types';
 
 const log = createLogger('api_paradas_adicionar');
 
+// Geocodifica via Nominatim (rate-limit ~1.1s/req, cascata de provedores). Sem
+// isto a function pode morrer no timeout default da Vercel antes do geocoding.
+export const maxDuration = 60;
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
