@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
@@ -244,14 +243,22 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
 
 // ─── Página Principal ─────────────────────────────────────────────────────────
 
+/** Paginação: 100 pedidos por página na fila de despacho.
+ *  Regra dos 10.000+ pedidos (doc 09/06): evita carregar tudo de uma vez. */
+const PAGE_SIZE_DESPACHO = 100;
+
 export default function DespachoPage() {
   const router = useRouter();
   const supabase = createClient();
 
+  // Dados paginados
   const [pedidos, setPedidos]       = useState<Pedido[]>([]);
+  const [total, setTotal]           = useState(0);
+  const [pagina, setPagina]         = useState(0);
   const [veiculos, setVeiculos]     = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [empresaId, setEmpresaId]   = useState<string | null>(null);
 
   // Busca
   const [busca, setBusca] = useState("");
@@ -267,10 +274,10 @@ export default function DespachoPage() {
   const [modalErr, setModalErr]             = useState("");
   const [sucesso, setSucesso]               = useState("");
 
-  // ── Carregamento inicial ───────────────────────────────────────────────────
+  // ── Carrega empresa do usuário (uma vez) ──────────────────────────────────
 
   useEffect(() => {
-    const load = async () => {
+    const init = async () => {
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
 
@@ -282,44 +289,51 @@ export default function DespachoPage() {
         .single();
       if (!ue?.empresa_id) return;
 
-      const empresaId = ue.empresa_id as string;
+      const eId = ue.empresa_id as string;
+      setEmpresaId(eId);
 
-      // Busca pedidos aguardando despacho (veiculo_id IS NULL, status não finalizado)
-      const pedidosData = await loadAll<Pedido>((from, to) =>
-        supabase
-          .from("pedidos")
-          .select("id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))")
-          .eq("empresa_id", empresaId)
-          .is("veiculo_id", null)
-          .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
-          .order("data_inicio_prevista", { ascending: true })
-          .range(from, to) as unknown as PromiseLike<{ data: Pedido[] | null }>
-      );
-
-      // Caminhões ativos da empresa (com apelido)
-      const { data: veicData } = await supabase
-        .from("veiculos")
-        .select("id,placa,apelido,marca,modelo")
-        .eq("empresa_id", empresaId)
-        .eq("ativo", true)
-        .order("placa");
-
-      // Motoristas ativos da empresa
-      const { data: motData } = await supabase
-        .from("motoristas")
-        .select("id,nome")
-        .eq("empresa_id", empresaId)
-        .eq("ativo", true)
-        .order("nome");
-
-      setPedidos(pedidosData);
+      // Caminhões e motoristas — carregados uma única vez (raramente mudam)
+      const [{ data: veicData }, { data: motData }] = await Promise.all([
+        supabase.from("veiculos").select("id,placa,apelido,marca,modelo")
+          .eq("empresa_id", eId).eq("ativo", true).order("placa"),
+        supabase.from("motoristas").select("id,nome")
+          .eq("empresa_id", eId).eq("ativo", true).order("nome"),
+      ]);
       setVeiculos((veicData ?? []) as Veiculo[]);
       setMotoristas((motData ?? []) as Motorista[]);
+    };
+    init();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // ── Carrega página de pedidos (reexecuta ao mudar pagina ou empresa) ──────
+
+  useEffect(() => {
+    if (!empresaId) return;
+    const load = async () => {
+      setLoading(true);
+      const from = pagina * PAGE_SIZE_DESPACHO;
+      const to   = from + PAGE_SIZE_DESPACHO - 1;
+
+      const { data, count } = await (supabase
+        .from("pedidos")
+        .select(
+          "id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))",
+          { count: "exact" }
+        )
+        .eq("empresa_id", empresaId)
+        .is("veiculo_id", null)
+        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
+        .order("data_inicio_prevista", { ascending: true })
+        .range(from, to) as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
+
+      setPedidos(data ?? []);
+      setTotal(count ?? 0);
       setLoading(false);
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [empresaId, pagina]);
 
   // ── Índice de busca + filtro (cliente / destino) ────────────────────────────
 
@@ -440,6 +454,7 @@ export default function DespachoPage() {
 
       // Remove da fila local (sem reload de página)
       setPedidos(prev => prev.filter(p => !modalPedidosIds.includes(p.id)));
+      setTotal(prev => Math.max(0, prev - modalPedidosIds.length));
       setSelecionados(new Set());
       setModalAberto(false);
 
@@ -459,8 +474,42 @@ export default function DespachoPage() {
 
   // ── KPIs ───────────────────────────────────────────────────────────────────
 
-  const totalAguardando = pedidos.length;
+  const totalAguardando  = total;
+  const totalPaginas     = Math.ceil(total / PAGE_SIZE_DESPACHO);
   const algumselecionado = selecionados.size > 0;
+
+  // Controles de paginação (reutilizáveis desktop/mobile)
+  const Paginacao = ({ mobile = false }: { mobile?: boolean }) =>
+    totalPaginas > 1 ? (
+      <div style={{
+        display: "flex", alignItems: "center", gap: "10px",
+        justifyContent: mobile ? "center" : "flex-end",
+        padding: "8px 0",
+      }}>
+        {!mobile && (
+          <span style={{ fontSize: "13px", color: "#64748b" }}>
+            Página {pagina + 1} de {totalPaginas} · {total} aguardando
+          </span>
+        )}
+        <Btn
+          variant="outline" size={mobile ? "sm" : "xs"}
+          disabled={pagina === 0 || loading}
+          onClick={() => setPagina(p => Math.max(0, p - 1))}
+        >
+          ← Anterior
+        </Btn>
+        {mobile && (
+          <span style={{ fontSize: "13px", color: "#64748b" }}>{pagina + 1}/{totalPaginas}</span>
+        )}
+        <Btn
+          variant="outline" size={mobile ? "sm" : "xs"}
+          disabled={pagina >= totalPaginas - 1 || loading}
+          onClick={() => setPagina(p => p + 1)}
+        >
+          Próxima →
+        </Btn>
+      </div>
+    ) : null;
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
@@ -606,6 +655,7 @@ export default function DespachoPage() {
               })}
             </tbody>
           </DataTable>
+          <Paginacao />
         </div>
 
         {/* Lista Mobile */}
@@ -656,6 +706,7 @@ export default function DespachoPage() {
             );
           })}
         </MobileList>
+        <div className="mobile-only"><Paginacao mobile /></div>
 
         {/* FAB Mobile para despachar selecionados */}
         {algumselecionado && (
