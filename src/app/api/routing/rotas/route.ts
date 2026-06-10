@@ -75,9 +75,25 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
     }
   }
 
+  // Nº do pedido vinculado (rota ancorada num despacho) — o app mostra o vínculo
+  const pedidoIds = Array.from(new Set(
+    (data ?? []).map((r) => r.pedido_id as string | null).filter((p): p is string => !!p)
+  ));
+  const numeroPorPedido: Record<string, string | null> = {};
+  if (pedidoIds.length > 0) {
+    const { data: peds } = await supabase
+      .from('pedidos')
+      .select('id,numero')
+      .in('id', pedidoIds);
+    for (const p of (peds ?? []) as Array<{ id: string; numero?: string | null }>) {
+      numeroPorPedido[p.id] = p.numero ?? null;
+    }
+  }
+
   const enriched = (data ?? []).map((r) => ({
     ...r,
     qtd_paradas: paradasPorRota[r.id as string] ?? 0,
+    numero_pedido: r.pedido_id ? (numeroPorPedido[r.pedido_id as string] ?? null) : null,
   }));
 
   return NextResponse.json({ rotas: enriched }, { status: 200 });

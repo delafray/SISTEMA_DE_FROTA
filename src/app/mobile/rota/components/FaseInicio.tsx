@@ -147,6 +147,22 @@ export function FaseInicio({
                         <span style={{ fontWeight: 700, fontSize: 14 }}>
                           {dataFormatada}
                         </span>
+                        {r.numero_pedido && (
+                          <span
+                            data-testid={`rota-pedido-${r.id}`}
+                            style={{
+                              fontSize: 11,
+                              fontWeight: 800,
+                              padding: '2px 8px',
+                              borderRadius: 999,
+                              background: '#dbeafe',
+                              color: '#1e40af',
+                              fontFamily: 'ui-monospace, monospace',
+                            }}
+                          >
+                            📦 {r.numero_pedido}
+                          </span>
+                        )}
                         <span
                           style={{
                             fontSize: 11,

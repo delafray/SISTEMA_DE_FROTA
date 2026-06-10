@@ -79,6 +79,9 @@ export interface RotaOtimizada {
   status: StatusRota;
   otimizada_em: string | null;
   criada_em: string;
+  /** TRANSIENTE (enriquecido pela API /api/routing/rotas): nº do pedido
+   *  vinculado (AAAA.SSSS) quando a rota está ancorada num despacho. */
+  numero_pedido?: string | null;
 }
 
 // ─── paradas ────────────────────────────────────────────────────────

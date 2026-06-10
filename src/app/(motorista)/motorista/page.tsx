@@ -21,6 +21,8 @@ type RotaItem = {
   distancia_total_km: number | null;
   tempo_total_min: number | null;
   qtd_paradas?: number;
+  /** nº do pedido vinculado (rota ancorada num despacho) */
+  numero_pedido?: string | null;
 };
 
 /** Converte uma rota cacheada (offline) no item de lista da tela. */
@@ -401,8 +403,13 @@ export default function MotoristaPage() {
               const conteudo = (
                 <>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: cores.texto }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: cores.texto, display: "flex", alignItems: "center", gap: "8px" }}>
                       {fmtDate(r.data)}
+                      {r.numero_pedido && (
+                        <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "999px", background: cores.fundoAzul, color: cores.azulTexto, fontFamily: "ui-monospace, monospace" }}>
+                          📦 {r.numero_pedido}
+                        </span>
+                      )}
                     </div>
                     <span style={{ background: st.bg, color: st.texto, border: `1px solid ${st.borda}`, borderRadius: "6px", padding: "3px 9px", fontSize: "11px", fontWeight: 700 }}>
                       {label}

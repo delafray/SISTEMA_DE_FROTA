@@ -81,6 +81,9 @@ export async function sincronizarFila(): Promise<SyncResult> {
             id_local: nota.id_local,
             motorista_id: nota.motorista_id,
             empresa_id: nota.empresa_id,
+            // vínculo com o pedido (rota ancorada num despacho) — NUNCA se perde:
+            // cada destino é gravado no banco já apontando pro pedido de origem
+            pedido_id: nota.pedido_id ?? null,
             cep: nota.cep,
             numero: nota.numero,
             endereco: nota.endereco,

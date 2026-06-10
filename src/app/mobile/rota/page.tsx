@@ -153,15 +153,33 @@ function RotaContent(): React.ReactElement {
           entregas: Array<{ id: string; destino: string | null; nome_cliente_avulso: string | null; clientes: { nome_fantasia: string } | { nome_fantasia: string }[] | null }>;
         }>;
         const ids = lista.map((p) => p.id);
-        const comRota = new Set<string>();
+        // Rotas abertas vinculadas: separa as PRÉ-CADASTRADAS no painel (paradas
+        // de entregas) das já MONTADAS pelo motorista (paradas de notas). Pedido
+        // com rota do motorista SAI da lista — ela aparece em "Rotas recentes"
+        // com o nº do pedido (decisão do dono 10/06).
+        const comRotaPainel = new Set<string>();
+        const comRotaMotorista = new Set<string>();
         if (ids.length > 0) {
           const { data: rts } = await supabase.from('rotas_otimizadas')
-            .select('pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']);
-          for (const r of (rts ?? []) as Array<{ pedido_id: string | null }>) {
-            if (r.pedido_id) comRota.add(r.pedido_id);
+            .select('id,pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']);
+          const rotas = (rts ?? []) as Array<{ id: string; pedido_id: string | null }>;
+          if (rotas.length > 0) {
+            const { data: pars } = await supabase.from('paradas')
+              .select('rota_id,nota_id').in('rota_id', rotas.map((r) => r.id));
+            const rotasComNota = new Set(
+              ((pars ?? []) as Array<{ rota_id: string; nota_id: string | null }>)
+                .filter((p) => p.nota_id).map((p) => p.rota_id)
+            );
+            for (const r of rotas) {
+              if (!r.pedido_id) continue;
+              if (rotasComNota.has(r.id)) comRotaMotorista.add(r.pedido_id);
+              else comRotaPainel.add(r.pedido_id);
+            }
           }
         }
-        const montados: DespachoAberto[] = lista.map((p) => {
+        const montados: DespachoAberto[] = lista
+          .filter((p) => !comRotaMotorista.has(p.id))
+          .map((p) => {
           const ents = Array.isArray(p.entregas) ? p.entregas : [];
           let cliente = 'Cliente não informado';
           for (const e of ents) {
@@ -180,7 +198,7 @@ function RotaContent(): React.ReactElement {
             local_carregamento: p.local_carregamento,
             qtd_entregas: ents.length,
             destinos,
-            tem_rota: comRota.has(p.id),
+            tem_rota: comRotaPainel.has(p.id),
           };
         });
         if (!cancelado) setDespachos(montados);
@@ -233,6 +251,7 @@ function RotaContent(): React.ReactElement {
               id_local: crypto.randomUUID(),
               motorista_id: motoristaId,
               empresa_id: empresaId,
+              pedido_id: d.id, // paradas puxadas da rota pré-cadastrada: vínculo gravado
               cep: end?.cep ?? '',
               numero: end?.numero ?? '',
               endereco: end,
@@ -668,6 +687,8 @@ function RotaContent(): React.ReactElement {
         id_local: crypto.randomUUID(),
         motorista_id: motoristaId,
         empresa_id: empresaId,
+        // cada destino capturado numa rota ancorada já nasce apontando pro pedido
+        pedido_id: pedidoAncora?.id ?? null,
         cep: input.cep,
         numero: input.numero,
         endereco: input.endereco,
@@ -684,7 +705,7 @@ function RotaContent(): React.ReactElement {
       const todas = await listarTodas(motoristaId);
       setNotas(todas);
     },
-    [motoristaId, empresaId]
+    [motoristaId, empresaId, pedidoAncora]
   );
 
   const handleEditar = useCallback(

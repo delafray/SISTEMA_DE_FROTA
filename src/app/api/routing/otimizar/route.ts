@@ -455,11 +455,18 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // 4. Persistir rota + paradas. Se ANCORADA num pedido, substitui a rota
-  //    anterior do pedido (mesma semântica do ramo de entregas).
-  if (body.ancorar_pedido_id) {
-    await supabase.from('paradas').delete().eq('pedido_id', body.ancorar_pedido_id);
-    await supabase.from('rotas_otimizadas').delete().eq('pedido_id', body.ancorar_pedido_id);
+  // 4. Persistir rota + paradas. ÂNCORA no pedido: vem do body OU é derivada
+  //    das próprias notas (cada destino é gravado com o pedido de origem —
+  //    decisão do dono 10/06: o vínculo NUNCA depende do estado do app).
+  const pedidosDasNotas = Array.from(
+    new Set(geocodificadas.map((n) => n.pedido_id).filter((p): p is string => !!p))
+  );
+  const ancoraPedidoId =
+    body.ancorar_pedido_id ?? (pedidosDasNotas.length === 1 ? pedidosDasNotas[0] : undefined);
+  if (ancoraPedidoId) {
+    // substitui a rota anterior do pedido (mesma semântica do ramo de entregas)
+    await supabase.from('paradas').delete().eq('pedido_id', ancoraPedidoId);
+    await supabase.from('rotas_otimizadas').delete().eq('pedido_id', ancoraPedidoId);
   }
 
   const { data: rotaInserida, error: errRota } = await supabase
@@ -467,7 +474,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     .insert({
       motorista_id: body.motorista_id,
       empresa_id: body.empresa_id,
-      pedido_id: body.ancorar_pedido_id ?? null,
+      pedido_id: ancoraPedidoId ?? null,
       data: dataRota,
       distancia_total_km: otim.resultado.distancia_total_km,
       tempo_total_min: Math.round(otim.resultado.tempo_total_min),
@@ -488,7 +495,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     paradasTraduzidas,
     notasMap,
     rotaInserida.id as string
-  ).map((p) => (body.ancorar_pedido_id ? { ...p, pedido_id: body.ancorar_pedido_id } : p));
+  ).map((p) => (ancoraPedidoId ? { ...p, pedido_id: ancoraPedidoId } : p));
 
   const { data: paradasInseridas, error: errParadas } = await supabase
     .from('paradas')

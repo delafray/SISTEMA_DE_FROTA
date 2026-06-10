@@ -51,6 +51,14 @@ type Pedido = {
   veiculos: { id: string; placa: string; apelido: string | null; marca: string; modelo: string } | null;
 };
 
+type NotaMontagem = {
+  id: string;
+  numero: string | null;
+  endereco: unknown;
+  status: string;
+  capturado_em: string | null;
+};
+
 type RotaExec = {
   id: string;
   status: string;
@@ -182,6 +190,8 @@ export default function DespachoDetalhePage() {
   const [abaTela, setAbaTela] = useState<"principal" | "rota">("principal");
   // Rota salva pelo motorista (ou roteirizada aqui) — cabeçalho da execução
   const [rotaExec, setRotaExec] = useState<RotaExec | null>(null);
+  // Notas que o motorista está capturando AGORA pra este pedido (em montagem)
+  const [notasMontagem, setNotasMontagem] = useState<NotaMontagem[]>([]);
   // Despachar/trocar aqui mesmo (modal compartilhado do Despacho)
   const [modalDespacho, setModalDespacho] = useState(false);
   const [veiculosOp, setVeiculosOp] = useState<VeiculoOpcao[]>([]);
@@ -226,6 +236,29 @@ export default function DespachoDetalhePage() {
     };
     load();
   }, [id]);
+
+  // ── "Tempo real" na aba Rota: a cada 10s atualiza execução + notas em
+  //    montagem (o que o motorista está construindo no celular AGORA).
+  useEffect(() => {
+    if (abaTela !== "rota" || !pedido) return;
+    let cancelado = false;
+    const atualizar = async () => {
+      const supabase = createClient();
+      const [{ data: notas }] = await Promise.all([
+        supabase.from("notas_capturadas")
+          .select("id,numero,endereco,status,capturado_em")
+          .eq("pedido_id", pedido.id)
+          .in("status", ["capturada", "geocodificada"])
+          .order("capturado_em", { ascending: true }),
+        recarregarRota(),
+      ]);
+      if (!cancelado) setNotasMontagem((notas ?? []) as unknown as NotaMontagem[]);
+    };
+    void atualizar();
+    const intervalo = setInterval(() => { void atualizar(); }, 10_000);
+    return () => { cancelado = true; clearInterval(intervalo); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaTela, pedido?.id]);
 
   /** Abre o modal de despacho/troca (carrega caminhões/motoristas ativos 1x) */
   const abrirDespacho = async () => {
@@ -619,6 +652,29 @@ export default function DespachoDetalhePage() {
                 </p>
               )}
           </Bloco>
+
+          {/* ══ EM MONTAGEM (o que o motorista está capturando AGORA) ═════ */}
+          {notasMontagem.length > 0 && (
+            <Bloco titulo={`🧱 Em montagem — motorista capturando (${notasMontagem.length})`} cor={COR_PEDIDO}>
+              <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 8px" }}>
+                Destinos que o motorista está colocando no celular pra este pedido — atualiza sozinho a cada 10s.
+              </p>
+              {notasMontagem.map((n, i) => (
+                <div key={n.id} style={{
+                  display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+                  padding: "7px 10px", marginBottom: "4px",
+                  background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px",
+                }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", minWidth: "20px" }}>{i + 1}º</span>
+                  <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{enderecoParada(n.endereco)}</span>
+                  <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" }}>
+                    {n.status === "geocodificada" ? "📍 localizada" : "⏳ capturada"}
+                    {n.capturado_em ? ` · ${fmtDT(n.capturado_em)}` : ""}
+                  </span>
+                </div>
+              ))}
+            </Bloco>
+          )}
 
           {/* ══ EXECUÇÃO DA ROTA (o que o motorista fez) ══════════════════ */}
           <Bloco titulo="⏱️ Execução da Rota" cor={COR_ENTREGAS}>
