@@ -244,6 +244,14 @@ export default function NovoPedidoSimplePage() {
       return;
     }
 
+    // Dispara geocoding das entregas em background (fire-and-forget) para que a
+    // rota saia instantânea depois — sem await para não atrasar o redirect.
+    fetch('/api/routing/geocodar', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ pedido_id: pedido.id }),
+    }).catch(() => {});
+
     // Se local avulso foi usado com cliente cadastrado, oferecer salvar
     if (!avulso && clienteId && usarLocalAvulso && localAvulsoTexto.trim()) {
       setModalSalvarLocal(true);

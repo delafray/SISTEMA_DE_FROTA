@@ -18,17 +18,32 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server';
+import { createClient } from '@supabase/supabase-js';
 import { geocodar, geocodarVozComVariantes } from '@/lib/routing/geocoding';
 import { geocodarGoogle, type ResultadoGoogle } from '@/lib/routing/googleGeocoding';
 import { lerGeocodeCache, gravarGeocodeCache, consumirCota, montarQueryEstruturada } from '@/lib/routing/geocodeCache';
 import { resolverCepDaRua } from '@/lib/cep/viacep';
 import type { ResultadoGeocoding } from '@/lib/routing/types';
 import { createLogger } from '@/lib/logger';
+import {
+  buscarEntregasDoPedido,
+  geocodarEntregas,
+} from '@/lib/routing/geocodarEntregasPedido';
 
 const log = createLogger('api_routing_geocodar');
 
+// Geocoding sequencial ~1.1s/endereço por rate-limit Nominatim; precisa de margem ampla.
+export const maxDuration = 300;
+
 interface GeocodarRequest {
   endereco: string;
+}
+
+function getSupabase() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.SUPABASE_SERVICE_ROLE_KEY!
+  );
 }
 
 /** Converte resultado do Google pro formato dos cards (ResultadoGeocoding).
@@ -151,17 +166,66 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
   return NextResponse.json(resultado, { status: statusErro });
 }
 
-// ─── POST /api/routing/geocodar — LEGADO ────────────────────────────
+// ─── POST /api/routing/geocodar ─────────────────────────────────────
+//
+// Dois modos discriminados pelo body:
+//
+//   { pedido_id }   → geocoda as entregas não-finalizadas do pedido (novo).
+//                     Responde { total, geocodificadas, falharam }.
+//                     Disparado fire-and-forget ao criar pedido.
+//
+//   { endereco }    → legado: geocoda 1 endereço-texto. Mantido para
+//                     compatibilidade com chamadas antigas.
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
-  let body: Partial<GeocodarRequest>;
+  let body: Partial<GeocodarRequest & { pedido_id: string }>;
   try {
-    body = (await request.json()) as Partial<GeocodarRequest>;
+    body = (await request.json()) as Partial<GeocodarRequest & { pedido_id: string }>;
   } catch {
     log.warn('json_invalido');
     return NextResponse.json({ error: 'json_invalido' }, { status: 400 });
   }
 
+  // ── NOVO: geocoda entregas de um pedido ──────────────────────────
+  if ('pedido_id' in body) {
+    if (!body.pedido_id || typeof body.pedido_id !== 'string') {
+      return NextResponse.json(
+        { error: 'campo_obrigatorio', detail: 'pedido_id' },
+        { status: 400 }
+      );
+    }
+
+    const supabase = getSupabase();
+
+    let entregas;
+    try {
+      entregas = await buscarEntregasDoPedido(supabase, body.pedido_id);
+    } catch (err) {
+      log.error('buscar_entregas_erro', { pedido_id: body.pedido_id, message: (err as Error).message });
+      return NextResponse.json({ error: 'db_query_failed' }, { status: 500 });
+    }
+
+    const total = entregas.length;
+    const { geocodificadas, sem_geocoding } = await geocodarEntregas(supabase, entregas);
+
+    log.info('geocodar_pedido_concluido', {
+      pedido_id: body.pedido_id,
+      total,
+      geocodificadas: geocodificadas.length,
+      falharam: sem_geocoding.length,
+    });
+
+    return NextResponse.json(
+      {
+        total,
+        geocodificadas: geocodificadas.length,
+        falharam: sem_geocoding.length,
+      },
+      { status: 200 }
+    );
+  }
+
+  // ── LEGADO: geocoda 1 endereço-texto ────────────────────────────
   if (!body.endereco || typeof body.endereco !== 'string') {
     return NextResponse.json(
       { error: 'campo_obrigatorio', detail: 'endereco' },

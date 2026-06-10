@@ -23,7 +23,6 @@ import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { otimizarRota } from '@/lib/routing/vroom';
 import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
-import { geocodar } from '@/lib/routing/geocoding';
 import {
   indexarJobs,
   notaParaJob,
@@ -33,8 +32,16 @@ import {
 } from '@/lib/routing/restricoes';
 import type { Coordenada, NotaCapturada } from '@/lib/routing/types';
 import type { Job } from '@/lib/routing/vroom';
+import {
+  buscarEntregasDoPedido,
+  geocodarEntregas,
+  type EntregaRoteavel,
+} from '@/lib/routing/geocodarEntregasPedido';
 
 const log = createLogger('api_routing_otimizar');
+
+// Geocoding sequencial ~1.1s/endereço por rate-limit Nominatim; precisa de margem ampla.
+export const maxDuration = 300;
 
 function getSupabase() {
   return createClient(
@@ -54,21 +61,6 @@ interface OtimizarRequest {
   // EMPRESA 1: quando presente, otimiza as ENTREGAS deste pedido (ramo novo),
   // em vez das notas_capturadas soltas do motorista. Ver otimizarPorPedido().
   pedido_id?: string;
-}
-
-// Subset de `entregas` usado no ramo do pedido. `destino` e endereco-texto
-// (geocodado por texto livre); `origem` e o ponto de coleta (nao roteirizado:
-// a parada e o DESTINO da entrega — decisao validada com o dono).
-interface EntregaRoteavel {
-  id: string;
-  empresa_id: string | null;
-  motorista_id: string | null;
-  destino: string | null;
-  latitude: number | null;
-  longitude: number | null;
-  status: string | null;
-  service_time_seg: number | null;
-  observacoes: string | null;
 }
 
 interface OtimizarResponse {
@@ -168,66 +160,8 @@ async function geocodarPendentes(
 // `destino` como texto livre, geocodado por `geocodar()` (Nominatim, confianca
 // sempre 'baixa'). Persiste pedido_id em rotas_otimizadas e pedido_id+entrega_id
 // em paradas, e grava entregas.sequencia. Sem tocar no ramo de notas.
-
-async function buscarEntregasDoPedido(
-  supabase: ReturnType<typeof getSupabase>,
-  pedidoId: string
-): Promise<EntregaRoteavel[]> {
-  const { data, error } = await supabase
-    .from('entregas')
-    .select('id, empresa_id, motorista_id, destino, latitude, longitude, status, service_time_seg, observacoes')
-    .eq('pedido_id', pedidoId);
-
-  if (error) throw new Error(`buscar_entregas_failed: ${error.message}`);
-  // "Todas nao-finalizadas" (decisao do dono). `entregas.status` usa os valores
-  // masculinos (agendado/concluido/cancelado + 'ocorrencia' do POD); as formas
-  // femininas ficam por seguranca contra dados antigos.
-  const FINALIZADAS = new Set([
-    'concluido', 'cancelado', 'ocorrencia',
-    'concluida', 'cancelada', 'entregue',
-  ]);
-  return ((data ?? []) as EntregaRoteavel[]).filter(
-    (e) => !FINALIZADAS.has((e.status ?? '').toLowerCase())
-  );
-}
-
-async function geocodarEntregas(
-  supabase: ReturnType<typeof getSupabase>,
-  entregas: EntregaRoteavel[]
-): Promise<{ geocodificadas: EntregaRoteavel[]; sem_geocoding: string[] }> {
-  const geocodificadas: EntregaRoteavel[] = [];
-  const sem_geocoding: string[] = [];
-
-  for (const ent of entregas) {
-    if (ent.latitude !== null && ent.longitude !== null) {
-      geocodificadas.push(ent);
-      continue;
-    }
-    const texto = (ent.destino ?? '').trim();
-    const geo = texto ? await geocodar(texto) : ({ ok: false } as const);
-    if (!geo.ok) {
-      await supabase.from('entregas').update({ geocode_status: 'falhou' }).eq('id', ent.id);
-      sem_geocoding.push(ent.id);
-      continue;
-    }
-    const { error: errUp } = await supabase
-      .from('entregas')
-      .update({
-        latitude: geo.resultado.lat,
-        longitude: geo.resultado.lng,
-        geocode_status: 'geocodificado',
-      })
-      .eq('id', ent.id);
-    if (errUp) {
-      log.warn('update_entrega_coord_falhou', { entrega_id: ent.id, message: errUp.message });
-      sem_geocoding.push(ent.id);
-      continue;
-    }
-    geocodificadas.push({ ...ent, latitude: geo.resultado.lat, longitude: geo.resultado.lng });
-  }
-
-  return { geocodificadas, sem_geocoding };
-}
+// buscarEntregasDoPedido e geocodarEntregas foram extraídas para
+// src/lib/routing/geocodarEntregasPedido.ts e importadas acima.
 
 /**
  * Resolve o ponto de partida do caminhao no modo pedido, em ordem:

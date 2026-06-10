@@ -15,8 +15,12 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
+import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
 
 const log = createLogger('api_notas_sync');
+
+// Geocoding sequencial ~1.1s/endereço por rate-limit Nominatim; 60s cobre casos normais.
+export const maxDuration = 60;
 
 function getSupabase() {
   return createClient(
@@ -76,6 +80,47 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   }
 
   const supabase = getSupabase();
+
+  // Geocodar na hora do sync: se o cliente não mandou coords, tenta resolver
+  // agora para que o otimizar já encontre a nota pronta (sem retardatário lento).
+  // Best-effort obrigatório: qualquer falha NÃO bloqueia o sync — a nota é
+  // inserida com lat/lng null e status 'capturada'; o fallback no otimizar pega.
+  let latFinal: number | null = body.latitude ?? null;
+  let lngFinal: number | null = body.longitude ?? null;
+  let statusFinal: string = 'capturada';
+
+  if (latFinal === null || lngFinal === null) {
+    try {
+      const coord = await resolverCoordenada({
+        empresa_id: body.empresa_id!,
+        logradouro: body.endereco?.logradouro,
+        numero: body.numero,
+        bairro: body.endereco?.bairro,
+        cidade: body.endereco?.cidade,
+        uf: body.endereco?.uf,
+        cep: body.cep,
+      });
+      if (coord) {
+        latFinal = coord.lat;
+        lngFinal = coord.lng;
+        statusFinal = 'geocodificada';
+        log.info('geocoding_sync_hit', {
+          id_local: body.id_local,
+          fonte: coord.fonte,
+          confianca: coord.confianca,
+        });
+      } else {
+        log.info('geocoding_sync_miss', { id_local: body.id_local });
+      }
+    } catch (geoErr) {
+      log.warn('geocoding_sync_erro', {
+        id_local: body.id_local,
+        message: (geoErr as Error).message,
+      });
+      // continua com lat/lng null — sync nunca falha por geocoding
+    }
+  }
+
   const { data, error } = await supabase
     .from('notas_capturadas')
     .insert({
@@ -85,10 +130,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       cep: body.cep ?? '',
       numero: body.numero!,
       endereco: body.endereco!,
-      latitude: body.latitude ?? null,
-      longitude: body.longitude ?? null,
+      latitude: latFinal,
+      longitude: lngFinal,
       observacao: body.observacao ?? null,
-      status: 'capturada',
+      status: statusFinal,
       capturado_em: body.capturado_em!,
       sincronizado_em: new Date().toISOString(),
     })
