@@ -45,9 +45,21 @@ Modelo: claude-opus-4-8 (Opus 4.8) em modo /goal
 - ✅ `whatsapp/reconectar/route.ts` — AbortController 12s no evoFetch
 - Verificado: tsc 0 erros, 1190/1190 testes verdes.
 
+### Bloco 2 — maxDuration extra (COMMITADO)
+- ✅ `routing/validar-endereco/route.ts` — maxDuration=30 (geocoding)
+- ✅ `whatsapp/reconectar/route.ts` — maxDuration=30
+- Verificado: tsc 0 erros, 1190/1190 verdes.
+
 ## Entrega
-- ⬜ docs/AUDITORIA_COMPLETA_2026-06-10.md (incremental)
-- ⬜ Pull Request para main
+- ✅ docs/AUDITORIA_COMPLETA_2026-06-10.md (escrito)
+- 🔄 Pull Request para main
+
+## DECISÕES PARA O DONO (resumo — detalhe no relatório)
+- D1 database.types.ts desatualizado (regenerar precisa de credencial)
+- D2 status em 2 gêneros no banco (migração de padronização — após redesign 05:00)
+- D3 dedupe duplicado (dedupe.ts vs classificadorBot.ts) — consolidar
+- D4 Modo B (extrairPedidoFrete) não ligado — Passo 5 pendente
+- D5 funções "órfãs" de routing = andaime do futuro, MANTER
 
 ---
 
