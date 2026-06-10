@@ -738,7 +738,7 @@ export default function DespachoPage() {
                     </Td>
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                        <Btn href={`/pedidos/${p.id}`} variant="ghost" size="xs">Ver</Btn>
+                        <Btn href={`/despacho/${p.id}`} variant="ghost" size="xs">Ver</Btn>
                         {aba === "fila" ? (
                           <>
                             <Btn
@@ -821,7 +821,7 @@ export default function DespachoPage() {
                 actions={
                   aba === "fila" ? (
                     <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                      <Btn href={`/pedidos/${p.id}`} variant="outline" size="sm">Ver</Btn>
+                      <Btn href={`/despacho/${p.id}`} variant="outline" size="sm">Ver</Btn>
                       <Btn
                         variant="primary"
                         size="sm"
@@ -848,7 +848,7 @@ export default function DespachoPage() {
                     </div>
                   ) : (
                     <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-                      <Btn href={`/pedidos/${p.id}`} variant="outline" size="sm">Ver</Btn>
+                      <Btn href={`/despacho/${p.id}`} variant="outline" size="sm">Ver</Btn>
                       <Btn
                         variant="outline"
                         size="sm"

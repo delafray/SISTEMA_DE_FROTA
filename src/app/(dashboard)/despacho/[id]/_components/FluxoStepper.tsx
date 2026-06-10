@@ -1,9 +1,10 @@
 "use client";
 
 /**
- * Stepper do fluxo do pedido (decisão do dono, 10/06/2026 — fluxo VISÍVEL,
- * padrão Fleetbase/Onfleet): Lançado → Despachado → Em rota → Concluído → Pago,
- * com o estágio atual aceso e o botão da PRÓXIMA ação ali do lado.
+ * Stepper do fluxo OPERACIONAL do pedido (decisão do dono, 10/06/2026 — fluxo
+ * VISÍVEL, padrão Fleetbase/Onfleet): Lançado → Despachado → Em rota →
+ * Concluído, com o estágio atual aceso e o botão da PRÓXIMA ação ali do lado.
+ * (Financeiro/pagamento NÃO entra aqui — logística é logística.)
  */
 
 import { Btn } from "@/components/ui/ds";

@@ -398,7 +398,7 @@ export default function PedidosListPage() {
                     <Td><Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge></Td>
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                        <Btn href={`/pedidos/${p.id}`}       variant="ghost"   size="xs">Ver</Btn>
+                        <Btn href={`/despacho/${p.id}`}       variant="ghost"   size="xs">Ver</Btn>
                         <Btn href={`/pedidos/${p.id}/editar`} variant="outline" size="xs">Editar</Btn>
                         <DeleteBtn id={p.id} table="pedidos" label="pedido" />
                       </div>
@@ -429,7 +429,7 @@ export default function PedidosListPage() {
             return (
               <MobileCard
                 key={p.id}
-                href={`/pedidos/${p.id}`}
+                href={`/despacho/${p.id}`}
                 title={cliente}
                 subtitle={resumoDestinos(entregas)}
                 badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}

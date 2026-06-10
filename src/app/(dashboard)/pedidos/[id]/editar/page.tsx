@@ -213,7 +213,7 @@ export default function EditarPedidoPage() {
       await supabase.from("entregas").update(vinc).in("id", Array.from(selectedEntregas));
     }
 
-    router.push(`/pedidos/${id}`);
+    router.push(`/despacho/${id}`);
     router.refresh();
   };
 
@@ -232,8 +232,8 @@ export default function EditarPedidoPage() {
         title="Editar Pedido"
         actions={
           <>
-            <Btn href={`/pedidos/${id}`} variant="ghost">← Voltar</Btn>
-            <Btn href={`/pedidos/${id}`} variant="outline">Cancelar</Btn>
+            <Btn href={`/despacho/${id}`} variant="ghost">← Voltar</Btn>
+            <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Atualizar"}
             </Btn>
@@ -480,7 +480,7 @@ export default function EditarPedidoPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href={`/pedidos/${id}`} variant="outline">Cancelar</Btn>
+          <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
           <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Atualizar Pedido"}</Btn>
         </div>
       </div>
