@@ -61,6 +61,10 @@ interface OtimizarRequest {
   // EMPRESA 1: quando presente, otimiza as ENTREGAS deste pedido (ramo novo),
   // em vez das notas_capturadas soltas do motorista. Ver otimizarPorPedido().
   pedido_id?: string;
+  // ÂNCORA (app do motorista, 10/06): otimiza as NOTAS capturadas normalmente,
+  // mas grava a rota/paradas vinculadas a este pedido — a execução aparece na
+  // aba Rota do despacho no painel. Substitui rota anterior do mesmo pedido.
+  ancorar_pedido_id?: string;
 }
 
 interface OtimizarResponse {
@@ -451,12 +455,19 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
   }
 
-  // 4. Persistir rota + paradas
+  // 4. Persistir rota + paradas. Se ANCORADA num pedido, substitui a rota
+  //    anterior do pedido (mesma semântica do ramo de entregas).
+  if (body.ancorar_pedido_id) {
+    await supabase.from('paradas').delete().eq('pedido_id', body.ancorar_pedido_id);
+    await supabase.from('rotas_otimizadas').delete().eq('pedido_id', body.ancorar_pedido_id);
+  }
+
   const { data: rotaInserida, error: errRota } = await supabase
     .from('rotas_otimizadas')
     .insert({
       motorista_id: body.motorista_id,
       empresa_id: body.empresa_id,
+      pedido_id: body.ancorar_pedido_id ?? null,
       data: dataRota,
       distancia_total_km: otim.resultado.distancia_total_km,
       tempo_total_min: Math.round(otim.resultado.tempo_total_min),
@@ -477,7 +488,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     paradasTraduzidas,
     notasMap,
     rotaInserida.id as string
-  );
+  ).map((p) => (body.ancorar_pedido_id ? { ...p, pedido_id: body.ancorar_pedido_id } : p));
 
   const { data: paradasInseridas, error: errParadas } = await supabase
     .from('paradas')

@@ -20,6 +20,7 @@ export function FaseCaptura({
   onOtimizar,
   onDesfazerUltima,
   onEditar,
+  onRemover,
 }: {
   notas: NotaNaFila[];
   totalEsperado?: number;
@@ -27,6 +28,8 @@ export function FaseCaptura({
   onOtimizar: () => void | Promise<void>;
   onDesfazerUltima: () => void | Promise<void>;
   onEditar: (idLocal: string, dados: NotaCapturadaInput) => Promise<void>;
+  /** remove uma nota específica da lista (rota ancorada: excluir paradas puxadas) */
+  onRemover?: (idLocal: string) => Promise<void>;
 }) {
   const [notaEmEdicao, setNotaEmEdicao] = useState<string | null>(null);
 
@@ -155,6 +158,27 @@ export function FaseCaptura({
                 >
                   ✏️
                 </button>
+                {onRemover && (
+                  <button
+                    type="button"
+                    data-testid={`btn-remover-${n.id_local}`}
+                    onClick={() => { void onRemover(n.id_local); }}
+                    title="Excluir esta entrega da rota"
+                    style={{
+                      flexShrink: 0,
+                      padding: '4px 8px',
+                      fontSize: 14,
+                      background: 'transparent',
+                      border: '1px solid #fecaca',
+                      borderRadius: 6,
+                      cursor: 'pointer',
+                      color: '#dc2626',
+                      marginTop: 2,
+                    }}
+                  >
+                    ✕
+                  </button>
+                )}
               </li>
             ))}
             {notas.length > 10 && (

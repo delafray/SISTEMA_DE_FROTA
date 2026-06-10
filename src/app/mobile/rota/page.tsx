@@ -33,8 +33,22 @@ import { enfileirarConcluirParada, enfileirarEncerrarRota } from '@/lib/offline/
 import { iniciarSyncAcoesWorker, sincronizarAcoes } from '@/lib/offline/syncAcoes';
 import { vibrar, lockOrientacaoRetrato } from '@/lib/mobile/dispositivo';
 import { carregarVeiculoAtivo, type VeiculoAtivo } from '@/lib/mobile/veiculoAtivo';
+import { createClient } from '@/lib/supabase/client';
+import { rotuloPedido } from '@/lib/utils/numeroPedido';
+import { DespachosAbertos, type DespachoAberto } from './components/DespachosAbertos';
 import { fetchRota } from '@/lib/routing/api';
 import { containerStyle, erroStyle } from './styles';
+
+// Âncora do despacho: a rota em criação pertence a este pedido (persistida no
+// aparelho pra sobreviver a refresh; limpa em "Nova rota" e ao encerrar).
+const ANCORA_KEY = 'frota_pedido_ancora';
+type PedidoAncora = { id: string; numero: string | null };
+function lerAncora(): PedidoAncora | null {
+  try {
+    const raw = localStorage.getItem(ANCORA_KEY);
+    return raw ? (JSON.parse(raw) as PedidoAncora) : null;
+  } catch { return null; }
+}
 import type { Fase } from './types';
 import { Header } from './components/Header';
 import { FaseInicio } from './components/FaseInicio';
@@ -78,6 +92,10 @@ function RotaContent(): React.ReactElement {
   // Caminhao da alocacao ativa do motorista (apelido/modelo/placa/km) — mostrado
   // no header em todas as fases. Offline cai pro snapshot salvo no aparelho.
   const [veiculo, setVeiculo] = useState<VeiculoAtivo | null>(null);
+  // Despachos em aberto do motorista (lista na fase inicio) + âncora ativa
+  const [despachos, setDespachos] = useState<DespachoAberto[]>([]);
+  const [pedidoAncora, setPedidoAncora] = useState<PedidoAncora | null>(null);
+  const [abrindoDespacho, setAbrindoDespacho] = useState<string | null>(null);
   // Uso do Google no mes (pra mostrar na captura: cache vs API + quanto falta
   // pro ViaCEP). Atualiza ao entrar na captura e a cada NF capturada.
   const [usoGoogle, setUsoGoogle] = useState<{ total: number; limite: number } | null>(null);
@@ -106,6 +124,132 @@ function RotaContent(): React.ReactElement {
       cancelado = true;
     };
   }, [motoristaId]);
+
+  // Restaura a âncora do despacho (sobrevive a refresh) e carrega os despachos
+  // em aberto do motorista pra lista da fase inicio (best-effort; offline fica vazio).
+  useEffect(() => {
+    if (!motoristaId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setPedidoAncora(lerAncora());
+    let cancelado = false;
+    (async () => {
+      try {
+        const supabase = createClient();
+        const { data: peds } = await supabase.from('pedidos')
+          .select('id,numero,status,data_inicio_prevista,local_carregamento,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))')
+          .eq('motorista_id', motoristaId)
+          .not('status', 'in', '(concluida,concluido,cancelada,cancelado)')
+          .order('data_inicio_prevista', { ascending: true })
+          .limit(30);
+        const lista = (peds ?? []) as Array<{
+          id: string; numero: string | null; status: string;
+          data_inicio_prevista: string | null; local_carregamento: string | null;
+          entregas: Array<{ id: string; destino: string | null; nome_cliente_avulso: string | null; clientes: { nome_fantasia: string } | { nome_fantasia: string }[] | null }>;
+        }>;
+        const ids = lista.map((p) => p.id);
+        const comRota = new Set<string>();
+        if (ids.length > 0) {
+          const { data: rts } = await supabase.from('rotas_otimizadas')
+            .select('pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']);
+          for (const r of (rts ?? []) as Array<{ pedido_id: string | null }>) {
+            if (r.pedido_id) comRota.add(r.pedido_id);
+          }
+        }
+        const montados: DespachoAberto[] = lista.map((p) => {
+          const ents = Array.isArray(p.entregas) ? p.entregas : [];
+          let cliente = 'Cliente não informado';
+          for (const e of ents) {
+            const cli = Array.isArray(e.clientes) ? e.clientes[0] : e.clientes;
+            if (cli?.nome_fantasia) { cliente = cli.nome_fantasia; break; }
+            if (e.nome_cliente_avulso?.trim()) cliente = e.nome_cliente_avulso.trim();
+          }
+          const dests = ents.map((e) => e.destino?.trim()).filter(Boolean);
+          const destinos = `${ents.length} entrega${ents.length !== 1 ? 's' : ''}${dests.length > 0 ? ` · ${String(dests[0]).slice(0, 28)}${dests.length > 1 ? ` +${dests.length - 1}` : ''}` : ''}`;
+          return {
+            id: p.id,
+            numero: p.numero ?? null,
+            cliente,
+            status: p.status,
+            data_inicio_prevista: p.data_inicio_prevista,
+            local_carregamento: p.local_carregamento,
+            qtd_entregas: ents.length,
+            destinos,
+            tem_rota: comRota.has(p.id),
+          };
+        });
+        if (!cancelado) setDespachos(montados);
+      } catch { /* offline ou erro — lista de despachos fica vazia */ }
+    })();
+    return () => { cancelado = true; };
+  }, [motoristaId]);
+
+  /** Grava/limpa a âncora (estado + aparelho). */
+  const definirAncora = useCallback((a: PedidoAncora | null) => {
+    setPedidoAncora(a);
+    try {
+      if (a) localStorage.setItem(ANCORA_KEY, JSON.stringify(a));
+      else localStorage.removeItem(ANCORA_KEY);
+    } catch { /* localStorage indisponível */ }
+  }, []);
+
+  /** "Abrir Rota Para Este Pedido": rota pré-cadastrada vira lista editável;
+   *  sem rota, captura do zero — sempre ancorado no pedido. */
+  const abrirRotaPedido = useCallback(async (d: DespachoAberto) => {
+    setAbrindoDespacho(d.id);
+    setErro(null);
+    try {
+      // mesma limpeza do "Nova rota": zera a fila local e as notas soltas no servidor
+      await limparFila(motoristaId);
+      await fetch('/api/routing/notas/limpar', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
+      }).catch(() => {});
+
+      // Rota pré-cadastrada? Puxa as paradas EM ABERTO pra lista editável.
+      try {
+        const supabase = createClient();
+        const { data: rotas } = await supabase.from('rotas_otimizadas')
+          .select('id')
+          .eq('pedido_id', d.id)
+          .in('status', ['otimizada', 'em_andamento'])
+          .order('criada_em', { ascending: false })
+          .limit(1);
+        const rotaPrev = (rotas ?? [])[0] as { id: string } | undefined;
+        if (rotaPrev) {
+          const { data: pars } = await supabase.from('paradas')
+            .select('endereco,latitude,longitude,observacao,concluida_em')
+            .eq('rota_id', rotaPrev.id)
+            .order('ordem', { ascending: true });
+          for (const par of ((pars ?? []) as Array<{ endereco: unknown; latitude: number | null; longitude: number | null; observacao: string | null; concluida_em: string | null }>).filter(p => !p.concluida_em)) {
+            const end = (par.endereco ?? {}) as NotaNaFila['endereco'] & { cep?: string | null; numero?: string | null };
+            await adicionarNota({
+              id_local: crypto.randomUUID(),
+              motorista_id: motoristaId,
+              empresa_id: empresaId,
+              cep: end?.cep ?? '',
+              numero: end?.numero ?? '',
+              endereco: end,
+              latitude: par.latitude ?? null,
+              longitude: par.longitude ?? null,
+              observacao: par.observacao ?? null,
+              status: 'capturada',
+              capturado_em: new Date().toISOString(),
+              status_sync: 'pendente',
+              tentativas: 0,
+            });
+          }
+          void sincronizarFila();
+        }
+      } catch { /* sem rede ou sem rota — segue captura vazia */ }
+
+      setNotas(await listarTodas(motoristaId));
+      definirAncora({ id: d.id, numero: d.numero });
+      setFase('captura');
+    } finally {
+      setAbrindoDespacho(null);
+    }
+  }, [motoristaId, empresaId, definirAncora]);
 
   // Persiste a fase no localStorage pra restaurar apos refresh/crash.
   // As NFs ficam seguras no IndexedDB (Dexie), mas o estado React se perde.
@@ -400,6 +544,7 @@ function RotaContent(): React.ReactElement {
 
   const iniciarCaptura = useCallback(async () => {
     setErro(null);
+    definirAncora(null); // "Nova rota" livre — sem vínculo com despacho
     if (motoristaId) {
       try {
         // 1. Limpa a fila offline local
@@ -417,7 +562,7 @@ function RotaContent(): React.ReactElement {
       }
     }
     setFase('captura');
-  }, [motoristaId, empresaId]);
+  }, [motoristaId, empresaId, definirAncora]);
 
   // ─── Saida da captura via Voltar (modal salvar/descartar/continuar) ──
 
@@ -438,6 +583,7 @@ function RotaContent(): React.ReactElement {
   // "Nova rota"), depois volta pra tela inicial.
   const descartarESair = useCallback(async () => {
     setConfirmandoSaida(false);
+    definirAncora(null);
     if (motoristaId) {
       try {
         await limparFila(motoristaId);
@@ -452,7 +598,7 @@ function RotaContent(): React.ReactElement {
     }
     setNotas([]);
     setFase('inicio');
-  }, [motoristaId, empresaId]);
+  }, [motoristaId, empresaId, definirAncora]);
 
   // Retoma a captura a partir da tela inicial SEM limpar a fila (diferente do
   // "Nova rota", que zera tudo). Usado pelo botao "Continuar captura (N)".
@@ -483,6 +629,21 @@ function RotaContent(): React.ReactElement {
       setErro(`Erro ao carregar rota: ${(err as Error).message}`);
     }
   }, []);
+
+  /** Remove uma nota específica da lista (decisão do dono: ao puxar rota
+   *  pré-cadastrada, o motorista pode EXCLUIR itens antes de re-roteirizar). */
+  const handleRemoverNota = useCallback(async (idLocal: string) => {
+    const nota = notas.find((n) => n.id_local === idLocal);
+    await remover(idLocal);
+    // se já sincronizou, apaga também no servidor (senão o otimizar a incluiria)
+    if (nota?.id_servidor) {
+      try {
+        await createClient().from('notas_capturadas').delete().eq('id', nota.id_servidor);
+      } catch { /* best-effort — limpar do servidor falhou, segue */ }
+    }
+    vibrar([30]);
+    setNotas(await listarTodas(motoristaId));
+  }, [notas, motoristaId]);
 
   const handleDesfazerUltima = useCallback(async () => {
     // Pega a ultima nota capturada (mais recente) e remove da fila local
@@ -577,6 +738,8 @@ function RotaContent(): React.ReactElement {
           motorista_id: motoristaId,
           empresa_id: empresaId,
           origem,
+          // âncora do despacho: a rota nasce vinculada ao pedido escolhido
+          ancorar_pedido_id: pedidoAncora?.id,
         }),
       });
       const data = await res.json();
@@ -605,7 +768,7 @@ function RotaContent(): React.ReactElement {
     } finally {
       setProgressoOtim('');
     }
-  }, [motoristaId, empresaId]);
+  }, [motoristaId, empresaId, pedidoAncora]);
 
   const handleConcluirParada = useCallback(
     async (paradaId: string, aprenderPonto = false) => {
@@ -708,6 +871,7 @@ function RotaContent(): React.ReactElement {
     }
     setRota(null);
     setParadas([]);
+    definirAncora(null); // rota encerrada — solta o vínculo com o despacho
     // Limpa notas da fila local pra nao restaurar falsamente 'captura' no proximo refresh.
     if (motoristaId) await limparFila(motoristaId);
     setNotas([]);
@@ -722,7 +886,7 @@ function RotaContent(): React.ReactElement {
       // Ignora erro — historico vai estar levemente desatualizado mas nao critico
     }
     setFase('inicio');
-  }, [empresaId, motoristaId, rota, paradas]);
+  }, [empresaId, motoristaId, rota, paradas, definirAncora]);
 
   // ─── Calculo dinamico de distancias ────────────────────────────────
   const statsDinamicos = useMemo(() => {
@@ -817,6 +981,12 @@ function RotaContent(): React.ReactElement {
       {fase === 'carregando' && <div style={{ padding: 24, textAlign: 'center' }}>Carregando…</div>}
 
       {fase === 'inicio' && (
+        <>
+        <DespachosAbertos
+          despachos={despachos}
+          abrindo={abrindoDespacho}
+          onAbrirRota={abrirRotaPedido}
+        />
         <FaseInicio
           onIniciar={iniciarCaptura}
           onCarregarRota={handleCarregarRota}
@@ -835,9 +1005,19 @@ function RotaContent(): React.ReactElement {
             }
           }}
         />
+        </>
       )}
 
       {fase === 'captura' && (
+        <>
+        {pedidoAncora && (
+          <div
+            data-testid="banner-ancora"
+            style={{ margin: '8px 0', padding: '8px 12px', background: '#eff6ff', border: '1px solid #bfdbfe', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#1e40af' }}
+          >
+            📦 Rota do pedido {rotuloPedido(pedidoAncora.numero, pedidoAncora.id)} — ajuste a lista e finalize.
+          </div>
+        )}
         <FaseCaptura
           notas={notas}
           totalEsperado={totalEsperado}
@@ -845,7 +1025,9 @@ function RotaContent(): React.ReactElement {
           onOtimizar={handleOtimizar}
           onDesfazerUltima={handleDesfazerUltima}
           onEditar={handleEditar}
+          onRemover={handleRemoverNota}
         />
+        </>
       )}
 
       {fase === 'otimizando' && (
