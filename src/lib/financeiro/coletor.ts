@@ -64,37 +64,95 @@ export async function coletarEventos(
   const { empresas, inicio, fim, incluirProvisaoManutencao } = opts;
   const eventos: EventoFinanceiro[] = [];
 
-  // ─── PEDIDOS (entrada: valor do pedido) ──────────────────────────────────
-  const { data: pedidos, error: pedidosErr } = await supabase
+  // ─── PEDIDOS (entrada: total a receber = valor + acréscimos - descontos) ──
+  // Pedido PARCELADO entra como UMA entrada POR PARCELA (valor + vencimento) —
+  // antes entrava a bolada inteira numa data só, errando o fluxo de caixa.
+  // Acréscimos/descontos: colunas da migration_pedido_acrescimos_descontos —
+  // tenta com elas e cai pro select antigo se a migration não rodou ainda.
+  const selPedidosBase = "id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)";
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  let pedidosRes: { data: any[] | null; error: { message: string } | null } = await supabase
     .from("pedidos")
-    .select("id,valor_pedido,pago,data_pagamento,data_inicio_prevista,data_fim_prevista,status,motoristas(nome)")
-    .in("empresa_id", empresas);
-
-  if (pedidosErr) {
-    console.error("Erro ao coletar pedidos:", pedidosErr);
-    throw new Error(`Erro ao coletar pedidos: ${pedidosErr.message}`);
+    .select(`${selPedidosBase},acrescimos,descontos`)
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    .in("empresa_id", empresas) as any;
+  if (pedidosRes.error) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    pedidosRes = await supabase
+      .from("pedidos")
+      .select(selPedidosBase)
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      .in("empresa_id", empresas) as any;
   }
+  if (pedidosRes.error) {
+    console.error("Erro ao coletar pedidos:", pedidosRes.error);
+    throw new Error(`Erro ao coletar pedidos: ${pedidosRes.error.message}`);
+  }
+  const pedidos = pedidosRes.data ?? [];
 
-  for (const p of pedidos ?? []) {
+  // Parcelas dos pedidos (pedido_parcelas) — best-effort (tabela pode não existir)
+  type ParcelaFluxo = { id: string; pedido_id: string; numero: number; valor: number; vencimento: string | null; pago: boolean; data_pagamento: string | null };
+  const parcelasPorPedido = new Map<string, ParcelaFluxo[]>();
+  try {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const { data: pars } = await (supabase as any)
+      .from("pedido_parcelas")
+      .select("id,pedido_id,numero,valor,vencimento,pago,data_pagamento")
+      .in("empresa_id", empresas)
+      .order("numero", { ascending: true });
+    for (const r of (pars ?? []) as ParcelaFluxo[]) {
+      const lista = parcelasPorPedido.get(r.pedido_id) ?? [];
+      lista.push(r);
+      parcelasPorPedido.set(r.pedido_id, lista);
+    }
+  } catch { /* antes da migration de parcelas — segue só com pedidos */ }
+
+  for (const p of pedidos) {
     const motorista = Array.isArray(p.motoristas) ? p.motoristas[0] : p.motoristas;
-    if (p.valor_pedido != null && p.valor_pedido > 0) {
-      const dataEntradaRaw = p.pago && p.data_pagamento
-        ? p.data_pagamento
-        : (p.data_fim_prevista ?? p.data_inicio_prevista);
-      if (dataEntradaRaw) {
+    if (p.valor_pedido == null || p.valor_pedido <= 0) continue;
+    const totalPedido = Math.round((p.valor_pedido + (p.acrescimos ?? 0) - (p.descontos ?? 0)) * 100) / 100;
+
+    const pars = parcelasPorPedido.get(p.id);
+    if (pars && pars.length > 0) {
+      // parcelado: uma entrada por parcela, na data de pagamento (paga) ou vencimento
+      for (const par of pars) {
+        const dataRaw = par.pago && par.data_pagamento
+          ? par.data_pagamento
+          : (par.vencimento ?? p.data_fim_prevista ?? p.data_inicio_prevista);
+        if (!dataRaw) continue;
         eventos.push({
-          id: `pedido_in:${p.id}`,
-          data: dataEntradaRaw.slice(0, 10),
-          descricao: `Pedido #${p.id.slice(0, 8)}`,
+          id: `pedido_parcela_in:${par.id}`,
+          data: dataRaw.slice(0, 10),
+          descricao: `Pedido #${p.id.slice(0, 8)} — parcela ${par.numero}/${pars.length}`,
           categoria: "pedido",
-          valor: p.valor_pedido,
+          valor: par.valor,
           tipo: "entrada",
-          pago: !!p.pago,
+          pago: !!par.pago,
           isProvisao: false,
-          origem: { tabela: "pedidos", id: p.id },
+          origem: { tabela: "pedido_parcelas", id: par.id },
           contexto: motorista?.nome ?? undefined,
         });
       }
+      continue;
+    }
+
+    // pagamento único (sem parcelas) — comportamento de sempre, com total ajustado
+    const dataEntradaRaw = p.pago && p.data_pagamento
+      ? p.data_pagamento
+      : (p.data_fim_prevista ?? p.data_inicio_prevista);
+    if (dataEntradaRaw) {
+      eventos.push({
+        id: `pedido_in:${p.id}`,
+        data: dataEntradaRaw.slice(0, 10),
+        descricao: `Pedido #${p.id.slice(0, 8)}`,
+        categoria: "pedido",
+        valor: totalPedido,
+        tipo: "entrada",
+        pago: !!p.pago,
+        isProvisao: false,
+        origem: { tabela: "pedidos", id: p.id },
+        contexto: motorista?.nome ?? undefined,
+      });
     }
   }
 

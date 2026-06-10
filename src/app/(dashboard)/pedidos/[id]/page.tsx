@@ -6,9 +6,9 @@
  * cadastro/edição). Esta rota fica de pé pra não quebrar links antigos
  * (dashboard, financeiro, importação, bot, favoritos).
  *
- * Obs.: a baixa de pagamento/parcelas (PagamentoSection, em _components/) saiu
- * do ar junto com o detalhe antigo — será reativada na área FINANCEIRA quando
- * o dono tratar o financeiro (financeiro é financeiro, logística é logística).
+ * Obs.: pagamento/parcelas do pedido se tratam no Financeiro por Cliente
+ * (/faturamento → 💳 Financeiro do pedido) — financeiro é financeiro,
+ * logística é logística.
  */
 
 import { useEffect } from "react";
