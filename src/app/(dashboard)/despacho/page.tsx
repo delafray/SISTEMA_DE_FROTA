@@ -79,14 +79,12 @@ const veiculoLabel = (v: Veiculo) =>
   v.apelido?.trim() ? `${v.apelido} (${v.placa})` : `${v.placa} — ${v.marca} ${v.modelo}`;
 
 /** Erro do Supabase em linguagem legível: mostra message + details + hint + code. */
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function fmtErroSupabase(e: any, contexto: string): string {
   const partes = [e?.message, e?.details, e?.hint].filter(Boolean);
   const cod = e?.code ? ` [${e.code}]` : "";
   return `${contexto}: ${partes.join(" — ") || "erro desconhecido"}${cod}`;
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function one<T>(x: any): T | null { return Array.isArray(x) ? (x[0] ?? null) : (x ?? null); }
 
 /** Cliente do pedido — vem das entregas (cadastrado ou avulso). */
@@ -409,8 +407,7 @@ export default function DespachoPage() {
       }
 
       for (const [statusNorm, ids] of grupos) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pedidoPayload: any = {
+                const pedidoPayload: any = {
           veiculo_id:           veiculoId,
           motorista_id:         motoristaId,
           empresa_motorista_id: empresa_motorista_id,
@@ -429,8 +426,7 @@ export default function DespachoPage() {
       }
 
       // Atualiza entregas dos pedidos despachados (caminhão + motorista).
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
+            const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
       const { error: errEntregas } = await supabase
         .from("entregas")
         .update(entregaPayload)

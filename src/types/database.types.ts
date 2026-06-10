@@ -14,186 +14,6 @@ export type Database = {
   }
   public: {
     Tables: {
-      alocacoes: {
-        Row: {
-          criado_em: string
-          fim: string | null
-          id: string
-          inicio: string
-          km_evento: number | null
-          km_fim: number | null
-          motorista_id: string | null
-          observacao: string | null
-          status: string
-          veiculo_id: string
-        }
-        Insert: {
-          criado_em?: string
-          fim?: string | null
-          id?: string
-          inicio?: string
-          km_evento?: number | null
-          km_fim?: number | null
-          motorista_id?: string | null
-          observacao?: string | null
-          status?: string
-          veiculo_id: string
-        }
-        Update: {
-          criado_em?: string
-          fim?: string | null
-          id?: string
-          inicio?: string
-          km_evento?: number | null
-          km_fim?: number | null
-          motorista_id?: string | null
-          observacao?: string | null
-          status?: string
-          veiculo_id?: string
-        }
-        Relationships: []
-      }
-      telefones: {
-        Row: {
-          anotar: boolean
-          ativo: boolean
-          atualizado_em: string
-          criado_em: string
-          id: string
-          papel: string | null
-          permissoes: Json
-          telefone: string
-          telefone_exibicao: string | null
-          usuario_id: string | null
-          usuario_nome: string | null
-        }
-        Insert: {
-          anotar?: boolean
-          ativo?: boolean
-          atualizado_em?: string
-          criado_em?: string
-          id?: string
-          papel?: string | null
-          permissoes?: Json
-          telefone: string
-          telefone_exibicao?: string | null
-          usuario_id?: string | null
-          usuario_nome?: string | null
-        }
-        Update: {
-          anotar?: boolean
-          ativo?: boolean
-          atualizado_em?: string
-          criado_em?: string
-          id?: string
-          papel?: string | null
-          permissoes?: Json
-          telefone?: string
-          telefone_exibicao?: string | null
-          usuario_id?: string | null
-          usuario_nome?: string | null
-        }
-        Relationships: []
-      }
-      contexto_ia: {
-        Row: { ativo: boolean; conteudo: string; criado_em: string; id: string; ordem: number; titulo: string }
-        Insert: { ativo?: boolean; conteudo: string; criado_em?: string; id?: string; ordem?: number; titulo: string }
-        Update: { ativo?: boolean; conteudo?: string; criado_em?: string; id?: string; ordem?: number; titulo?: string }
-        Relationships: []
-      }
-      bot_msgs_processadas: {
-        Row: { processado_em: string; status: string; wamid: string }
-        Insert: { processado_em?: string; status?: string; wamid: string }
-        Update: { processado_em?: string; status?: string; wamid?: string }
-        Relationships: []
-      }
-      bot_estado_pendente: {
-        Row: { criado_em: string; dados: Json; expira_em: string; telefone: string; tipo: string }
-        Insert: { criado_em?: string; dados: Json; expira_em: string; telefone: string; tipo: string }
-        Update: { criado_em?: string; dados?: Json; expira_em?: string; telefone?: string; tipo?: string }
-        Relationships: []
-      }
-      bot_contexto_conversa: {
-        Row: { apelido: string | null; atualizado_em: string; expira_em: string; telefone: string; turns: number; veiculo_id: string | null }
-        Insert: { apelido?: string | null; atualizado_em?: string; expira_em: string; telefone: string; turns?: number; veiculo_id?: string | null }
-        Update: { apelido?: string | null; atualizado_em?: string; expira_em?: string; telefone?: string; turns?: number; veiculo_id?: string | null }
-        Relationships: []
-      }
-      regras: {
-        Row: {
-          acoes: string[]
-          ativa: boolean
-          atualizado_em: string
-          campos: Json
-          criado_em: string
-          empresas_alvo: string[]
-          escopo_dados: Json
-          exige_confirmacao: boolean
-          fixa: boolean
-          frases_exemplo: string[]
-          frases_negativas: string[]
-          gatilho_inicio: boolean
-          gatilhos: string[]
-          id: string
-          nome: string
-          observacao: string | null
-          prioridade: number
-          quem_pode_disparar: string[]
-          resposta: string | null
-          teto: string | null
-          tipo: string
-          versao: number
-        }
-        Insert: {
-          ativa?: boolean
-          atualizado_em?: string
-          campos?: Json
-          criado_em?: string
-          empresas_alvo?: string[]
-          escopo_dados?: Json
-          exige_confirmacao?: boolean
-          acoes?: string[]
-          fixa?: boolean
-          frases_exemplo?: string[]
-          frases_negativas?: string[]
-          gatilho_inicio?: boolean
-          gatilhos?: string[]
-          id?: string
-          nome: string
-          observacao?: string | null
-          prioridade?: number
-          quem_pode_disparar?: string[]
-          resposta?: string | null
-          teto?: string | null
-          tipo?: string
-          versao?: number
-        }
-        Update: {
-          ativa?: boolean
-          atualizado_em?: string
-          campos?: Json
-          criado_em?: string
-          empresas_alvo?: string[]
-          escopo_dados?: Json
-          exige_confirmacao?: boolean
-          acoes?: string[]
-          fixa?: boolean
-          frases_exemplo?: string[]
-          frases_negativas?: string[]
-          gatilho_inicio?: boolean
-          gatilhos?: string[]
-          id?: string
-          nome?: string
-          observacao?: string | null
-          prioridade?: number
-          quem_pode_disparar?: string[]
-          resposta?: string | null
-          teto?: string | null
-          tipo?: string
-          versao?: number
-        }
-        Relationships: []
-      }
       abastecimentos: {
         Row: {
           confirmado: boolean | null
@@ -568,6 +388,45 @@ export type Database = {
           },
         ]
       }
+      alocacoes: {
+        Row: {
+          criado_em: string
+          fim: string | null
+          id: string
+          inicio: string
+          km_evento: number | null
+          km_fim: number | null
+          motorista_id: string | null
+          observacao: string | null
+          status: string
+          veiculo_id: string
+        }
+        Insert: {
+          criado_em?: string
+          fim?: string | null
+          id?: string
+          inicio?: string
+          km_evento?: number | null
+          km_fim?: number | null
+          motorista_id?: string | null
+          observacao?: string | null
+          status?: string
+          veiculo_id: string
+        }
+        Update: {
+          criado_em?: string
+          fim?: string | null
+          id?: string
+          inicio?: string
+          km_evento?: number | null
+          km_fim?: number | null
+          motorista_id?: string | null
+          observacao?: string | null
+          status?: string
+          veiculo_id?: string
+        }
+        Relationships: []
+      }
       audit_logs: {
         Row: {
           acao: string
@@ -735,6 +594,153 @@ export type Database = {
           },
         ]
       }
+      bot_contexto_conversa: {
+        Row: {
+          apelido: string | null
+          atualizado_em: string
+          expira_em: string
+          telefone: string
+          veiculo_id: string | null
+        }
+        Insert: {
+          apelido?: string | null
+          atualizado_em?: string
+          expira_em: string
+          telefone: string
+          veiculo_id?: string | null
+        }
+        Update: {
+          apelido?: string | null
+          atualizado_em?: string
+          expira_em?: string
+          telefone?: string
+          veiculo_id?: string | null
+        }
+        Relationships: []
+      }
+      bot_estado_pendente: {
+        Row: {
+          criado_em: string
+          dados: Json
+          expira_em: string
+          telefone: string
+          tipo: string
+        }
+        Insert: {
+          criado_em?: string
+          dados: Json
+          expira_em: string
+          telefone: string
+          tipo: string
+        }
+        Update: {
+          criado_em?: string
+          dados?: Json
+          expira_em?: string
+          telefone?: string
+          tipo?: string
+        }
+        Relationships: []
+      }
+      bot_metricas: {
+        Row: {
+          cached_tokens: number | null
+          created_at: string
+          empresa_id: string | null
+          erro: string | null
+          fast_path_matcher: string | null
+          id: string
+          latency_ms: number | null
+          modelo: string | null
+          modo: string
+          sucesso: boolean
+          telefone: string
+          tokens_in: number | null
+          tokens_out: number | null
+          tool_rounds: number | null
+          tools_chamadas: string[] | null
+        }
+        Insert: {
+          cached_tokens?: number | null
+          created_at?: string
+          empresa_id?: string | null
+          erro?: string | null
+          fast_path_matcher?: string | null
+          id?: string
+          latency_ms?: number | null
+          modelo?: string | null
+          modo: string
+          sucesso?: boolean
+          telefone: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_rounds?: number | null
+          tools_chamadas?: string[] | null
+        }
+        Update: {
+          cached_tokens?: number | null
+          created_at?: string
+          empresa_id?: string | null
+          erro?: string | null
+          fast_path_matcher?: string | null
+          id?: string
+          latency_ms?: number | null
+          modelo?: string | null
+          modo?: string
+          sucesso?: boolean
+          telefone?: string
+          tokens_in?: number | null
+          tokens_out?: number | null
+          tool_rounds?: number | null
+          tools_chamadas?: string[] | null
+        }
+        Relationships: []
+      }
+      bot_msgs_processadas: {
+        Row: {
+          processado_em: string
+          status: string
+          wamid: string
+        }
+        Insert: {
+          processado_em?: string
+          status?: string
+          wamid: string
+        }
+        Update: {
+          processado_em?: string
+          status?: string
+          wamid?: string
+        }
+        Relationships: []
+      }
+      cep_cache: {
+        Row: {
+          bairro: string | null
+          cep: string
+          cidade: string
+          consultado_em: string
+          logradouro: string | null
+          uf: string
+        }
+        Insert: {
+          bairro?: string | null
+          cep: string
+          cidade: string
+          consultado_em?: string
+          logradouro?: string | null
+          uf: string
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string
+          cidade?: string
+          consultado_em?: string
+          logradouro?: string | null
+          uf?: string
+        }
+        Relationships: []
+      }
       checklists_diarios: {
         Row: {
           created_at: string | null
@@ -881,8 +887,45 @@ export type Database = {
           },
         ]
       }
+      cliente_preferencias: {
+        Row: {
+          atualizada_em: string
+          cliente_id: string
+          criada_em: string
+          empresa_id: string
+          id: string
+          janela_horario: Json | null
+          observacao: string | null
+          posicao_preferida: string
+          tempo_descarga_min: number | null
+        }
+        Insert: {
+          atualizada_em?: string
+          cliente_id: string
+          criada_em?: string
+          empresa_id: string
+          id?: string
+          janela_horario?: Json | null
+          observacao?: string | null
+          posicao_preferida?: string
+          tempo_descarga_min?: number | null
+        }
+        Update: {
+          atualizada_em?: string
+          cliente_id?: string
+          criada_em?: string
+          empresa_id?: string
+          id?: string
+          janela_horario?: Json | null
+          observacao?: string | null
+          posicao_preferida?: string
+          tempo_descarga_min?: number | null
+        }
+        Relationships: []
+      }
       clientes: {
         Row: {
+          apelido: string | null
           ativo: boolean | null
           bairro: string | null
           cep: string | null
@@ -907,6 +950,7 @@ export type Database = {
           updated_at: string | null
         }
         Insert: {
+          apelido?: string | null
           ativo?: boolean | null
           bairro?: string | null
           cep?: string | null
@@ -931,6 +975,7 @@ export type Database = {
           updated_at?: string | null
         }
         Update: {
+          apelido?: string | null
           ativo?: boolean | null
           bairro?: string | null
           cep?: string | null
@@ -963,6 +1008,63 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      contexto_ia: {
+        Row: {
+          ativo: boolean
+          conteudo: string
+          criado_em: string
+          id: string
+          ordem: number
+          titulo: string
+        }
+        Insert: {
+          ativo?: boolean
+          conteudo: string
+          criado_em?: string
+          id?: string
+          ordem?: number
+          titulo: string
+        }
+        Update: {
+          ativo?: boolean
+          conteudo?: string
+          criado_em?: string
+          id?: string
+          ordem?: number
+          titulo?: string
+        }
+        Relationships: []
+      }
+      coordenadas_aprendidas: {
+        Row: {
+          amostras: number
+          atualizado_em: string
+          chave: string
+          criado_em: string
+          empresa_id: string
+          lat: number
+          lng: number
+        }
+        Insert: {
+          amostras?: number
+          atualizado_em?: string
+          chave: string
+          criado_em?: string
+          empresa_id: string
+          lat: number
+          lng: number
+        }
+        Update: {
+          amostras?: number
+          atualizado_em?: string
+          chave?: string
+          criado_em?: string
+          empresa_id?: string
+          lat?: number
+          lng?: number
+        }
+        Relationships: []
       }
       despesas_avulsas: {
         Row: {
@@ -1197,6 +1299,39 @@ export type Database = {
         }
         Relationships: []
       }
+      endereco_validacao_cache: {
+        Row: {
+          cidade: string
+          confianca: string
+          created_at: string
+          dados: Json
+          expires_at: string
+          id: string
+          rua_norm: string
+          uf: string
+        }
+        Insert: {
+          cidade: string
+          confianca: string
+          created_at?: string
+          dados: Json
+          expires_at: string
+          id?: string
+          rua_norm: string
+          uf: string
+        }
+        Update: {
+          cidade?: string
+          confianca?: string
+          created_at?: string
+          dados?: Json
+          expires_at?: string
+          id?: string
+          rua_norm?: string
+          uf?: string
+        }
+        Relationships: []
+      }
       entregas: {
         Row: {
           aceito_pelo_motorista_em: string | null
@@ -1210,20 +1345,33 @@ export type Database = {
           data_inicio: string | null
           destino: string
           empresa_id: string
+          executor_tipo: string | null
+          geocode_status: string | null
           id: string
+          janela_fim: string | null
+          janela_inicio: string | null
           km_final: number | null
-          km_inicial: number
+          km_inicial: number | null
           km_total: number | null
-          motorista_id: string
+          latitude: number | null
+          longitude: number | null
+          motorista_id: string | null
+          nfe_chave: string | null
+          nfe_numero: string | null
+          nfe_valor: number | null
           nome_cliente_avulso: string | null
           observacoes: string | null
           origem: string
+          origem_demanda: string | null
           pedido_id: string | null
+          pedido_pai_id: string | null
           peso_carga_kg: number | null
+          sequencia: number | null
+          service_time_seg: number | null
           status: string
           tipo_carga: string | null
           updated_at: string | null
-          veiculo_id: string
+          veiculo_id: string | null
         }
         Insert: {
           aceito_pelo_motorista_em?: string | null
@@ -1237,20 +1385,33 @@ export type Database = {
           data_inicio?: string | null
           destino: string
           empresa_id: string
+          executor_tipo?: string | null
+          geocode_status?: string | null
           id?: string
+          janela_fim?: string | null
+          janela_inicio?: string | null
           km_final?: number | null
-          km_inicial: number
+          km_inicial?: number | null
           km_total?: number | null
-          motorista_id: string
+          latitude?: number | null
+          longitude?: number | null
+          motorista_id?: string | null
+          nfe_chave?: string | null
+          nfe_numero?: string | null
+          nfe_valor?: number | null
           nome_cliente_avulso?: string | null
           observacoes?: string | null
           origem: string
+          origem_demanda?: string | null
           pedido_id?: string | null
+          pedido_pai_id?: string | null
           peso_carga_kg?: number | null
+          sequencia?: number | null
+          service_time_seg?: number | null
           status?: string
           tipo_carga?: string | null
           updated_at?: string | null
-          veiculo_id: string
+          veiculo_id?: string | null
         }
         Update: {
           aceito_pelo_motorista_em?: string | null
@@ -1264,20 +1425,33 @@ export type Database = {
           data_inicio?: string | null
           destino?: string
           empresa_id?: string
+          executor_tipo?: string | null
+          geocode_status?: string | null
           id?: string
+          janela_fim?: string | null
+          janela_inicio?: string | null
           km_final?: number | null
-          km_inicial?: number
+          km_inicial?: number | null
           km_total?: number | null
-          motorista_id?: string
+          latitude?: number | null
+          longitude?: number | null
+          motorista_id?: string | null
+          nfe_chave?: string | null
+          nfe_numero?: string | null
+          nfe_valor?: number | null
           nome_cliente_avulso?: string | null
           observacoes?: string | null
           origem?: string
+          origem_demanda?: string | null
           pedido_id?: string | null
+          pedido_pai_id?: string | null
           peso_carga_kg?: number | null
+          sequencia?: number | null
+          service_time_seg?: number | null
           status?: string
           tipo_carga?: string | null
           updated_at?: string | null
-          veiculo_id?: string
+          veiculo_id?: string | null
         }
         Relationships: [
           {
@@ -1359,6 +1533,72 @@ export type Database = {
           },
         ]
       }
+      geocode_cache: {
+        Row: {
+          bairro: string | null
+          cep: string | null
+          chave: string
+          cidade: string | null
+          criado_em: string
+          endereco_formatado: string | null
+          fonte: string
+          lat: number
+          lng: number
+          logradouro: string | null
+          numero: string | null
+          precisao: string | null
+          uf: string | null
+        }
+        Insert: {
+          bairro?: string | null
+          cep?: string | null
+          chave: string
+          cidade?: string | null
+          criado_em?: string
+          endereco_formatado?: string | null
+          fonte?: string
+          lat: number
+          lng: number
+          logradouro?: string | null
+          numero?: string | null
+          precisao?: string | null
+          uf?: string | null
+        }
+        Update: {
+          bairro?: string | null
+          cep?: string | null
+          chave?: string
+          cidade?: string | null
+          criado_em?: string
+          endereco_formatado?: string | null
+          fonte?: string
+          lat?: number
+          lng?: number
+          logradouro?: string | null
+          numero?: string | null
+          precisao?: string | null
+          uf?: string | null
+        }
+        Relationships: []
+      }
+      geocode_uso: {
+        Row: {
+          atualizado_em: string
+          mes: string
+          total: number
+        }
+        Insert: {
+          atualizado_em?: string
+          mes: string
+          total?: number
+        }
+        Update: {
+          atualizado_em?: string
+          mes?: string
+          total?: number
+        }
+        Relationships: []
+      }
       imprevistos: {
         Row: {
           created_at: string | null
@@ -1412,37 +1652,6 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
-      }
-      lembretes: {
-        Row: {
-          id: string
-          empresa_id: string
-          usuario_id: string | null
-          texto: string
-          origem: string
-          criado_em: string
-          ciente_em: string | null
-          ciente_por: string | null
-          criado_por_nome: string | null
-          criado_por_telefone: string | null
-        }
-        Insert: {
-          id?: string
-          empresa_id: string
-          usuario_id?: string | null
-          texto: string
-          origem?: string
-          criado_em?: string
-          ciente_em?: string | null
-          ciente_por?: string | null
-          criado_por_nome?: string | null
-          criado_por_telefone?: string | null
-        }
-        Update: {
-          ciente_em?: string | null
-          ciente_por?: string | null
-        }
-        Relationships: []
       }
       km_logs: {
         Row: {
@@ -1539,6 +1748,96 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "veiculos_resultado_periodo"
             referencedColumns: ["veiculo_id"]
+          },
+        ]
+      }
+      lembretes: {
+        Row: {
+          ciente_em: string | null
+          ciente_por: string | null
+          criado_em: string
+          criado_por_nome: string | null
+          criado_por_telefone: string | null
+          empresa_id: string | null
+          id: string
+          origem: string
+          texto: string
+          usuario_id: string | null
+        }
+        Insert: {
+          ciente_em?: string | null
+          ciente_por?: string | null
+          criado_em?: string
+          criado_por_nome?: string | null
+          criado_por_telefone?: string | null
+          empresa_id?: string | null
+          id?: string
+          origem?: string
+          texto: string
+          usuario_id?: string | null
+        }
+        Update: {
+          ciente_em?: string | null
+          ciente_por?: string | null
+          criado_em?: string
+          criado_por_nome?: string | null
+          criado_por_telefone?: string | null
+          empresa_id?: string | null
+          id?: string
+          origem?: string
+          texto?: string
+          usuario_id?: string | null
+        }
+        Relationships: []
+      }
+      locais_carregamento: {
+        Row: {
+          ativo: boolean | null
+          cliente_id: string
+          created_at: string | null
+          empresa_id: string
+          endereco: string
+          id: string
+          nome: string
+          principal: boolean | null
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          cliente_id: string
+          created_at?: string | null
+          empresa_id: string
+          endereco: string
+          id?: string
+          nome: string
+          principal?: boolean | null
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          cliente_id?: string
+          created_at?: string | null
+          empresa_id?: string
+          endereco?: string
+          id?: string
+          nome?: string
+          principal?: boolean | null
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "locais_carregamento_cliente_id_fkey"
+            columns: ["cliente_id"]
+            isOneToOne: false
+            referencedRelation: "clientes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "locais_carregamento_empresa_id_fkey"
+            columns: ["empresa_id"]
+            isOneToOne: false
+            referencedRelation: "empresas"
+            referencedColumns: ["id"]
           },
         ]
       }
@@ -1879,56 +2178,119 @@ export type Database = {
           },
         ]
       }
+      notas_capturadas: {
+        Row: {
+          capturado_em: string
+          cep: string
+          empresa_id: string
+          endereco: Json
+          id: string
+          latitude: number | null
+          longitude: number | null
+          motorista_id: string
+          numero: string
+          observacao: string | null
+          pedido_id: string | null
+          sincronizado_em: string | null
+          status: string
+        }
+        Insert: {
+          capturado_em?: string
+          cep: string
+          empresa_id: string
+          endereco: Json
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          motorista_id: string
+          numero: string
+          observacao?: string | null
+          pedido_id?: string | null
+          sincronizado_em?: string | null
+          status?: string
+        }
+        Update: {
+          capturado_em?: string
+          cep?: string
+          empresa_id?: string
+          endereco?: Json
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          motorista_id?: string
+          numero?: string
+          observacao?: string | null
+          pedido_id?: string | null
+          sincronizado_em?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
       paradas: {
         Row: {
           concluida_em: string | null
-          endereco: Json | null
+          endereco: Json
           entrega_id: string | null
-          fixada: boolean | null
+          fixada: boolean
           id: string
           janela_horario: Json | null
-          latitude: number | null
-          longitude: number | null
+          latitude: number
+          longitude: number
           nota_id: string | null
           observacao: string | null
-          ordem: number | null
+          ordem: number
           pedido_id: string | null
-          rota_id: string | null
-          tempo_descarga_min: number | null
+          rota_id: string
+          tempo_descarga_min: number
         }
         Insert: {
           concluida_em?: string | null
-          endereco?: Json | null
+          endereco: Json
           entrega_id?: string | null
-          fixada?: boolean | null
+          fixada?: boolean
           id?: string
           janela_horario?: Json | null
-          latitude?: number | null
-          longitude?: number | null
+          latitude: number
+          longitude: number
           nota_id?: string | null
           observacao?: string | null
-          ordem?: number | null
+          ordem: number
           pedido_id?: string | null
-          rota_id?: string | null
-          tempo_descarga_min?: number | null
+          rota_id: string
+          tempo_descarga_min?: number
         }
         Update: {
           concluida_em?: string | null
-          endereco?: Json | null
+          endereco?: Json
           entrega_id?: string | null
-          fixada?: boolean | null
+          fixada?: boolean
           id?: string
           janela_horario?: Json | null
-          latitude?: number | null
-          longitude?: number | null
+          latitude?: number
+          longitude?: number
           nota_id?: string | null
           observacao?: string | null
-          ordem?: number | null
+          ordem?: number
           pedido_id?: string | null
-          rota_id?: string | null
-          tempo_descarga_min?: number | null
+          rota_id?: string
+          tempo_descarga_min?: number
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "paradas_nota_id_fkey"
+            columns: ["nota_id"]
+            isOneToOne: false
+            referencedRelation: "notas_capturadas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "paradas_rota_id_fkey"
+            columns: ["rota_id"]
+            isOneToOne: false
+            referencedRelation: "rotas_otimizadas"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pedido_motoristas: {
         Row: {
@@ -2010,6 +2372,7 @@ export type Database = {
       }
       pedidos: {
         Row: {
+          cliente_id: string | null
           created_at: string
           data_fim_prevista: string | null
           data_fim_real: string | null
@@ -2018,20 +2381,28 @@ export type Database = {
           data_pagamento: string | null
           empresa_id: string
           empresa_motorista_id: string | null
+          executor_tipo: string | null
           forma_pagamento: string | null
           id: string
           km_final: number | null
           km_inicial: number | null
+          local_carregamento: string | null
+          local_carregamento_id: string | null
+          modo: string | null
           motorista_id: string | null
           observacoes: string | null
           observacoes_financeiras: string | null
+          origem_demanda: string | null
           pago: boolean | null
+          pedido_pai_id: string | null
           status: string
+          tamanho: string | null
           updated_at: string
           valor_pedido: number | null
           veiculo_id: string | null
         }
         Insert: {
+          cliente_id?: string | null
           created_at?: string
           data_fim_prevista?: string | null
           data_fim_real?: string | null
@@ -2040,20 +2411,28 @@ export type Database = {
           data_pagamento?: string | null
           empresa_id: string
           empresa_motorista_id?: string | null
+          executor_tipo?: string | null
           forma_pagamento?: string | null
           id?: string
           km_final?: number | null
           km_inicial?: number | null
+          local_carregamento?: string | null
+          local_carregamento_id?: string | null
+          modo?: string | null
           motorista_id?: string | null
           observacoes?: string | null
           observacoes_financeiras?: string | null
+          origem_demanda?: string | null
           pago?: boolean | null
+          pedido_pai_id?: string | null
           status?: string
+          tamanho?: string | null
           updated_at?: string
           valor_pedido?: number | null
           veiculo_id?: string | null
         }
         Update: {
+          cliente_id?: string | null
           created_at?: string
           data_fim_prevista?: string | null
           data_fim_real?: string | null
@@ -2062,15 +2441,22 @@ export type Database = {
           data_pagamento?: string | null
           empresa_id?: string
           empresa_motorista_id?: string | null
+          executor_tipo?: string | null
           forma_pagamento?: string | null
           id?: string
           km_final?: number | null
           km_inicial?: number | null
+          local_carregamento?: string | null
+          local_carregamento_id?: string | null
+          modo?: string | null
           motorista_id?: string | null
           observacoes?: string | null
           observacoes_financeiras?: string | null
+          origem_demanda?: string | null
           pago?: boolean | null
+          pedido_pai_id?: string | null
           status?: string
+          tamanho?: string | null
           updated_at?: string
           valor_pedido?: number | null
           veiculo_id?: string | null
@@ -2081,6 +2467,13 @@ export type Database = {
             columns: ["empresa_id"]
             isOneToOne: false
             referencedRelation: "empresas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pedidos_local_carregamento_id_fkey"
+            columns: ["local_carregamento_id"]
+            isOneToOne: false
+            referencedRelation: "locais_carregamento"
             referencedColumns: ["id"]
           },
           {
@@ -2127,7 +2520,7 @@ export type Database = {
           },
         ]
       }
-       perfis: {
+      perfis: {
         Row: {
           ativo: boolean | null
           cpf: string | null
@@ -2273,6 +2666,48 @@ export type Database = {
           },
         ]
       }
+      pod: {
+        Row: {
+          assinatura_url: string | null
+          capturado_em: string | null
+          empresa_id: string | null
+          entrega_id: string | null
+          foto_url: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          observacao: string | null
+          recebedor: string | null
+          tipo_ocorrencia: string | null
+        }
+        Insert: {
+          assinatura_url?: string | null
+          capturado_em?: string | null
+          empresa_id?: string | null
+          entrega_id?: string | null
+          foto_url?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacao?: string | null
+          recebedor?: string | null
+          tipo_ocorrencia?: string | null
+        }
+        Update: {
+          assinatura_url?: string | null
+          capturado_em?: string | null
+          empresa_id?: string | null
+          entrega_id?: string | null
+          foto_url?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          observacao?: string | null
+          recebedor?: string | null
+          tipo_ocorrencia?: string | null
+        }
+        Relationships: []
+      }
       recorrencias_financeiras: {
         Row: {
           ativo: boolean
@@ -2339,6 +2774,168 @@ export type Database = {
           },
         ]
       }
+      regras: {
+        Row: {
+          acoes: string[]
+          ativa: boolean
+          atualizado_em: string
+          campos: Json
+          criado_em: string
+          empresas_alvo: string[]
+          escopo_dados: Json
+          exige_confirmacao: boolean
+          fixa: boolean
+          frases_exemplo: string[]
+          frases_negativas: string[]
+          gatilho_inicio: boolean
+          gatilhos: string[]
+          id: string
+          nome: string
+          observacao: string | null
+          prioridade: number
+          quem_pode_disparar: string[]
+          resposta: string | null
+          tipo: string
+          versao: number
+        }
+        Insert: {
+          acoes?: string[]
+          ativa?: boolean
+          atualizado_em?: string
+          campos?: Json
+          criado_em?: string
+          empresas_alvo?: string[]
+          escopo_dados?: Json
+          exige_confirmacao?: boolean
+          fixa?: boolean
+          frases_exemplo?: string[]
+          frases_negativas?: string[]
+          gatilho_inicio?: boolean
+          gatilhos?: string[]
+          id?: string
+          nome: string
+          observacao?: string | null
+          prioridade?: number
+          quem_pode_disparar?: string[]
+          resposta?: string | null
+          tipo?: string
+          versao?: number
+        }
+        Update: {
+          acoes?: string[]
+          ativa?: boolean
+          atualizado_em?: string
+          campos?: Json
+          criado_em?: string
+          empresas_alvo?: string[]
+          escopo_dados?: Json
+          exige_confirmacao?: boolean
+          fixa?: boolean
+          frases_exemplo?: string[]
+          frases_negativas?: string[]
+          gatilho_inicio?: boolean
+          gatilhos?: string[]
+          id?: string
+          nome?: string
+          observacao?: string | null
+          prioridade?: number
+          quem_pode_disparar?: string[]
+          resposta?: string | null
+          tipo?: string
+          versao?: number
+        }
+        Relationships: []
+      }
+      rotas: {
+        Row: {
+          criada_em: string | null
+          data_planejada: string | null
+          empresa_id: string | null
+          executor_tipo: string | null
+          id: string
+          km_estimado: number | null
+          motorista_id: string | null
+          otimizada_em: string | null
+          pedido_id: string | null
+          polyline: string | null
+          status: string | null
+          tempo_estimado_min: number | null
+          veiculo_id: string | null
+          vroom_payload: Json | null
+        }
+        Insert: {
+          criada_em?: string | null
+          data_planejada?: string | null
+          empresa_id?: string | null
+          executor_tipo?: string | null
+          id?: string
+          km_estimado?: number | null
+          motorista_id?: string | null
+          otimizada_em?: string | null
+          pedido_id?: string | null
+          polyline?: string | null
+          status?: string | null
+          tempo_estimado_min?: number | null
+          veiculo_id?: string | null
+          vroom_payload?: Json | null
+        }
+        Update: {
+          criada_em?: string | null
+          data_planejada?: string | null
+          empresa_id?: string | null
+          executor_tipo?: string | null
+          id?: string
+          km_estimado?: number | null
+          motorista_id?: string | null
+          otimizada_em?: string | null
+          pedido_id?: string | null
+          polyline?: string | null
+          status?: string | null
+          tempo_estimado_min?: number | null
+          veiculo_id?: string | null
+          vroom_payload?: Json | null
+        }
+        Relationships: []
+      }
+      rotas_otimizadas: {
+        Row: {
+          criada_em: string
+          data: string
+          distancia_total_km: number | null
+          empresa_id: string
+          id: string
+          motorista_id: string
+          otimizada_em: string | null
+          pedido_id: string | null
+          status: string
+          tempo_total_min: number | null
+        }
+        Insert: {
+          criada_em?: string
+          data?: string
+          distancia_total_km?: number | null
+          empresa_id: string
+          id?: string
+          motorista_id: string
+          otimizada_em?: string | null
+          pedido_id?: string | null
+          status?: string
+          tempo_total_min?: number | null
+        }
+        Update: {
+          criada_em?: string
+          data?: string
+          distancia_total_km?: number | null
+          empresa_id?: string
+          id?: string
+          motorista_id?: string
+          otimizada_em?: string | null
+          pedido_id?: string | null
+          status?: string
+          tempo_total_min?: number | null
+        }
+        Relationships: []
+      }
       sessoes_whatsapp: {
         Row: {
           contexto: Json | null
@@ -2383,6 +2980,48 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      telefones: {
+        Row: {
+          anotar: boolean
+          ativo: boolean
+          atualizado_em: string
+          criado_em: string
+          id: string
+          papel: string | null
+          permissoes: Json
+          telefone: string
+          telefone_exibicao: string | null
+          usuario_id: string | null
+          usuario_nome: string | null
+        }
+        Insert: {
+          anotar?: boolean
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          papel?: string | null
+          permissoes?: Json
+          telefone: string
+          telefone_exibicao?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Update: {
+          anotar?: boolean
+          ativo?: boolean
+          atualizado_em?: string
+          criado_em?: string
+          id?: string
+          papel?: string | null
+          permissoes?: Json
+          telefone?: string
+          telefone_exibicao?: string | null
+          usuario_id?: string | null
+          usuario_nome?: string | null
+        }
+        Relationships: []
       }
       tipos_manutencao: {
         Row: {
@@ -2597,6 +3236,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      whatsapp_historico: {
+        Row: {
+          created_at: string
+          id: string
+          metadata: Json | null
+          role: string
+          telefone: string
+          texto: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role: string
+          telefone: string
+          texto: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          role?: string
+          telefone?: string
+          texto?: string
+        }
+        Relationships: []
       }
     }
     Views: {
@@ -2864,10 +3530,35 @@ export type Database = {
       }
     }
     Functions: {
+      consumir_geocode_cota: {
+        Args: { p_limite: number; p_mes: string }
+        Returns: {
+          permitido: boolean
+          total: number
+        }[]
+      }
       get_user_empresas: { Args: never; Returns: string[] }
       get_user_motorista_id: { Args: never; Returns: string }
       get_user_role: { Args: { p_empresa_id: string }; Returns: string }
       is_master_of_empresa: { Args: { emp_id: string }; Returns: boolean }
+      update_session_atomic: {
+        Args: { p_contexto_patch: Json; p_estado: string; p_session_id: string }
+        Returns: {
+          contexto: Json | null
+          empresa_id: string | null
+          estado: string
+          id: string
+          motorista_id: string | null
+          ultimo_contato: string
+          whatsapp: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "sessoes_whatsapp"
+          isOneToOne: true
+          isSetofReturn: false
+        }
+      }
     }
     Enums: {
       [_ in never]: never
@@ -3000,4 +3691,3 @@ export const Constants = {
     Enums: {},
   },
 } as const
-

@@ -66,8 +66,7 @@ export default function AReceberTab({ empresas }: { empresas: string[] }) {
 
   // ─── filtros de servidor (compartilhados entre listagem e contagem) ──────
   const aplicarFiltros = useCallback(
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    async (q: any, buscaTermo: string, filtroAtual: typeof filtro) => {
+        async (q: any, buscaTermo: string, filtroAtual: typeof filtro) => {
       q = q.in("empresa_id", empresas).not("valor_pedido", "is", null).gt("valor_pedido", 0);
 
       if (filtroAtual === "pendentes") {

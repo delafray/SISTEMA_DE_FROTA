@@ -128,8 +128,7 @@ export default function PedidosPage() {
 
   /** Aplica filtros de busca e status na query do Supabase. Retorna null se o resultado é vazio garantido. */
   const aplicarFiltros = useCallback((
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    query: any,
+        query: any,
     opts: {
       filtroStatus: string;
       mostrarPagos: boolean;
@@ -139,8 +138,7 @@ export default function PedidosPage() {
       relacionados: { veiculoIds: string[]; motoristaIds: string[] } | null;
       buscaServidor: string;
     }
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  ): any | null => {
+    ): any | null => {
     const { filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim, relacionados, buscaServidor } = opts;
 
     const now = new Date();

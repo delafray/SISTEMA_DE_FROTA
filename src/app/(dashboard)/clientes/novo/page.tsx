@@ -88,8 +88,7 @@ export default function NovoClientePage() {
     if (!emp?.id) { alert("Nenhuma empresa cadastrada."); return; }
     const empresa_id = emp.id;
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data: clienteSalvo, error: clienteError } = await supabase
+        const { data: clienteSalvo, error: clienteError } = await supabase
       .from("clientes")
       .insert({
         empresa_id,
@@ -108,7 +107,7 @@ export default function NovoClientePage() {
         cidade: data.cidade || null,
         uf: data.uf || null,
         ativo: data.status === "ATIVO",
-      } as any)
+      })
       .select("id")
       .single();
 

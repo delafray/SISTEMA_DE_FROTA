@@ -127,8 +127,7 @@ export default function ImportarNotasPage() {
       setEmpresaId(ue.empresa_id);
 
       // locais_carregamento (sem filtro de cliente — lista global da empresa)
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { data: locs } = await (supabase as any)
+            const { data: locs } = await supabase
         .from("locais_carregamento")
         .select("id,nome,endereco,principal")
         .eq("empresa_id", ue.empresa_id)
@@ -256,15 +255,15 @@ export default function ImportarNotasPage() {
     if (chaves.length > 0 && empresaId) {
       const lotes = chunks(chaves, 200);
       for (const lote of lotes) {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data } = await (supabase as any)
+        const { data } = await supabase
           .from("entregas")
           .select("nfe_chave")
           .eq("empresa_id", empresaId)
           .in("nfe_chave", lote);
         if (data) {
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          (data as any[]).forEach((r) => jaExistentes.add(r.nfe_chave));
+          data.forEach((r) => {
+            if (r.nfe_chave) jaExistentes.add(r.nfe_chave);
+          });
         }
       }
     }
@@ -327,8 +326,7 @@ export default function ImportarNotasPage() {
     try {
       if (agrupamento === "unico") {
         // ── modo: 1 pedido, N entregas ──────────────────────────────────────
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const pedidoPayload: any = {
+                const pedidoPayload: any = {
           empresa_id: empresaId,
           status: "agendada",
           data_inicio_prevista: dataPrevista || null,
@@ -339,8 +337,7 @@ export default function ImportarNotasPage() {
 
         const { data: pedido, error: errPedido } = await supabase
           .from("pedidos")
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .insert(pedidoPayload as any)
+                    .insert(pedidoPayload)
           .select("id")
           .single();
 
@@ -365,8 +362,7 @@ export default function ImportarNotasPage() {
 
         const { error: errEnt } = await supabase
           .from("entregas")
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .insert(rowsEntregas as unknown as any[]);
+                    .insert(rowsEntregas );
 
         if (errEnt) throw new Error(errEnt.message);
 
@@ -392,8 +388,7 @@ export default function ImportarNotasPage() {
 
         const { data: pedidosCriados, error: errPeds } = await supabase
           .from("pedidos")
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .insert(pedidosPayload as unknown as any[])
+                    .insert(pedidosPayload )
           .select("id");
 
         if (errPeds || !pedidosCriados || pedidosCriados.length === 0) {
@@ -417,8 +412,7 @@ export default function ImportarNotasPage() {
 
         const { error: errEnt } = await supabase
           .from("entregas")
-          // eslint-disable-next-line @typescript-eslint/no-explicit-any
-          .insert(rowsEntregas as unknown as any[]);
+                    .insert(rowsEntregas );
 
         if (errEnt) throw new Error(errEnt.message);
 

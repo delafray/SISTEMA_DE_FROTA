@@ -79,15 +79,14 @@ export default function EditarClientePage() {
       const [{ data: cliente }, { data: contatos }, { data: locaisData }] = await Promise.all([
         supabase.from("clientes").select("*").eq("id", id).single(),
         supabase.from("cliente_contatos").select("*").eq("cliente_id", id).order("principal", { ascending: false }),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("locais_carregamento").select("*").eq("cliente_id", id).eq("ativo", true).order("principal", { ascending: false }),
+                supabase.from("locais_carregamento").select("*").eq("cliente_id", id).eq("ativo", true).order("principal", { ascending: false }),
       ]);
       if (cliente) {
         reset({
           cnpj_cpf: fmtDoc(cliente.documento ?? ""),
           razao_social: cliente.razao_social ?? "",
           nome_fantasia: cliente.nome_fantasia ?? "",
-          apelido: (cliente as any).apelido ?? "",
+          apelido: cliente.apelido ?? "",
           telefone: cliente.telefone ?? "",
           email: cliente.email ?? "",
           cep: cliente.cep ?? "",
@@ -141,8 +140,7 @@ export default function EditarClientePage() {
     const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id").eq("usuario_id", authData.user.id).eq("is_padrao", true).single();
     if (!ue?.empresa_id) { setErr("Empresa não encontrada."); return; }
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { error: clienteError } = await supabase.from("clientes").update({
+        const { error: clienteError } = await supabase.from("clientes").update({
       documento: data.cnpj_cpf.replace(/\D/g, ""),
       razao_social: data.razao_social,
       nome_fantasia: data.nome_fantasia || data.razao_social,
@@ -158,7 +156,7 @@ export default function EditarClientePage() {
       cidade: data.cidade || null,
       uf: data.uf || null,
       ativo: data.status === "ATIVO",
-    } as any).eq("id", id);
+    }).eq("id", id);
 
     if (clienteError) { setErr("Erro ao atualizar cliente: " + clienteError.message); return; }
 
@@ -179,8 +177,7 @@ export default function EditarClientePage() {
     }
 
     // Salvar locais de carregamento (delete + reinsert)
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("locais_carregamento").delete().eq("cliente_id", id);
+        await supabase.from("locais_carregamento").delete().eq("cliente_id", id);
     if (locais.length > 0) {
       const locaisPayload = locais.map(l => ({
         empresa_id: ue.empresa_id,
@@ -189,8 +186,7 @@ export default function EditarClientePage() {
         endereco: l.endereco,
         principal: l.principal,
       }));
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: locaisError } = await (supabase as any).from("locais_carregamento").insert(locaisPayload);
+            const { error: locaisError } = await supabase.from("locais_carregamento").insert(locaisPayload);
       if (locaisError) console.warn("Erro ao salvar locais:", locaisError.message);
     }
 

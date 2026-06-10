@@ -34,7 +34,6 @@ const ENTREGA_STATUS_LABEL: Record<string, string> = {
 
 const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
 function one<T>(x: any): T | null { return Array.isArray(x) ? (x[0] ?? null) : (x ?? null); }
 
 export default function EditarPedidoPage() {
@@ -86,8 +85,7 @@ export default function EditarPedidoPage() {
 
       const [pedidoRes, cliRes, entAtRes, entDispRes] = await Promise.all([
         supabase.from("pedidos").select("*, motoristas(nome), veiculos(placa,apelido,marca,modelo)").eq("id", id).single(),
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("clientes").select("id,nome_fantasia,apelido").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome_fantasia"),
+                supabase.from("clientes").select("id,nome_fantasia,apelido").eq("empresa_id", ue.empresa_id).eq("ativo", true).order("nome_fantasia"),
         supabase.from("entregas")
           .select("id,origem,destino,data_coleta_prevista,status,nome_cliente_avulso,clientes(nome_fantasia)")
           .eq("pedido_id", id)
@@ -100,8 +98,7 @@ export default function EditarPedidoPage() {
           .order("data_coleta_prevista", { ascending: true }),
       ]);
 
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const v: any = pedidoRes.data;
+            const v: any = pedidoRes.data;
       if (v) {
         setF({
           status:       v.status       ?? "agendada",
@@ -186,8 +183,7 @@ export default function EditarPedidoPage() {
     setSaving(true);
     const supabase = createClient();
 
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const payload: any = {
+        const payload: any = {
       status:               f.status,
       data_inicio_prevista: f.data_inicio_prevista || null,
       data_fim_prevista:    f.data_fim_prevista    || null,
@@ -203,8 +199,7 @@ export default function EditarPedidoPage() {
     if (error) { setErr(error.message); setSaving(false); return; }
 
     // Propaga cliente às entregas do pedido (cadastrado ou avulso).
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const entregaCli: any = avulso
+        const entregaCli: any = avulso
       ? { cliente_id: null, nome_cliente_avulso: nomeAvulso.trim() }
       : { cliente_id: clienteId, nome_cliente_avulso: null };
     const { error: errCli } = await supabase.from("entregas").update(entregaCli).eq("pedido_id", id);
@@ -212,8 +207,7 @@ export default function EditarPedidoPage() {
 
     // Vincular novas entregas selecionadas — herda o despacho atual do pedido (se houver).
     if (selectedEntregas.size > 0) {
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const vinc: any = { pedido_id: id };
+            const vinc: any = { pedido_id: id };
       if (motoristaId) vinc.motorista_id = motoristaId;
       if (veiculoId)   vinc.veiculo_id   = veiculoId;
       await supabase.from("entregas").update(vinc).in("id", Array.from(selectedEntregas));

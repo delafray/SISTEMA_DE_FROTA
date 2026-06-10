@@ -70,14 +70,13 @@ export default function NovoPedidoSimplePage() {
 
       if (ue?.empresa_id) {
         setEmpresaId(ue.empresa_id);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const { data: cli } = await (supabase as any)
+                const { data: cli } = await supabase
           .from("clientes")
           .select("id,nome_fantasia,apelido")
           .eq("empresa_id", ue.empresa_id)
           .eq("ativo", true)
           .order("nome_fantasia");
-        setClientes((cli ?? []) as Cliente[]);
+        setClientes(cli ?? []);
       }
     };
     load();
@@ -107,8 +106,7 @@ export default function NovoPedidoSimplePage() {
 
   // Carrega locais quando seleciona cliente
   const carregarLocais = async (cId: string) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const { data } = await (supabase as any)
+        const { data } = await supabase
       .from("locais_carregamento")
       .select("id,nome,endereco,principal")
       .eq("cliente_id", cId)
@@ -207,8 +205,7 @@ export default function NovoPedidoSimplePage() {
       locaisValidos.length === 1 && locaisValidos[0].localId ? locaisValidos[0].localId : null;
 
     // INSERT pedido
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const pedidoPayload: any = {
+        const pedidoPayload: any = {
       empresa_id:             empresaId,
       status:                 "agendada",
       data_inicio_prevista:   dataPrevista || null,
@@ -251,8 +248,7 @@ export default function NovoPedidoSimplePage() {
     // são opcionais no banco real (preenchidos depois, no Despacho).
     const { error: errEntregas } = await supabase
       .from("entregas")
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      .insert(rowsEntregas as unknown as any[]);
+            .insert(rowsEntregas );
 
     if (errEntregas) {
       // Pedido foi criado mas entregas falharam — avisa sem bloquear
@@ -293,8 +289,7 @@ export default function NovoPedidoSimplePage() {
       const aGravar = avulsosParaSalvar.filter(l => l.nome.trim());
       if (aGravar.length > 0) {
         setSalvandoLocal(true);
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        await (supabase as any).from("locais_carregamento").insert(
+                await supabase.from("locais_carregamento").insert(
           aGravar.map((l, i) => ({
             empresa_id: empresaId,
             cliente_id: clienteId,
