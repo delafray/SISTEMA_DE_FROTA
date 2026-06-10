@@ -42,6 +42,7 @@ export function PagamentoSection({
   dataPagamento,
   formaPagamento,
   empresaFaturamentoId,
+  onPagoChange,
 }: {
   pedidoId: string;
   empresaId: string | null;
@@ -50,6 +51,8 @@ export function PagamentoSection({
   dataPagamento: string | null;
   formaPagamento: string | null;
   empresaFaturamentoId: string | null;
+  /** avisa o pai quando o "pago" do pedido muda (sync do stepper) */
+  onPagoChange?: (pago: boolean) => void;
 }) {
   const [parcelas, setParcelas] = useState<Parcela[]>([]);
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
@@ -111,6 +114,7 @@ export function PagamentoSection({
       data_pagamento: todasPagas ? (ultima?.data_pagamento ?? hojeISO()) : null,
     }).eq("id", pedidoId);
     setPagoLocal(todasPagas);
+    onPagoChange?.(todasPagas);
   };
 
   // ── gerar N parcelas iguais (sobra de centavos na última) ─────────────────

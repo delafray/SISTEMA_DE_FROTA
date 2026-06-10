@@ -9,6 +9,15 @@ import {
 } from "@/components/ui/ds";
 import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
 import { PagamentoSection } from "./_components/PagamentoSection";
+import { FluxoStepper } from "./_components/FluxoStepper";
+import { ModalDespacho, type VeiculoOpcao, type MotoristaOpcao } from "../../despacho/_components/ModalDespacho";
+import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
+
+/** Constraint do banco aceita só as formas FEMININAS (ver despacho/page.tsx) */
+const STATUS_FEMININO: Record<string, string> = {
+  agendado: "agendada", concluido: "concluida", cancelado: "cancelada",
+};
+const normalizarStatus = (s: string) => STATUS_FEMININO[s] ?? s;
 
 // Parada como o MapaRota consome (subset). Reusa o tipo do componente pra nao
 // divergir do snapshot `endereco` jsonb que ele renderiza.
@@ -124,6 +133,12 @@ export default function PedidoDetalhePage() {
   const [editandoDestino, setEditandoDestino] = useState<string | null>(null);
   const [destinoEdit, setDestinoEdit] = useState("");
   const [salvandoDestino, setSalvandoDestino] = useState(false);
+  // Despacho no próprio pedido (sem trocar de tela)
+  const [modalDespacho, setModalDespacho] = useState(false);
+  const [veiculosOp, setVeiculosOp] = useState<VeiculoOpcao[]>([]);
+  const [motoristasOp, setMotoristasOp] = useState<MotoristaOpcao[]>([]);
+  const [despachoSaving, setDespachoSaving] = useState(false);
+  const [despachoErr, setDespachoErr] = useState("");
   // Roteirizacao (Passo 3)
   const [paradas, setParadas] = useState<ParadaMapa[]>([]);
   const [roteirizando, setRoteirizando] = useState(false);
@@ -194,6 +209,68 @@ export default function PedidoDetalhePage() {
     };
     load();
   }, [id]);
+
+  /** Abre o modal de despacho aqui mesmo (carrega caminhões/motoristas ativos 1x) */
+  const abrirDespacho = async () => {
+    setDespachoErr("");
+    if (veiculosOp.length === 0 && pedido?.empresa_id) {
+      const supabase = createClient();
+      const [{ data: veic }, { data: mot }] = await Promise.all([
+        supabase.from("veiculos").select("id,placa,apelido,marca,modelo")
+          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("placa"),
+        supabase.from("motoristas").select("id,nome")
+          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("nome"),
+      ]);
+      setVeiculosOp((veic ?? []) as VeiculoOpcao[]);
+      setMotoristasOp((mot ?? []) as MotoristaOpcao[]);
+    }
+    setModalDespacho(true);
+  };
+
+  /** Mesma gravação do Despacho (status normalizado + propagação às entregas) */
+  const confirmarDespachoLocal = async (veiculoId: string, motoristaId: string) => {
+    if (!pedido) return;
+    setDespachoSaving(true);
+    setDespachoErr("");
+    try {
+      const supabase = createClient();
+      const [empVeic, empMot] = await Promise.all([
+        empresaDoVeiculo(supabase, veiculoId),
+        empresaDoMotorista(supabase, motoristaId),
+      ]);
+      if (!empVeic) {
+        setDespachoErr("Caminhão sem empresa definida. Verifique o cadastro do caminhão.");
+        setDespachoSaving(false);
+        return;
+      }
+      const statusNorm = normalizarStatus(pedido.status);
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      const { error: errPedido } = await supabase.from("pedidos").update({
+        veiculo_id: veiculoId,
+        motorista_id: motoristaId,
+        empresa_motorista_id: empMot,
+        status: statusNorm,
+      } as any).eq("id", pedido.id);
+      if (errPedido) { setDespachoErr(errPedido.message); setDespachoSaving(false); return; }
+
+      const { error: errEnt } = await supabase.from("entregas")
+        .update({ veiculo_id: veiculoId, motorista_id: motoristaId })
+        .eq("pedido_id", pedido.id);
+      if (errEnt) { setDespachoErr(`Pedido despachado, mas houve erro ao atualizar as entregas: ${errEnt.message}`); setDespachoSaving(false); return; }
+
+      const vObj = veiculosOp.find(v => v.id === veiculoId);
+      const mObj = motoristasOp.find(m => m.id === motoristaId);
+      setPedido(p => p ? {
+        ...p,
+        status: statusNorm,
+        veiculos: vObj ? { id: vObj.id, placa: vObj.placa, apelido: vObj.apelido, marca: vObj.marca, modelo: vObj.modelo } : p.veiculos,
+        motoristas: mObj ? { id: mObj.id, nome: mObj.nome } : p.motoristas,
+      } : p);
+      setModalDespacho(false);
+    } finally {
+      setDespachoSaving(false);
+    }
+  };
 
   const changeStatus = async (novoStatus: string) => {
     setUpdatingStatus(true);
@@ -334,14 +411,22 @@ export default function PedidoDetalhePage() {
   const cliente   = clienteDoPedido(entregas);
   const kmRodado  = pedido.km_final != null && pedido.km_inicial != null ? pedido.km_final - pedido.km_inicial : null;
 
-  // Iniciar/Concluir só fazem sentido DEPOIS do despacho (fluxo Pedido → Despacho → Execução).
-  const nextStatus = !despachado ? null :
-    (pedido.status === "agendada" || pedido.status === "agendado") ? "em_andamento" :
-    pedido.status === "em_andamento"                               ? "concluida"    : null;
-
-  const nextLabel =
-    nextStatus === "em_andamento" ? "Iniciar Pedido" :
-    nextStatus === "concluida"    ? "Concluir Pedido" : null;
+  // ── Stepper: estágios do fluxo + próxima ação (padrão Fleetbase/Onfleet) ──
+  const emRota    = pedido.status === "em_andamento" || pedido.status === "concluida" || pedido.status === "concluido";
+  const concluido = pedido.status === "concluida" || pedido.status === "concluido";
+  const etapasFluxo = [
+    { label: "Lançado",    done: true },
+    { label: "Despachado", done: despachado },
+    { label: "Em rota",    done: emRota },
+    { label: "Concluído",  done: concluido },
+    { label: "Pago",       done: !!pedido.pago },
+  ];
+  const proximaAcao =
+    !despachado ? { label: "🚚 Despachar agora", onClick: abrirDespacho } :
+    !emRota     ? { label: "▶ Iniciar Pedido",   onClick: () => changeStatus("em_andamento"), disabled: updatingStatus } :
+    !concluido  ? { label: "✓ Concluir Pedido",  onClick: () => changeStatus("concluida"),    disabled: updatingStatus } :
+    !pedido.pago ? { label: "💰 Registrar pagamento", onClick: () => document.getElementById("secao-pagamento")?.scrollIntoView({ behavior: "smooth", block: "center" }) } :
+    null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -351,18 +436,6 @@ export default function PedidoDetalhePage() {
         actions={
           <>
             <Btn href="/pedidos" variant="ghost">← Voltar</Btn>
-            {!despachado && !finalizado && (
-              <Btn href="/despacho" variant="primary">🚚 Despachar</Btn>
-            )}
-            {nextStatus && (
-              <Btn
-                variant="primary"
-                disabled={updatingStatus}
-                onClick={() => changeStatus(nextStatus)}
-              >
-                {updatingStatus ? "..." : nextLabel}
-              </Btn>
-            )}
             {!finalizado && (
               <Btn
                 variant="danger"
@@ -382,6 +455,15 @@ export default function PedidoDetalhePage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Fluxo visível: onde o pedido está e qual a próxima ação */}
+        <div style={{ maxWidth: "900px", marginBottom: "16px" }}>
+          <FluxoStepper
+            etapas={etapasFluxo}
+            cancelado={pedido.status === "cancelada" || pedido.status === "cancelado"}
+            acao={proximaAcao}
+          />
+        </div>
+
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
 
           <FormSection title="📦 Pedido">
@@ -425,7 +507,7 @@ export default function PedidoDetalhePage() {
                 <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
                   Este pedido ainda <strong>não foi despachado</strong> — sem caminhão e motorista definidos.
                 </p>
-                {!finalizado && <Btn href="/despacho" variant="outline" size="sm">Ir para o Despacho →</Btn>}
+                {!finalizado && <Btn variant="primary" size="sm" onClick={abrirDespacho}>🚚 Despachar agora</Btn>}
               </div>
             ) : (
               <>
@@ -491,15 +573,18 @@ export default function PedidoDetalhePage() {
             )}
           </FormSection>
 
-          <PagamentoSection
-            pedidoId={pedido.id}
-            empresaId={pedido.empresa_id}
-            valorPedido={pedido.valor_pedido}
-            pago={pedido.pago}
-            dataPagamento={pedido.data_pagamento}
-            formaPagamento={pedido.forma_pagamento}
-            empresaFaturamentoId={pedido.empresa_faturamento_id}
-          />
+          <div id="secao-pagamento">
+            <PagamentoSection
+              pedidoId={pedido.id}
+              empresaId={pedido.empresa_id}
+              valorPedido={pedido.valor_pedido}
+              pago={pedido.pago}
+              dataPagamento={pedido.data_pagamento}
+              formaPagamento={pedido.forma_pagamento}
+              empresaFaturamentoId={pedido.empresa_faturamento_id}
+              onPagoChange={(novoPago) => setPedido(p => p ? { ...p, pago: novoPago } : p)}
+            />
+          </div>
 
           {pedido.observacoes && (
             <FormSection title="Observações">
@@ -638,6 +723,19 @@ export default function PedidoDetalhePage() {
 
         </div>
       </div>
+
+      {/* Despacho sem trocar de tela (mesmo modal do Despacho) */}
+      {modalDespacho && (
+        <ModalDespacho
+          pedidosIds={[pedido.id]}
+          veiculos={veiculosOp}
+          motoristas={motoristasOp}
+          onConfirm={confirmarDespachoLocal}
+          onClose={() => setModalDespacho(false)}
+          saving={despachoSaving}
+          err={despachoErr}
+        />
+      )}
     </div>
   );
 }
