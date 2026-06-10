@@ -37,6 +37,7 @@ import { processarChecklistFlow } from '@/lib/whatsapp/flows/checklistFlow';
 import { processarAdiantamentoFlow } from '@/lib/whatsapp/flows/adiantamentoFlow';
 import { processarDespesaFlow } from '@/lib/whatsapp/flows/despesaFlow';
 import { processarImprevistoFlow } from '@/lib/whatsapp/flows/imprevistoFlow';
+import { ehComandoApagarUltimo, iniciarApagarUltimo, processarApagarUltimoFlow } from '@/lib/whatsapp/flows/apagarUltimoFlow';
 import { processarGestorFlow } from '@/lib/whatsapp/flows/gestorFlow';
 import { processarComGemini, processarAudioComGemini } from '@/lib/whatsapp/geminiBot';
 import { cotaGeminiDisponivel } from '@/lib/whatsapp/geminiRateLimit';
@@ -290,6 +291,20 @@ export async function processarMensagem(msg: ParsedMessage): Promise<void> {
     return;
   }
 
+  // ── "APAGA O ÚLTIMO" (comando determinístico, ANTES do Gemini) ──────
+  // Precisa vir antes do bloco Gemini: senão a IA sequestra o texto e o
+  // comando nunca chega ao flow. Só motorista, só ocioso (sem flow ativo).
+  const ociosoParaApagar = sessao.estado === 'novo' || sessao.estado === 'aguardando_acao';
+  if (
+    identity.tipo === 'motorista' && ociosoParaApagar &&
+    msgResolvida.tipo === 'texto' && !!msgResolvida.texto &&
+    ehComandoApagarUltimo(msgResolvida.texto)
+  ) {
+    log.info('comando_apagar_ultimo', { session_id: sessao.id });
+    await iniciarApagarUltimo(msgResolvida, sessao);
+    return;
+  }
+
   // ── GEMINI MODE: IA responde quando o motorista está OCIOSO ─────────
   // A IA só intercepta texto/audio quando NÃO há fluxo determinístico ativo
   // esperando resposta (estado 'novo' ou 'aguardando_acao'/menu). Se um fluxo
@@ -448,6 +463,12 @@ async function rotearMotorista(
   // Imprevisto
   if (['aguardando_imprevisto_tipo', 'aguardando_imprevisto_tempo', 'aguardando_imprevisto_midia'].includes(estado)) {
     await processarImprevistoFlow(msg, sessao);
+    return;
+  }
+
+  // Apagar último registro (confirmação)
+  if (estado === 'aguardando_confirmacao_apagar') {
+    await processarApagarUltimoFlow(msg, sessao);
     return;
   }
 

@@ -160,7 +160,12 @@ export default function PedidosListPage() {
       <PageHeader
         title="Pedidos"
         count={filtradas.length}
-        actions={<Btn href="/pedidos/novo">+ Novo Pedido</Btn>}
+        actions={
+          <>
+            <Btn href="/pedidos/importar" variant="outline">Importar notas</Btn>
+            <Btn href="/pedidos/novo">+ Novo Pedido</Btn>
+          </>
+        }
       />
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>

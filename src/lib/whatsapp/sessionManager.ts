@@ -47,6 +47,7 @@ export type EstadoSessao =
   | 'aguardando_imprevisto_tempo'
   | 'aguardando_imprevisto_midia'
   | 'aguardando_documento_tipo'
+  | 'aguardando_confirmacao_apagar'
   | 'inferindo_intencao'
   // Gestor
   | 'aguardando_confirmacao_pedido'
@@ -70,6 +71,8 @@ export type ContextoSessao = {
   checklist_index?: number;
   checklist_respostas?: Record<string, boolean>;
   foto_url?: string;
+  /** Alvo do "apaga o último" aguardando confirmação (tabela + id + descrição do preview) */
+  apagar_alvo?: { tabela: string; id: string; descricao: string; veiculo_id?: string };
   /** Opcoes do menu numerado mais recente, para resolver respostas tipo "1", "2" → id original.
    *  `tipo_original` indica se o handler original esperava resposta de lista ou de botao. */
   menu_opcoes?: {

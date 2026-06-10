@@ -23,6 +23,7 @@
     "@xyflow/react": "^12.11.0",
     "date-fns": "^4.2.1",
     "dexie": "^4.4.3",
+    "fast-xml-parser": "^5.8.0",
     "file-saver": "^2.0.5",
     "jspdf": "^4.2.1",
     "jszip": "^3.10.1",
@@ -35,6 +36,7 @@
     "react-imask": "^7.6.1",
     "react-leaflet": "^5.0.0",
     "tesseract.js": "^7.0.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zod": "^4.4.3"
   },
   "devDependencies": {

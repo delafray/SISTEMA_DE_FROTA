@@ -1,13 +1,14 @@
 "use client";
 
-import { useState, useEffect, useMemo, useDeferredValue } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
-import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
+
+const PAGE_SIZE = 100;
 
 type Abastecimento = {
   id: string;
@@ -24,65 +25,162 @@ type Abastecimento = {
   motoristas: { nome: string } | null;
 };
 
+function sanitizarBusca(s: string): string {
+  // Remove caracteres que quebram a sintaxe do .or() do Supabase
+  return s.replace(/[,()%]/g, "").trim();
+}
+
 export default function AbastecimentosPage() {
   const router = useRouter();
-  const [todos, setTodos]     = useState<Abastecimento[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [busca, setBusca]     = useState("");
-  const [filtro, setFiltro]   = useState("");
-  const buscaDeferred = useDeferredValue(busca);
+  const [linhas, setLinhas]         = useState<Abastecimento[]>([]);
+  const [loading, setLoading]       = useState(true);
+  const [loadingMais, setLoadingMais] = useState(false);
+  const [pagina, setPagina]         = useState(0);
+  const [totalCount, setTotalCount] = useState<number | null>(null);
+  const [busca, setBusca]           = useState("");
+  const [filtro, setFiltro]         = useState("");
+  const [empresaId, setEmpresaId]   = useState<string | null>(null);
 
+  // KPIs de soma (precisam de todas as linhas; payload mínimo até existir RPC de agregação)
+  const [kpiCount, setKpiCount]         = useState<number | null>(null);
+  const [kpiLitros, setKpiLitros]       = useState<number | null>(null);
+  const [kpiCusto, setKpiCusto]         = useState<number | null>(null);
+
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // ─── Auth / empresa ───────────────────────────────────────────────────────
   useEffect(() => {
-    const load = async () => {
+    const init = async () => {
       const supabase = createClient();
       const { data: auth } = await supabase.auth.getUser();
       if (!auth.user) { router.push("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
         .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
-
-      const data = await loadAll<Abastecimento>((from, to) =>
-        supabase.from("abastecimentos")
-          .select("id,km_no_abast,litros,valor_litro,valor_total,posto,confirmado,created_at,veiculo_id,motorista_id,veiculos(placa,modelo),motoristas(nome)")
-          .eq("empresa_id", ue.empresa_id)
-          .order("created_at", { ascending: false })
-          .range(from, to)
-      );
-      setTodos(data);
-      setLoading(false);
+      setEmpresaId(ue.empresa_id);
     };
-    load();
+    init();
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const haystack = useMemo(() => {
-    const m = new Map<string, string>();
-    for (const a of todos) {
-      m.set(a.id, normalizar([
-        a.veiculos?.placa ?? "",
-        a.veiculos?.modelo ?? "",
-        a.motoristas?.nome ?? "",
-        a.posto ?? "",
-      ].join(" ")));
+  // ─── Busca / filtro com debounce ──────────────────────────────────────────
+  useEffect(() => {
+    if (!empresaId) return;
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => {
+      setPagina(0);
+      setLinhas([]);
+      buscarPagina(0, true);
+    }, 350);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [busca, filtro, empresaId]);
+
+  // ─── Helpers de query ─────────────────────────────────────────────────────
+  async function resolverIdsRelacionados(supabase: ReturnType<typeof createClient>, termoNorm: string, eid: string) {
+    // Prefetch IDs de veículos e motoristas que casam com o termo
+    const [{ data: veics }, { data: mots }] = await Promise.all([
+      supabase.from("veiculos")
+        .select("id")
+        .eq("empresa_id", eid)
+        .or(`placa.ilike.%${termoNorm}%,modelo.ilike.%${termoNorm}%`)
+        .limit(200),
+      supabase.from("motoristas")
+        .select("id")
+        .eq("empresa_id", eid)
+        .ilike("nome", `%${termoNorm}%`)
+        .limit(200),
+    ]);
+    const veicIds = (veics ?? []).map((v: { id: string }) => v.id);
+    const motIds  = (mots  ?? []).map((m: { id: string }) => m.id);
+    return { veicIds, motIds };
+  }
+
+  function buildOrFilter(termoNorm: string, veicIds: string[], motIds: string[]): string | null {
+    const partes: string[] = [];
+    // Coluna própria buscável na tabela
+    partes.push(`posto.ilike.%${termoNorm}%`);
+    if (veicIds.length > 0) partes.push(`veiculo_id.in.(${veicIds.join(",")})`);
+    if (motIds.length  > 0) partes.push(`motorista_id.in.(${motIds.join(",")})`);
+    return partes.length > 0 ? partes.join(",") : null;
+  }
+
+  // ─── Busca paginada ───────────────────────────────────────────────────────
+  async function buscarPagina(pag: number, substituir: boolean) {
+    if (!empresaId) return;
+    const eid = empresaId; // narrowed to string
+    if (pag === 0) setLoading(true); else setLoadingMais(true);
+
+    const supabase = createClient();
+    // ilike já é case-insensitive; não normalizar acentos ou o termo deixa de casar com o dado do banco
+    const termo = sanitizarBusca(busca);
+
+    // Resolve IDs de relacionados quando há busca textual
+    let orFilter: string | null = null;
+    if (termo) {
+      const { veicIds, motIds } = await resolverIdsRelacionados(supabase, termo, eid);
+      // Se o termo não casou nenhum relacionado E não há coluna própria que possa casar,
+      // ainda vale buscar por posto — apenas montamos o filtro normalmente.
+      orFilter = buildOrFilter(termo, veicIds, motIds);
     }
-    return m;
-  }, [todos]);
 
-  const filtrados = useMemo(() => {
-    const termo = normalizar(buscaDeferred);
-    const palavras = termo.split(/\s+/).filter(Boolean);
-    return todos.filter(a => {
-      if (filtro === "confirmado" && !a.confirmado) return false;
-      if (filtro === "pendente"   &&  a.confirmado) return false;
-      if (palavras.length === 0) return true;
-      const h = haystack.get(a.id) ?? "";
-      return palavras.every(p => h.includes(p));
-    });
-  }, [todos, haystack, buscaDeferred, filtro]);
+    const from = pag * PAGE_SIZE;
+    const to   = from + PAGE_SIZE - 1;
 
-  const totalLitros  = todos.reduce((s, a) => s + a.litros, 0);
-  const custoTotal   = todos.reduce((s, a) => s + a.valor_total, 0);
-  const ticketMedio  = todos.length > 0 ? custoTotal / todos.length : 0;
+    let q = supabase
+      .from("abastecimentos")
+      .select("id,km_no_abast,litros,valor_litro,valor_total,posto,confirmado,created_at,veiculo_id,motorista_id,veiculos(placa,modelo),motoristas(nome)", { count: "exact" })
+      .eq("empresa_id", eid)
+      .order("created_at", { ascending: false })
+      .order("id", { ascending: true })
+      .range(from, to);
+
+    if (filtro === "confirmado") q = q.eq("confirmado", true);
+    if (filtro === "pendente")   q = q.eq("confirmado", false);
+    if (orFilter)                q = q.or(orFilter);
+
+    const { data, count } = await q;
+    const novas = (data ?? []) as Abastecimento[];
+
+    setLinhas(prev => substituir ? novas : [...prev, ...novas]);
+    setTotalCount(count ?? 0);
+
+    if (pag === 0) setLoading(false); else setLoadingMais(false);
+    setPagina(pag);
+  }
+
+  // ─── KPIs (globais da empresa, como no comportamento original — carregam
+  //     uma vez, não a cada busca) ──────────────────────────────────────────
+  useEffect(() => {
+    if (!empresaId) return;
+    const eid = empresaId;
+    const supabase = createClient();
+    const carregarKpis = async () => {
+      const { count } = await supabase
+        .from("abastecimentos")
+        .select("*", { count: "exact", head: true })
+        .eq("empresa_id", eid);
+      setKpiCount(count ?? 0);
+
+      // soma precisa de todas as linhas; payload mínimo até existir RPC de agregação
+      const somaData = await loadAll<{ litros: number; valor_total: number }>((from, to) =>
+        supabase
+          .from("abastecimentos")
+          .select("litros,valor_total")
+          .eq("empresa_id", eid)
+          .range(from, to)
+      );
+      setKpiLitros(somaData.reduce((s, a) => s + (a.litros ?? 0), 0));
+      setKpiCusto(somaData.reduce((s, a) => s + (a.valor_total ?? 0), 0));
+    };
+    carregarKpis();
+  }, [empresaId]);
+
+  const ticketMedio = (kpiCount != null && kpiCount > 0 && kpiCusto != null)
+    ? kpiCusto / kpiCount
+    : 0;
+
+  const temMais = totalCount != null ? linhas.length < totalCount : linhas.length >= (pagina + 1) * PAGE_SIZE;
 
   const toolbar = (
     <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
@@ -98,28 +196,28 @@ export default function AbastecimentosPage() {
         <option value="pendente">Pendentes</option>
       </select>
       <span style={{ fontSize: "11px", color: "#94a3b8", marginLeft: "auto", whiteSpace: "nowrap" }}>
-        {filtrados.length} de {todos.length} registros
+        {linhas.length} de {totalCount ?? "..."} registros
       </span>
     </div>
   );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader title="Abastecimentos" count={loading ? undefined : todos.length}>
+      <PageHeader title="Abastecimentos" count={loading ? undefined : (totalCount ?? undefined)}>
         <Btn href="/abastecimentos/novo" size="sm">+ Registrar Abastecimento</Btn>
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
-          <KpiCard label="Total Abastecimentos" value={loading ? "..." : todos.length} />
-          <KpiCard label="Total Litros"         value={loading ? "..." : totalLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
-          <KpiCard label="Custo Total"          value={loading ? "..." : custoTotal.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
-          <KpiCard label="Ticket Médio"         value={loading ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
+          <KpiCard label="Total Abastecimentos" value={kpiCount == null ? "..." : kpiCount} />
+          <KpiCard label="Total Litros"         value={kpiLitros == null ? "..." : kpiLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
+          <KpiCard label="Custo Total"          value={kpiCusto == null ? "..." : kpiCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
+          <KpiCard label="Ticket Médio"         value={kpiCusto == null ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
         </div>
 
         {/* Desktop: tabela */}
         <div className="m-hide">
-        <DataTable count={filtrados.length} label="abastecimentos" toolbar={toolbar}>
+        <DataTable count={linhas.length} label="abastecimentos" toolbar={toolbar}>
           <thead>
             <tr>
               <Th>Data</Th>
@@ -137,17 +235,17 @@ export default function AbastecimentosPage() {
           <tbody>
             {loading ? (
               <tr><td colSpan={10} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
-            ) : filtrados.length === 0 ? (
+            ) : linhas.length === 0 ? (
               <tr>
                 <td colSpan={10}>
-                  {todos.length === 0
+                  {!busca && !filtro
                     ? <EmptyState message="Nenhum abastecimento registrado." icon="⛽" action={<Btn href="/abastecimentos/novo">+ Registrar primeiro abastecimento</Btn>} />
                     : <EmptyState message="Nenhum abastecimento encontrado para esta busca." icon="🔍" />
                   }
                 </td>
               </tr>
             ) : (
-              filtrados.map(a => {
+              linhas.map(a => {
                 const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
                 return (
                   <Tr key={a.id}>
@@ -185,8 +283,8 @@ export default function AbastecimentosPage() {
         </div>
 
         {/* Mobile: cards */}
-        <MobileList count={filtrados.length} label="abastecimentos">
-          {loading ? null : filtrados.map(a => {
+        <MobileList count={linhas.length} label="abastecimentos">
+          {loading ? null : linhas.map(a => {
             const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
             return (
               <MobileCard
@@ -207,6 +305,20 @@ export default function AbastecimentosPage() {
             );
           })}
         </MobileList>
+
+        {/* Botão "Carregar mais" — desktop e mobile */}
+        {!loading && temMais && (
+          <div style={{ display: "flex", justifyContent: "center", padding: "8px 0 16px" }}>
+            <Btn
+              variant="outline"
+              size="sm"
+              onClick={() => buscarPagina(pagina + 1, false)}
+              disabled={loadingMais}
+            >
+              {loadingMais ? "Carregando..." : `Carregar mais (${linhas.length} de ${totalCount ?? "?"})`}
+            </Btn>
+          </div>
+        )}
 
         <MobileFAB href="/abastecimentos/novo" label="Registrar Abastecimento" />
       </div>

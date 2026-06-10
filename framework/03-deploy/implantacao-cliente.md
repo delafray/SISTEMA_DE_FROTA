@@ -36,24 +36,89 @@
 
 ---
 
-## Migrations Supabase (passo 1 — rodar todas no SQL Editor)
+## Migrations Supabase (passo 1 — rodar todas no SQL Editor, NA ORDEM)
 
-| Arquivo | O que faz | Obrigatório |
+> **Atualizado em 10/06/2026** (consolidação do item 6 da fila de pendências). A ordem abaixo segue
+> a cronologia de criação dos arquivos. Quase todas são idempotentes (`IF NOT EXISTS`), então rodar
+> de novo não quebra. Pendência conhecida: conferir `schema_routing_completo.sql` contra o banco
+> real (item 5 da fila) — a receita foi derivada do código.
+
+### Bloco 1 — Base
+| # | Arquivo | O que faz |
 |---|---|---|
-| Schema principal | Tabelas base (gerado pelo Supabase) | ✅ |
-| `db/migration_whatsapp_historico.sql` | Histórico de conversas do bot | ✅ |
-| `db/migration_session_atomic.sql` | RPC de sessão atômica | ✅ |
-| `db/migration_bot_metricas.sql` | Métricas do bot | ✅ |
-| `db/migration_geocode_google.sql` | Cache e cota do Google Geocoding | ✅ |
-| `db/migration_coordenadas_aprendidas.sql` | Coordenadas aprendidas pela frota | ✅ |
-| `db/migration_fix_permissions_e_cep.sql` | GRANTs de permissão + CEP opcional | ✅ |
-| `db/migration_fix_cota_ambiguo.sql` | Fix da RPC de cota (coluna ambígua) | ✅ |
-| `db/migration_limpeza_modelo.sql` | Rename de tabelas (viagens→pedidos, fretes→entregas) | ✅ |
-| `db/migration_whatsapp_empresa.sql` | Colunas `whatsapp_instance` e `whatsapp_numero` em `empresas` | ✅ |
-| `db/migration_lembretes.sql` | Tabela de lembretes do painel | ✅ |
-| `db/migration_fix_lembretes_fk.sql` | Corrige FK de lembretes → perfis (necessário para o join de nome funcionar) | ✅ |
+| 0 | Schema principal | Tabelas base (gerado pelo Supabase do projeto original) |
+| 1 | `db/seed_tipos_manutencao.sql` | Seed de tipos de manutenção |
+| 2 | `db/migration_whatsapp_historico.sql` | Histórico de conversas do bot |
+| 3 | `db/migration_session_atomic.sql` | RPC de sessão atômica |
+| 4 | `db/migration_bot_metricas.sql` | Métricas do bot |
 
-> Após rodar as migrations, popular `empresas.whatsapp_instance` com o nome da instância Evolution (`frota-bot-novo` ou equivalente).
+### Bloco 2 — Geocoding
+| # | Arquivo | O que faz |
+|---|---|---|
+| 5 | `db/migration_geocode_google.sql` | Cache e cota do Google Geocoding |
+| 6 | `db/migration_coordenadas_aprendidas.sql` | Coordenadas aprendidas pela frota |
+| 7 | `db/migration_fix_permissions_e_cep.sql` | GRANTs de permissão + CEP opcional |
+| 8 | `db/migration_fix_cota_ambiguo.sql` | Fix da RPC de cota (coluna ambígua) |
+
+### Bloco 3 — Modelo de negócio (Pedido→Entrega)
+| # | Arquivo | O que faz |
+|---|---|---|
+| 9 | `db/migration_limpeza_modelo.sql` | Rename de tabelas (viagens→pedidos, fretes→entregas) |
+| 10 | `migration_api_cadastros.sql` (raiz) | Página /uso-apis (cadastros de API cifrados — exige env `USO_APIS_ENC_KEY`) |
+| 11 | `db/migration_whatsapp_empresa.sql` | Colunas `whatsapp_instance` e `whatsapp_numero` em `empresas` |
+
+### Bloco 4 — Lembretes (sem trava)
+| # | Arquivo | O que faz |
+|---|---|---|
+| 12 | `db/migration_lembretes.sql` | Tabela de lembretes do painel |
+| 13 | `db/migration_fix_lembretes_fk.sql` | Corrige FK de lembretes → perfis |
+| 14 | `db/migration_lembretes_qualquer_usuario.sql` | Qualquer usuário vê/grava lembrete |
+| 15 | `db/migration_lembretes_sem_trava.sql` | Remove travas de empresa/usuário (decisão do dono) |
+
+### Bloco 5 — Motor de regras + autorizações (no-code)
+| # | Arquivo | O que faz |
+|---|---|---|
+| 16 | `db/migration_autorizacoes.sql` | Matriz de autorizações por telefone |
+| 17 | `db/migration_regras.sql` | Tabela de regras do bot |
+| 18 | `db/migration_regras_gatilhos.sql` | Gatilhos das regras |
+| 19 | `db/migration_alocacoes.sql` | Alocações motorista↔veículo |
+| 20 | `db/migration_motorista_usuario.sql` | Vínculo motorista↔usuário |
+| 21 | `db/migration_migrar_vinculo_alocacoes.sql` | Migra vínculos antigos p/ alocações |
+| 22 | `db/migration_alocacoes_km_fim.sql` | KM final nas alocações |
+| 23 | `db/migration_regras_teto.sql` | Teto de valor nas regras |
+| 24 | `db/migration_regras_acoes.sql` | Ações permitidas por regra |
+| 25 | `db/migration_regras_gestor.sql` | Regras de gestor |
+| 26 | `db/migration_bot_classificador.sql` | Tabelas do motor classificador (estado pendente, msgs processadas) |
+| 27 | `db/migration_regras_gatilho_inicio.sql` | Flag "gatilho só no início da frase" |
+| 28 | `db/migration_veiculos_updated_at.sql` | `updated_at` em veículos (optimistic lock do KM) |
+| 29 | `db/migration_bot_msgs_status.sql` | Status na idempotência por wamid |
+| 30 | `db/migration_bot_contexto_conversa.sql` | Contexto "caminhão atual" da conversa |
+| 31 | `db/migration_ctx_incrementar_turns.sql` | RPC atômica de turns do contexto |
+
+### Bloco 6 — Logística (Pedidos/Despacho/Roteirização)
+| # | Arquivo | O que faz |
+|---|---|---|
+| 32 | `db/migration_pedidos_empresa_motorista.sql` | `empresa_motorista_id` em pedidos |
+| 33 | `db/migration_transferencia_empresa.sql` | Transferência de registros entre empresas fiscais |
+| 34 | `db/migration_empresa01_logistica.sql` | Cliente em pedidos, rotas, POD, locais de carregamento |
+| 35 | `db/schema_routing_completo.sql` | Schema completo de roteirização (entregas, janelas, geocode) |
+| 36 | `db/migration_entregas_despacho_nullable.sql` | Entregas com motorista/veículo nullable (fila do Despacho) |
+| 37 | `db/migration_import_notas.sql` | Colunas NFe em entregas (importação em massa — Fase 4) |
+
+> Após rodar as migrations: popular `empresas.whatsapp_instance` com o nome da instância Evolution
+> (`frota-bot-novo` ou equivalente) e cadastrar a(s) empresa(s) — ver [onboarding-empresa.md](onboarding-empresa.md).
+
+---
+
+## VM Oracle — OSRM + VROOM (roteirização)
+
+A roteirização precisa da VM com OSRM (rotas) + VROOM (otimização) — pode ser feita DEPOIS do
+go-live do bot (fica em background). Passo a passo completo: [oracle-cloud.md](oracle-cloud.md) e
+[../04-roteirizacao/osrm-vroom-setup.md](../04-roteirizacao/osrm-vroom-setup.md).
+
+Envs correspondentes na Vercel: `OSRM_URL`, `VROOM_URL`, `OVERPASS_URL` (ver
+[../02-apis-e-chaves/env-template.md](../02-apis-e-chaves/env-template.md) para a lista completa,
+incluindo `USO_APIS_ENC_KEY` do passo 10).
 
 ---
 
