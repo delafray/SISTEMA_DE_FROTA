@@ -52,7 +52,11 @@ Modelo: claude-opus-4-8 (Opus 4.8) em modo /goal
 
 ## Entrega
 - ✅ docs/AUDITORIA_COMPLETA_2026-06-10.md (escrito)
-- 🔄 Pull Request para main
+- ✅ Pull Request para main → https://github.com/delafray/SISTEMA_DE_FROTA/pull/1
+
+## STATUS FINAL: AUDITORIA CONCLUÍDA ✅
+Todas as correções simples/seguras aplicadas, testadas, commitadas e enviadas.
+Decisões de nível superior documentadas no relatório. tsc 0 / 1190 testes verdes.
 
 ## DECISÕES PARA O DONO (resumo — detalhe no relatório)
 - D1 database.types.ts desatualizado (regenerar precisa de credencial)
