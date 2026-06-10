@@ -30,7 +30,7 @@ type Pedido = {
   forma_pagamento: string | null;
   data_pagamento: string | null;
   motoristas: { id: string; nome: string } | null;
-  veiculos: { id: string; placa: string; marca: string; modelo: string } | null;
+  veiculos: { id: string; placa: string; apelido: string | null; marca: string; modelo: string } | null;
 };
 
 type EntregaPedido = {
@@ -41,6 +41,7 @@ type EntregaPedido = {
   sequencia: number | null;
   geocode_status: string | null;
   data_coleta_prevista: string | null;
+  nome_cliente_avulso: string | null;
   clientes: { nome_fantasia: string } | null;
 };
 
@@ -54,10 +55,16 @@ type ResultadoFinanceiro = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
-  agendada: "Agendada", em_andamento: "Em Andamento", concluida: "Concluída", cancelada: "Cancelada",
+  agendada: "Agendado", agendado: "Agendado",
+  em_andamento: "Em Andamento",
+  concluida: "Concluído", concluido: "Concluído",
+  cancelada: "Cancelado", cancelado: "Cancelado",
 };
 const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
-  agendada: "warning", em_andamento: "info", concluida: "success", cancelada: "danger",
+  agendada: "warning", agendado: "warning",
+  em_andamento: "info",
+  concluida: "success", concluido: "success",
+  cancelada: "danger", cancelado: "danger",
 };
 const ENTREGA_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
@@ -69,6 +76,27 @@ const ENTREGA_STATUS_LABEL: Record<string, string> = {
 const fmtBRL  = (v: number | null) => v != null ? v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) : "—";
 const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 const fmtDT   = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR") : "—";
+
+function one<T>(x: T | T[] | null | undefined): T | null {
+  if (Array.isArray(x)) return x[0] ?? null;
+  return x ?? null;
+}
+
+/** Cliente do pedido — vem das entregas (cadastrado ou avulso), igual à lista. */
+function clienteDoPedido(entregas: EntregaPedido[]): string {
+  for (const e of entregas) {
+    const cli = one(e.clientes);
+    if (cli?.nome_fantasia) return cli.nome_fantasia;
+  }
+  for (const e of entregas) {
+    if (e.nome_cliente_avulso?.trim()) return e.nome_cliente_avulso.trim();
+  }
+  return "Cliente não informado";
+}
+
+/** "Apelido (PLACA)" quando tem apelido; senão "PLACA — marca modelo". */
+const veiculoLabel = (v: { placa: string; apelido: string | null; marca: string; modelo: string }) =>
+  v.apelido?.trim() ? `${v.apelido} (${v.placa})` : `${v.placa} — ${v.marca} ${v.modelo}`;
 
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
@@ -96,11 +124,11 @@ export default function PedidoDetalhePage() {
       const supabase = createClient();
       const [pedidoRes, entregasRes, paradasRes] = await Promise.all([
         supabase.from("pedidos")
-          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,marca,modelo)")
+          .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)")
           .eq("id", id)
           .single(),
         supabase.from("entregas")
-          .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,clientes(nome_fantasia)")
+          .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,nome_cliente_avulso,clientes(nome_fantasia)")
           .eq("pedido_id", id)
           .order("sequencia", { ascending: true, nullsFirst: false })
           .order("data_coleta_prevista", { ascending: true }),
@@ -121,7 +149,7 @@ export default function PedidoDetalhePage() {
         let custo_combustivel = 0;
         let custo_despesas = 0;
 
-        const veiculoId = (Array.isArray(pedidoData.veiculos) ? pedidoData.veiculos[0] : pedidoData.veiculos)?.id;
+        const veiculoId = one(pedidoData.veiculos)?.id;
         const mesRef = pedidoData.data_inicio_real ?? pedidoData.data_inicio_prevista ?? pedidoData.created_at;
         if (veiculoId && mesRef) {
           const mesInicio = new Date(mesRef);
@@ -182,7 +210,7 @@ export default function PedidoDetalhePage() {
         .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
         .eq("pedido_id", pedido.id).order("ordem", { ascending: true }),
       supabase.from("entregas")
-        .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,clientes(nome_fantasia)")
+        .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,nome_cliente_avulso,clientes(nome_fantasia)")
         .eq("pedido_id", pedido.id)
         .order("sequencia", { ascending: true, nullsFirst: false })
         .order("data_coleta_prevista", { ascending: true }),
@@ -193,9 +221,9 @@ export default function PedidoDetalhePage() {
 
   const roteirizar = async () => {
     if (!pedido) return;
-    const mot = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
+    const mot = one(pedido.motoristas);
     if (!mot?.id || !pedido.empresa_id) {
-      setRotaMsg({ tipo: "error", texto: "Pedido sem motorista ou empresa definidos — não dá pra roteirizar." });
+      setRotaMsg({ tipo: "error", texto: "Pedido ainda não foi despachado — despache primeiro para roteirizar." });
       return;
     }
     if (entregas.length === 0) {
@@ -250,26 +278,34 @@ export default function PedidoDetalhePage() {
     </div>
   );
 
-  const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
-  const veiculo   = Array.isArray(pedido.veiculos)   ? pedido.veiculos[0]   : pedido.veiculos;
+  const motorista = one(pedido.motoristas);
+  const veiculo   = one(pedido.veiculos);
+  const despachado = !!veiculo || !!motorista;
+  const finalizado = pedido.status === "cancelada" || pedido.status === "cancelado"
+                  || pedido.status === "concluida" || pedido.status === "concluido";
+  const cliente   = clienteDoPedido(entregas);
   const kmRodado  = pedido.km_final != null && pedido.km_inicial != null ? pedido.km_final - pedido.km_inicial : null;
 
-  const nextStatus =
-    pedido.status === "agendada"     ? "em_andamento" :
-    pedido.status === "em_andamento" ? "concluida"    : null;
+  // Iniciar/Concluir só fazem sentido DEPOIS do despacho (fluxo Pedido → Despacho → Execução).
+  const nextStatus = !despachado ? null :
+    (pedido.status === "agendada" || pedido.status === "agendado") ? "em_andamento" :
+    pedido.status === "em_andamento"                               ? "concluida"    : null;
 
   const nextLabel =
-    pedido.status === "agendada"     ? "Iniciar Pedido" :
-    pedido.status === "em_andamento" ? "Concluir Pedido" : null;
+    nextStatus === "em_andamento" ? "Iniciar Pedido" :
+    nextStatus === "concluida"    ? "Concluir Pedido" : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
-        title={`Pedido — ${motorista?.nome ?? "—"}`}
+        title={`Pedido — ${cliente}`}
         subtitle={`Criado em ${fmtDT(pedido.created_at)}`}
         actions={
           <>
             <Btn href="/pedidos" variant="ghost">← Voltar</Btn>
+            {!despachado && !finalizado && (
+              <Btn href="/despacho" variant="primary">🚚 Despachar</Btn>
+            )}
             {nextStatus && (
               <Btn
                 variant="primary"
@@ -279,8 +315,12 @@ export default function PedidoDetalhePage() {
                 {updatingStatus ? "..." : nextLabel}
               </Btn>
             )}
-            {pedido.status !== "cancelada" && pedido.status !== "concluida" && (
-              <Btn variant="danger" disabled={updatingStatus} onClick={() => changeStatus("cancelada")}>
+            {!finalizado && (
+              <Btn
+                variant="danger"
+                disabled={updatingStatus}
+                onClick={() => { if (window.confirm("Cancelar este pedido?")) changeStatus("cancelada"); }}
+              >
                 Cancelar
               </Btn>
             )}
@@ -296,37 +336,49 @@ export default function PedidoDetalhePage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
 
-          <FormSection title="Motorista e Veículo">
-            <Row label="Motorista" value={<strong>{motorista?.nome ?? "—"}</strong>} />
-            <Row label="Veículo"   value={veiculo ? `${veiculo.placa} — ${veiculo.marca} ${veiculo.modelo}` : "—"} />
-          </FormSection>
-
-          <FormSection title="Datas">
-            <Row label="Início Previsto"   value={fmtDate(pedido.data_inicio_prevista)} />
-            <Row label="Fim Previsto" value={fmtDate(pedido.data_fim_prevista)} />
-            <Row label="Início Real"       value={fmtDT(pedido.data_inicio_real)} />
-            <Row label="Fim Real"     value={fmtDT(pedido.data_fim_real)} />
-          </FormSection>
-
-          <FormSection title="Quilometragem">
-            <Row label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
-            <Row label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
-            {kmRodado != null && (
-              <Row label="KM Rodados" value={<strong style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</strong>} />
-            )}
-          </FormSection>
-
-          <FormSection title="💰 Resultado Financeiro">
-            <Row label="Entregas neste pedido" value={<Badge variant="info">{entregas.length}</Badge>} />
-            <Row label="Valor do Pedido" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</strong>} />
+          <FormSection title="📦 Pedido">
+            <Row label="Cliente" value={<strong>{cliente}</strong>} />
+            <Row label="Valor" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</strong>} />
             <Row label="Pagamento" value={pedido.pago
               ? <span style={{ color: "#16a34a" }}>✓ Pago {pedido.data_pagamento ? `em ${fmtDate(pedido.data_pagamento)}` : ""}</span>
               : <span style={{ color: "#eab308" }}>Pendente</span>}
             />
+            <Row label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
+            <Row label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />
+            <Row label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} />
+          </FormSection>
+
+          <FormSection title="🚚 Despacho e Execução">
+            {!despachado ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "8px 0" }}>
+                <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
+                  Este pedido ainda <strong>não foi despachado</strong> — sem caminhão e motorista definidos.
+                </p>
+                {!finalizado && <Btn href="/despacho" variant="outline" size="sm">Ir para o Despacho →</Btn>}
+              </div>
+            ) : (
+              <>
+                <Row label="Motorista" value={<strong>{motorista?.nome ?? "—"}</strong>} />
+                <Row label="Caminhão"  value={veiculo ? veiculoLabel(veiculo) : "—"} />
+                <Row label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
+                <Row label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
+                {kmRodado != null && (
+                  <Row label="KM Rodados" value={<strong style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</strong>} />
+                )}
+                <Row label="Início Real" value={fmtDT(pedido.data_inicio_real)} />
+                <Row label="Fim Real"    value={fmtDT(pedido.data_fim_real)} />
+              </>
+            )}
+            <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
+              Caminhão, motorista e KM são definidos na tela de <a href="/despacho" style={{ color: "#2563eb" }}>Despacho</a> e no fluxo do motorista.
+            </p>
+          </FormSection>
+
+          <FormSection title="💰 Resultado Financeiro">
+            <Row label="Receita do Pedido" value={<strong style={{ color: "#16a34a" }}>{fmtBRL(pedido.valor_pedido)}</strong>} />
 
             {resultado && resultado.custo_total > 0 && (
               <>
-                <div style={{ height: "1px", background: "#f1f5f9", margin: "6px 0" }} />
                 {resultado.custo_combustivel > 0 && (
                   <Row label="(-) Combustível (mês)" value={<span style={{ color: "#dc2626" }}>- {fmtBRL(resultado.custo_combustivel)}</span>} />
                 )}
@@ -361,17 +413,17 @@ export default function PedidoDetalhePage() {
 
             {resultado && resultado.custo_total === 0 && (
               <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
-                📌 Nenhuma despesa registrada no mês para este veículo.
+                {despachado
+                  ? "📌 Nenhuma despesa registrada no mês para este veículo."
+                  : "📌 Os custos aparecem depois do despacho (são consolidados por caminhão)."}
               </p>
             )}
           </FormSection>
 
           {pedido.observacoes && (
-            <div style={{ gridColumn: "span 2" }}>
-              <FormSection title="Observações">
-                <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
-              </FormSection>
-            </div>
+            <FormSection title="Observações">
+              <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
+            </FormSection>
           )}
 
           <div style={{ gridColumn: "span 2" }}>
@@ -379,7 +431,7 @@ export default function PedidoDetalhePage() {
               <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
                 <Btn
                   variant="primary"
-                  disabled={roteirizando || entregas.length === 0}
+                  disabled={roteirizando || entregas.length === 0 || !despachado}
                   onClick={roteirizar}
                 >
                   {roteirizando ? "Roteirizando…" : paradas.length > 0 ? "🔄 Re-roteirizar" : "🧭 Roteirizar"}
@@ -387,6 +439,8 @@ export default function PedidoDetalhePage() {
                 <span style={{ fontSize: "12px", color: "#94a3b8" }}>
                   {entregas.length === 0
                     ? "Adicione entregas ao pedido para roteirizar."
+                    : !despachado
+                    ? "Despache o pedido primeiro — a rota é calculada para o motorista."
                     : "Parte do depósito (endereço da empresa) e ordena os destinos das entregas."}
                 </span>
               </div>
@@ -429,7 +483,7 @@ export default function PedidoDetalhePage() {
                   </thead>
                   <tbody>
                     {entregas.map(fr => {
-                      const cliente = Array.isArray(fr.clientes) ? fr.clientes[0] : fr.clientes;
+                      const cli = one(fr.clientes);
                       return (
                         <Tr key={fr.id}>
                           <Td style={{ fontWeight: 600 }}>
@@ -446,7 +500,7 @@ export default function PedidoDetalhePage() {
                               <span title="Destino não pôde ser geocodificado — ficou fora da rota" style={{ marginLeft: "6px", fontSize: "11px", color: "#dc2626" }}>⚠ sem coordenada</span>
                             )}
                           </Td>
-                          <Td>{cliente?.nome_fantasia ?? "—"}</Td>
+                          <Td>{cli?.nome_fantasia ?? fr.nome_cliente_avulso?.trim() ?? "—"}</Td>
                           <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
                           <Td>
                             <Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>
