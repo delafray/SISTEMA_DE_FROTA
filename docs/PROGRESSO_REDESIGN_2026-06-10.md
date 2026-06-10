@@ -9,7 +9,7 @@ Legenda: ✅ FEITO · 🔄 EM ANDAMENTO · ⬜ FALTA
 ## Blocos
 
 - ✅ **B0 — Setup**: ler docs/código, criar este progresso, `npm install`, baseline `tsc`.
-- ⬜ **B1 — Novo Pedido: múltiplos locais de carregamento** (cadastrados+avulsos no mesmo pedido, chips com indicação de "já usado", modal salvar local).
+- ✅ **B1 — Novo Pedido: múltiplos locais de carregamento** (lista unificada cadastrados+avulsos no mesmo pedido, chips com "✓ adicionado", modal salva N locais novos com nome opcional). tsc verde.
 - ⬜ **B2 — Listagem de Pedidos localizável** (cliente, data de cadastro, destinos resumidos, valor, status; busca por cliente e destino).
 - ⬜ **B3 — Editar Pedido simplificado** (motorista/veículo só leitura + link Despacho; km_inicial leitura, ajuste manual só gestor; editar = cliente/valor/data/obs/entregas).
 - ⬜ **B4 — Despacho** (busca + cliente + data + destinos na fila; apelido do caminhão no modal; CORREÇÃO do erro ao confirmar + mensagens legíveis; SQL proposto em db/).
