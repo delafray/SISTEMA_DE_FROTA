@@ -1,30 +1,39 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
+import { normalizar } from "@/lib/utils/normalizar";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
   PageHeader, DataTable, Th, Td, Tr, Badge, Btn,
-  KpiCard, EmptyState, selectStyle, Alert, FormField,
+  KpiCard, EmptyState, selectStyle, Alert, FormField, SearchInput,
 } from "@/components/ui/ds";
 import { MobileCard, MobileList } from "@/components/mobile";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────────
 
+type EntregaLite = {
+  id: string;
+  destino: string | null;
+  nome_cliente_avulso: string | null;
+  clientes: { nome_fantasia: string } | null;
+};
+
 type Pedido = {
   id: string;
   status: string;
   valor_pedido: number | null;
+  created_at: string | null;
   data_inicio_prevista: string | null;
-  data_fim_prevista: string | null;
-  entregas: { id: string; destino: string | null }[];
+  entregas: EntregaLite[];
 };
 
 type Veiculo = {
   id: string;
   placa: string;
+  apelido: string | null;
   marca: string;
   modelo: string;
 };
@@ -51,22 +60,62 @@ const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   cancelada: "danger", cancelado: "danger",
 };
 
+/** A constraint `viagens_status_check` só aceita as formas FEMININAS. Pedidos
+ *  antigos podem ter status masculino ('agendado'), e o Postgres RE-VALIDA o
+ *  CHECK em QUALQUER update da linha (mesmo sem mexer no status) → o despacho
+ *  estourava. Normalizamos pra forma feminina no próprio update do despacho. */
+const STATUS_FEMININO: Record<string, string> = {
+  agendado: "agendada", concluido: "concluida", cancelado: "cancelada",
+};
+const normalizarStatus = (s: string) => STATUS_FEMININO[s] ?? s;
+
 const fmtDate = (d: string | null) =>
   d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
 const fmtMoeda = (v: number | null) =>
   v != null ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—";
 
-/** Resumo de destinos de um pedido. */
-function resumoDestinos(entregas: { destino: string | null }[]): string {
-  const dests = entregas
-    .map(e => e.destino?.split("-")[0]?.trim())
-    .filter(Boolean)
-    .slice(0, 2);
-  if (dests.length === 0) return "—";
-  const total = entregas.filter(e => e.destino).length;
-  const extra = total > 2 ? ` +${total - 2}` : "";
-  return dests.join(" / ") + extra;
+const veiculoLabel = (v: Veiculo) =>
+  v.apelido?.trim() ? `${v.apelido} (${v.placa})` : `${v.placa} — ${v.marca} ${v.modelo}`;
+
+/** Erro do Supabase em linguagem legível: mostra message + details + hint + code. */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fmtErroSupabase(e: any, contexto: string): string {
+  const partes = [e?.message, e?.details, e?.hint].filter(Boolean);
+  const cod = e?.code ? ` [${e.code}]` : "";
+  return `${contexto}: ${partes.join(" — ") || "erro desconhecido"}${cod}`;
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function one<T>(x: any): T | null { return Array.isArray(x) ? (x[0] ?? null) : (x ?? null); }
+
+/** Cliente do pedido — vem das entregas (cadastrado ou avulso). */
+function clienteDoPedido(entregas: EntregaLite[]): string {
+  for (const e of entregas) {
+    const cli = one<{ nome_fantasia: string }>(e.clientes);
+    if (cli?.nome_fantasia) return cli.nome_fantasia;
+  }
+  for (const e of entregas) {
+    if (e.nome_cliente_avulso?.trim()) return e.nome_cliente_avulso.trim();
+  }
+  return "Cliente não informado";
+}
+
+function rotuloDestino(destino: string): string {
+  const partes = destino.trim().split(",").map(s => s.trim()).filter(Boolean);
+  const alvo = partes.length >= 2 ? partes[partes.length - 1] : partes[0] ?? destino;
+  return alvo.length > 22 ? alvo.slice(0, 21) + "…" : alvo;
+}
+
+/** "3 entregas · Centro / Jardim +1" */
+function resumoDestinos(entregas: EntregaLite[]): string {
+  const dests = entregas.map(e => e.destino?.trim()).filter((d): d is string => !!d);
+  const n = entregas.length;
+  const palavra = n === 1 ? "entrega" : "entregas";
+  if (dests.length === 0) return `${n} ${palavra}`;
+  const rotulos = dests.slice(0, 2).map(rotuloDestino);
+  const extra = dests.length > 2 ? ` +${dests.length - 2}` : "";
+  return `${n} ${palavra} · ${rotulos.join(" / ")}${extra}`;
 }
 
 // ─── Modal Despacho ────────────────────────────────────────────────────────────
@@ -128,7 +177,7 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
           Despachar Pedido{pedidosIds.length > 1 ? `s (${pedidosIds.length})` : ""}
         </h2>
         <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 20px" }}>
-          Selecione o veículo e o motorista para este despacho.
+          Selecione o caminhão e o motorista para este despacho.
           {pedidosIds.length > 1 && " Todos os pedidos selecionados receberão o mesmo caminhão/motorista."}
         </p>
 
@@ -138,16 +187,16 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
           </div>
         )}
 
-        <FormField label="Veículo">
+        <FormField label="Caminhão">
           <select
             value={veiculoId}
             onChange={e => handleVeiculoChange(e.target.value)}
             style={selectStyle}
           >
-            <option value="">Selecione um veículo...</option>
+            <option value="">Selecione um caminhão...</option>
             {veiculos.map(v => (
               <option key={v.id} value={v.id}>
-                {v.placa} — {v.marca} {v.modelo}
+                {veiculoLabel(v)}
               </option>
             ))}
           </select>
@@ -173,7 +222,7 @@ function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onClose, s
 
         {veiculoId && !loadingMotorista && !motoristaId && (
           <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 12px" }}>
-            Nenhum motorista padrão encontrado para este veículo. Selecione manualmente.
+            Nenhum motorista padrão encontrado para este caminhão. Selecione manualmente.
           </p>
         )}
 
@@ -206,6 +255,10 @@ export default function DespachoPage() {
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [loading, setLoading]       = useState(true);
 
+  // Busca
+  const [busca, setBusca] = useState("");
+  const buscaDeferred = useDeferredValue(busca);
+
   // Seleção múltipla
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
@@ -237,7 +290,7 @@ export default function DespachoPage() {
       const pedidosData = await loadAll<Pedido>((from, to) =>
         supabase
           .from("pedidos")
-          .select("id,status,valor_pedido,data_inicio_prevista,data_fim_prevista,entregas(id,destino)")
+          .select("id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))")
           .eq("empresa_id", empresaId)
           .is("veiculo_id", null)
           .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`)
@@ -245,10 +298,10 @@ export default function DespachoPage() {
           .range(from, to) as unknown as PromiseLike<{ data: Pedido[] | null }>
       );
 
-      // Veículos ativos da empresa
+      // Caminhões ativos da empresa (com apelido)
       const { data: veicData } = await supabase
         .from("veiculos")
-        .select("id,placa,marca,modelo")
+        .select("id,placa,apelido,marca,modelo")
         .eq("empresa_id", empresaId)
         .eq("ativo", true)
         .order("placa");
@@ -270,6 +323,33 @@ export default function DespachoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // ── Índice de busca + filtro (cliente / destino) ────────────────────────────
+
+  const pedidosIndexados = useMemo(() =>
+    pedidos.map(p => {
+      const entregas = Array.isArray(p.entregas) ? p.entregas : [];
+      const cliente = clienteDoPedido(entregas);
+      const hay = normalizar([
+        cliente,
+        ...entregas.map(e => e.destino ?? ""),
+        ...entregas.map(e => e.nome_cliente_avulso ?? ""),
+      ].join(" "));
+      return { p, entregas, cliente, hay };
+    }),
+  [pedidos]);
+
+  const filtrados = useMemo(() => {
+    const q = normalizar(buscaDeferred);
+    const lista = q ? pedidosIndexados.filter(r => r.hay.includes(q)) : pedidosIndexados;
+    return [...lista].sort((a, b) => {
+      const da = a.p.data_inicio_prevista, db = b.p.data_inicio_prevista;
+      if (!da && !db) return 0;
+      if (!da) return 1;
+      if (!db) return -1;
+      return da.localeCompare(db);
+    });
+  }, [pedidosIndexados, buscaDeferred]);
+
   // ── Seleção ────────────────────────────────────────────────────────────────
 
   const toggleSelecionado = (id: string) => {
@@ -280,11 +360,14 @@ export default function DespachoPage() {
     });
   };
 
+  const idsVisiveis = filtrados.map(r => r.p.id);
+  const todosSelecionados = idsVisiveis.length > 0 && idsVisiveis.every(id => selecionados.has(id));
+
   const toggleTodos = () => {
-    if (selecionados.size === pedidos.length) {
+    if (todosSelecionados) {
       setSelecionados(new Set());
     } else {
-      setSelecionados(new Set(pedidos.map(p => p.id)));
+      setSelecionados(new Set(idsVisiveis));
     }
   };
 
@@ -303,49 +386,58 @@ export default function DespachoPage() {
     setModalErr("");
 
     try {
-      // Busca snapshots (empresa do veículo e empresa do motorista)
+      // Snapshots: empresa do veículo (obrigatória) e empresa do motorista.
       const [empresa_id, empresa_motorista_id] = await Promise.all([
         empresaDoVeiculo(supabase, veiculoId),
         empresaDoMotorista(supabase, motoristaId),
       ]);
 
       if (!empresa_id) {
-        setModalErr("Veículo sem empresa definida. Verifique o cadastro do veículo.");
+        setModalErr("Caminhão sem empresa definida. Verifique o cadastro do caminhão.");
         setSaving(false);
         return;
       }
 
-      // Atualiza pedidos
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const pedidoPayload: any = {
-        veiculo_id:           veiculoId,
-        motorista_id:         motoristaId,
-        empresa_motorista_id: empresa_motorista_id,
-      };
-      const { error: errPedidos } = await supabase
-        .from("pedidos")
-        .update(pedidoPayload)
-        .in("id", modalPedidosIds);
-
-      if (errPedidos) {
-        setModalErr("Erro ao atualizar pedidos: " + errPedidos.message);
-        setSaving(false);
-        return;
+      // Agrupa os pedidos por status JÁ NORMALIZADO (feminino), pra gravar um
+      // status válido na mesma operação e não tropeçar na constraint.
+      const statusPorId = new Map(pedidos.map(p => [p.id, normalizarStatus(p.status)]));
+      const grupos = new Map<string, string[]>();
+      for (const pid of modalPedidosIds) {
+        const st = statusPorId.get(pid) ?? "agendada";
+        if (!grupos.has(st)) grupos.set(st, []);
+        grupos.get(st)!.push(pid);
       }
 
-      // Atualiza entregas dos pedidos despachados
+      for (const [statusNorm, ids] of grupos) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const pedidoPayload: any = {
+          veiculo_id:           veiculoId,
+          motorista_id:         motoristaId,
+          empresa_motorista_id: empresa_motorista_id,
+          status:               statusNorm, // normaliza gênero → constraint feliz
+        };
+        const { error: errPedidos } = await supabase
+          .from("pedidos")
+          .update(pedidoPayload)
+          .in("id", ids);
+
+        if (errPedidos) {
+          setModalErr(fmtErroSupabase(errPedidos, "Erro ao despachar o pedido"));
+          setSaving(false);
+          return;
+        }
+      }
+
+      // Atualiza entregas dos pedidos despachados (caminhão + motorista).
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const entregaPayload: any = {
-        veiculo_id:   veiculoId,
-        motorista_id: motoristaId,
-      };
+      const entregaPayload: any = { veiculo_id: veiculoId, motorista_id: motoristaId };
       const { error: errEntregas } = await supabase
         .from("entregas")
         .update(entregaPayload)
         .in("pedido_id", modalPedidosIds);
 
       if (errEntregas) {
-        setModalErr("Erro ao atualizar entregas: " + errEntregas.message);
+        setModalErr(fmtErroSupabase(errEntregas, "Pedido despachado, mas houve erro ao atualizar as entregas"));
         setSaving(false);
         return;
       }
@@ -363,7 +455,7 @@ export default function DespachoPage() {
       );
       setTimeout(() => setSucesso(""), 4000);
     } catch (e) {
-      setModalErr("Erro inesperado: " + String(e));
+      setModalErr(fmtErroSupabase(e, "Erro inesperado ao despachar"));
     } finally {
       setSaving(false);
     }
@@ -372,27 +464,15 @@ export default function DespachoPage() {
   // ── KPIs ───────────────────────────────────────────────────────────────────
 
   const totalAguardando = pedidos.length;
+  const algumselecionado = selecionados.size > 0;
 
   // ── Render ─────────────────────────────────────────────────────────────────
-
-  const todosSelecionados = pedidos.length > 0 && selecionados.size === pedidos.length;
-  const algumselecionado  = selecionados.size > 0;
-
-  const pedidosOrdenados = useMemo(
-    () => [...pedidos].sort((a, b) => {
-      if (!a.data_inicio_prevista && !b.data_inicio_prevista) return 0;
-      if (!a.data_inicio_prevista) return 1;
-      if (!b.data_inicio_prevista) return -1;
-      return a.data_inicio_prevista.localeCompare(b.data_inicio_prevista);
-    }),
-    [pedidos]
-  );
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
         title="Despacho"
-        subtitle="Fila de pedidos aguardando atribuição de veículo"
+        subtitle="Fila de pedidos aguardando caminhão e motorista"
         count={totalAguardando}
         actions={
           algumselecionado ? (
@@ -418,21 +498,37 @@ export default function DespachoPage() {
           <Alert variant="success">{sucesso}</Alert>
         )}
 
+        {/* Busca no mobile */}
+        <div className="mobile-only" style={{ marginBottom: "4px" }}>
+          <SearchInput
+            placeholder="Buscar por cliente ou destino..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+        </div>
+
         {/* Tabela Desktop */}
         <div className="m-hide">
           <DataTable
-            count={pedidos.length}
+            count={filtrados.length}
             label="pedidos aguardando despacho"
             toolbar={
-              algumselecionado ? (
-                <Btn
-                  variant="primary"
-                  size="sm"
-                  onClick={() => abrirModal(Array.from(selecionados))}
-                >
-                  Despachar {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
-                </Btn>
-              ) : undefined
+              <>
+                <SearchInput
+                  placeholder="Buscar por cliente ou destino..."
+                  value={busca}
+                  onChange={e => setBusca(e.target.value)}
+                />
+                {algumselecionado && (
+                  <Btn
+                    variant="primary"
+                    size="sm"
+                    onClick={() => abrirModal(Array.from(selecionados))}
+                  >
+                    Despachar {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
+                  </Btn>
+                )}
+              </>
             }
           >
             <thead>
@@ -446,11 +542,11 @@ export default function DespachoPage() {
                     title="Selecionar todos"
                   />
                 </Th>
-                <Th>Status</Th>
+                <Th>Cliente</Th>
                 <Th>Data Prevista</Th>
                 <Th>Destinos</Th>
-                <Th>Entregas</Th>
                 <Th>Valor</Th>
+                <Th>Status</Th>
                 <Th></Th>
               </tr>
             </thead>
@@ -461,18 +557,17 @@ export default function DespachoPage() {
                     Carregando...
                   </Td>
                 </tr>
-              ) : pedidosOrdenados.length === 0 ? (
+              ) : filtrados.length === 0 ? (
                 <tr>
                   <td colSpan={7}>
                     <EmptyState
                       icon="🚚"
-                      message="Nenhum pedido aguardando despacho. Lance um pedido primeiro."
-                      action={<Btn href="/pedidos/novo">Criar Novo Pedido</Btn>}
+                      message={busca ? "Nenhum pedido encontrado para essa busca." : "Nenhum pedido aguardando despacho. Lance um pedido primeiro."}
+                      action={busca ? undefined : <Btn href="/pedidos/novo">Criar Novo Pedido</Btn>}
                     />
                   </td>
                 </tr>
-              ) : pedidosOrdenados.map(p => {
-                const entregas = Array.isArray(p.entregas) ? p.entregas : [];
+              ) : filtrados.map(({ p, entregas, cliente }) => {
                 const sel = selecionados.has(p.id);
                 return (
                   <Tr
@@ -487,21 +582,17 @@ export default function DespachoPage() {
                         style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
                       />
                     </Td>
+                    <Td style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</Td>
+                    <Td>{fmtDate(p.data_inicio_prevista)}</Td>
+                    <Td style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                      {resumoDestinos(entregas)}
+                    </Td>
+                    <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
                     <Td>
                       <Badge variant={STATUS_VAR[p.status] ?? "default"}>
                         {STATUS_LABEL[p.status] ?? p.status}
                       </Badge>
                     </Td>
-                    <Td>{fmtDate(p.data_inicio_prevista)}</Td>
-                    <Td style={{ maxWidth: "220px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {resumoDestinos(entregas)}
-                    </Td>
-                    <Td style={{ textAlign: "center" }}>
-                      <Badge variant={entregas.length > 0 ? "info" : "default"}>
-                        {entregas.length}
-                      </Badge>
-                    </Td>
-                    <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
                         <Btn href={`/pedidos/${p.id}`} variant="ghost" size="xs">Ver</Btn>
@@ -523,19 +614,18 @@ export default function DespachoPage() {
 
         {/* Lista Mobile */}
         <MobileList
-          count={pedidosOrdenados.length}
+          count={filtrados.length}
           label="pedidos aguardando despacho"
           emptyMessage="Nenhum pedido aguardando despacho."
           emptyIcon="🚚"
         >
-          {loading ? null : pedidosOrdenados.map(p => {
-            const entregas = Array.isArray(p.entregas) ? p.entregas : [];
+          {loading ? null : filtrados.map(({ p, entregas, cliente }) => {
             const sel = selecionados.has(p.id);
             return (
               <MobileCard
                 key={p.id}
-                title={resumoDestinos(entregas) !== "—" ? resumoDestinos(entregas) : "Sem destino"}
-                subtitle={`Previsto: ${fmtDate(p.data_inicio_prevista)}`}
+                title={cliente}
+                subtitle={resumoDestinos(entregas)}
                 badge={
                   <Badge variant={STATUS_VAR[p.status] ?? "default"}>
                     {STATUS_LABEL[p.status] ?? p.status}
@@ -543,7 +633,7 @@ export default function DespachoPage() {
                 }
                 highlight={sel ? "#2563eb" : "#e2e8f0"}
                 details={[
-                  { label: "Entregas", value: String(entregas.length) },
+                  { label: "Previsto", value: fmtDate(p.data_inicio_prevista) },
                   { label: "Valor",    value: fmtMoeda(p.valor_pedido) },
                 ]}
                 actions={
@@ -562,7 +652,7 @@ export default function DespachoPage() {
                       size="sm"
                       onClick={() => toggleSelecionado(p.id)}
                     >
-                      {sel ? "Desselecionado" : "Selecionar"}
+                      {sel ? "Tirar" : "Marcar"}
                     </Btn>
                   </div>
                 }
