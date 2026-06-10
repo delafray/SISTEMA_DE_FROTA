@@ -17,7 +17,6 @@ import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, Btn, Badge, Alert,
-  DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
 import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
 import { FluxoStepper } from "./_components/FluxoStepper";
@@ -50,6 +49,33 @@ type Pedido = {
   veiculos: { id: string; placa: string; apelido: string | null; marca: string; modelo: string } | null;
 };
 
+type RotaExec = {
+  id: string;
+  status: string;
+  data: string | null;
+  criada_em: string | null;
+  otimizada_em: string | null;
+  distancia_total_km: number | null;
+  tempo_total_min: number | null;
+};
+
+const ROTA_STATUS_LABEL: Record<string, string> = {
+  rascunho: "Rascunho", otimizada: "Em aberto", em_andamento: "Em andamento",
+  concluida: "Concluída", cancelada: "Cancelada",
+};
+const ROTA_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger" | "default"> = {
+  rascunho: "default", otimizada: "warning", em_andamento: "info",
+  concluida: "success", cancelada: "danger",
+};
+
+/** Endereço legível do JSON da parada. */
+function enderecoParada(e: unknown): string {
+  const o = (e ?? {}) as { logradouro?: string; numero?: string; cidade?: string; uf?: string };
+  const rua = [o.logradouro, o.numero].filter(Boolean).join(", ");
+  const cidade = [o.cidade, o.uf].filter(Boolean).join("/");
+  return [rua, cidade].filter(Boolean).join(" — ") || "Endereço não informado";
+}
+
 type EntregaPedido = {
   id: string;
   origem: string | null;
@@ -74,13 +100,6 @@ const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   concluida: "success", concluido: "success",
   cancelada: "danger", cancelado: "danger",
 };
-const ENTREGA_STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
-  agendado: "warning", em_andamento: "info", concluido: "success", cancelado: "danger",
-};
-const ENTREGA_STATUS_LABEL: Record<string, string> = {
-  agendado: "Agendado", em_andamento: "Em Andamento", concluido: "Concluído", cancelado: "Cancelado",
-};
-
 const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 const fmtDT   = (d: string | null) => d ? new Date(d).toLocaleString("pt-BR") : "—";
 
@@ -157,9 +176,10 @@ export default function DespachoDetalhePage() {
   // pedidos.local_carregamento separados por " | ")
   const [novoLocal, setNovoLocal] = useState("");
   const [salvandoLocal, setSalvandoLocal] = useState(false);
-  const [editandoDestino, setEditandoDestino] = useState<string | null>(null);
-  const [destinoEdit, setDestinoEdit] = useState("");
-  const [salvandoDestino, setSalvandoDestino] = useState(false);
+  // Abas da tela: principal (pedido + despacho) e rota (mapa + execução)
+  const [abaTela, setAbaTela] = useState<"principal" | "rota">("principal");
+  // Rota salva pelo motorista (ou roteirizada aqui) — cabeçalho da execução
+  const [rotaExec, setRotaExec] = useState<RotaExec | null>(null);
   // Despachar/trocar aqui mesmo (modal compartilhado do Despacho)
   const [modalDespacho, setModalDespacho] = useState(false);
   const [veiculosOp, setVeiculosOp] = useState<VeiculoOpcao[]>([]);
@@ -174,7 +194,7 @@ export default function DespachoDetalhePage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [pedidoRes, entregasRes, paradasRes] = await Promise.all([
+      const [pedidoRes, entregasRes, paradasRes, rotaRes] = await Promise.all([
         supabase.from("pedidos")
           .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,local_carregamento,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)" as never)
           .eq("id", id)
@@ -189,10 +209,17 @@ export default function DespachoDetalhePage() {
           .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
           .eq("pedido_id", id)
           .order("ordem", { ascending: true }),
+        // Rota salva (do celular do motorista ou roteirizada aqui) — execução.
+        supabase.from("rotas_otimizadas")
+          .select("id,status,data,criada_em,otimizada_em,distancia_total_km,tempo_total_min")
+          .eq("pedido_id", id)
+          .order("criada_em", { ascending: false })
+          .limit(1),
       ]);
       setPedido(pedidoRes.data as unknown as Pedido | null);
       setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
       setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
+      setRotaExec(((rotaRes.data ?? [])[0] ?? null) as RotaExec | null);
       setLoading(false);
     };
     load();
@@ -271,12 +298,6 @@ export default function DespachoDetalhePage() {
     setUpdatingStatus(false);
   };
 
-  const desvincularEntrega = async (entregaId: string) => {
-    const supabase = createClient();
-    await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
-    setEntregas(p => p.filter(f => f.id !== entregaId));
-  };
-
   /** Grava a lista de locais (join " | ") e propaga como origem das entregas. */
   const salvarLocais = async (lista: string[]) => {
     if (!pedido) return;
@@ -291,34 +312,10 @@ export default function DespachoDetalhePage() {
     setSalvandoLocal(false);
   };
 
-  /** Salva o novo destino da entrega, zera a coordenada e re-geocoda o pedido. */
-  const salvarDestino = async (entregaId: string) => {
-    if (!pedido) return;
-    const novo = destinoEdit.trim();
-    if (!novo) return;
-    setSalvandoDestino(true);
-    const supabase = createClient();
-    await supabase.from("entregas").update({
-      destino: novo,
-      latitude: null,
-      longitude: null,
-      geocode_status: "pendente",
-    }).eq("id", entregaId);
-    setEntregas(prev => prev.map(e => e.id === entregaId ? { ...e, destino: novo, geocode_status: "pendente" } : e));
-    setEditandoDestino(null);
-    setSalvandoDestino(false);
-    // re-geocoda em background (mesma cascata da criação)
-    fetch("/api/routing/geocodar", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ pedido_id: pedido.id }),
-    }).catch(() => {});
-  };
-
   const recarregarRota = async () => {
     if (!pedido) return;
     const supabase = createClient();
-    const [paradasRes, entregasRes] = await Promise.all([
+    const [paradasRes, entregasRes, rotaRes] = await Promise.all([
       supabase.from("paradas")
         .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
         .eq("pedido_id", pedido.id).order("ordem", { ascending: true }),
@@ -327,9 +324,15 @@ export default function DespachoDetalhePage() {
         .eq("pedido_id", pedido.id)
         .order("sequencia", { ascending: true, nullsFirst: false })
         .order("data_coleta_prevista", { ascending: true }),
+      supabase.from("rotas_otimizadas")
+        .select("id,status,data,criada_em,otimizada_em,distancia_total_km,tempo_total_min")
+        .eq("pedido_id", pedido.id)
+        .order("criada_em", { ascending: false })
+        .limit(1),
     ]);
     setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
     setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
+    setRotaExec(((rotaRes.data ?? [])[0] ?? null) as RotaExec | null);
   };
 
   const roteirizar = async () => {
@@ -442,6 +445,28 @@ export default function DespachoDetalhePage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Abas: Principal (pedido + despacho) | Rota (mapa + execução) */}
+        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+          {([["principal", "📋 Principal"], ["rota", "🗺️ Rota"]] as const).map(([v, l]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setAbaTela(v)}
+              style={{
+                padding: "6px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600,
+                cursor: "pointer",
+                border: abaTela === v ? "none" : "1px solid #cbd5e1",
+                background: abaTela === v ? "#2563eb" : "#fff",
+                color: abaTela === v ? "#fff" : "#475569",
+              }}
+            >
+              {l}
+            </button>
+          ))}
+        </div>
+
+        {abaTela === "principal" && (
+        <>
         {/* Fluxo visível: onde o pedido está e qual a próxima ação */}
         <div style={{ maxWidth: "900px", marginBottom: "16px" }}>
           <FluxoStepper
@@ -549,8 +574,15 @@ export default function DespachoDetalhePage() {
             )}
           </Bloco>
 
-          {/* ══ ROTA ══════════════════════════════════════════════════════ */}
-          <Bloco titulo="🗺️ Rota Otimizada" cor={COR_ROTA}>
+        </div>
+        </>
+        )}
+
+        {abaTela === "rota" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
+
+          {/* ══ MAPA + ROTEIRIZAR ═════════════════════════════════════════ */}
+          <Bloco titulo="🗺️ Mapa e Roteirização" cor={COR_ROTA}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
                 <Btn
                   variant="primary"
@@ -585,98 +617,89 @@ export default function DespachoDetalhePage() {
               )}
           </Bloco>
 
-          {/* ══ ENTREGAS ══════════════════════════════════════════════════ */}
-          <Bloco titulo={`📋 Entregas deste Pedido (${entregas.length})`} cor={COR_ENTREGAS}>
-              {entregas.length === 0 ? (
-                <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhuma entrega vinculada.</p>
-                  <Btn href={`/pedidos/${id}/editar`} variant="outline" size="xs">Adicionar Entregas</Btn>
-                </div>
-              ) : (
-                <DataTable>
-                  <thead>
-                    <tr>
-                      <Th>Rota</Th>
-                      <Th>Cliente</Th>
-                      <Th>Coleta Prevista</Th>
-                      <Th>Status</Th>
-                      <Th></Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entregas.map(fr => {
-                      const cli = one(fr.clientes);
+          {/* ══ EXECUÇÃO DA ROTA (o que o motorista fez) ══════════════════ */}
+          <Bloco titulo="⏱️ Execução da Rota" cor={COR_ENTREGAS}>
+            {!rotaExec && paradas.length === 0 ? (
+              <p style={{ fontSize: "13px", color: "#94a3b8", margin: "6px 0" }}>
+                Nenhuma rota carregada ainda. Quando o motorista montar a rota no celular
+                (ou você roteirizar aqui), a execução aparece neste bloco: quando a rota
+                foi salva, quando começou e a hora da baixa em cada local.
+              </p>
+            ) : (
+              <>
+                {rotaExec && (
+                  <>
+                    <Row label="Situação" value={
+                      <Badge variant={ROTA_STATUS_VAR[rotaExec.status] ?? "default"}>
+                        {ROTA_STATUS_LABEL[rotaExec.status] ?? rotaExec.status}
+                      </Badge>
+                    } />
+                    <Row label="Rota salva em" value={fmtDT(rotaExec.criada_em)} />
+                    {rotaExec.otimizada_em && <Row label="Otimizada em" value={fmtDT(rotaExec.otimizada_em)} />}
+                    {(rotaExec.distancia_total_km != null || rotaExec.tempo_total_min != null) && (
+                      <Row label="Distância / tempo previsto" value={
+                        [
+                          rotaExec.distancia_total_km != null ? `${rotaExec.distancia_total_km.toFixed(1)} km` : null,
+                          rotaExec.tempo_total_min != null ? `≈${Math.round(rotaExec.tempo_total_min)} min` : null,
+                        ].filter(Boolean).join(" · ")
+                      } />
+                    )}
+                    {(() => {
+                      const baixas = paradas
+                        .map(p => (p as { concluida_em?: string | null }).concluida_em)
+                        .filter((d): d is string => !!d)
+                        .sort();
+                      return baixas.length > 0
+                        ? <Row label="Começou (1ª baixa)" value={fmtDT(baixas[0])} />
+                        : <Row label="Começou" value="ainda sem baixas" />;
+                    })()}
+                  </>
+                )}
+
+                {/* baixa de cada local, na ordem da rota */}
+                {paradas.length > 0 && (
+                  <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                    <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "6px" }}>
+                      📍 Baixas por local ({paradas.filter(p => (p as { concluida_em?: string | null }).concluida_em).length}/{paradas.length})
+                    </div>
+                    {paradas.map(p => {
+                      const par = p as { id: string; ordem: number; endereco: unknown; concluida_em?: string | null };
                       return (
-                        <Tr key={fr.id}>
-                          <Td style={{ fontWeight: 600 }}>
-                            {fr.sequencia != null && (
-                              <span style={{
-                                display: "inline-flex", alignItems: "center", justifyContent: "center",
-                                minWidth: "20px", height: "20px", marginRight: "8px", padding: "0 5px",
-                                borderRadius: "10px", background: "#2563eb", color: "#fff",
-                                fontSize: "11px", fontWeight: 700,
-                              }}>{fr.sequencia}</span>
-                            )}
-                            {editandoDestino === fr.id ? (
-                              <span style={{ display: "inline-flex", gap: "4px", alignItems: "center" }}>
-                                <input
-                                  style={{ fontSize: "12px", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", width: "320px" }}
-                                  value={destinoEdit}
-                                  onChange={e => setDestinoEdit(e.target.value)}
-                                  autoFocus
-                                />
-                                <Btn variant="primary" size="xs" disabled={salvandoDestino} onClick={() => salvarDestino(fr.id)}>
-                                  {salvandoDestino ? "..." : "OK"}
-                                </Btn>
-                                <Btn variant="ghost" size="xs" onClick={() => setEditandoDestino(null)}>✕</Btn>
-                              </span>
-                            ) : (
-                              <>
-                                {fr.origem ?? "—"} → {fr.destino ?? "—"}
-                                {!finalizado && (
-                                  <button
-                                    onClick={() => { setDestinoEdit(fr.destino ?? ""); setEditandoDestino(fr.id); }}
-                                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#2563eb", marginLeft: "6px", padding: 0 }}
-                                    title="Editar endereço de entrega (re-geocoda automaticamente)"
-                                  >✏️</button>
-                                )}
-                                {fr.geocode_status === "falhou" && (
-                                  <span title="Destino não pôde ser geocodificado — ficou fora da rota" style={{ marginLeft: "6px", fontSize: "11px", color: "#dc2626" }}>⚠ sem coordenada</span>
-                                )}
-                                {fr.geocode_status === "pendente" && (
-                                  <span title="Aguardando geocodificação" style={{ marginLeft: "6px", fontSize: "11px", color: "#d97706" }}>⏳</span>
-                                )}
-                              </>
-                            )}
-                          </Td>
-                          <Td>{cli?.nome_fantasia ?? fr.nome_cliente_avulso?.trim() ?? "—"}</Td>
-                          <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
-                          <Td>
-                            <Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>
-                              {ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}
-                            </Badge>
-                          </Td>
-                          <Td>
-                            <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                              <Btn href={`/entregas/${fr.id}`} variant="ghost" size="xs">Ver</Btn>
-                              <button
-                                onClick={() => desvincularEntrega(fr.id)}
-                                style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}
-                                title="Remover do pedido"
-                              >
-                                Desvincular
-                              </button>
-                            </div>
-                          </Td>
-                        </Tr>
+                        <div key={par.id} style={{
+                          display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+                          padding: "7px 10px", marginBottom: "4px",
+                          background: par.concluida_em ? "#f0fdf4" : "#f8fafc",
+                          border: "1px solid " + (par.concluida_em ? "#bbf7d0" : "#e2e8f0"),
+                          borderRadius: "8px",
+                        }}>
+                          <span style={{
+                            display: "inline-flex", alignItems: "center", justifyContent: "center",
+                            minWidth: "20px", height: "20px", padding: "0 5px",
+                            borderRadius: "10px", background: par.concluida_em ? "#16a34a" : "#94a3b8",
+                            color: "#fff", fontSize: "11px", fontWeight: 700,
+                          }}>{par.ordem}</span>
+                          <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{enderecoParada(par.endereco)}</span>
+                          {par.concluida_em ? (
+                            <span style={{ fontSize: "12px", color: "#16a34a", fontWeight: 700, whiteSpace: "nowrap" }}>
+                              ✓ baixa {fmtDT(par.concluida_em)}
+                            </span>
+                          ) : (
+                            <span style={{ fontSize: "12px", color: "#94a3b8", whiteSpace: "nowrap" }}>pendente</span>
+                          )}
+                        </div>
                       );
                     })}
-                  </tbody>
-                </DataTable>
-              )}
+                  </div>
+                )}
+              </>
+            )}
+            <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "10px", marginBottom: 0 }}>
+              📥 Em breve: puxar endereços e produtos das notas fiscais do pedido para AJUDAR a montar a rota (o sistema sugere, o motorista decide).
+            </p>
           </Bloco>
 
         </div>
+        )}
       </div>
 
       {/* Despachar/trocar sem sair da tela (mesmo modal da lista do Despacho) */}
