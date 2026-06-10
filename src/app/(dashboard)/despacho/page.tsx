@@ -48,8 +48,6 @@ type Motorista = {
   nome: string;
 };
 
-type Aba = "fila" | "despachados";
-
 // ─── Helpers ─────────────────────────────────────────────────────────────────
 
 const STATUS_FINALIZADOS = ["concluido", "concluida", "cancelado", "cancelada"];
@@ -131,10 +129,10 @@ export default function DespachoPage() {
   const router = useRouter();
   const supabase = createClient();
 
-  // ── Abas ────────────────────────────────────────────────────────────────────
-  const [aba, setAba] = useState<Aba>("fila");
+  // SEM FILTROS (decisão do dono 10/06): a lista mostra TUDO — ele vai definir
+  // depois quais filtros quer. Sobraram só busca e paginação.
 
-  // Contagens de cada aba (cabeçalho) + em rota (KPI)
+  // Contagens informativas dos KPIs (não filtram nada)
   const [contFila, setContFila]             = useState<number | null>(null);
   const [contDespachados, setContDespachados] = useState<number | null>(null);
   const [contEmRota, setContEmRota]         = useState<number | null>(null);
@@ -158,7 +156,7 @@ export default function DespachoPage() {
     return () => clearTimeout(t);
   }, [busca]);
 
-  // Seleção múltipla (apenas na aba Fila)
+  // Seleção múltipla pra despachar em lote
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
 
   // Modal
@@ -203,7 +201,7 @@ export default function DespachoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Contagens de cada aba (head queries, sem baixar linhas) ───────────────
+  // ── Contagens dos KPIs (head queries, sem baixar linhas) ──────────────────
 
   const carregarContagens = async (eId: string) => {
     const [{ count: cFila }, { count: cDesp }, { count: cRota }] = await Promise.all([
@@ -237,7 +235,7 @@ export default function DespachoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
-  // ── Carrega página de pedidos (reexecuta ao mudar pagina, empresa ou aba) ──
+  // ── Carrega página de pedidos (reexecuta ao mudar pagina, empresa ou busca) ──
 
   useEffect(() => {
     if (!empresaId) return;
@@ -275,30 +273,20 @@ export default function DespachoPage() {
         }
       }
 
-      // Monta query conforme aba
-      let selectFields =
-        "id,status,valor_pedido,created_at,data_inicio_prevista,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
-      if (aba === "despachados") {
-        selectFields =
-          "id,status,valor_pedido,created_at,data_inicio_prevista,veiculo_id,motorista_id,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
-      }
+      // SEM FILTRO NENHUM: mostra todos os pedidos (qualquer status, com ou
+      // sem caminhão). Só busca + paginação.
+      const selectFields =
+        "id,status,valor_pedido,created_at,data_inicio_prevista,veiculo_id,motorista_id,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))";
 
       let q = supabase
         .from("pedidos")
         .select(selectFields, { count: "exact" })
-        .eq("empresa_id", empresaId)
-        .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`);
-
-      if (aba === "fila") {
-        q = q.is("veiculo_id", null);
-      } else {
-        q = q.not("veiculo_id", "is", null);
-      }
+        .eq("empresa_id", empresaId);
 
       if (idsBusca) q = q.in("id", idsBusca);
 
       const { data, count } = await (q
-        .order("data_inicio_prevista", { ascending: true })
+        .order("created_at", { ascending: false })
         .order("id", { ascending: true })
         .range(from, to) as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
 
@@ -308,18 +296,7 @@ export default function DespachoPage() {
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, pagina, buscaServidor, aba]);
-
-  // ── Trocar aba ────────────────────────────────────────────────────────────
-
-  const trocarAba = (novaAba: Aba) => {
-    if (novaAba === aba) return;
-    setAba(novaAba);
-    setPagina(0);
-    setSelecionados(new Set());
-    setBusca("");
-    setBuscaServidor("");
-  };
+  }, [empresaId, pagina, buscaServidor]);
 
   // ── Refinamento client-side instantâneo (a busca REAL roda no servidor via
   //    buscaServidor; isto só filtra a página atual enquanto digita) ───────────
@@ -521,11 +498,7 @@ export default function DespachoPage() {
 
   const totalAguardando  = total;
   const totalPaginas     = Math.ceil(total / PAGE_SIZE_DESPACHO);
-  const algumselecionado = aba === "fila" && selecionados.size > 0;
-
-  // Rótulos das abas
-  const labelFila        = contFila        != null ? `Fila (${contFila})`               : "Fila";
-  const labelDespachados = contDespachados != null ? `Despachados (${contDespachados})` : "Despachados";
+  const algumselecionado = selecionados.size > 0;
 
   // Controles de paginação (reutilizáveis desktop/mobile)
   const Paginacao = ({ mobile = false }: { mobile?: boolean }) =>
@@ -537,7 +510,7 @@ export default function DespachoPage() {
       }}>
         {!mobile && (
           <span style={{ fontSize: "13px", color: "#64748b" }}>
-            Página {pagina + 1} de {totalPaginas} · {total} {aba === "fila" ? "aguardando" : "despachados"}
+            Página {pagina + 1} de {totalPaginas} · {total} pedidos
           </span>
         )}
         <Btn
@@ -566,7 +539,7 @@ export default function DespachoPage() {
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
         title="Despacho"
-        subtitle={aba === "fila" ? "Fila de pedidos aguardando caminhão e motorista" : "Pedidos já despachados"}
+        subtitle="Todos os pedidos — despache, troque e acompanhe a rota"
         count={totalAguardando}
         actions={
           algumselecionado ? (
@@ -582,31 +555,7 @@ export default function DespachoPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
-        {/* Abas pill */}
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap" }}>
-          {(["fila", "despachados"] as Aba[]).map(a => (
-            <button
-              key={a}
-              type="button"
-              onClick={() => trocarAba(a)}
-              style={{
-                padding: "6px 16px",
-                borderRadius: "20px",
-                fontSize: "13px",
-                fontWeight: 600,
-                cursor: "pointer",
-                border: aba === a ? "none" : "1px solid #cbd5e1",
-                background: aba === a ? "#2563eb" : "#fff",
-                color: aba === a ? "#fff" : "#475569",
-                transition: "all 0.15s",
-              }}
-            >
-              {a === "fila" ? labelFila : labelDespachados}
-            </button>
-          ))}
-        </div>
-
-        {/* KPIs — mesmo padrão da listagem de Pedidos */}
+        {/* KPIs — mesmo padrão da listagem de Pedidos (informativos, não filtram) */}
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
           <KpiCard label="Na lista"     value={loading ? "..." : totalAguardando} />
           <KpiCard label="Na fila"      value={contFila ?? "..."}        color="warning" />
@@ -632,7 +581,7 @@ export default function DespachoPage() {
         <div className="m-hide">
           <DataTable
             count={filtrados.length}
-            label={aba === "fila" ? "pedidos aguardando despacho" : "pedidos despachados"}
+            label="pedidos"
             toolbar={
               <>
                 <SearchInput
@@ -640,8 +589,8 @@ export default function DespachoPage() {
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                 />
-                {/* Botão de despachar múltiplos — só na aba Fila */}
-                {aba === "fila" && algumselecionado && (
+                {/* Botão de despachar múltiplos */}
+                {algumselecionado && (
                   <Btn
                     variant="primary"
                     size="sm"
@@ -655,18 +604,15 @@ export default function DespachoPage() {
           >
             <thead>
               <tr>
-                {/* Checkbox só na aba Fila */}
-                {aba === "fila" && (
-                  <Th style={{ width: "36px", textAlign: "center" }}>
-                    <input
-                      type="checkbox"
-                      checked={todosSelecionados}
-                      onChange={toggleTodos}
-                      style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
-                      title="Selecionar todos"
-                    />
-                  </Th>
-                )}
+                <Th style={{ width: "36px", textAlign: "center" }}>
+                  <input
+                    type="checkbox"
+                    checked={todosSelecionados}
+                    onChange={toggleTodos}
+                    style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                    title="Selecionar todos"
+                  />
+                </Th>
                 <Th>Cliente</Th>
                 <Th>Previsto</Th>
                 <Th>Destinos</Th>
@@ -678,50 +624,46 @@ export default function DespachoPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={aba === "fila" ? 7 : 6} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  <Td colSpan={7} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                     Carregando...
                   </Td>
                 </tr>
               ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={aba === "fila" ? 7 : 6}>
+                  <td colSpan={7}>
                     <EmptyState
                       icon="🚚"
                       message={
                         busca
                           ? "Nenhum pedido encontrado para essa busca."
-                          : aba === "fila"
-                            ? "Nenhum pedido aguardando despacho. Lance um pedido primeiro."
-                            : "Nenhum pedido despachado no momento."
+                          : "Nenhum pedido lançado ainda."
                       }
-                      action={busca ? undefined : aba === "fila" ? <Btn href="/pedidos/novo">Criar Novo Pedido</Btn> : undefined}
+                      action={busca ? undefined : <Btn href="/pedidos/novo">Criar Novo Pedido</Btn>}
                     />
                   </td>
                 </tr>
               ) : filtrados.map(({ p, entregas, cliente }) => {
-                const sel = aba === "fila" && selecionados.has(p.id);
+                const sel = selecionados.has(p.id);
                 const veicObj = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
                 const motObj  = one<{ nome: string }>(p.motoristas);
                 const veicLabel = veicObj
                   ? (veicObj.apelido?.trim() ? `${veicObj.apelido} (${veicObj.placa})` : `${veicObj.placa} — ${veicObj.modelo}`)
                   : null;
+                const despachadoRow = !!(veicLabel || motObj);
 
                 return (
                   <Tr
                     key={p.id}
                     style={{ background: sel ? "#eff6ff" : undefined }}
                   >
-                    {/* Checkbox só na aba Fila */}
-                    {aba === "fila" && (
-                      <Td style={{ textAlign: "center" }}>
-                        <input
-                          type="checkbox"
-                          checked={sel}
-                          onChange={() => toggleSelecionado(p.id)}
-                          style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
-                        />
-                      </Td>
-                    )}
+                    <Td style={{ textAlign: "center" }}>
+                      <input
+                        type="checkbox"
+                        checked={sel}
+                        onChange={() => toggleSelecionado(p.id)}
+                        style={{ width: "15px", height: "15px", cursor: "pointer", accentColor: "#2563eb" }}
+                      />
+                    </Td>
                     <Td>
                       <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
                       <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
@@ -750,7 +692,7 @@ export default function DespachoPage() {
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
                         <Btn href={`/despacho/${p.id}`} variant="ghost" size="xs">Ver</Btn>
-                        {aba === "fila" ? (
+                        {!despachadoRow ? (
                           <>
                             <Btn
                               variant="primary"
@@ -800,17 +742,18 @@ export default function DespachoPage() {
         {/* Lista Mobile */}
         <MobileList
           count={filtrados.length}
-          label={aba === "fila" ? "pedidos aguardando despacho" : "pedidos despachados"}
-          emptyMessage={aba === "fila" ? "Nenhum pedido aguardando despacho." : "Nenhum pedido despachado."}
+          label="pedidos"
+          emptyMessage="Nenhum pedido lançado ainda."
           emptyIcon="🚚"
         >
           {loading ? null : filtrados.map(({ p, entregas, cliente }) => {
-            const sel = aba === "fila" && selecionados.has(p.id);
+            const sel = selecionados.has(p.id);
             const veicObj = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
             const motObj  = one<{ nome: string }>(p.motoristas);
             const veicLabel = veicObj
               ? (veicObj.apelido?.trim() ? `${veicObj.apelido} (${veicObj.placa})` : `${veicObj.placa} — ${veicObj.modelo}`)
               : null;
+            const despachadoRow = !!(veicLabel || motObj);
 
             return (
               <MobileCard
@@ -830,7 +773,7 @@ export default function DespachoPage() {
                   { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
                 ]}
                 actions={
-                  aba === "fila" ? (
+                  !despachadoRow ? (
                     <div style={{ display: "flex", gap: "8px", width: "100%" }}>
                       <Btn href={`/despacho/${p.id}`} variant="outline" size="sm">Ver</Btn>
                       <Btn
@@ -884,7 +827,7 @@ export default function DespachoPage() {
         </MobileList>
         <div className="mobile-only"><Paginacao mobile /></div>
 
-        {/* FAB Mobile para despachar selecionados — só na aba Fila */}
+        {/* FAB Mobile para despachar selecionados */}
         {algumselecionado && (
           <button
             type="button"
