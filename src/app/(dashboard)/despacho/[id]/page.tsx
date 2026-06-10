@@ -16,7 +16,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  PageHeader, FormSection, Btn, Badge, Alert,
+  PageHeader, Btn, Badge, Alert,
   DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
 import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
@@ -105,14 +105,47 @@ function clienteDoPedido(entregas: EntregaPedido[]): string {
 const veiculoLabel = (v: { placa: string; apelido: string | null; marca: string; modelo: string }) =>
   v.apelido?.trim() ? `${v.apelido} (${v.placa})` : `${v.placa} — ${v.marca} ${v.modelo}`;
 
+/** Linha "rótulo ····· valor" — pontilhado liga o campo ao valor (pedido do dono). */
 function Row({ label, value }: { label: string; value: React.ReactNode }) {
   return (
-    <div style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: "1px solid #f1f5f9" }}>
-      <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500 }}>{label}</span>
-      <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 500 }}>{value}</span>
+    <div style={{ display: "flex", alignItems: "baseline", gap: "10px", padding: "9px 0" }}>
+      <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 600, whiteSpace: "nowrap" }}>{label}</span>
+      <span aria-hidden style={{ flex: 1, borderBottom: "2px dotted #cbd5e1", transform: "translateY(-3px)" }} />
+      <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 600, textAlign: "right" }}>{value}</span>
     </div>
   );
 }
+
+/** Bloco com borda forte e cabeçalho colorido — separa visualmente Pedido / Despacho / etc. */
+function Bloco({
+  titulo, cor, acoes, children,
+}: {
+  titulo: string;
+  cor: { borda: string; fundo: string; texto: string };
+  acoes?: React.ReactNode;
+  children: React.ReactNode;
+}) {
+  return (
+    <section style={{ background: "#fff", border: `2px solid ${cor.borda}`, borderRadius: "12px", overflow: "hidden" }}>
+      <div style={{
+        display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px",
+        background: cor.fundo, borderBottom: `2px solid ${cor.borda}`,
+        padding: "10px 16px",
+      }}>
+        <span style={{ fontSize: "13px", fontWeight: 800, color: cor.texto, textTransform: "uppercase", letterSpacing: "0.04em" }}>
+          {titulo}
+        </span>
+        {acoes}
+      </div>
+      <div style={{ padding: "10px 16px 14px" }}>{children}</div>
+    </section>
+  );
+}
+
+const COR_PEDIDO   = { borda: "#bfdbfe", fundo: "#eff6ff", texto: "#1e40af" };
+const COR_DESPACHO = { borda: "#bbf7d0", fundo: "#f0fdf4", texto: "#166534" };
+const COR_ROTA     = { borda: "#fde68a", fundo: "#fffbeb", texto: "#92400e" };
+const COR_ENTREGAS = { borda: "#e2e8f0", fundo: "#f8fafc", texto: "#334155" };
 
 export default function DespachoDetalhePage() {
   const { id } = useParams<{ id: string }>();
@@ -120,9 +153,9 @@ export default function DespachoDetalhePage() {
   const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
-  // Edição inline: local de carregamento (pedido) e destino (entrega)
-  const [editandoLocal, setEditandoLocal] = useState(false);
-  const [localEdit, setLocalEdit] = useState("");
+  // Locais de carregamento: pode ter MAIS DE UM (guardados em
+  // pedidos.local_carregamento separados por " | ")
+  const [novoLocal, setNovoLocal] = useState("");
   const [salvandoLocal, setSalvandoLocal] = useState(false);
   const [editandoDestino, setEditandoDestino] = useState<string | null>(null);
   const [destinoEdit, setDestinoEdit] = useState("");
@@ -244,17 +277,17 @@ export default function DespachoDetalhePage() {
     setEntregas(p => p.filter(f => f.id !== entregaId));
   };
 
-  /** Salva o local de carregamento no pedido e propaga como origem das entregas. */
-  const salvarLocal = async () => {
+  /** Grava a lista de locais (join " | ") e propaga como origem das entregas. */
+  const salvarLocais = async (lista: string[]) => {
     if (!pedido) return;
     setSalvandoLocal(true);
     const supabase = createClient();
-    const novo = localEdit.trim() || null;
-    await supabase.from("pedidos").update({ local_carregamento: novo }).eq("id", pedido.id);
-    await supabase.from("entregas").update({ origem: novo ?? "Depósito" }).eq("pedido_id", pedido.id);
-    setPedido(p => p ? { ...p, local_carregamento: novo } : p);
-    setEntregas(prev => prev.map(e => ({ ...e, origem: novo ?? "Depósito" })));
-    setEditandoLocal(false);
+    const texto = lista.map(s => s.trim()).filter(Boolean).join(" | ") || null;
+    await supabase.from("pedidos").update({ local_carregamento: texto }).eq("id", pedido.id);
+    await supabase.from("entregas").update({ origem: texto ?? "Depósito" }).eq("pedido_id", pedido.id);
+    setPedido(p => p ? { ...p, local_carregamento: texto } : p);
+    setEntregas(prev => prev.map(e => ({ ...e, origem: texto ?? "Depósito" })));
+    setNovoLocal("");
     setSalvandoLocal(false);
   };
 
@@ -365,6 +398,8 @@ export default function DespachoDetalhePage() {
                   || pedido.status === "concluida" || pedido.status === "concluido";
   const cliente   = clienteDoPedido(entregas);
   const kmRodado  = pedido.km_final != null && pedido.km_inicial != null ? pedido.km_final - pedido.km_inicial : null;
+  // Locais de carregamento (1 ou mais, separados por " | " no banco)
+  const locais = (pedido.local_carregamento ?? "").split(" | ").map(s => s.trim()).filter(Boolean);
 
   // ── Stepper OPERACIONAL: sem etapa de pagamento (financeiro é financeiro) ──
   const emRota    = pedido.status === "em_andamento" || pedido.status === "concluida" || pedido.status === "concluido";
@@ -398,7 +433,6 @@ export default function DespachoDetalhePage() {
                 Cancelar
               </Btn>
             )}
-            <Btn href={`/pedidos/${id}/editar`} variant="outline">Editar pedido</Btn>
           </>
         }
       >
@@ -417,81 +451,106 @@ export default function DespachoDetalhePage() {
           />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
 
-          <FormSection title="📦 Pedido">
-            <Row label="Cliente" value={<strong>{cliente}</strong>} />
+          {/* ══ TUDO QUE É DO PEDIDO ══════════════════════════════════════ */}
+          <Bloco
+            titulo="📦 Pedido"
+            cor={COR_PEDIDO}
+            acoes={<Btn href={`/pedidos/${id}/editar`} variant="outline" size="xs">✏️ Editar pedido</Btn>}
+          >
+            <Row label="Cliente" value={cliente} />
             <Row label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
             <Row label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />
             <Row label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} />
-            {/* Local de carregamento editável (origem das entregas) */}
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "8px", padding: "8px 0" }}>
-              <span style={{ fontSize: "12px", color: "#64748b", fontWeight: 500, whiteSpace: "nowrap" }}>Local de carregamento</span>
-              {editandoLocal ? (
-                <span style={{ display: "flex", gap: "4px", flex: 1, justifyContent: "flex-end" }}>
-                  <input
-                    style={{ fontSize: "12px", padding: "4px 8px", border: "1px solid #cbd5e1", borderRadius: "6px", flex: 1, maxWidth: "260px" }}
-                    value={localEdit}
-                    onChange={e => setLocalEdit(e.target.value)}
-                    placeholder="Endereço de coleta"
-                  />
-                  <Btn variant="primary" size="xs" disabled={salvandoLocal} onClick={salvarLocal}>{salvandoLocal ? "..." : "OK"}</Btn>
-                  <Btn variant="ghost" size="xs" onClick={() => setEditandoLocal(false)}>✕</Btn>
-                </span>
-              ) : (
-                <span style={{ fontSize: "13px", color: "#1e293b", fontWeight: 500, display: "flex", alignItems: "center", gap: "6px" }}>
-                  {pedido.local_carregamento || "—"}
+
+            {/* Locais de carregamento — pode ter MAIS DE UM */}
+            <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+              <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "6px" }}>
+                📍 Locais de carregamento {locais.length > 0 && `(${locais.length})`}
+              </div>
+              {locais.length === 0 && (
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 6px" }}>Nenhum local informado.</p>
+              )}
+              {locais.map((l, i) => (
+                <div key={`${l}-${i}`} style={{
+                  display: "flex", alignItems: "center", gap: "8px",
+                  padding: "6px 10px", marginBottom: "4px",
+                  background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px",
+                }}>
+                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", minWidth: "20px" }}>{i + 1}º</span>
+                  <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{l}</span>
                   {!finalizado && (
                     <button
-                      onClick={() => { setLocalEdit(pedido.local_carregamento ?? ""); setEditandoLocal(true); }}
-                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#2563eb", padding: 0 }}
-                      title="Editar local de carregamento"
-                    >✏️</button>
+                      onClick={() => salvarLocais(locais.filter((_, j) => j !== i))}
+                      disabled={salvandoLocal}
+                      style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#ef4444", padding: 0 }}
+                      title="Remover este local"
+                    >✕</button>
                   )}
-                </span>
+                </div>
+              ))}
+              {!finalizado && (
+                <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
+                  <input
+                    style={{ fontSize: "12px", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: "8px", flex: 1 }}
+                    value={novoLocal}
+                    onChange={e => setNovoLocal(e.target.value)}
+                    onKeyDown={e => { if (e.key === "Enter" && novoLocal.trim()) { e.preventDefault(); salvarLocais([...locais, novoLocal]); } }}
+                    placeholder="Endereço de coleta (ex.: depósito, fornecedor...)"
+                  />
+                  <Btn variant="outline" size="xs" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => salvarLocais([...locais, novoLocal])}>
+                    {salvandoLocal ? "..." : "+ Adicionar"}
+                  </Btn>
+                </div>
               )}
             </div>
-            <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
-              Dados cadastrais (cliente, valor, entregas) são editados em <a href={`/pedidos/${id}/editar`} style={{ color: "#2563eb" }}>Editar pedido</a>. Financeiro é tratado na área financeira.
-            </p>
-          </FormSection>
 
-          <FormSection title="🚚 Despacho e Execução">
-            {!despachado ? (
-              <div style={{ display: "flex", flexDirection: "column", gap: "10px", padding: "8px 0" }}>
-                <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
-                  Este pedido ainda <strong>não foi despachado</strong> — sem caminhão e motorista definidos.
-                </p>
-                {!finalizado && <Btn variant="primary" size="sm" onClick={abrirDespacho}>🚚 Despachar agora</Btn>}
+            {pedido.observacoes && (
+              <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
+                <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, marginBottom: "4px" }}>📝 Observações</div>
+                <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
               </div>
+            )}
+
+            <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "10px", marginBottom: 0 }}>
+              Dados cadastrais (cliente, valor, entregas) são editados em Editar pedido. Financeiro é tratado na área financeira.
+            </p>
+          </Bloco>
+
+          {/* ══ TUDO QUE É DO DESPACHO ════════════════════════════════════ */}
+          <Bloco
+            titulo="🚚 Despacho e Execução"
+            cor={COR_DESPACHO}
+            acoes={
+              !finalizado ? (
+                despachado
+                  ? <Btn variant="outline" size="xs" onClick={abrirDespacho}>🔁 Trocar caminhão/motorista</Btn>
+                  : <Btn variant="primary" size="xs" onClick={abrirDespacho}>🚚 Despachar agora</Btn>
+              ) : undefined
+            }
+          >
+            {!despachado ? (
+              <p style={{ fontSize: "13px", color: "#64748b", margin: "6px 0" }}>
+                Este pedido ainda <strong>não foi despachado</strong> — sem caminhão e motorista definidos.
+              </p>
             ) : (
               <>
-                <Row label="Motorista" value={<strong>{motorista?.nome ?? "—"}</strong>} />
                 <Row label="Caminhão"  value={veiculo ? veiculoLabel(veiculo) : "—"} />
+                <Row label="Motorista" value={motorista?.nome ?? "—"} />
                 <Row label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
                 <Row label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
                 {kmRodado != null && (
-                  <Row label="KM Rodados" value={<strong style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</strong>} />
+                  <Row label="KM Rodados" value={<span style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</span>} />
                 )}
                 <Row label="Início Real" value={fmtDT(pedido.data_inicio_real)} />
                 <Row label="Fim Real"    value={fmtDT(pedido.data_fim_real)} />
-                {!finalizado && (
-                  <div style={{ paddingTop: "10px" }}>
-                    <Btn variant="outline" size="sm" onClick={abrirDespacho}>🔁 Trocar caminhão/motorista</Btn>
-                  </div>
-                )}
               </>
             )}
-          </FormSection>
+          </Bloco>
 
-          {pedido.observacoes && (
-            <FormSection title="Observações">
-              <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
-            </FormSection>
-          )}
-
-          <div style={{ gridColumn: "span 2" }}>
-            <FormSection title="🗺️ Rota Otimizada">
+          {/* ══ ROTA ══════════════════════════════════════════════════════ */}
+          <Bloco titulo="🗺️ Rota Otimizada" cor={COR_ROTA}>
               <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
                 <Btn
                   variant="primary"
@@ -524,11 +583,10 @@ export default function DespachoDetalhePage() {
                   Nenhuma rota gerada ainda. Clique em <strong>Roteirizar</strong> para calcular a ordem ótima das entregas.
                 </p>
               )}
-            </FormSection>
-          </div>
+          </Bloco>
 
-          <div style={{ gridColumn: "span 2" }}>
-            <FormSection title={`Entregas deste Pedido (${entregas.length})`}>
+          {/* ══ ENTREGAS ══════════════════════════════════════════════════ */}
+          <Bloco titulo={`📋 Entregas deste Pedido (${entregas.length})`} cor={COR_ENTREGAS}>
               {entregas.length === 0 ? (
                 <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
                   <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhuma entrega vinculada.</p>
@@ -616,8 +674,7 @@ export default function DespachoDetalhePage() {
                   </tbody>
                 </DataTable>
               )}
-            </FormSection>
-          </div>
+          </Bloco>
 
         </div>
       </div>
