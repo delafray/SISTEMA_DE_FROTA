@@ -13,6 +13,7 @@ import { parseWebhookPayload, type EvolutionWebhookPayload } from '@/lib/whatsap
 import { marcarComoLida } from '@/lib/whatsapp/messageSender';
 import { processarMensagem } from '@/lib/whatsapp/messageRouter';
 import { verifyEvolutionSignature } from '@/lib/whatsapp/security';
+import { reservarWamid, marcarWamidOk } from '@/lib/whatsapp/dedupe';
 import { createLogger } from '@/lib/logger';
 
 const log = createLogger('webhook');
@@ -20,6 +21,10 @@ const log = createLogger('webhook');
 // Pina na região US East — mais perto do Evolution API, Deepgram e Gemini (todos US)
 // Supabase (BR) perde ~150ms nas queries pequenas, trade-off favorável
 export const preferredRegion = 'iad1';
+
+// Áudio longo (Deepgram) + Gemini rodam ANTES do ACK; sem margem explícita a
+// função morre no default e a Evolution reenvia em cascata.
+export const maxDuration = 120;
 
 // ─── POST: Receber mensagens ─────────────────────────────────────────
 
@@ -85,12 +90,25 @@ async function processarMensagemAsync(msg: Awaited<ReturnType<typeof parseWebhoo
   const ctx = { msg_id: msg.messageId, from: msg.from, tipo: msg.tipo };
   try {
     log.info('message_received', ctx);
+
+    // R8: dedupe por wamid no caminho CLÁSSICO — Evolution reenvia até 10× se o
+    // ACK demorar (áudio longo) e um reenvio registraria o mesmo dado 2×.
+    // Só com o classificador DESLIGADO: ligado, o classificadorBot já reserva o
+    // wamid (R4) e reservar aqui também marcaria a mensagem como duplicada.
+    // reservarWamid é fail-open (erro/tabela ausente → processa normalmente).
+    const classificadorAtivo = process.env.MODO_CLASSIFICADOR === 'true';
+    if (!classificadorAtivo && (await reservarWamid(msg.messageId)) === 'duplicada') {
+      log.info('message_duplicada_descartada', ctx);
+      return;
+    }
+
     // Marca como lida em PARALELO (fire-and-forget): é uma chamada ao Evolution
     // que pode levar até 3s e NÃO precisa bloquear a resposta ao motorista.
     // marcarComoLida já trata o próprio erro internamente (nunca lança), então
     // dispensar o await é seguro — tira esse tempo do caminho crítico de toda msg.
     void marcarComoLida(msg.messageId);
     await processarMensagem(msg);
+    if (!classificadorAtivo) void marcarWamidOk(msg.messageId);
     log.info('message_processed', ctx);
   } catch (err) {
     Sentry.captureException(err, {
