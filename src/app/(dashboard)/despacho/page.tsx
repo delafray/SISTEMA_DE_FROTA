@@ -79,8 +79,8 @@ const normalizarStatus = (s: string) => STATUS_FEMININO[s] ?? s;
 const fmtDate = (d: string | null) =>
   d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
-const fmtMoeda = (v: number | null) =>
-  v != null ? `R$ ${v.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—";
+const fmtDataCadastro = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
 
 
 /** Erro do Supabase em linguagem legível: mostra message + details + hint + code. */
@@ -134,9 +134,10 @@ export default function DespachoPage() {
   // ── Abas ────────────────────────────────────────────────────────────────────
   const [aba, setAba] = useState<Aba>("fila");
 
-  // Contagens de cada aba (cabeçalho)
+  // Contagens de cada aba (cabeçalho) + em rota (KPI)
   const [contFila, setContFila]             = useState<number | null>(null);
   const [contDespachados, setContDespachados] = useState<number | null>(null);
+  const [contEmRota, setContEmRota]         = useState<number | null>(null);
 
   // Dados paginados
   const [pedidos, setPedidos]       = useState<Pedido[]>([]);
@@ -205,7 +206,7 @@ export default function DespachoPage() {
   // ── Contagens de cada aba (head queries, sem baixar linhas) ───────────────
 
   const carregarContagens = async (eId: string) => {
-    const [{ count: cFila }, { count: cDesp }] = await Promise.all([
+    const [{ count: cFila }, { count: cDesp }, { count: cRota }] = await Promise.all([
       supabase
         .from("pedidos")
         .select("id", { count: "exact", head: true })
@@ -218,9 +219,15 @@ export default function DespachoPage() {
         .eq("empresa_id", eId)
         .not("veiculo_id", "is", null)
         .not("status", "in", `(${STATUS_FINALIZADOS.join(",")})`),
+      supabase
+        .from("pedidos")
+        .select("id", { count: "exact", head: true })
+        .eq("empresa_id", eId)
+        .eq("status", "em_andamento"),
     ]);
     setContFila(cFila ?? 0);
     setContDespachados(cDesp ?? 0);
+    setContEmRota(cRota ?? 0);
   };
 
   useEffect(() => {
@@ -599,13 +606,12 @@ export default function DespachoPage() {
           ))}
         </div>
 
-        {/* KPI */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxWidth: "320px" }}>
-          <KpiCard
-            label={aba === "fila" ? "Aguardando Despacho" : "Despachados (ativos)"}
-            value={loading ? "..." : totalAguardando}
-            color={aba === "fila" ? "warning" : "info"}
-          />
+        {/* KPIs — mesmo padrão da listagem de Pedidos */}
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+          <KpiCard label="Na lista"     value={loading ? "..." : totalAguardando} />
+          <KpiCard label="Na fila"      value={contFila ?? "..."}        color="warning" />
+          <KpiCard label="Despachados"  value={contDespachados ?? "..."} color="info" />
+          <KpiCard label="Em rota"      value={contEmRota ?? "..."}      color="success" />
         </div>
 
         {/* Alerta de sucesso */}
@@ -662,10 +668,9 @@ export default function DespachoPage() {
                   </Th>
                 )}
                 <Th>Cliente</Th>
-                <Th>Data Prevista</Th>
+                <Th>Previsto</Th>
                 <Th>Destinos</Th>
-                {aba === "despachados" && <Th>Caminhão / Motorista</Th>}
-                <Th>Valor</Th>
+                <Th>Caminhão / Motorista</Th>
                 <Th>Status</Th>
                 <Th></Th>
               </tr>
@@ -673,13 +678,13 @@ export default function DespachoPage() {
             <tbody>
               {loading ? (
                 <tr>
-                  <Td colSpan={aba === "fila" ? 7 : 7} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
+                  <Td colSpan={aba === "fila" ? 7 : 6} style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>
                     Carregando...
                   </Td>
                 </tr>
               ) : filtrados.length === 0 ? (
                 <tr>
-                  <td colSpan={aba === "fila" ? 7 : 7}>
+                  <td colSpan={aba === "fila" ? 7 : 6}>
                     <EmptyState
                       icon="🚚"
                       message={
@@ -695,13 +700,11 @@ export default function DespachoPage() {
                 </tr>
               ) : filtrados.map(({ p, entregas, cliente }) => {
                 const sel = aba === "fila" && selecionados.has(p.id);
-                // Dados do veículo/motorista para aba Despachados
                 const veicObj = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
                 const motObj  = one<{ nome: string }>(p.motoristas);
                 const veicLabel = veicObj
                   ? (veicObj.apelido?.trim() ? `${veicObj.apelido} (${veicObj.placa})` : `${veicObj.placa} — ${veicObj.modelo}`)
-                  : "—";
-                const motLabel = motObj?.nome ?? "—";
+                  : null;
 
                 return (
                   <Tr
@@ -719,18 +722,26 @@ export default function DespachoPage() {
                         />
                       </Td>
                     )}
-                    <Td style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</Td>
-                    <Td>{fmtDate(p.data_inicio_prevista)}</Td>
-                    <Td style={{ maxWidth: "240px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                      {resumoDestinos(entregas)}
+                    <Td>
+                      <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
+                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                        Cadastrado em {fmtDataCadastro(p.created_at)}
+                      </div>
                     </Td>
-                    {aba === "despachados" && (
-                      <Td style={{ fontSize: "12px", color: "#475569" }}>
-                        <div style={{ fontWeight: 600, color: "#1e293b" }}>{veicLabel}</div>
-                        <div>{motLabel}</div>
-                      </Td>
-                    )}
-                    <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
+                    <Td>{fmtDate(p.data_inicio_prevista)}</Td>
+                    <Td style={{ maxWidth: "240px" }}>
+                      <span style={{ color: "#475569" }}>{resumoDestinos(entregas)}</span>
+                    </Td>
+                    <Td style={{ fontSize: "12px" }}>
+                      {veicLabel || motObj ? (
+                        <>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{veicLabel ?? "—"}</div>
+                          <div style={{ color: "#64748b" }}>{motObj?.nome ?? "—"}</div>
+                        </>
+                      ) : (
+                        <Badge variant="warning">Não despachado</Badge>
+                      )}
+                    </Td>
                     <Td>
                       <Badge variant={STATUS_VAR[p.status] ?? "default"}>
                         {STATUS_LABEL[p.status] ?? p.status}
@@ -813,10 +824,10 @@ export default function DespachoPage() {
                 }
                 highlight={sel ? "#2563eb" : "#e2e8f0"}
                 details={[
-                  { label: "Previsto", value: fmtDate(p.data_inicio_prevista) },
-                  { label: "Valor",    value: fmtMoeda(p.valor_pedido) },
-                  ...(aba === "despachados" && veicLabel ? [{ label: "Caminhão", value: veicLabel }] : []),
-                  ...(aba === "despachados" && motObj?.nome ? [{ label: "Motorista", value: motObj.nome }] : []),
+                  { label: "Previsto",   value: fmtDate(p.data_inicio_prevista) },
+                  { label: "Caminhão",   value: veicLabel ?? "Não despachado" },
+                  { label: "Motorista",  value: motObj?.nome ?? "—" },
+                  { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
                 ]}
                 actions={
                   aba === "fila" ? (
