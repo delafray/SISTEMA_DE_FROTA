@@ -5,6 +5,9 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('whatsapp-reconectar');
 
+// Faz vários chamados sequenciais à Evolution (logout, delete, create) + espera.
+export const maxDuration = 30;
+
 function getEvoBase() {
   return process.env.EVOLUTION_API_URL ?? 'http://129.80.27.159:8080';
 }

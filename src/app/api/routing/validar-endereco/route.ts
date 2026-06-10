@@ -29,6 +29,10 @@ import { geocodar, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding
 
 const log = createLogger('api_validar_endereco');
 
+// Geocodifica via cascata (Nominatim rate-limit ~1.1s/req). Sem isto a function
+// pode morrer no timeout default da Vercel antes de resolver o endereço.
+export const maxDuration = 30;
+
 interface RequestBody {
   cep: string;
   numero: string;
