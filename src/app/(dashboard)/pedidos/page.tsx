@@ -12,17 +12,22 @@ import {
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
+type EntregaLite = {
+  id: string;
+  destino: string | null;
+  nome_cliente_avulso: string | null;
+  clientes: { nome_fantasia: string; apelido: string | null } | null;
+};
+
 type Pedido = {
   id: string;
   status: string;
   valor_pedido: number | null;
+  created_at: string | null;
   data_inicio_prevista: string | null;
-  data_fim_prevista: string | null;
-  km_inicial: number | null;
-  km_final: number | null;
   motoristas: { nome: string } | null;
-  veiculos: { placa: string; modelo: string; marca: string } | null;
-  entregas: { id: string }[];
+  veiculos: { placa: string; apelido: string | null; modelo: string } | null;
+  entregas: EntregaLite[];
 };
 
 const STATUS_LABEL: Record<string, string> = {
@@ -38,8 +43,50 @@ const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
   cancelada: "danger", cancelado: "danger",
 };
 
-const fmtDate = (d: string | null) =>
-  d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
+const fmtDataCadastro = (d: string | null) =>
+  d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+
+const fmtMoeda = (v: number | null) =>
+  v != null ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—";
+
+/** Normaliza embed que o PostgREST às vezes devolve como array. */
+function one<T>(x: T | T[] | null | undefined): T | null {
+  if (Array.isArray(x)) return x[0] ?? null;
+  return x ?? null;
+}
+
+/** Nome do cliente do pedido — vem das entregas (cadastrado ou avulso). */
+function clienteDoPedido(p: Pedido): string {
+  const entregas = Array.isArray(p.entregas) ? p.entregas : [];
+  for (const e of entregas) {
+    const cli = one(e.clientes);
+    if (cli?.nome_fantasia) return cli.nome_fantasia;
+  }
+  for (const e of entregas) {
+    if (e.nome_cliente_avulso?.trim()) return e.nome_cliente_avulso.trim();
+  }
+  return "Cliente não informado";
+}
+
+/** Pega um rótulo curto e legível de um destino ("Rua X, 123 - Centro" → "Centro" ou começo). */
+function rotuloDestino(destino: string): string {
+  const txt = destino.trim();
+  // Tenta o bairro/cidade no fim (depois da última vírgula); senão o começo.
+  const partes = txt.split(",").map(s => s.trim()).filter(Boolean);
+  const alvo = partes.length >= 2 ? partes[partes.length - 1] : partes[0] ?? txt;
+  return alvo.length > 22 ? alvo.slice(0, 21) + "…" : alvo;
+}
+
+/** Resumo dos destinos: "3 entregas · Centro / Jardim +1". */
+function resumoDestinos(entregas: EntregaLite[]): string {
+  const dests = entregas.map(e => e.destino?.trim()).filter((d): d is string => !!d);
+  const n = entregas.length;
+  const palavra = n === 1 ? "entrega" : "entregas";
+  if (dests.length === 0) return `${n} ${palavra}`;
+  const rotulos = dests.slice(0, 2).map(rotuloDestino);
+  const extra = dests.length > 2 ? ` +${dests.length - 2}` : "";
+  return `${n} ${palavra} · ${rotulos.join(" / ")}${extra}`;
+}
 
 export default function PedidosListPage() {
   const router = useRouter();
@@ -60,10 +107,10 @@ export default function PedidosListPage() {
 
       const data = await loadAll<Pedido>((from, to) =>
         supabase.from("pedidos")
-          .select("id,status,valor_pedido,data_inicio_prevista,data_fim_prevista,km_inicial,km_final,motoristas(nome),veiculos(placa,modelo,marca),entregas(id)")
+          .select("id,status,valor_pedido,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))")
           .eq("empresa_id", ue.empresa_id)
-          .order("data_inicio_prevista", { ascending: false })
-          .range(from, to)
+          .order("created_at", { ascending: false })
+          .range(from, to) as unknown as PromiseLike<{ data: Pedido[] | null }>
       );
       setTodas(data);
       setLoading(false);
@@ -72,20 +119,34 @@ export default function PedidosListPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Índice de busca por pedido: cliente + destinos + motorista + placa/apelido.
+  const indexado = useMemo(() =>
+    todas.map(p => {
+      const entregas = Array.isArray(p.entregas) ? p.entregas : [];
+      const motorista = one(p.motoristas);
+      const veiculo = one(p.veiculos);
+      const cliente = clienteDoPedido(p);
+      const hay = normalizar([
+        cliente,
+        ...entregas.map(e => e.destino ?? ""),
+        ...entregas.map(e => e.nome_cliente_avulso ?? ""),
+        motorista?.nome ?? "",
+        veiculo?.placa ?? "",
+        veiculo?.apelido ?? "",
+        veiculo?.modelo ?? "",
+      ].join(" "));
+      return { p, cliente, motorista, veiculo, entregas, hay };
+    }),
+  [todas]);
+
   const filtradas = useMemo(() => {
-    const hay = normalizar(buscaDeferred);
-    return todas.filter(v => {
-      if (filtro && v.status !== filtro) return false;
-      if (!hay) return true;
-      const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
-      const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
-      return (
-        normalizar(motorista?.nome ?? "").includes(hay) ||
-        normalizar(veiculo?.placa ?? "").includes(hay) ||
-        normalizar(veiculo?.modelo ?? "").includes(hay)
-      );
+    const q = normalizar(buscaDeferred);
+    return indexado.filter(row => {
+      if (filtro && row.p.status !== filtro) return false;
+      if (!q) return true;
+      return row.hay.includes(q);
     });
-  }, [todas, buscaDeferred, filtro]);
+  }, [indexado, buscaDeferred, filtro]);
 
   const kpis = useMemo(() => ({
     total:       todas.length,
@@ -116,60 +177,58 @@ export default function PedidosListPage() {
           toolbar={
             <>
               <SearchInput
-                placeholder="Buscar motorista, placa..."
+                placeholder="Buscar por cliente ou destino..."
                 value={busca}
                 onChange={e => setBusca(e.target.value)}
               />
               <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "160px" }}>
                 <option value="">Todos os status</option>
-                <option value="agendado">Agendado</option>
+                <option value="agendada">Agendado</option>
                 <option value="em_andamento">Em Andamento</option>
-                <option value="concluido">Concluído</option>
-                <option value="cancelado">Cancelado</option>
+                <option value="concluida">Concluído</option>
+                <option value="cancelada">Cancelado</option>
               </select>
             </>
           }
         >
           <thead>
             <tr>
-              <Th>Status</Th>
-              <Th>Motorista</Th>
-              <Th>Veículo</Th>
-              <Th>Início Previsto</Th>
-              <Th>Fim Previsto</Th>
-              <Th>Entregas</Th>
+              <Th>Cliente</Th>
+              <Th>Cadastrado em</Th>
+              <Th>Destinos</Th>
               <Th>Valor (R$)</Th>
-              <Th>KM</Th>
+              <Th>Status</Th>
               <Th></Th>
             </tr>
           </thead>
           <tbody>
             {loading ? (
-              <tr><Td colSpan={9} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
+              <tr><Td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
             ) : filtradas.length === 0 ? (
-              <tr><td colSpan={9}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
-            ) : filtradas.map(v => {
-              const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
-              const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
-              const entregas  = Array.isArray(v.entregas)   ? v.entregas      : [];
-              const kmRodado  = v.km_final != null && v.km_inicial != null ? v.km_final - v.km_inicial : null;
+              <tr><td colSpan={6}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
+            ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
+              const veicLabel = veiculo ? (veiculo.apelido?.trim() || `${veiculo.placa} · ${veiculo.modelo}`) : null;
               return (
-                <Tr key={v.id}>
-                  <Td><Badge variant={STATUS_VAR[v.status] ?? "default"}>{STATUS_LABEL[v.status] ?? v.status}</Badge></Td>
-                  <Td style={{ fontWeight: 600 }}>{motorista?.nome ?? "—"}</Td>
-                  <Td>{veiculo ? `${veiculo.placa} · ${veiculo.marca} ${veiculo.modelo}` : "—"}</Td>
-                  <Td>{fmtDate(v.data_inicio_prevista)}</Td>
-                  <Td>{fmtDate(v.data_fim_prevista)}</Td>
-                  <Td style={{ textAlign: "center" }}>
-                    <Badge variant={entregas.length > 0 ? "info" : "default"}>{entregas.length}</Badge>
+                <Tr key={p.id}>
+                  <Td>
+                    <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
+                    {(motorista || veicLabel) && (
+                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                        {[motorista?.nome, veicLabel].filter(Boolean).join(" · ")}
+                      </div>
+                    )}
                   </Td>
-                  <Td style={{ textAlign: "right" }}>{v.valor_pedido ? v.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—"}</Td>
-                  <Td>{kmRodado != null ? `${kmRodado.toLocaleString("pt-BR")} km` : "—"}</Td>
+                  <Td>{fmtDataCadastro(p.created_at)}</Td>
+                  <Td style={{ maxWidth: "260px" }}>
+                    <span style={{ color: "#475569" }}>{resumoDestinos(entregas)}</span>
+                  </Td>
+                  <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
+                  <Td><Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge></Td>
                   <Td>
                     <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
-                      <Btn href={`/pedidos/${v.id}`}      variant="ghost" size="xs">Ver</Btn>
-                      <Btn href={`/pedidos/${v.id}/editar`} variant="outline" size="xs">Editar</Btn>
-                      <DeleteBtn id={v.id} table="pedidos" label="pedido" />
+                      <Btn href={`/pedidos/${p.id}`}      variant="ghost" size="xs">Ver</Btn>
+                      <Btn href={`/pedidos/${p.id}/editar`} variant="outline" size="xs">Editar</Btn>
+                      <DeleteBtn id={p.id} table="pedidos" label="pedido" />
                     </div>
                   </Td>
                 </Tr>
@@ -179,27 +238,34 @@ export default function PedidosListPage() {
         </DataTable>
         </div>
 
+        {/* Busca no mobile (a tabela fica oculta no celular) */}
+        <div className="mobile-only" style={{ marginBottom: "4px" }}>
+          <SearchInput
+            placeholder="Buscar por cliente ou destino..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+        </div>
+
         <MobileList count={filtradas.length} label="pedidos">
-          {loading ? null : filtradas.map(v => {
-            const motorista = Array.isArray(v.motoristas) ? v.motoristas[0] : v.motoristas;
-            const veiculo   = Array.isArray(v.veiculos)   ? v.veiculos[0]   : v.veiculos;
-            const entregas  = Array.isArray(v.entregas)   ? v.entregas      : [];
-            const concluido = v.status === "concluida" || v.status === "concluido";
-            const cancelado = v.status === "cancelada" || v.status === "cancelado";
-            const statusColor = concluido ? "#16a34a" : v.status === "em_andamento" ? "#2563eb" : cancelado ? "#ef4444" : "#eab308";
+          {loading ? null : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
+            const concluido = p.status === "concluida" || p.status === "concluido";
+            const cancelado = p.status === "cancelada" || p.status === "cancelado";
+            const statusColor = concluido ? "#16a34a" : p.status === "em_andamento" ? "#2563eb" : cancelado ? "#ef4444" : "#eab308";
+            const veicLabel = veiculo ? (veiculo.apelido?.trim() || `${veiculo.placa} • ${veiculo.modelo}`) : "Sem veículo";
             return (
               <MobileCard
-                key={v.id}
-                href={`/pedidos/${v.id}`}
-                title={motorista?.nome ?? "Sem motorista"}
-                subtitle={veiculo ? `${veiculo.placa} • ${veiculo.marca} ${veiculo.modelo}` : "Sem veículo"}
-                badge={<Badge variant={STATUS_VAR[v.status] ?? "default"}>{STATUS_LABEL[v.status] ?? v.status}</Badge>}
+                key={p.id}
+                href={`/pedidos/${p.id}`}
+                title={cliente}
+                subtitle={resumoDestinos(entregas)}
+                badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}
                 highlight={statusColor}
                 details={[
-                  { label: "Início", value: fmtDate(v.data_inicio_prevista) },
-                  { label: "Fim", value: fmtDate(v.data_fim_prevista) },
-                  { label: "Entregas", value: String(entregas.length) },
-                  { label: "Valor", value: v.valor_pedido ? `R$ ${v.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—" },
+                  { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
+                  { label: "Valor", value: p.valor_pedido != null ? `R$ ${fmtMoeda(p.valor_pedido)}` : "—" },
+                  { label: "Motorista", value: motorista?.nome ?? "—" },
+                  { label: "Veículo", value: veicLabel },
                 ]}
               />
             );
