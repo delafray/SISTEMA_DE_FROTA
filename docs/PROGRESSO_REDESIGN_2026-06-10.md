@@ -13,7 +13,9 @@ Legenda: ✅ FEITO · 🔄 EM ANDAMENTO · ⬜ FALTA
 - ✅ **B2 — Listagem de Pedidos localizável**: cliente (das entregas), data de cadastro, destinos resumidos ("3 entregas · Centro / Jardim +1"), valor, status; busca por cliente+destino. tsc verde.
 - ✅ **B3 — Editar Pedido simplificado**: motorista/veículo/KM só leitura (aviso + link /despacho); KM com "ajuste manual (gestor)" p/ admin/master; editáveis = cliente(cadastrado/avulso)/valor/datas/status/obs/entregas. Removido o bloqueio que exigia motorista+veículo. tsc verde.
 - ✅ **B4 — Despacho**: fila com Cliente/Data/Destinos resumidos + BUSCA (cliente+destino); modal mostra APELIDO do caminhão; CORRIGIDO o erro ao confirmar (constraint viagens_status_check revalidada em update — normaliza status p/ feminino no proprio update) + mensagens de erro legiveis (message+details+hint+code); SQL em db/migration_despacho_status_fix.sql. tsc verde, 1190 testes verdes.
-- ⬜ **B5 — Doc leiga** `docs/REDESIGN_PEDIDOS_DESPACHO_2026-06-10.md`.
+- ✅ **B5 — Doc leiga** `docs/REDESIGN_PEDIDOS_DESPACHO_2026-06-10.md` (o dono lê de manhã).
+
+**STATUS FINAL: todos os blocos concluídos. `npx tsc --noEmit` verde, `npm test -- --run` = 1190/1190 verdes. Commits direto na main, prefixo `redesign:`.**
 
 ---
 
