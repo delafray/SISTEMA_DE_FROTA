@@ -20,6 +20,8 @@ export interface PerfilSessao {
   motorista_id: string | null;
   role: string;
   nome: string | null;
+  /** Beta teste rota: app standalone (sem caminhao/despacho), rotas no usuario */
+  beta_rota?: boolean;
 }
 
 export interface ResultadoAuth {
@@ -69,6 +71,7 @@ async function resolverOffline(roles: string[]): Promise<ResultadoAuth> {
       motorista_id: local.motorista_id,
       role: local.role,
       nome: local.nome,
+      beta_rota: local.beta_rota ?? false,
     },
   };
 }
@@ -113,12 +116,26 @@ export async function obterSessaoComFallback(
     if (!ue?.empresa_id) return { ok: false, origem: 'online', motivo: 'sem_empresa' };
     if (!roles.includes(ue.role)) return { ok: false, origem: 'online', motivo: 'role_negado' };
 
+    // Beta teste rota — consulta separada e BLINDADA de propósito: a coluna é
+    // da migration_beta_rota; sem ela (ou em ambiente de teste sem o mock) a
+    // query falha e o flag fica false, sem derrubar o login.
+    let betaRota = false;
+    try {
+      const { data: beta } = await supabase
+        .from('perfis')
+        .select('beta_rota' as never)
+        .eq('id', auth.user.id)
+        .maybeSingle();
+      betaRota = !!(beta as { beta_rota?: boolean } | null)?.beta_rota;
+    } catch { /* coluna ausente ou erro — segue como usuário normal */ }
+
     const sessao: PerfilSessao = {
       usuario_id: auth.user.id,
       empresa_id: ue.empresa_id as string,
       motorista_id: (perfil?.motorista_id as string | null) ?? null,
       role: ue.role as string,
       nome: (perfil?.nome as string | null) ?? null,
+      beta_rota: betaRota,
     };
 
     // Persiste pra uso offline (no-op em ambiente sem IndexedDB).

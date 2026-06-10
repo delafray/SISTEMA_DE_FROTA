@@ -16,6 +16,7 @@ export default function EditarUsuarioPage() {
   const [senha, setSenha]     = useState("");
   const [motoristaId, setMotoristaId] = useState("");
   const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
+  const [betaRota, setBetaRota] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -45,6 +46,10 @@ export default function EditarUsuarioPage() {
         setLogin(n.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]/g, ""));
         setMotoristaId(perfil?.motorista_id ?? "");
       }
+      // \ud83e\uddea flag beta (coluna da migration_beta_rota; sem ela fica false)
+      const { data: beta } = await supabase
+        .from("perfis").select("beta_rota" as never).eq("id", id).maybeSingle();
+      setBetaRota(!!(beta as { beta_rota?: boolean } | null)?.beta_rota);
       setLoading(false);
     };
     load();
@@ -145,6 +150,25 @@ export default function EditarUsuarioPage() {
                       ))}
                     </select>
                   </FormField>
+                )}
+
+                {role === "motorista" && (
+                  <div style={{ gridColumn: "span 2" }}>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px", cursor: "pointer", lineHeight: 1.5 }}>
+                      <input
+                        type="checkbox"
+                        name="beta_rota"
+                        checked={betaRota}
+                        onChange={e => setBetaRota(e.target.checked)}
+                        style={{ marginTop: "2px", width: "15px", height: "15px", accentColor: "#d97706" }}
+                      />
+                      <span>
+                        <strong>🧪 Beta teste rota</strong> — usuário externo só pra validar a roteirização:
+                        app de rota standalone (sem caminhão, sem despachos, sem pedidos). Rotas gravadas
+                        atreladas ao nome de usuário.
+                      </span>
+                    </label>
+                  </div>
                 )}
               </div>
             </FormSection>

@@ -35,6 +35,7 @@ export async function criarUsuarioAction(
   const senha        = formData.get("senha")        as string;
   const role         = formData.get("role")         as "master" | "gestor" | "motorista";
   const motorista_id = (formData.get("motorista_id") as string) || null;
+  const beta_rota    = formData.get("beta_rota") === "on"; // 🧪 testador externo de rota
 
   // Validações robustas no lado do servidor
   if (!nome || nome.trim().length < 2) {
@@ -138,6 +139,13 @@ export async function criarUsuarioAction(
       .update({ motorista_id })
       .eq("id", targetUserId);
   }
+
+  // ── 🧪 Beta teste rota (coluna da migration_beta_rota; falha silenciosa
+  //    se a migration ainda não rodou — o resto do cadastro fica de pé) ─────
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from("perfis")
+    .update({ beta_rota })
+    .eq("id", targetUserId);
 
   redirect("/usuarios");
 }

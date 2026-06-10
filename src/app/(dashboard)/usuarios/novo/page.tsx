@@ -117,6 +117,20 @@ export default function NovoUsuarioPage() {
                     <p style={{ fontSize: "11px", color: "#64748b", marginTop: "4px" }}>O motorista precisa estar cadastrado primeiro.</p>
                   </FormField>
                 )}
+
+                {role === "motorista" && (
+                  <div style={{ gridColumn: "span 2" }}>
+                    <label style={{ display: "flex", alignItems: "flex-start", gap: "10px", fontSize: "13px", color: "#92400e", background: "#fffbeb", border: "1px solid #fde68a", borderRadius: "8px", padding: "12px", cursor: "pointer", lineHeight: 1.5 }}>
+                      <input type="checkbox" name="beta_rota" style={{ marginTop: "2px", width: "15px", height: "15px", accentColor: "#d97706" }} />
+                      <span>
+                        <strong>🧪 Beta teste rota</strong> — usuário EXTERNO só pra validar a roteirização.
+                        Usa o app de rota como standalone: captura → otimiza → segue. <strong>Sem caminhão,
+                        sem despachos, sem vínculo com pedidos</strong> — não precisa vincular motorista nem telefone.
+                        As rotas dele ficam gravadas no banco atreladas ao nome de usuário, pra você validar.
+                      </span>
+                    </label>
+                  </div>
+                )}
               </div>
             </FormSection>
 

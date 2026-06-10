@@ -25,6 +25,7 @@ export async function editarUsuarioAction(
   const role         = formData.get("role") as string;
   const senha        = formData.get("senha") as string;
   const motorista_id = (formData.get("motorista_id") as string) || null;
+  const beta_rota    = formData.get("beta_rota") === "on"; // 🧪 testador externo de rota
 
   // 1. Atualiza senha se fornecida
   if (senha && senha.length >= 6) {
@@ -56,6 +57,12 @@ export async function editarUsuarioAction(
     .update({ role })
     .eq("usuario_id", usuarioId)
     .eq("empresa_id", myUe.empresa_id);
+
+  // 🧪 Beta teste rota (coluna da migration_beta_rota; falha silenciosa sem ela)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  await (admin as any).from("perfis")
+    .update({ beta_rota: role === "motorista" ? beta_rota : false })
+    .eq("id", usuarioId);
 
   redirect("/usuarios");
 }

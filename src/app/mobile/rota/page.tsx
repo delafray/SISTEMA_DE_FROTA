@@ -63,6 +63,10 @@ function RotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const motoristaId = searchParams.get('motorista_id') ?? '';
   const empresaId = searchParams.get('empresa_id') ?? '';
+  // 🧪 Beta teste rota: testador externo — comportamento STANDALONE (como era
+  // antes do vínculo com despacho): sem lista de despachos, sem âncora de
+  // pedido, sem caminhão no header. motorista_id aqui é o usuario_id dele.
+  const beta = searchParams.get('beta') === '1';
   // Deep-link opcional: ?abrir=<rotaId> abre direto essa rota (veio da lista de
   // rotas na tela do motorista), pulando a tela de historico.
   const abrirId = searchParams.get('abrir') ?? '';
@@ -113,9 +117,10 @@ function RotaContent(): React.ReactElement {
     lockOrientacaoRetrato();
   }, []);
 
-  // Carrega o caminhao do motorista (best-effort, nao bloqueia a tela)
+  // Carrega o caminhao do motorista (best-effort, nao bloqueia a tela).
+  // Beta nao tem caminhao — nem tenta.
   useEffect(() => {
-    if (!motoristaId) return;
+    if (!motoristaId || beta) return;
     let cancelado = false;
     carregarVeiculoAtivo(motoristaId)
       .then((v) => { if (!cancelado) setVeiculo(v); })
@@ -123,12 +128,13 @@ function RotaContent(): React.ReactElement {
     return () => {
       cancelado = true;
     };
-  }, [motoristaId]);
+  }, [motoristaId, beta]);
 
   // Restaura a âncora do despacho (sobrevive a refresh) e carrega os despachos
   // em aberto do motorista pra lista da fase inicio (best-effort; offline fica vazio).
+  // Beta é standalone: sem âncora e sem despachos.
   useEffect(() => {
-    if (!motoristaId) return;
+    if (!motoristaId || beta) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPedidoAncora(lerAncora());
     let cancelado = false;
@@ -181,7 +187,7 @@ function RotaContent(): React.ReactElement {
       } catch { /* offline ou erro — lista de despachos fica vazia */ }
     })();
     return () => { cancelado = true; };
-  }, [motoristaId]);
+  }, [motoristaId, beta]);
 
   /** Grava/limpa a âncora (estado + aparelho). */
   const definirAncora = useCallback((a: PedidoAncora | null) => {
@@ -739,7 +745,8 @@ function RotaContent(): React.ReactElement {
           empresa_id: empresaId,
           origem,
           // âncora do despacho: a rota nasce vinculada ao pedido escolhido
-          ancorar_pedido_id: pedidoAncora?.id,
+          // (beta é standalone — nunca ancora)
+          ancorar_pedido_id: beta ? undefined : pedidoAncora?.id,
         }),
       });
       const data = await res.json();
@@ -768,7 +775,7 @@ function RotaContent(): React.ReactElement {
     } finally {
       setProgressoOtim('');
     }
-  }, [motoristaId, empresaId, pedidoAncora]);
+  }, [motoristaId, empresaId, pedidoAncora, beta]);
 
   const handleConcluirParada = useCallback(
     async (paradaId: string, aprenderPonto = false) => {
@@ -982,11 +989,13 @@ function RotaContent(): React.ReactElement {
 
       {fase === 'inicio' && (
         <>
-        <DespachosAbertos
-          despachos={despachos}
-          abrindo={abrindoDespacho}
-          onAbrirRota={abrirRotaPedido}
-        />
+        {!beta && (
+          <DespachosAbertos
+            despachos={despachos}
+            abrindo={abrindoDespacho}
+            onAbrirRota={abrirRotaPedido}
+          />
+        )}
         <FaseInicio
           onIniciar={iniciarCaptura}
           onCarregarRota={handleCarregarRota}

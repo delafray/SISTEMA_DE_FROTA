@@ -66,6 +66,9 @@ export default function MotoristaPage() {
   const [modalKm, setModalKm] = useState(false);
   const [modalTroca, setModalTroca] = useState(false);
   const [avisoOk, setAvisoOk] = useState<string | null>(null);
+  // 🧪 Beta teste rota: testador EXTERNO — app standalone (sem caminhão/KM/
+  // despachos); as rotas dele ficam atreladas ao usuario_id, não a motorista.
+  const [beta, setBeta] = useState(false);
 
   useEffect(() => {
     const load = async () => {
@@ -79,14 +82,19 @@ export default function MotoristaPage() {
         return;
       }
 
-      const { motorista_id: mId, empresa_id: eId, nome: nomeUsr } = auth.sessao;
+      const { motorista_id: mIdSessao, empresa_id: eId, nome: nomeUsr, usuario_id, beta_rota } = auth.sessao;
       if (nomeUsr) setNome(nomeUsr);
+      // 🧪 Beta: as rotas ficam atreladas ao PRÓPRIO usuário (sem cadastro de motorista)
+      const ehBeta = !!beta_rota;
+      const mId = ehBeta ? usuario_id : mIdSessao;
+      setBeta(ehBeta);
       setMotoristaId(mId);
       setEmpresaIdState(eId);
 
       // Caminhão da alocação ativa (apelido/modelo/placa/km) — best-effort,
       // em paralelo com o resto; offline cai pro snapshot salvo no aparelho.
-      if (mId) {
+      // Beta não tem caminhão — nem tenta.
+      if (mId && !ehBeta) {
         void carregarVeiculoAtivo(mId).then(setVeiculo).catch(() => {});
       }
 
@@ -174,6 +182,18 @@ export default function MotoristaPage() {
           <h1 style={{ fontSize: "20px", fontWeight: 700, color: cores.branco, margin: "2px 0 0", lineHeight: 1.2 }}>
             Olá, {nome.split(" ")[0] || "Motorista"}
           </h1>
+          {beta && (
+            <div
+              data-testid="badge-beta"
+              style={{
+                display: "inline-flex", alignItems: "center", gap: "6px", marginTop: "8px",
+                background: "rgba(251,191,36,0.18)", borderRadius: "8px", padding: "5px 10px",
+                fontSize: "12px", fontWeight: 700, color: "#fde68a",
+              }}
+            >
+              🧪 Beta de roteirização
+            </div>
+          )}
           {veiculo && (
             <div
               data-testid="veiculo-info"
@@ -216,7 +236,7 @@ export default function MotoristaPage() {
       <div style={{ padding: "16px 12px 0" }}>
         {motoristaId && empresaId ? (
           <a
-            href={`/mobile/rota?motorista_id=${motoristaId}&empresa_id=${empresaId}`}
+            href={`/mobile/rota?motorista_id=${motoristaId}&empresa_id=${empresaId}${beta ? "&beta=1" : ""}`}
             data-testid="btn-rota-do-dia"
             style={{
               display: "flex",
@@ -263,7 +283,8 @@ export default function MotoristaPage() {
         )}
       </div>
 
-      {/* Botao discreto: registrar abastecimento (acao do motorista) */}
+      {/* Botao discreto: registrar abastecimento (acao do motorista; beta nao tem) */}
+      {!beta && (
       <div style={{ padding: "10px 12px 0" }}>
         <Link
           href="/motorista/abastecimentos/novo"
@@ -286,9 +307,10 @@ export default function MotoristaPage() {
           ⛽ Registrar abastecimento
         </Link>
       </div>
+      )}
 
-      {/* Acoes do caminhao: atualizar KM e trocar de caminhao */}
-      {motoristaId && (
+      {/* Acoes do caminhao: atualizar KM e trocar de caminhao (beta nao tem caminhao) */}
+      {motoristaId && !beta && (
         <div style={{ display: "flex", gap: "10px", padding: "10px 12px 0" }}>
           <button
             type="button"
@@ -406,7 +428,7 @@ export default function MotoristaPage() {
                 <a
                   key={r.id}
                   data-testid={`rota-item-${r.id}`}
-                  href={`/mobile/rota?motorista_id=${motoristaId}&empresa_id=${empresaId}&abrir=${r.id}`}
+                  href={`/mobile/rota?motorista_id=${motoristaId}&empresa_id=${empresaId}&abrir=${r.id}${beta ? "&beta=1" : ""}`}
                   style={cardStyle}
                 >
                   {conteudo}

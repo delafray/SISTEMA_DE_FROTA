@@ -34,6 +34,8 @@ export interface SessaoLocal {
   motorista_id: string | null;
   role: string;
   nome: string | null;
+  /** Beta teste rota: app standalone (sem caminhao/despacho), rotas no usuario */
+  beta_rota?: boolean;
   salvo_em: string;            // ISO timestamp — base do TTL de validade offline
 }
 
