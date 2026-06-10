@@ -8,6 +8,9 @@ import { obterSessaoComFallback } from "@/lib/offline/authOffline";
 import { limparSessaoLocal } from "@/lib/offline/sessao";
 import { listarRotasCacheadas } from "@/lib/offline/rotaCache";
 import type { RotaCacheada } from "@/lib/offline/types";
+import { carregarVeiculoAtivo, linhaVeiculo, type VeiculoAtivo } from "@/lib/mobile/veiculoAtivo";
+import { ModalAtualizarKm } from "./_components/ModalAtualizarKm";
+import { ModalTrocarCaminhao } from "./_components/ModalTrocarCaminhao";
 import { cores, statusRota } from "@/lib/mobile/ui";
 
 /** Item da lista de rotas na tela inicial do motorista. */
@@ -59,6 +62,10 @@ export default function MotoristaPage() {
   const [motoristaId, setMotoristaId] = useState<string | null>(null);
   const [empresaId, setEmpresaIdState] = useState<string | null>(null);
   const [offline, setOffline] = useState(false);
+  const [veiculo, setVeiculo] = useState<VeiculoAtivo | null>(null);
+  const [modalKm, setModalKm] = useState(false);
+  const [modalTroca, setModalTroca] = useState(false);
+  const [avisoOk, setAvisoOk] = useState<string | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -76,6 +83,12 @@ export default function MotoristaPage() {
       if (nomeUsr) setNome(nomeUsr);
       setMotoristaId(mId);
       setEmpresaIdState(eId);
+
+      // Caminhão da alocação ativa (apelido/modelo/placa/km) — best-effort,
+      // em paralelo com o resto; offline cai pro snapshot salvo no aparelho.
+      if (mId) {
+        void carregarVeiculoAtivo(mId).then(setVeiculo).catch(() => {});
+      }
 
       // Offline: monta a lista a partir das rotas guardadas no aparelho.
       if (auth.origem === "offline_cache") {
@@ -122,6 +135,24 @@ export default function MotoristaPage() {
     router.push("/login");
   };
 
+  // Pós-sucesso dos popups: atualiza o caminhão na tela e o snapshot offline
+  // (carregarVeiculoAtivo regrava o cache do aparelho ao buscar com sucesso).
+  const aposAtualizarKm = (kmNovo: number) => {
+    setModalKm(false);
+    setVeiculo((v) => (v ? { ...v, km_atual: kmNovo } : v));
+    if (motoristaId) void carregarVeiculoAtivo(motoristaId).then((v) => { if (v) setVeiculo(v); }).catch(() => {});
+    setAvisoOk(`✅ KM atualizado: ${kmNovo.toLocaleString("pt-BR")} km.`);
+    setTimeout(() => setAvisoOk(null), 5000);
+  };
+
+  const aposTrocarCaminhao = (novo: VeiculoAtivo) => {
+    setModalTroca(false);
+    setVeiculo(novo);
+    if (motoristaId) void carregarVeiculoAtivo(motoristaId).catch(() => {});
+    setAvisoOk(`✅ Agora você está com ${novo.apelido ?? novo.modelo} (${novo.placa}). O gestor foi avisado.`);
+    setTimeout(() => setAvisoOk(null), 6000);
+  };
+
   const semVinculo = !loading && motoristaId === null;
 
   if (loading) return (
@@ -143,6 +174,25 @@ export default function MotoristaPage() {
           <h1 style={{ fontSize: "20px", fontWeight: 700, color: cores.branco, margin: "2px 0 0", lineHeight: 1.2 }}>
             Olá, {nome.split(" ")[0] || "Motorista"}
           </h1>
+          {veiculo && (
+            <div
+              data-testid="veiculo-info"
+              style={{
+                display: "inline-flex",
+                alignItems: "center",
+                gap: "6px",
+                marginTop: "8px",
+                background: "rgba(255,255,255,0.1)",
+                borderRadius: "8px",
+                padding: "5px 10px",
+                fontSize: "12px",
+                fontWeight: 600,
+                color: "rgba(255,255,255,0.92)",
+              }}
+            >
+              🚛 {linhaVeiculo(veiculo)}
+            </div>
+          )}
         </div>
         <button
           onClick={handleSignOut}
@@ -237,6 +287,69 @@ export default function MotoristaPage() {
         </Link>
       </div>
 
+      {/* Acoes do caminhao: atualizar KM e trocar de caminhao */}
+      {motoristaId && (
+        <div style={{ display: "flex", gap: "10px", padding: "10px 12px 0" }}>
+          <button
+            type="button"
+            data-testid="btn-atualizar-km"
+            onClick={() => setModalKm(true)}
+            disabled={!veiculo}
+            title={!veiculo ? "Sem caminhão vinculado" : undefined}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              background: cores.branco,
+              border: `1px solid ${cores.bordaAzul}`,
+              color: cores.azulTexto,
+              borderRadius: "10px",
+              padding: "11px",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: veiculo ? "pointer" : "default",
+              opacity: veiculo ? 1 : 0.5,
+            }}
+          >
+            🛣️ Atualizar KM
+          </button>
+          <button
+            type="button"
+            data-testid="btn-trocar-caminhao"
+            onClick={() => setModalTroca(true)}
+            style={{
+              flex: 1,
+              display: "flex",
+              alignItems: "center",
+              justifyContent: "center",
+              gap: "8px",
+              background: cores.branco,
+              border: `1px solid ${cores.bordaForte}`,
+              color: cores.textoForte,
+              borderRadius: "10px",
+              padding: "11px",
+              fontSize: "14px",
+              fontWeight: 600,
+              cursor: "pointer",
+            }}
+          >
+            🔁 Trocar caminhão
+          </button>
+        </div>
+      )}
+
+      {avisoOk && (
+        <div
+          role="status"
+          data-testid="aviso-ok"
+          style={{ margin: "10px 12px 0", background: cores.fundoVerde, border: `1px solid ${cores.bordaVerde}`, borderRadius: "10px", padding: "10px 14px", fontSize: "13px", fontWeight: 600, color: cores.textoVerde }}
+        >
+          {avisoOk}
+        </div>
+      )}
+
       {semVinculo && (
         <div style={{ margin: "16px 12px 0", background: cores.fundoAmbar, border: `1px solid ${cores.bordaAmbar}`, borderRadius: "10px", padding: "16px", color: cores.textoAmbar, fontSize: "13px", lineHeight: 1.6 }}>
           <strong>Conta não vinculada</strong><br />
@@ -307,6 +420,26 @@ export default function MotoristaPage() {
           </div>
         )}
       </div>
+
+      {modalKm && veiculo && motoristaId && empresaId && (
+        <ModalAtualizarKm
+          veiculo={veiculo}
+          motoristaId={motoristaId}
+          empresaId={empresaId}
+          onFechar={() => setModalKm(false)}
+          onSucesso={aposAtualizarKm}
+        />
+      )}
+
+      {modalTroca && motoristaId && empresaId && (
+        <ModalTrocarCaminhao
+          veiculoAtual={veiculo}
+          motoristaId={motoristaId}
+          empresaId={empresaId}
+          onFechar={() => setModalTroca(false)}
+          onSucesso={aposTrocarCaminhao}
+        />
+      )}
     </div>
   );
 }

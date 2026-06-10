@@ -32,6 +32,7 @@ import { salvarRotaAtiva, lerRotaAtiva, lerUltimaRotaAtiva } from '@/lib/offline
 import { enfileirarConcluirParada, enfileirarEncerrarRota } from '@/lib/offline/acoesRota';
 import { iniciarSyncAcoesWorker, sincronizarAcoes } from '@/lib/offline/syncAcoes';
 import { vibrar, lockOrientacaoRetrato } from '@/lib/mobile/dispositivo';
+import { carregarVeiculoAtivo, type VeiculoAtivo } from '@/lib/mobile/veiculoAtivo';
 import { fetchRota } from '@/lib/routing/api';
 import { containerStyle, erroStyle } from './styles';
 import type { Fase } from './types';
@@ -74,6 +75,9 @@ function RotaContent(): React.ReactElement {
   >([]);
   // Historico de rotas para mostrar na tela de inicio
   const [rotasHistorico, setRotasHistorico] = useState<RotaOtimizada[]>([]);
+  // Caminhao da alocacao ativa do motorista (apelido/modelo/placa/km) — mostrado
+  // no header em todas as fases. Offline cai pro snapshot salvo no aparelho.
+  const [veiculo, setVeiculo] = useState<VeiculoAtivo | null>(null);
   // Uso do Google no mes (pra mostrar na captura: cache vs API + quanto falta
   // pro ViaCEP). Atualiza ao entrar na captura e a cada NF capturada.
   const [usoGoogle, setUsoGoogle] = useState<{ total: number; limite: number } | null>(null);
@@ -90,6 +94,18 @@ function RotaContent(): React.ReactElement {
   useEffect(() => {
     lockOrientacaoRetrato();
   }, []);
+
+  // Carrega o caminhao do motorista (best-effort, nao bloqueia a tela)
+  useEffect(() => {
+    if (!motoristaId) return;
+    let cancelado = false;
+    carregarVeiculoAtivo(motoristaId)
+      .then((v) => { if (!cancelado) setVeiculo(v); })
+      .catch(() => {});
+    return () => {
+      cancelado = true;
+    };
+  }, [motoristaId]);
 
   // Persiste a fase no localStorage pra restaurar apos refresh/crash.
   // As NFs ficam seguras no IndexedDB (Dexie), mas o estado React se perde.
@@ -753,7 +769,7 @@ function RotaContent(): React.ReactElement {
 
   return (
     <div style={containerStyle}>
-      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} numConcluidas={paradas.filter(p => p.concluida_em).length} statsDinamicos={statsDinamicos} usoGoogle={usoGoogle} />
+      <Header fase={fase} online={online} numCapturadas={notas.length} numParadas={paradas.length} numConcluidas={paradas.filter(p => p.concluida_em).length} statsDinamicos={statsDinamicos} usoGoogle={usoGoogle} veiculo={veiculo} />
 
 
       {toast && (

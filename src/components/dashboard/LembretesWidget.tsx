@@ -114,7 +114,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                       <div style={{ fontSize: "11px", color: "#92400e", marginTop: "3px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                         <span>👤 {nomePerfil(l)}</span>
                         <span>{fmtDataHora(l.criado_em)}</span>
-                        <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : "via painel"}</span>
+                        <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : l.origem === "app_motorista" ? "via app do motorista" : "via painel"}</span>
                       </div>
                     </div>
                     <button
@@ -255,7 +255,7 @@ export function LembretesWidget() {
                 <div style={{ fontSize: "11px", color: "#92400e", marginTop: "4px", display: "flex", gap: "8px", flexWrap: "wrap" }}>
                   <span>👤 {nomePerfil(l)}</span>
                   <span>{fmtDataHora(l.criado_em)}</span>
-                  <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : "via painel"}</span>
+                  <span style={{ opacity: 0.7 }}>{l.origem === "whatsapp" ? "via WhatsApp" : l.origem === "app_motorista" ? "via app do motorista" : "via painel"}</span>
                 </div>
               </div>
               <button

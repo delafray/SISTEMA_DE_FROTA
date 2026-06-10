@@ -7,6 +7,8 @@
  */
 
 import type { Fase } from '../types';
+import type { VeiculoAtivo } from '@/lib/mobile/veiculoAtivo';
+import { linhaVeiculo } from '@/lib/mobile/veiculoAtivo';
 import { headerStyle } from '../styles';
 
 export function Header({
@@ -17,6 +19,7 @@ export function Header({
   numConcluidas,
   statsDinamicos,
   usoGoogle,
+  veiculo,
 }: {
   fase: Fase;
   online: boolean;
@@ -25,6 +28,7 @@ export function Header({
   numConcluidas: number;
   statsDinamicos?: { proxKm: number; proxMin: number; faltamKm: number; faltamMin: number } | null;
   usoGoogle?: { total: number; limite: number } | null;
+  veiculo?: VeiculoAtivo | null;
 }) {
   const labelFase: Record<Fase, string> = {
     carregando: 'Carregando',
@@ -52,6 +56,14 @@ export function Header({
           </span>
         </div>
       </div>
+      {veiculo && (
+        <div
+          data-testid="veiculo-info"
+          style={{ fontSize: 12, fontWeight: 600, color: '#475569', marginTop: 4 }}
+        >
+          🚛 {linhaVeiculo(veiculo)}
+        </div>
+      )}
       {fase === 'captura' && (
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', fontSize: 13, color: '#475569', marginTop: 4 }}>
           <span>
