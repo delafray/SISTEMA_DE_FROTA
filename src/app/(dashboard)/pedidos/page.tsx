@@ -22,12 +22,16 @@ type Pedido = {
   id: string;
   status: string;
   valor_pedido: number | null;
+  pago: boolean | null;
   created_at: string | null;
   data_inicio_prevista: string | null;
   motoristas: { nome: string } | null;
   veiculos: { placa: string; apelido: string | null; modelo: string } | null;
   entregas: EntregaLite[];
 };
+
+/** Filtro "Em aberto" (padrão): tudo que ainda não foi concluído nem cancelado. */
+const STATUS_FECHADOS = ["concluida", "concluido", "cancelada", "cancelado"];
 
 const STATUS_LABEL: Record<string, string> = {
   agendada: "Agendado", agendado: "Agendado",
@@ -44,6 +48,9 @@ const STATUS_VAR: Record<string, "warning" | "info" | "success" | "danger"> = {
 
 const fmtDataCadastro = (d: string | null) =>
   d ? new Date(d).toLocaleDateString("pt-BR") : "—";
+
+const fmtDataPrevista = (d: string | null) =>
+  d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
 const fmtMoeda = (v: number | null) =>
   v != null ? v.toLocaleString("pt-BR", { minimumFractionDigits: 2 }) : "—";
@@ -101,9 +108,10 @@ export default function PedidosListPage() {
   const [loading, setLoading]   = useState(true);
   const [empresaId, setEmpresaId] = useState<string | null>(null);
 
-  // Filtros
+  // Filtros — padrão "abertos": lista tudo que NÃO foi concluído/cancelado
+  // (regra do dono 10/06: a tela tem que mostrar o que ainda está em jogo).
   const [busca, setBusca]   = useState("");
-  const [filtro, setFiltro] = useState("");
+  const [filtro, setFiltro] = useState("abertos");
   const buscaDeferred = useDeferredValue(busca);
   // Busca aplicada no SERVIDOR (regra do CLAUDE.md) — debounce de 350ms
   const [buscaServidor, setBuscaServidor] = useState("");
@@ -186,7 +194,7 @@ export default function PedidosListPage() {
       let q = supabase
         .from("pedidos")
         .select(
-          "id,status,valor_pedido,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))",
+          "id,status,valor_pedido,pago,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))",
           { count: "exact" }
         )
         .eq("empresa_id", empresaId)
@@ -194,7 +202,8 @@ export default function PedidosListPage() {
         .order("id", { ascending: true })
         .range(from, to);
 
-      if (filtro) q = q.eq("status", filtro);
+      if (filtro === "abertos") q = q.not("status", "in", `(${STATUS_FECHADOS.join(",")})`);
+      else if (filtro) q = q.eq("status", filtro);
       if (orBusca) q = q.or(orBusca);
 
       const { data, count } = await (q as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
@@ -307,7 +316,7 @@ export default function PedidosListPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-          <KpiCard label="Total"        value={kpis.total}      />
+          <KpiCard label="Na lista"     value={kpis.total}      />
           <KpiCard label="Agendados"    value={kpis.agendadas}  color="warning" />
           <KpiCard label="Em Andamento" value={kpis.andamento}  color="info" />
           <KpiCard label="Concluídos"   value={kpis.concluidas} color="success" />
@@ -319,11 +328,12 @@ export default function PedidosListPage() {
             toolbar={
               <>
                 <SearchInput
-                  placeholder="Buscar por cliente ou destino..."
+                  placeholder="Buscar cliente, destino, motorista ou placa..."
                   value={busca}
                   onChange={e => setBusca(e.target.value)}
                 />
-                <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "160px" }}>
+                <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "190px" }}>
+                  <option value="abertos">Em aberto (não concluídos)</option>
                   <option value="">Todos os status</option>
                   <option value="agendada">Agendado</option>
                   <option value="em_andamento">Em Andamento</option>
@@ -336,35 +346,55 @@ export default function PedidosListPage() {
             <thead>
               <tr>
                 <Th>Cliente</Th>
-                <Th>Cadastrado em</Th>
+                <Th>Previsto</Th>
                 <Th>Destinos</Th>
+                <Th>Caminhão / Motorista</Th>
                 <Th>Valor (R$)</Th>
+                <Th>Pagamento</Th>
                 <Th>Status</Th>
                 <Th></Th>
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><Td colSpan={6} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
+                <tr><Td colSpan={8} style={{ textAlign: "center", padding: "32px", color: "#94a3b8" }}>Carregando...</Td></tr>
               ) : filtradas.length === 0 ? (
-                <tr><td colSpan={6}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
+                <tr><td colSpan={8}><EmptyState message="Nenhum pedido encontrado" action={<Btn href="/pedidos/novo">Criar primeiro pedido</Btn>} /></td></tr>
               ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
                 const veicLabel = veiculo ? (veiculo.apelido?.trim() || `${veiculo.placa} · ${veiculo.modelo}`) : null;
+                const cancelado = p.status === "cancelada" || p.status === "cancelado";
                 return (
                   <Tr key={p.id}>
                     <Td>
                       <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
-                      {(motorista || veicLabel) && (
-                        <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
-                          {[motorista?.nome, veicLabel].filter(Boolean).join(" · ")}
-                        </div>
-                      )}
+                      <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+                        Cadastrado em {fmtDataCadastro(p.created_at)}
+                      </div>
                     </Td>
-                    <Td>{fmtDataCadastro(p.created_at)}</Td>
-                    <Td style={{ maxWidth: "260px" }}>
+                    <Td>{fmtDataPrevista(p.data_inicio_prevista)}</Td>
+                    <Td style={{ maxWidth: "240px" }}>
                       <span style={{ color: "#475569" }}>{resumoDestinos(entregas)}</span>
                     </Td>
+                    <Td style={{ fontSize: "12px" }}>
+                      {veicLabel || motorista ? (
+                        <>
+                          <div style={{ fontWeight: 600, color: "#1e293b" }}>{veicLabel ?? "—"}</div>
+                          <div style={{ color: "#64748b" }}>{motorista?.nome ?? "—"}</div>
+                        </>
+                      ) : (
+                        <Badge variant="warning">Não despachado</Badge>
+                      )}
+                    </Td>
                     <Td style={{ textAlign: "right" }}>{fmtMoeda(p.valor_pedido)}</Td>
+                    <Td>
+                      {cancelado ? (
+                        <span style={{ fontSize: "12px", color: "#94a3b8" }}>—</span>
+                      ) : p.pago ? (
+                        <Badge variant="success">Pago</Badge>
+                      ) : (
+                        <Badge variant="warning">Em aberto</Badge>
+                      )}
+                    </Td>
                     <Td><Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge></Td>
                     <Td>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "flex-end" }}>
@@ -384,7 +414,7 @@ export default function PedidosListPage() {
         {/* ── Busca Mobile ────────────────────────────────────────────────── */}
         <div className="mobile-only" style={{ marginBottom: "4px" }}>
           <SearchInput
-            placeholder="Buscar por cliente ou destino..."
+            placeholder="Buscar cliente, destino, motorista ou placa..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
@@ -405,10 +435,12 @@ export default function PedidosListPage() {
                 badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}
                 highlight={statusColor}
                 details={[
-                  { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
+                  { label: "Previsto",   value: fmtDataPrevista(p.data_inicio_prevista) },
                   { label: "Valor",      value: p.valor_pedido != null ? `R$ ${fmtMoeda(p.valor_pedido)}` : "—" },
+                  { label: "Pagamento",  value: cancelado ? "—" : p.pago ? "✅ Pago" : "⏳ Em aberto" },
                   { label: "Motorista",  value: motorista?.nome ?? "—" },
                   { label: "Veículo",    value: veicLabel },
+                  { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
                 ]}
               />
             );

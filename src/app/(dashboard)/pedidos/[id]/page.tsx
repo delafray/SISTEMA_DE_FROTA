@@ -1,27 +1,14 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  PageHeader, FormSection, Btn, Badge, Alert,
+  PageHeader, FormSection, Btn, Badge,
   DataTable, Th, Td, Tr,
 } from "@/components/ui/ds";
-import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
 import { PagamentoSection } from "./_components/PagamentoSection";
 import { FluxoStepper } from "./_components/FluxoStepper";
-import { ModalDespacho, type VeiculoOpcao, type MotoristaOpcao } from "../../despacho/_components/ModalDespacho";
-import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
-
-/** Constraint do banco aceita só as formas FEMININAS (ver despacho/page.tsx) */
-const STATUS_FEMININO: Record<string, string> = {
-  agendado: "agendada", concluido: "concluida", cancelado: "cancelada",
-};
-const normalizarStatus = (s: string) => STATUS_FEMININO[s] ?? s;
-
-// Parada como o MapaRota consome (subset). Reusa o tipo do componente pra nao
-// divergir do snapshot `endereco` jsonb que ele renderiza.
-type ParadaMapa = MapaRotaProps["paradas"][number];
 
 type Pedido = {
   id: string;
@@ -121,6 +108,7 @@ function Row({ label, value }: { label: string; value: React.ReactNode }) {
 
 export default function PedidoDetalhePage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [resultado, setResultado] = useState<ResultadoFinanceiro | null>(null);
@@ -133,21 +121,11 @@ export default function PedidoDetalhePage() {
   const [editandoDestino, setEditandoDestino] = useState<string | null>(null);
   const [destinoEdit, setDestinoEdit] = useState("");
   const [salvandoDestino, setSalvandoDestino] = useState(false);
-  // Despacho no próprio pedido (sem trocar de tela)
-  const [modalDespacho, setModalDespacho] = useState(false);
-  const [veiculosOp, setVeiculosOp] = useState<VeiculoOpcao[]>([]);
-  const [motoristasOp, setMotoristasOp] = useState<MotoristaOpcao[]>([]);
-  const [despachoSaving, setDespachoSaving] = useState(false);
-  const [despachoErr, setDespachoErr] = useState("");
-  // Roteirizacao (Passo 3)
-  const [paradas, setParadas] = useState<ParadaMapa[]>([]);
-  const [roteirizando, setRoteirizando] = useState(false);
-  const [rotaMsg, setRotaMsg] = useState<{ tipo: "success" | "error" | "info"; texto: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const [pedidoRes, entregasRes, paradasRes] = await Promise.all([
+      const [pedidoRes, entregasRes] = await Promise.all([
         supabase.from("pedidos")
           .select("id,empresa_id,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,created_at,valor_pedido,pago,forma_pagamento,data_pagamento,local_carregamento,empresa_faturamento_id,motoristas(id,nome),veiculos(id,placa,apelido,marca,modelo)" as never)
           .eq("id", id)
@@ -157,16 +135,10 @@ export default function PedidoDetalhePage() {
           .eq("pedido_id", id)
           .order("sequencia", { ascending: true, nullsFirst: false })
           .order("data_coleta_prevista", { ascending: true }),
-        // Paradas ja roteirizadas (se houver) — pra desenhar o mapa ao abrir.
-        supabase.from("paradas")
-          .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
-          .eq("pedido_id", id)
-          .order("ordem", { ascending: true }),
       ]);
       const pedidoData = pedidoRes.data as unknown as Pedido | null;
       setPedido(pedidoData);
       setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
-      setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
 
       // Carrega resultado financeiro: receita do pedido + custos via veiculos_resultado_periodo
       if (pedidoData) {
@@ -209,68 +181,6 @@ export default function PedidoDetalhePage() {
     };
     load();
   }, [id]);
-
-  /** Abre o modal de despacho aqui mesmo (carrega caminhões/motoristas ativos 1x) */
-  const abrirDespacho = async () => {
-    setDespachoErr("");
-    if (veiculosOp.length === 0 && pedido?.empresa_id) {
-      const supabase = createClient();
-      const [{ data: veic }, { data: mot }] = await Promise.all([
-        supabase.from("veiculos").select("id,placa,apelido,marca,modelo")
-          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motoristas").select("id,nome")
-          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("nome"),
-      ]);
-      setVeiculosOp((veic ?? []) as VeiculoOpcao[]);
-      setMotoristasOp((mot ?? []) as MotoristaOpcao[]);
-    }
-    setModalDespacho(true);
-  };
-
-  /** Mesma gravação do Despacho (status normalizado + propagação às entregas) */
-  const confirmarDespachoLocal = async (veiculoId: string, motoristaId: string) => {
-    if (!pedido) return;
-    setDespachoSaving(true);
-    setDespachoErr("");
-    try {
-      const supabase = createClient();
-      const [empVeic, empMot] = await Promise.all([
-        empresaDoVeiculo(supabase, veiculoId),
-        empresaDoMotorista(supabase, motoristaId),
-      ]);
-      if (!empVeic) {
-        setDespachoErr("Caminhão sem empresa definida. Verifique o cadastro do caminhão.");
-        setDespachoSaving(false);
-        return;
-      }
-      const statusNorm = normalizarStatus(pedido.status);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const { error: errPedido } = await supabase.from("pedidos").update({
-        veiculo_id: veiculoId,
-        motorista_id: motoristaId,
-        empresa_motorista_id: empMot,
-        status: statusNorm,
-      } as any).eq("id", pedido.id);
-      if (errPedido) { setDespachoErr(errPedido.message); setDespachoSaving(false); return; }
-
-      const { error: errEnt } = await supabase.from("entregas")
-        .update({ veiculo_id: veiculoId, motorista_id: motoristaId })
-        .eq("pedido_id", pedido.id);
-      if (errEnt) { setDespachoErr(`Pedido despachado, mas houve erro ao atualizar as entregas: ${errEnt.message}`); setDespachoSaving(false); return; }
-
-      const vObj = veiculosOp.find(v => v.id === veiculoId);
-      const mObj = motoristasOp.find(m => m.id === motoristaId);
-      setPedido(p => p ? {
-        ...p,
-        status: statusNorm,
-        veiculos: vObj ? { id: vObj.id, placa: vObj.placa, apelido: vObj.apelido, marca: vObj.marca, modelo: vObj.modelo } : p.veiculos,
-        motoristas: mObj ? { id: mObj.id, nome: mObj.nome } : p.motoristas,
-      } : p);
-      setModalDespacho(false);
-    } finally {
-      setDespachoSaving(false);
-    }
-  };
 
   const changeStatus = async (novoStatus: string) => {
     setUpdatingStatus(true);
@@ -327,70 +237,6 @@ export default function PedidoDetalhePage() {
     }).catch(() => {});
   };
 
-  const recarregarRota = async () => {
-    if (!pedido) return;
-    const supabase = createClient();
-    const [paradasRes, entregasRes] = await Promise.all([
-      supabase.from("paradas")
-        .select("id,ordem,latitude,longitude,endereco,fixada,concluida_em")
-        .eq("pedido_id", pedido.id).order("ordem", { ascending: true }),
-      supabase.from("entregas")
-        .select("id,origem,destino,status,sequencia,geocode_status,data_coleta_prevista,nome_cliente_avulso,clientes(nome_fantasia)")
-        .eq("pedido_id", pedido.id)
-        .order("sequencia", { ascending: true, nullsFirst: false })
-        .order("data_coleta_prevista", { ascending: true }),
-    ]);
-    setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
-    setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
-  };
-
-  const roteirizar = async () => {
-    if (!pedido) return;
-    const mot = one(pedido.motoristas);
-    if (!mot?.id || !pedido.empresa_id) {
-      setRotaMsg({ tipo: "error", texto: "Pedido ainda não foi despachado — despache primeiro para roteirizar." });
-      return;
-    }
-    if (entregas.length === 0) {
-      setRotaMsg({ tipo: "error", texto: "Pedido sem entregas pra roteirizar." });
-      return;
-    }
-    setRoteirizando(true);
-    setRotaMsg({ tipo: "info", texto: "Geocodificando os destinos e otimizando a rota… (pode levar alguns segundos)" });
-    try {
-      const res = await fetch("/api/routing/otimizar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // origem omitida de proposito: o servidor usa o deposito (endereco da empresa).
-        body: JSON.stringify({ motorista_id: mot.id, empresa_id: pedido.empresa_id, pedido_id: pedido.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        const motivo = json?.motivo ? ` (${json.motivo})` : "";
-        const dica = json?.error === "otimizacao_falhou"
-          ? " — verifique se o VROOM_URL está configurado."
-          : json?.error === "todas_geocoding_falharam"
-          ? " — nenhum destino pôde ser geocodificado (endereços muito vagos?)."
-          : "";
-        setRotaMsg({ tipo: "error", texto: `Falha ao roteirizar: ${json?.error ?? res.status}${motivo}${dica}` });
-        return;
-      }
-      await recarregarRota();
-      const naoAtend = Array.isArray(json?.nao_atendidas) ? json.nao_atendidas.length : 0;
-      const nParadas = Array.isArray(json?.paradas) ? json.paradas.length : 0;
-      const km = typeof json?.distancia_total_km === "number" ? json.distancia_total_km.toFixed(1) : "?";
-      setRotaMsg(
-        naoAtend > 0
-          ? { tipo: "info", texto: `Rota gerada com ${nParadas} parada(s). ${naoAtend} entrega(s) ficaram de fora (endereço não geocodificado).` }
-          : { tipo: "success", texto: `✓ Rota otimizada: ${nParadas} parada(s), ${km} km.` }
-      );
-    } catch (e) {
-      setRotaMsg({ tipo: "error", texto: `Erro de rede ao roteirizar: ${(e as Error).message}` });
-    } finally {
-      setRoteirizando(false);
-    }
-  };
-
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
       Carregando...
@@ -422,7 +268,7 @@ export default function PedidoDetalhePage() {
     { label: "Pago",       done: !!pedido.pago },
   ];
   const proximaAcao =
-    !despachado ? { label: "🚚 Despachar agora", onClick: abrirDespacho } :
+    !despachado ? { label: "🚚 Despachar (na tela de Despacho)", onClick: () => router.push("/despacho") } :
     !emRota     ? { label: "▶ Iniciar Pedido",   onClick: () => changeStatus("em_andamento"), disabled: updatingStatus } :
     !concluido  ? { label: "✓ Concluir Pedido",  onClick: () => changeStatus("concluida"),    disabled: updatingStatus } :
     !pedido.pago ? { label: "💰 Registrar pagamento", onClick: () => document.getElementById("secao-pagamento")?.scrollIntoView({ behavior: "smooth", block: "center" }) } :
@@ -507,7 +353,7 @@ export default function PedidoDetalhePage() {
                 <p style={{ fontSize: "13px", color: "#64748b", margin: 0 }}>
                   Este pedido ainda <strong>não foi despachado</strong> — sem caminhão e motorista definidos.
                 </p>
-                {!finalizado && <Btn variant="primary" size="sm" onClick={abrirDespacho}>🚚 Despachar agora</Btn>}
+                {!finalizado && <Btn href="/despacho" variant="primary" size="sm">🚚 Despachar na tela de Despacho</Btn>}
               </div>
             ) : (
               <>
@@ -523,7 +369,7 @@ export default function PedidoDetalhePage() {
               </>
             )}
             <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "8px", marginBottom: 0 }}>
-              Caminhão, motorista e KM são definidos na tela de <a href="/despacho" style={{ color: "#2563eb" }}>Despacho</a> e no fluxo do motorista.
+              Caminhão, motorista, troca, rota e KM são tratados na tela de <a href="/despacho" style={{ color: "#2563eb" }}>Despacho</a> e no fluxo do motorista — aqui é só leitura.
             </p>
           </FormSection>
 
@@ -591,43 +437,6 @@ export default function PedidoDetalhePage() {
               <p style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6, margin: 0 }}>{pedido.observacoes}</p>
             </FormSection>
           )}
-
-          <div style={{ gridColumn: "span 2" }}>
-            <FormSection title="🗺️ Rota Otimizada">
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-                <Btn
-                  variant="primary"
-                  disabled={roteirizando || entregas.length === 0 || !despachado}
-                  onClick={roteirizar}
-                >
-                  {roteirizando ? "Roteirizando…" : paradas.length > 0 ? "🔄 Re-roteirizar" : "🧭 Roteirizar"}
-                </Btn>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-                  {entregas.length === 0
-                    ? "Adicione entregas ao pedido para roteirizar."
-                    : !despachado
-                    ? "Despache o pedido primeiro — a rota é calculada para o motorista."
-                    : "Parte do depósito (endereço da empresa) e ordena os destinos das entregas."}
-                </span>
-              </div>
-
-              {rotaMsg && (
-                <div style={{ marginBottom: "12px" }}>
-                  <Alert variant={rotaMsg.tipo === "success" ? "success" : rotaMsg.tipo === "error" ? "error" : "info"}>
-                    {rotaMsg.texto}
-                  </Alert>
-                </div>
-              )}
-
-              {paradas.length > 0 ? (
-                <MapaRota paradas={paradas} altura={380} />
-              ) : (
-                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
-                  Nenhuma rota gerada ainda. Clique em <strong>Roteirizar</strong> para calcular a ordem ótima das entregas.
-                </p>
-              )}
-            </FormSection>
-          </div>
 
           <div style={{ gridColumn: "span 2" }}>
             <FormSection title={`Entregas deste Pedido (${entregas.length})`}>
@@ -723,19 +532,6 @@ export default function PedidoDetalhePage() {
 
         </div>
       </div>
-
-      {/* Despacho sem trocar de tela (mesmo modal do Despacho) */}
-      {modalDespacho && (
-        <ModalDespacho
-          pedidosIds={[pedido.id]}
-          veiculos={veiculosOp}
-          motoristas={motoristasOp}
-          onConfirm={confirmarDespachoLocal}
-          onClose={() => setModalDespacho(false)}
-          saving={despachoSaving}
-          err={despachoErr}
-        />
-      )}
     </div>
   );
 }

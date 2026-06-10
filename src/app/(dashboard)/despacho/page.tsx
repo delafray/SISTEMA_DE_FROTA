@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/ds";
 import { MobileCard, MobileList } from "@/components/mobile";
 import { ModalDespacho } from "./_components/ModalDespacho";
+import { ModalRota } from "./_components/ModalRota";
 
 // ─── Tipos ──────────────────────────────────────────────────────────────────────
 
@@ -166,6 +167,8 @@ export default function DespachoPage() {
   const [saving, setSaving]                 = useState(false);
   const [modalErr, setModalErr]             = useState("");
   const [sucesso, setSucesso]               = useState("");
+  // Rota do pedido (roteirizar + mapa) — movida da tela do pedido pra cá (10/06)
+  const [modalRota, setModalRota] = useState<{ pedidoId: string; motoristaId: string | null } | null>(null);
 
   // ── Carrega empresa do usuário (uma vez) ──────────────────────────────────
 
@@ -755,13 +758,23 @@ export default function DespachoPage() {
                             </Btn>
                           </>
                         ) : (
-                          <Btn
-                            variant="outline"
-                            size="xs"
-                            onClick={() => abrirModal([p.id], true)}
-                          >
-                            Trocar
-                          </Btn>
+                          <>
+                            <Btn
+                              variant="outline"
+                              size="xs"
+                              onClick={() => setModalRota({ pedidoId: p.id, motoristaId: p.motorista_id ?? null })}
+                              title="Roteirizar e ver o mapa da rota"
+                            >
+                              🗺️ Rota
+                            </Btn>
+                            <Btn
+                              variant="outline"
+                              size="xs"
+                              onClick={() => abrirModal([p.id], true)}
+                            >
+                              Trocar
+                            </Btn>
+                          </>
                         )}
                       </div>
                     </Td>
@@ -839,6 +852,13 @@ export default function DespachoPage() {
                       <Btn
                         variant="outline"
                         size="sm"
+                        onClick={() => setModalRota({ pedidoId: p.id, motoristaId: p.motorista_id ?? null })}
+                      >
+                        🗺️ Rota
+                      </Btn>
+                      <Btn
+                        variant="outline"
+                        size="sm"
                         onClick={() => abrirModal([p.id], true)}
                         style={{ flex: 1, justifyContent: "center" }}
                       >
@@ -879,6 +899,16 @@ export default function DespachoPage() {
           saving={saving}
           err={modalErr}
           modoTroca={modalModoTroca}
+        />
+      )}
+
+      {/* Rota do pedido (roteirizar + mapa) */}
+      {modalRota && empresaId && (
+        <ModalRota
+          pedidoId={modalRota.pedidoId}
+          empresaId={empresaId}
+          motoristaId={modalRota.motoristaId}
+          onClose={() => setModalRota(null)}
         />
       )}
     </div>
