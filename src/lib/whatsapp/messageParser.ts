@@ -253,6 +253,10 @@ export async function getMediaAsBase64DataUrl(messageId: string): Promise<string
     return null;
   }
 
+  // Timeout: a busca de mídia roda no caminho quente do webhook (maxDuration=120).
+  // Sem AbortController um fetch travado da Evolution comeria todo o orçamento.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${instance}`, {
       method: 'POST',
@@ -261,6 +265,7 @@ export async function getMediaAsBase64DataUrl(messageId: string): Promise<string
         apikey: apiKey,
       },
       body: JSON.stringify({ message: { key: { id: messageId } } }),
+      signal: controller.signal,
     });
 
     if (!res.ok) {
@@ -277,8 +282,14 @@ export async function getMediaAsBase64DataUrl(messageId: string): Promise<string
 
     return `data:${data.mimetype ?? 'audio/ogg'};base64,${data.base64}`;
   } catch (err) {
-    console.error('[messageParser] Erro getMediaAsBase64DataUrl:', err);
+    if ((err as Error).name === 'AbortError') {
+      console.error('[messageParser] Timeout getMediaAsBase64DataUrl após 15s');
+    } else {
+      console.error('[messageParser] Erro getMediaAsBase64DataUrl:', err);
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
@@ -300,6 +311,9 @@ export async function getMediaUrl(mediaId: string): Promise<string | null> {
     return null;
   }
 
+  // Timeout: mesmo caminho quente do webhook — não deixar a Evolution travar a function.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 15000);
   try {
     const res = await fetch(`${apiUrl}/chat/getBase64FromMediaMessage/${instance}`, {
       method: 'POST',
@@ -308,6 +322,7 @@ export async function getMediaUrl(mediaId: string): Promise<string | null> {
         apikey: apiKey,
       },
       body: JSON.stringify({ message: { key: { id: mediaId } } }),
+      signal: controller.signal,
     });
 
     if (!res.ok) {
@@ -321,7 +336,13 @@ export async function getMediaUrl(mediaId: string): Promise<string | null> {
     // Retorna como data URL para compatibilidade com o aiService
     return `data:${data.mimetype ?? 'image/jpeg'};base64,${data.base64}`;
   } catch (err) {
-    console.error('[messageParser] Erro ao buscar mídia:', err);
+    if ((err as Error).name === 'AbortError') {
+      console.error('[messageParser] Timeout getMediaUrl após 15s');
+    } else {
+      console.error('[messageParser] Erro ao buscar mídia:', err);
+    }
     return null;
+  } finally {
+    clearTimeout(timeout);
   }
 }

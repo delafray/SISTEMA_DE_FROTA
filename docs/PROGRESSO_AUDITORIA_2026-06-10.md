@@ -18,9 +18,9 @@ Modelo: claude-opus-4-8 (Opus 4.8) em modo /goal
 - ✅ Ler docs/empresa01.md, docs/PESQUISAS_CONSOLIDADO.md, framework/INDEX.md
 - ✅ Criar branch audit/2026-06-10
 - ✅ Criar docs/PROGRESSO_AUDITORIA_2026-06-10.md
-- 🔄 npm install
-- ⬜ Baseline: `npm test -- --run`
-- ⬜ Baseline: `npx tsc --noEmit`
+- ✅ npm install
+- ✅ Baseline: `npm test -- --run` → 1190/1190 passaram (110 arquivos)
+- ✅ Baseline: `npx tsc --noEmit` → 0 erros
 
 ## Exploração (fan-out leitura)
 - ⬜ Fluxo Empresa 1: routing/* , pod, (motorista), mobile, lib/routing/*
@@ -29,8 +29,21 @@ Modelo: claude-opus-4-8 (Opus 4.8) em modo /goal
 - ⬜ Telas pedidos/despacho: SOMENTE RELATAR (não editar — redesign 05:00 UTC)
 - ⬜ database.types.ts: listar o que falta (não regenerar)
 
+## Exploração (fan-out leitura) — RESULTADO
+- ✅ Routing/POD/motorista/mobile (subagente haiku, revisado por mim)
+- ✅ Bot WhatsApp (subagente haiku, revisado por mim)
+- ✅ Banco vs código (subagente haiku, revisado por mim) → SEM divergências de coluna
+- ✅ database.types.ts gaps listados (não regenerar)
+
 ## Correções (commit+push a cada bloco)
-- (a preencher conforme achados)
+
+### Bloco 1 — maxDuration + timeouts (COMMITADO)
+- ✅ `routing/rota/[id]/reorganizar/route.ts` — add `maxDuration=60` (roda VROOM)
+- ✅ `routing/rota/[id]/paradas/adicionar/route.ts` — add `maxDuration=60` (geocoding)
+- ✅ `routing/rota/[id]/paradas/route.ts` — add `maxDuration=30` (batch updates)
+- ✅ `whatsapp/messageParser.ts` — AbortController 15s nos 2 fetch da Evolution (caminho quente do webhook)
+- ✅ `whatsapp/reconectar/route.ts` — AbortController 12s no evoFetch
+- Verificado: tsc 0 erros, 1190/1190 testes verdes.
 
 ## Entrega
 - ⬜ docs/AUDITORIA_COMPLETA_2026-06-10.md (incremental)

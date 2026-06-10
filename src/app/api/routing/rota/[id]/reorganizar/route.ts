@@ -26,6 +26,10 @@ import type { Coordenada, JanelaHorario } from '@/lib/routing/types';
 
 const log = createLogger('api_routing_reorganizar');
 
+// Roda o VROOM (timeout interno de 30s). Sem isto a function morre no default da
+// Vercel (10s no Hobby) e a reorganizacao falha em rotas com muitas paradas.
+export const maxDuration = 60;
+
 function getSupabase() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
