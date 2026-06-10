@@ -6,9 +6,9 @@
 -- 2026-06-09 pela outra IA). Sem isso, "implantar do zero" num cliente novo
 -- e impossivel (modelo de venda do dono = deploy proprio por cliente).
 --
--- Derivada do codigo real: src/lib/routing/types.ts (interfaces NotaCapturada/
--- RotaOtimizada/Parada), src/app/api/notas/sync/route.ts (insert), e telas de
--- locais_carregamento (clientes/[id]/editar + pedidos/novo).
+-- Derivada do codigo real e CONFERIDA contra o banco de producao em 10/06/2026
+-- (information_schema.columns — item 5 da fila de pendencias). A partir dessa
+-- conferencia, este arquivo espelha o banco 1:1 (NOT NULLs e defaults reais).
 --
 -- Padrao SEM TRAVA: sem RLS, sem FK rigida, GRANT ALL. Idempotente — rodar no
 -- banco de PRODUCAO e seguro (IF NOT EXISTS nao toca no que ja existe) e e
@@ -18,18 +18,18 @@
 -- ─── notas_capturadas — captura offline de NFs pelo motorista ───────────────
 CREATE TABLE IF NOT EXISTS notas_capturadas (
   id              UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  motorista_id    UUID,
-  empresa_id      UUID,
+  motorista_id    UUID NOT NULL,
+  empresa_id      UUID NOT NULL,
   pedido_id       UUID,                          -- EMPRESA 1: NULL = captura solta
-  cep             TEXT DEFAULT '',               -- 8 digitos sem hifen ('' = sem CEP)
-  numero          TEXT,
-  endereco        JSONB,                         -- { logradouro, bairro, cidade, uf }
+  cep             TEXT NOT NULL,                 -- 8 digitos sem hifen ('' = sem CEP; o app SEMPRE manda)
+  numero          TEXT NOT NULL,
+  endereco        JSONB NOT NULL,                -- { logradouro, bairro, cidade, uf }
   latitude        NUMERIC,
   longitude       NUMERIC,
   observacao      TEXT,
-  status          TEXT DEFAULT 'capturada',
+  status          TEXT NOT NULL DEFAULT 'capturada',
   -- capturada | geocodificada | em_rota | concluida | cancelada
-  capturado_em    TIMESTAMPTZ,
+  capturado_em    TIMESTAMPTZ NOT NULL DEFAULT now(),
   sincronizado_em TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_notas_capturadas_motorista ON notas_capturadas (motorista_id, status);
@@ -39,16 +39,16 @@ CREATE INDEX IF NOT EXISTS idx_notas_capturadas_pedido    ON notas_capturadas (p
 -- ─── rotas_otimizadas — 1 rota gerada pelo VROOM (captura solta OU pedido) ──
 CREATE TABLE IF NOT EXISTS rotas_otimizadas (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  motorista_id       UUID,
-  empresa_id         UUID,
+  motorista_id       UUID NOT NULL,
+  empresa_id         UUID NOT NULL,
   pedido_id          UUID,                       -- EMPRESA 1: NULL = captura solta
-  data               DATE,
+  data               DATE NOT NULL DEFAULT CURRENT_DATE,
   distancia_total_km NUMERIC,
-  tempo_total_min    NUMERIC,
-  status             TEXT DEFAULT 'rascunho',
+  tempo_total_min    INTEGER,
+  status             TEXT NOT NULL DEFAULT 'rascunho',
   -- rascunho | otimizada | em_andamento | concluida | cancelada
   otimizada_em       TIMESTAMPTZ,
-  criada_em          TIMESTAMPTZ DEFAULT now()
+  criada_em          TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_rotas_otimizadas_motorista ON rotas_otimizadas (motorista_id, data);
 CREATE INDEX IF NOT EXISTS idx_rotas_otimizadas_pedido    ON rotas_otimizadas (pedido_id);
@@ -56,17 +56,17 @@ CREATE INDEX IF NOT EXISTS idx_rotas_otimizadas_pedido    ON rotas_otimizadas (p
 -- ─── paradas — 1 parada da rota (snapshot do endereco; nao muda se editar) ──
 CREATE TABLE IF NOT EXISTS paradas (
   id                 UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  rota_id            UUID,
+  rota_id            UUID NOT NULL,
   nota_id            UUID,                       -- origem captura solta (ou NULL)
   pedido_id          UUID,                       -- EMPRESA 1: denormalizado
   entrega_id         UUID,                       -- EMPRESA 1: origem ramo entregas
-  ordem              INTEGER,
-  endereco           JSONB,                      -- snapshot + coord_confianca/coord_fonte
-  latitude           NUMERIC,
-  longitude          NUMERIC,
-  fixada             BOOLEAN DEFAULT false,
+  ordem              INTEGER NOT NULL,
+  endereco           JSONB NOT NULL,             -- snapshot + coord_confianca/coord_fonte
+  latitude           NUMERIC NOT NULL,
+  longitude          NUMERIC NOT NULL,
+  fixada             BOOLEAN NOT NULL DEFAULT false,
   janela_horario     JSONB,                      -- [["HH:MM","HH:MM"], ...]
-  tempo_descarga_min INTEGER DEFAULT 5,
+  tempo_descarga_min INTEGER NOT NULL DEFAULT 5,
   observacao         TEXT,
   concluida_em       TIMESTAMPTZ
 );
@@ -76,13 +76,14 @@ CREATE INDEX IF NOT EXISTS idx_paradas_pedido ON paradas (pedido_id);
 -- ─── locais_carregamento — enderecos de coleta salvos por cliente ───────────
 CREATE TABLE IF NOT EXISTS locais_carregamento (
   id         UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  empresa_id UUID,
-  cliente_id UUID,
-  nome       TEXT,
-  endereco   TEXT,
+  empresa_id UUID NOT NULL,
+  cliente_id UUID NOT NULL,
+  nome       TEXT NOT NULL,
+  endereco   TEXT NOT NULL,
   principal  BOOLEAN DEFAULT false,
   ativo      BOOLEAN DEFAULT true,
-  created_at TIMESTAMPTZ DEFAULT now()
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_locais_carregamento_cliente ON locais_carregamento (cliente_id, ativo);
 
