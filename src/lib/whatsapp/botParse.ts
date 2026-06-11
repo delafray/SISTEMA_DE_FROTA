@@ -68,6 +68,26 @@ export function parseSimNao(texto: string): boolean | null {
   return null;
 }
 
+/**
+ * Detecta o status-alvo numa frase de mudança de status do veículo.
+ * "põe o leão em manutenção" → 'manutencao' · "deixa o touro parado" → 'parado'
+ * "põe pra rodar / libera" → 'operacional' (precisa de motorista — tratado no caller).
+ * null = não deu pra saber → o caller pergunta.
+ */
+export function parseStatusVeiculo(texto: string): "manutencao" | "parado" | "operacional" | null {
+  const t = normPalavras(texto);
+  if (/\b(manutencao|oficina|mecanic\w*|conserto|revisao geral)\b/.test(t)) return "manutencao";
+  if (/\b(parado|parar|encosta\w*|encostado|de circulacao|garagem)\b/.test(t)) return "parado";
+  if (/\b(rodar|rodando|operacional|libera\w*|volta\w* a (rodar|operar)|ativa\w*)\b/.test(t)) return "operacional";
+  return null;
+}
+
+export const STATUS_VEICULO_LABEL: Record<string, string> = {
+  operacional: "🟢 Rodando",
+  manutencao: "🔧 Manutenção",
+  parado: "🅿️ Parado",
+};
+
 const ORDINAIS: Record<string, number> = {
   primeiro: 0, primeira: 0, "1o": 0, "1a": 0, segundo: 1, segunda: 1, "2o": 1, "2a": 1, terceiro: 2, terceira: 2, "3o": 2, "3a": 2,
 };

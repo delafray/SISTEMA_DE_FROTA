@@ -25,9 +25,10 @@ import { criarLembrete } from "@/lib/ai/tools/frotaTools";
 import { createLogger } from "@/lib/logger";
 import {
   executarConsulta, acharVeiculo, commitAtualizarKm, colunasPermitidas,
+  consultarStatusFrota, lerAlocacaoAberta, commitMudarStatus,
   type EscopoColunas,
 } from "@/lib/whatsapp/botExecutor";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica, parseStatusVeiculo, STATUS_VEICULO_LABEL } from "@/lib/whatsapp/botParse";
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
@@ -43,7 +44,8 @@ function sb(): SupabaseClient {
 type Pendente =
   | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null; tentativas?: number }
   | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string }
-  | { tipo: "confirmacao"; acao: "anotar"; texto: string };
+  | { tipo: "confirmacao"; acao: "anotar"; texto: string }
+  | { tipo: "confirmacao"; acao: "status_veiculo"; veiculo_id: string; status_novo: "manutencao" | "parado"; aloc_id: string | null; rotulo: string };
 
 // R4: reserva idempotente com status. 'duplicada' = já processada (ok) ou em curso recente.
 async function reservarWamid(supa: SupabaseClient, wamid: string): Promise<"reservado" | "duplicada"> {
@@ -172,6 +174,29 @@ async function executarRegra(
     return `${aviso}✏️ Alterar KM do ${rotulo}\nDe:   ${kmAtual.toLocaleString("pt-BR")} km\nPara: ${valor.toLocaleString("pt-BR")} km  (+${(valor - kmAtual).toLocaleString("pt-BR")})\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
   }
 
+  // MUDAR STATUS DO VEÍCULO (escopo permite alterar alocacoes.status) → propose→confirm
+  if (colunasPermitidas(regra.escopo, "alocacoes", "alterar").includes("status")) {
+    const statusNovo = parseStatusVeiculo(texto);
+    if (!statusNovo) return "Pra qual situação? Me diz *manutenção* ou *parado*.";
+    if (statusNovo === "operacional") return "Pra colocar um caminhão pra rodar eu preciso saber o motorista — por enquanto isso é feito no painel (Veículos → Vínculo).";
+    if (!alvoEff) return "Qual caminhão? Me diz o apelido ou a placa.";
+    const v = await acharVeiculo(supa, empresaId, alvoEff);
+    if (v.tipo === "nenhum") return `Não achei o caminhão "${alvoEff}".`;
+    if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
+    await registrarUso(supa, telefone, v.veiculo, doContexto);
+    const rotulo = `${v.veiculo.apelido ?? "?"}${v.veiculo.placa ? ` (${v.veiculo.placa})` : ""}`;
+    let atual;
+    try { atual = await lerAlocacaoAberta(supa, v.veiculo.id); } catch { return "❌ Não consegui ler a situação atual do caminhão. Tenta de novo."; }
+    if (atual?.status === statusNovo) return `O ${rotulo} já está em *${STATUS_VEICULO_LABEL[statusNovo]}*. Não mudei nada.`;
+    await salvarPendente(supa, telefone, {
+      tipo: "confirmacao", acao: "status_veiculo", veiculo_id: v.veiculo.id,
+      status_novo: statusNovo, aloc_id: atual?.id ?? null, rotulo,
+    });
+    const aviso = doContexto ? `💡 _Assumindo o ${rotulo} (do contexto). Se for outro, me corrige._\n\n` : "";
+    const de = atual ? (STATUS_VEICULO_LABEL[atual.status] ?? atual.status) : "sem vínculo";
+    return `${aviso}🔄 Mudar status do ${rotulo}\nDe:   ${de}\nPara: ${STATUS_VEICULO_LABEL[statusNovo]}\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
+  }
+
   // CONSULTAR
   if (colunasPermitidas(regra.escopo, Object.keys(regra.escopo)[0] ?? "", "consultar").length > 0 || regra.acoes.includes("consultar")) {
     try {
@@ -183,6 +208,11 @@ async function executarRegra(
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
         await registrarUso(supa, telefone, v.veiculo, doContexto);
         veiculoId = v.veiculo.id;
+      }
+      // STATUS DA FROTA: escopo pede alocacoes.status → consulta dedicada com
+      // status real (alocação aberta) + nome do motorista. A genérica não faz join.
+      if (colunasPermitidas(regra.escopo, "alocacoes", "consultar").includes("status")) {
+        return await consultarStatusFrota(supa, ctx, veiculoId);
       }
       return await executarConsulta(supa, regra.escopo, ctx, alvoEff, veiculoId);
     } catch (e) {
@@ -215,6 +245,12 @@ async function resolverPendente(
     }
     const empresaId = "empresa_id" in identity ? identity.empresa_id : null;
     if (!empresaId) return "Não consegui confirmar sua empresa.";
+    if (pend.acao === "status_veiculo") {
+      const r = await commitMudarStatus(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.status_novo, pend.aloc_id);
+      return r.ok
+        ? `✅ ${pend.rotulo} agora está em *${STATUS_VEICULO_LABEL[pend.status_novo]}*. Já aparece no painel.`
+        : `❌ ${r.motivo}`;
+    }
     const r = await commitAtualizarKm(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.km_novo, pend.km_atual);
     return r.ok
       ? `✅ KM do ${pend.rotulo} atualizado para ${r.km.toLocaleString("pt-BR")}.`

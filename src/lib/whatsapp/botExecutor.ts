@@ -107,6 +107,90 @@ export async function executarConsulta(
   return `📋 ${tabela} (${linhas.length}):\n${corpo}${extra}`;
 }
 
+// ─── STATUS DA FROTA (consulta) ─────────────────────────────────────────
+// alocacoes NÃO tem empresa_id → filtra pelos veículos da empresa.
+// Alocação ABERTA = fim IS NULL (mesmo critério do painel/VinculoResponsavel).
+
+const STATUS_ICONE: Record<string, string> = { operacional: "🟢", manutencao: "🔧", parado: "🅿️" };
+const STATUS_NOME: Record<string, string> = { operacional: "rodando", manutencao: "em manutenção", parado: "parado" };
+
+/**
+ * Responde "quais caminhões estão parados / quem está com o leão":
+ * frota inteira (ou 1 veículo) com status da alocação aberta + nome do motorista.
+ */
+export async function consultarStatusFrota(
+  sb: SupabaseClient, ctx: { empresa_id: string }, veiculoId?: string | null
+): Promise<string> {
+  let qv = sb.from("veiculos").select("id,apelido,placa").eq("empresa_id", ctx.empresa_id).eq("ativo", true);
+  if (veiculoId) qv = qv.eq("id", veiculoId);
+  const { data: veics, error: e1 } = await qv;
+  if (e1) throw new Error(e1.message || "erro ao buscar veículos");
+  if (!veics?.length) return "Nenhum caminhão ativo encontrado.";
+
+  const ids = veics.map((v) => v.id);
+  const { data: alocs, error: e2 } = await sb.from("alocacoes")
+    .select("veiculo_id,status,motorista_id").in("veiculo_id", ids).is("fim", null);
+  if (e2) throw new Error(e2.message || "erro ao buscar alocações");
+
+  const motIds = [...new Set((alocs ?? []).map((a) => a.motorista_id).filter(Boolean))] as string[];
+  const nomes: Record<string, string> = {};
+  if (motIds.length) {
+    const { data: mots } = await sb.from("motoristas").select("id,nome").in("id", motIds);
+    for (const m of mots ?? []) nomes[m.id] = m.nome;
+  }
+
+  const alocPorVeiculo = new Map((alocs ?? []).map((a) => [a.veiculo_id, a]));
+  const linhas = veics.map((v) => {
+    const a = alocPorVeiculo.get(v.id);
+    const rot = `${v.apelido ?? "?"}${v.placa ? ` (${v.placa})` : ""}`;
+    if (!a) return `⚪ ${rot} — sem vínculo`;
+    const quem = a.status === "operacional" && a.motorista_id ? ` — com ${nomes[a.motorista_id] ?? "(motorista)"}` : "";
+    return `${STATUS_ICONE[a.status] ?? "•"} ${rot} — ${STATUS_NOME[a.status] ?? a.status}${quem}`;
+  });
+  return veiculoId ? linhas[0] : `🚛 Frota (${linhas.length}):\n${linhas.join("\n")}`;
+}
+
+// ─── MUDAR STATUS DO VEÍCULO (propose→confirm) ──────────────────────────
+
+export type AlocacaoAberta = { id: string; status: string; motorista_id: string | null } | null;
+
+/** Lê a alocação aberta do veículo (pra mostrar no preview e travar no commit). */
+export async function lerAlocacaoAberta(sb: SupabaseClient, veiculoId: string): Promise<AlocacaoAberta> {
+  const { data, error } = await sb.from("alocacoes")
+    .select("id,status,motorista_id").eq("veiculo_id", veiculoId).is("fim", null).maybeSingle();
+  if (error) throw new Error(error.message || "erro ao ler alocação");
+  return (data as AlocacaoAberta) ?? null;
+}
+
+/**
+ * Confirma a mudança de status — REVALIDA a alocação aberta no commit (lock por id):
+ * se mudou desde a proposta → conflito. Fecha a atual (fim + km_fim) e abre a nova
+ * (motorista_id null, km_evento = km_atual do veículo) — IGUAL ao painel.
+ */
+export async function commitMudarStatus(
+  sb: SupabaseClient, ctx: { empresa_id: string }, veiculoId: string,
+  statusNovo: "manutencao" | "parado", alocIdEsperado: string | null
+): Promise<{ ok: true } | { ok: false; motivo: string }> {
+  const { data: v } = await sb.from("veiculos")
+    .select("id,km_atual").eq("id", veiculoId).eq("empresa_id", ctx.empresa_id).maybeSingle();
+  if (!v) return { ok: false, motivo: "Veículo não encontrado." };
+
+  const atual = await lerAlocacaoAberta(sb, veiculoId).catch(() => null);
+  if ((atual?.id ?? null) !== alocIdEsperado) return { ok: false, motivo: "A situação do caminhão mudou enquanto eu confirmava. Manda de novo." };
+  if (atual?.status === statusNovo) return { ok: false, motivo: "O caminhão já está nesse status." };
+
+  const agora = new Date().toISOString();
+  const km = v.km_atual ?? null;
+  if (atual) {
+    const { error } = await sb.from("alocacoes").update({ fim: agora, km_fim: km }).eq("id", atual.id).is("fim", null);
+    if (error) return { ok: false, motivo: "Erro ao fechar o vínculo atual." };
+  }
+  const { error: e2 } = await sb.from("alocacoes")
+    .insert({ veiculo_id: veiculoId, motorista_id: null, status: statusNovo, km_evento: km, inicio: agora });
+  if (e2) return { ok: false, motivo: "Erro ao gravar o novo status." };
+  return { ok: true };
+}
+
 /**
  * Confirma e grava o novo KM — REVALIDA no commit + optimistic lock.
  * km nunca pode decrescer. Se o registro mudou desde a proposta → conflito.

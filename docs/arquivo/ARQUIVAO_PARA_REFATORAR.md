@@ -15,8 +15,31 @@ consolidado em outro doc, ou obsoleto.
 
 ---
 
+# 0. ⭐ DÍVIDAS TÉCNICAS — EMPRESA 1 (avaliação 10/06/2026 com o dono)
+
+*Esta seção é a EXCEÇÃO do arquivão: não é garimpo histórico, é a lista viva priorizada. Recorte definido pelo dono: empresa 1 = dono de frota que presta serviço a outras empresas. Sistema é ORGANIZACIONAL (tirar planilhas da tela do gestor) — **nada fiscal será tratado neste sistema** (CT-e/MDF-e/romaneio: fora, definitivo). Importação em massa, roteirização em lote (E3) e GPS server-side ficam pras próximas empresas.*
+
+## Pendências assumidas (ordem de prioridade)
+
+1. **Crons/alertas — pendência confirmada pelo dono.** CNH/IPVA/licenciamento vencendo, manutenção por km, veículo sem registro de km há N dias, relatório mensal. Desenho em §1.1–1.2 abaixo. ⚠️ Regra "custo zero no zap": alerta nasce no **painel** (dashboard cutuca o gestor), NÃO como mensagem proativa no WhatsApp (risco de ban do chip).
+2. **Modo B — conciliação do motorista no galpão.** Na empresa 1 é o MOTORISTA que recebe as notas na hora do carregamento (o gestor só sabe "carregar no galpão X, ~70 pedidos região Y"). `src/app/mobile/captura-notas/page.tsx` tem TODO (~linha 117): "Finalizar Rota" só muda estado local — **nunca dispara geocoding nem otimização**. É o gap mais grave do recorte atual.
+3. **POD/fila offline.** Entrega registrada sem sinal precisa subir sozinha quando voltar o 4G. Base Dexie já existe (sessão/rota offline 7 dias); falta a fila de POD (ver §6/P4).
+4. **Lembrete → pedido (atalho).** Fluxo do dono: "fechei negócio, anota aí" → lembrete → no dia seguinte vira pedido. Hoje tem degrau manual (gestor digita o pedido do zero). Botão **"virar pedido"** no lembrete abrindo `/pedidos/novo` pré-preenchido fecha o ciclo. Custo baixo, ganho direto.
+5. **GPS via rastreador terceirizado.** Caminhões já são rastreados por empresa terceira → consumir a API do rastreador via **token** e plotar no mapa do painel (sem app rastreando nada). Se o rastreador atual não der token, o gestor troca de empresa. Aguarda o token — integração bem delimitada.
+6. **Refatoração dos blocos gigantes** (não é feature, é sustentabilidade): `mobile/rota` 1.178 linhas, `ajuste-rota` 911, `pedidos/importar` 891, `InputEnderecoNF` 791, `despacho` 790, `despacho/[id]` ~750. Um por vez, suíte verde entre cada. `messageRouter` (940) fica quieto — já delega bem. `pedidos/novo` × `novo-avancado`: **manter os dois por ora** (decisão do dono 10/06, reavaliar após uso real).
+
+## Decisões de recorte (não rediscutir sem o dono)
+
+- **Fiscal: FORA do sistema, definitivo** — o sistema organiza a operação; fiscal roda fora.
+- **Importação XML/XLS**: não importa pra empresa 1 (motorista concilia no galpão); entra nas próximas empresas (§4).
+- **Roteirização em lote E3**: pra frente (§8).
+- **GPS server-side próprio**: não — integração com rastreador terceirizado via token (item 5 acima).
+
+---
+
 ## ÍNDICE
 
+0. [⭐ Dívidas técnicas — empresa 1 (lista viva)](#0--dívidas-técnicas--empresa-1-avaliação-10062026-com-o-dono)
 1. [Funcionalidades planejadas e nunca implementadas (PLANO_DE_PROJETO)](#1-funcionalidades-planejadas-e-nunca-implementadas)
 2. [Decisões de negócio registradas só no plano antigo](#2-decisões-de-negócio-registradas-só-no-plano-antigo)
 3. [Glossário fiscal/operacional BR (termos sem tela no sistema)](#3-glossário-fiscaloperacional-br)

@@ -138,3 +138,4 @@ Formato: `- [DATA] [MODELO] — [O QUE FEZ] — [QUANTOS TESTES NOVOS] — [STAT
 - 2026-06-10 Claude Fable 5 — Aba Rota do despacho realinhada: bloco Notas (importação, sem mapa), Em montagem em tempo real dentro da Execução, guia Mapa separada habilitada só com rota montada — +0 testes — suíte completa
 - 2026-06-10 Claude Fable 5 — Prints do Zap: toda imagem no bot arquivada no R2 (prints/) + tabela prints_zap + GET /api/prints pro Claude analisar — +0 testes — ✅ 1263/1263
 - 2026-06-10 Claude Fable 5 — ➕ do Ajuste de Rota com popup (continuar lote × adicionar um), ?continuar= puxa paradas pra captura editável, encerrar com confirmação+motivo→gestor, botões Ajustar/Encerrar distintos — +0 testes (1 atualizado) — ✅ suíte completa
+- 2026-06-11 Claude Fable 5 — Bot: Mudar Status do Veículo executa de verdade (propose→confirm via alocações) + Status da Frota com consulta dedicada (status real + motorista) + parseStatusVeiculo — +4 testes — ✅ 1267/1267 passaram

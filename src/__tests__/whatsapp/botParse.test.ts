@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica } from "@/lib/whatsapp/botParse";
+import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica, parseStatusVeiculo } from "@/lib/whatsapp/botParse";
 
 describe("ehReferenciaGenerica", () => {
   it("reconhece referência ao caminhão do contexto", () => {
@@ -104,5 +104,27 @@ describe("parseSelecao", () => {
   });
   it("não entendeu → null", () => {
     expect(parseSelecao("xyz qualquer coisa", ops)).toBeNull();
+  });
+});
+
+
+describe("parseStatusVeiculo", () => {
+  it("manutenção: oficina/mecânico/conserto", () => {
+    expect(parseStatusVeiculo("coloca o leão em manutenção")).toBe("manutencao");
+    expect(parseStatusVeiculo("manda o touro pra oficina")).toBe("manutencao");
+    expect(parseStatusVeiculo("o tigre vai pro mecânico")).toBe("manutencao");
+  });
+  it("parado: encostar/tirar de circulação/garagem", () => {
+    expect(parseStatusVeiculo("deixa o leão parado")).toBe("parado");
+    expect(parseStatusVeiculo("encosta o touro")).toBe("parado");
+    expect(parseStatusVeiculo("tira o ABC1234 de circulação")).toBe("parado");
+  });
+  it("operacional: rodar/liberar (caller orienta pro painel)", () => {
+    expect(parseStatusVeiculo("põe o leão pra rodar")).toBe("operacional");
+    expect(parseStatusVeiculo("libera o touro")).toBe("operacional");
+  });
+  it("não deu pra saber → null", () => {
+    expect(parseStatusVeiculo("muda o status do leão")).toBeNull();
+    expect(parseStatusVeiculo("e aí, tudo certo?")).toBeNull();
   });
 });
