@@ -8,9 +8,9 @@ vi.mock('@xyflow/react', async (importOriginal) => {
   const actual = await importOriginal<typeof import('@xyflow/react')>();
   return {
     ...actual,
-    ReactFlow: ({ children, onNodeClick, nodes }: any) => (
+    ReactFlow: ({ children, onNodeClick, nodes }: { children?: React.ReactNode; onNodeClick: (e: unknown, node: unknown) => void; nodes: Array<{ id: string; data: { label: string } }> }) => (
       <div data-testid="react-flow-mock">
-        {nodes.map((node: any) => (
+        {nodes.map((node) => (
           <button 
             key={node.id} 
             data-testid={`mock-node-${node.id}`} 
@@ -25,8 +25,8 @@ vi.mock('@xyflow/react', async (importOriginal) => {
     MiniMap: () => <div data-testid="minimap-mock" />,
     Controls: () => <div data-testid="controls-mock" />,
     Background: () => <div data-testid="background-mock" />,
-    useNodesState: (initial: any) => [initial, vi.fn(), vi.fn()],
-    useEdgesState: (initial: any) => [initial, vi.fn(), vi.fn()],
+    useNodesState: (initial: unknown) => [initial, vi.fn(), vi.fn()],
+    useEdgesState: (initial: unknown) => [initial, vi.fn(), vi.fn()],
   };
 });
 

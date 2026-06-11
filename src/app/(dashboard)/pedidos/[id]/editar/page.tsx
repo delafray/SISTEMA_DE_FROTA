@@ -35,13 +35,13 @@ const ENTREGA_STATUS_LABEL: Record<string, string> = {
 
 const fmtDate = (d: string | null) => d ? new Date(d + "T00:00:00").toLocaleDateString("pt-BR") : "—";
 
-function one<T>(x: any): T | null { return Array.isArray(x) ? (x[0] ?? null) : (x ?? null); }
+function one<T>(x: T | T[] | null | undefined): T | null { return Array.isArray(x) ? (x[0] ?? null) : (x ?? null); }
 
 export default function EditarPedidoPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
 
-  const [empresaId, setEmpresaId]       = useState("");
+  const [_empresaId, setEmpresaId]      = useState("");
   const [isGestor, setIsGestor]         = useState(false);
   const [clientes, setClientes]         = useState<Cliente[]>([]);
   const [entregasAtuais, setEntregasAtuais] = useState<EntregaAtual[]>([]);
@@ -99,6 +99,7 @@ export default function EditarPedidoPage() {
           .order("data_coleta_prevista", { ascending: true }),
       ]);
 
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const v: any = pedidoRes.data;
       if (v) {
         setF({
@@ -184,6 +185,7 @@ export default function EditarPedidoPage() {
     setSaving(true);
     const supabase = createClient();
 
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const payload: any = {
       status:               f.status,
       data_inicio_prevista: f.data_inicio_prevista || null,
@@ -200,6 +202,7 @@ export default function EditarPedidoPage() {
     if (error) { setErr(error.message); setSaving(false); return; }
 
     // Propaga cliente às entregas do pedido (cadastrado ou avulso).
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const entregaCli: any = avulso
       ? { cliente_id: null, nome_cliente_avulso: nomeAvulso.trim() }
       : { cliente_id: clienteId, nome_cliente_avulso: null };
@@ -208,6 +211,7 @@ export default function EditarPedidoPage() {
 
     // Vincular novas entregas selecionadas — herda o despacho atual do pedido (se houver).
     if (selectedEntregas.size > 0) {
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             const vinc: any = { pedido_id: id };
       if (motoristaId) vinc.motorista_id = motoristaId;
       if (veiculoId)   vinc.veiculo_id   = veiculoId;

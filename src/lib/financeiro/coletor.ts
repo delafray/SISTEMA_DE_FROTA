@@ -78,7 +78,7 @@ export async function coletarEventos(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     .in("empresa_id", empresas) as any;
   if (pedidosRes.error) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     pedidosRes = await supabase
       .from("pedidos")
       .select(selPedidosBase)

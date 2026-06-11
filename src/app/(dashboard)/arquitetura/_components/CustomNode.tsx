@@ -5,7 +5,16 @@ import { Handle, Position } from '@xyflow/react';
 // texto = atividade de hoje ("32 msgs hoje") ou detalhe ("OSRM ✓ · VROOM ✗").
 export type Vivo = { dot?: 'ok' | 'falha' | 'parcial'; texto?: string };
 
-export function CustomNode({ data }: any) {
+type DadosNo = {
+  label: string;
+  subline?: string;
+  icon?: string;
+  status?: string;
+  hasFeatures?: boolean;
+  vivo?: Vivo;
+};
+
+export function CustomNode({ data }: { data: DadosNo }) {
   const isDebito  = data.status === 'DÉBITO TÉCNICO';
   const isAtencao = data.status === 'ATENÇÃO';
   const hasFeatures = data.hasFeatures;

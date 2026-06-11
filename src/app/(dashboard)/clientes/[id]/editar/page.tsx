@@ -108,7 +108,7 @@ export default function EditarClientePage() {
           })),
         });
       }
-      setLocais((locaisData ?? []).map((l: any) => ({
+      setLocais((locaisData ?? []).map((l: { id: string; nome: string | null; endereco: string | null; principal: boolean | null }) => ({
         id: l.id,
         nome: l.nome ?? "",
         endereco: l.endereco ?? "",

@@ -23,7 +23,6 @@ import {
   enderecoBoxStyle,
   botaoPrimarioStyle,
   botaoSecundarioStyle,
-  erroStyle,
 } from './estilos';
 
 interface TelaConfirmarProps {

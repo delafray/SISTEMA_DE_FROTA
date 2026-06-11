@@ -15,7 +15,6 @@ vi.mock('@/lib/whatsapp/sessionManager', () => ({
 // Supabase chainável para queries de SELECT
 function makeChain(resolved: unknown = { data: [], error: null }) {
   const chain: Record<string, unknown> = {};
-  const self = () => chain;
   chain.select = vi.fn().mockReturnValue(chain);
   chain.eq = vi.fn().mockReturnValue(chain);
   chain.order = vi.fn().mockReturnValue(chain);

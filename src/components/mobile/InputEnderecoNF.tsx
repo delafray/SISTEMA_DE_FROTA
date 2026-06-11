@@ -37,7 +37,7 @@ import { TelaCEP } from './inputEnderecoNF/TelaCEP';
 import { TelaConfirmar, type StatusValidacao } from './inputEnderecoNF/TelaConfirmar';
 import { useOcrState } from './inputEnderecoNF/useOcrState';
 import { useTranscricaoEndereco, type OpcaoFala } from './inputEnderecoNF/useTranscricaoEndereco';
-import { containerStyle, erroStyle, botaoSecundarioStyle } from './inputEnderecoNF/estilos';
+import { containerStyle, erroStyle } from './inputEnderecoNF/estilos';
 
 // ─── TIPOS ──────────────────────────────────────────────────────────
 

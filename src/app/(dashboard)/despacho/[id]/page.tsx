@@ -128,12 +128,13 @@ export default function DespachoDetalhePage() {
         return;
       }
       const statusNorm = normalizarStatus(pedido.status);
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+       
       const { error: errPedido } = await supabase.from("pedidos").update({
         veiculo_id: veiculoId,
         motorista_id: motoristaId,
         empresa_motorista_id: empMot,
         status: statusNorm,
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       } as any).eq("id", pedido.id);
       if (errPedido) { setDespachoErr(errPedido.message); setDespachoSaving(false); return; }
 
@@ -206,7 +207,7 @@ export default function DespachoDetalhePage() {
 
   // ── "Tempo real" nas abas Rota/Mapa: a cada 10s atualiza execução + notas
   //    em montagem (o que o motorista está construindo no celular AGORA).
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+   
   useEffect(() => {
     if ((abaTela !== "rota" && abaTela !== "mapa") || !pedido) return;
     let cancelado = false;

@@ -762,11 +762,12 @@ export default function ArquiteturaPage() {
   }, [setNodes]);
 
   const onConnect = useCallback(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     (params: any) => setEdges(eds => addEdge(params, eds)),
     [setEdges],
   );
 
-  const onNodeClick = useCallback((_: any, node: any) => {
+  const onNodeClick = useCallback((_: React.MouseEvent, node: { id: string }) => {
     const service = SYSTEM[node.id];
     if (service) {
       setSelectedService(service);

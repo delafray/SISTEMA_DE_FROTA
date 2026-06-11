@@ -205,6 +205,7 @@ export default function NovoPedidoSimplePage() {
       locaisValidos.length === 1 && locaisValidos[0].localId ? locaisValidos[0].localId : null;
 
     // INSERT pedido
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         const pedidoPayload: any = {
       empresa_id:             empresaId,
       status:                 "agendada",

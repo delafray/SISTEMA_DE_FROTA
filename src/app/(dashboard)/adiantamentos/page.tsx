@@ -91,10 +91,12 @@ export default function AdiantamentosPage() {
 
   /** Monta os filtros de texto/status sobre um query builder base (any — Supabase builder é fluente) */
   const aplicarFiltros = useCallback((
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
         query: any,
     busca: string,
     filtroStatus: string,
     motoristaIds: string[] | null
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     ): any => {
     let r = query;
 
@@ -182,6 +184,7 @@ export default function AdiantamentosPage() {
 
       // Query de contagem total (mesmo filtro, sem linhas)
       {
+                // eslint-disable-next-line @typescript-eslint/no-explicit-any
                 let cq: any = supabase
           .from("adiantamentos")
           .select("*", { count: "exact", head: true })
@@ -192,6 +195,7 @@ export default function AdiantamentosPage() {
       }
 
       // Query de linhas
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
             let q: any = supabase
         .from("adiantamentos")
         .select("id,valor,tipo,status,justificativa,data_pagamento,created_at,motorista_id,motoristas(nome)")

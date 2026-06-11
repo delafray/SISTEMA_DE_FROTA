@@ -6,7 +6,7 @@ import { PageHeader, FormSection, FormField, inputStyle, Btn, Alert } from "@/co
 
 export default function PerfilPage() {
   const [nome, setNome]           = useState("");
-  const [senhaAtual, setSenhaAtual] = useState("");
+  const [_senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [saving, setSaving]       = useState(false);
