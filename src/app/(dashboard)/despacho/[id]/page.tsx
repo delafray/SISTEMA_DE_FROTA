@@ -186,8 +186,9 @@ export default function DespachoDetalhePage() {
   // pedidos.local_carregamento separados por " | ")
   const [novoLocal, setNovoLocal] = useState("");
   const [salvandoLocal, setSalvandoLocal] = useState(false);
-  // Abas da tela: principal (pedido + despacho) e rota (mapa + execução)
-  const [abaTela, setAbaTela] = useState<"principal" | "rota">("principal");
+  // Abas da tela: principal (pedido + despacho), rota (notas + montagem +
+  // execução em tempo real) e mapa (SÓ habilita quando a rota existe)
+  const [abaTela, setAbaTela] = useState<"principal" | "rota" | "mapa">("principal");
   // Rota salva pelo motorista (ou roteirizada aqui) — cabeçalho da execução
   const [rotaExec, setRotaExec] = useState<RotaExec | null>(null);
   // Notas que o motorista está capturando AGORA pra este pedido (em montagem)
@@ -234,29 +235,6 @@ export default function DespachoDetalhePage() {
     };
     load();
   }, [id]);
-
-  // ── "Tempo real" na aba Rota: a cada 10s atualiza execução + notas em
-  //    montagem (o que o motorista está construindo no celular AGORA).
-  useEffect(() => {
-    if (abaTela !== "rota" || !pedido) return;
-    let cancelado = false;
-    const atualizar = async () => {
-      const supabase = createClient();
-      const [{ data: notas }] = await Promise.all([
-        supabase.from("notas_capturadas")
-          .select("id,numero,endereco,status,capturado_em")
-          .eq("pedido_id", pedido.id)
-          .in("status", ["capturada", "geocodificada"])
-          .order("capturado_em", { ascending: true }),
-        recarregarRota(),
-      ]);
-      if (!cancelado) setNotasMontagem((notas ?? []) as unknown as NotaMontagem[]);
-    };
-    void atualizar();
-    const intervalo = setInterval(() => { void atualizar(); }, 10_000);
-    return () => { cancelado = true; clearInterval(intervalo); };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [abaTela, pedido?.id]);
 
   /** Abre o modal de despacho/troca (carrega caminhões/motoristas ativos 1x) */
   const abrirDespacho = async () => {
@@ -368,6 +346,30 @@ export default function DespachoDetalhePage() {
     setRotaExec(((rotaRes.data ?? [])[0] ?? null) as RotaExec | null);
   };
 
+  // ── "Tempo real" nas abas Rota/Mapa: a cada 10s atualiza execução + notas
+  //    em montagem (o que o motorista está construindo no celular AGORA).
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if ((abaTela !== "rota" && abaTela !== "mapa") || !pedido) return;
+    let cancelado = false;
+    const atualizar = async () => {
+      const supabase = createClient();
+      const [{ data: notas }] = await Promise.all([
+        supabase.from("notas_capturadas")
+          .select("id,numero,endereco,status,capturado_em")
+          .eq("pedido_id", pedido.id)
+          .in("status", ["capturada", "geocodificada"])
+          .order("capturado_em", { ascending: true }),
+        recarregarRota(),
+      ]);
+      if (!cancelado) setNotasMontagem((notas ?? []) as unknown as NotaMontagem[]);
+    };
+    void atualizar();
+    const intervalo = setInterval(() => { void atualizar(); }, 10_000);
+    return () => { cancelado = true; clearInterval(intervalo); };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [abaTela, pedido?.id]);
+
   if (loading) return (
     <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
       Carregando...
@@ -431,16 +433,19 @@ export default function DespachoDetalhePage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        {/* Abas: Principal (pedido + despacho) | Rota (mapa + execução) */}
+        {/* Abas: Principal | Rota (notas + tempo real) | Mapa (só com rota montada) */}
         <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
-          {([["principal", "📋 Principal"], ["rota", "🗺️ Rota"]] as const).map(([v, l]) => (
+          {([["principal", "📋 Principal", true], ["rota", "🚛 Rota", true], ["mapa", "🗺️ Mapa", paradas.length > 0]] as const).map(([v, l, habilitada]) => (
             <button
               key={v}
               type="button"
-              onClick={() => setAbaTela(v)}
+              disabled={!habilitada}
+              title={!habilitada ? "Habilita quando o motorista montar a rota no celular" : undefined}
+              onClick={() => habilitada && setAbaTela(v)}
               style={{
                 padding: "6px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600,
-                cursor: "pointer",
+                cursor: habilitada ? "pointer" : "not-allowed",
+                opacity: habilitada ? 1 : 0.45,
                 border: abaTela === v ? "none" : "1px solid #cbd5e1",
                 background: abaTela === v ? "#2563eb" : "#fff",
                 color: abaTela === v ? "#fff" : "#475569",
@@ -568,60 +573,53 @@ export default function DespachoDetalhePage() {
         {abaTela === "rota" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
 
-          {/* ══ MAPA DA ROTA (montada pelo MOTORISTA — o painel só exibe) ═ */}
+          {/* ══ NOTAS DO PEDIDO (importação: endereço + itens — SEM mapa) ═ */}
           <Bloco
-            titulo="🗺️ Mapa da Rota"
+            titulo="📥 Notas do Pedido"
             cor={COR_ROTA}
             acoes={
-              <Btn href={`/pedidos/importar?pedido_id=${id}`} variant="outline" size="xs" title="Jogar as notas fiscais: captura endereço e itens">
+              <Btn href={`/pedidos/importar?pedido_id=${id}`} variant="primary" size="xs">
                 📥 Importar notas (XML)
               </Btn>
             }
           >
-              <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 10px" }}>
-                A rota é montada e otimizada pelo <strong>motorista no celular</strong> — aqui o painel acompanha.
-                Pelo sistema você joga as notas fiscais (endereço + itens) pra alimentar o pedido.
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0", lineHeight: 1.6 }}>
+                Jogue as notas fiscais aqui: o sistema captura o <strong>endereço</strong> e os <strong>itens</strong> de
+                cada nota pra alimentar o pedido. Os itens (ex.: 3 caixas de cebola, 1 caixa de alho) por enquanto ficam
+                só anotados — depois o sistema vai propor a ordem de carregamento, quando o motorista finalizar a rota.
               </p>
-
-              {paradas.length > 0 ? (
-                <MapaRota paradas={paradas} altura={380} />
-              ) : (
-                <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
-                  Nenhuma rota montada ainda — quando o motorista criar a rota deste pedido no celular, o mapa aparece aqui.
-                </p>
-              )}
           </Bloco>
 
-          {/* ══ EM MONTAGEM (o que o motorista está capturando AGORA) ═════ */}
-          {notasMontagem.length > 0 && (
-            <Bloco titulo={`🧱 Em montagem — motorista capturando (${notasMontagem.length})`} cor={COR_PEDIDO}>
-              <p style={{ fontSize: "11px", color: "#64748b", margin: "4px 0 8px" }}>
-                Destinos que o motorista está colocando no celular pra este pedido — atualiza sozinho a cada 10s.
-              </p>
-              {notasMontagem.map((n, i) => (
-                <div key={n.id} style={{
-                  display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
-                  padding: "7px 10px", marginBottom: "4px",
-                  background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px",
-                }}>
-                  <span style={{ fontSize: "12px", fontWeight: 700, color: "#64748b", minWidth: "20px" }}>{i + 1}º</span>
-                  <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{enderecoParada(n.endereco)}</span>
-                  <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" }}>
-                    {n.status === "geocodificada" ? "📍 localizada" : "⏳ capturada"}
-                    {n.capturado_em ? ` · ${fmtDT(n.capturado_em)}` : ""}
-                  </span>
-                </div>
-              ))}
-            </Bloco>
-          )}
-
-          {/* ══ EXECUÇÃO DA ROTA (o que o motorista fez) ══════════════════ */}
+          {/* ══ EXECUÇÃO DA ROTA — tempo real do que o motorista faz ══════ */}
           <Bloco titulo="⏱️ Execução da Rota" cor={COR_ENTREGAS}>
-            {!rotaExec && paradas.length === 0 ? (
+            {/* EM MONTAGEM: o que o motorista está cadastrando AGORA (10s) */}
+            {notasMontagem.length > 0 && (
+              <div style={{ marginBottom: "10px" }}>
+                <div style={{ fontSize: "12px", color: "#1e40af", fontWeight: 700, marginBottom: "6px" }}>
+                  🧱 Em montagem — motorista cadastrando ({notasMontagem.length}) · atualiza sozinho a cada 10s
+                </div>
+                {notasMontagem.map((n, i) => (
+                  <div key={n.id} style={{
+                    display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap",
+                    padding: "7px 10px", marginBottom: "4px",
+                    background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px",
+                  }}>
+                    <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e40af", minWidth: "20px" }}>{i + 1}º</span>
+                    <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{enderecoParada(n.endereco)}</span>
+                    <span style={{ fontSize: "11px", color: "#64748b", whiteSpace: "nowrap" }}>
+                      {n.status === "geocodificada" ? "📍 localizada" : "⏳ capturada"}
+                      {n.capturado_em ? ` · ${fmtDT(n.capturado_em)}` : ""}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {!rotaExec && paradas.length === 0 && notasMontagem.length === 0 ? (
               <p style={{ fontSize: "13px", color: "#94a3b8", margin: "6px 0" }}>
-                Nenhuma rota carregada ainda. Quando o motorista montar a rota no celular
-                (ou você roteirizar aqui), a execução aparece neste bloco: quando a rota
-                foi salva, quando começou e a hora da baixa em cada local.
+                Nada ainda. Assim que o motorista começar a cadastrar os destinos no celular,
+                eles aparecem <strong>aqui em tempo real</strong>; depois vem a execução —
+                quando a rota foi salva, quando começou e a hora da baixa em cada local.
               </p>
             ) : (
               <>
@@ -691,11 +689,28 @@ export default function DespachoDetalhePage() {
                 )}
               </>
             )}
-            <p style={{ fontSize: "10px", color: "#94a3b8", marginTop: "10px", marginBottom: 0 }}>
-              📥 Em breve: puxar endereços e produtos das notas fiscais do pedido para AJUDAR a montar a rota (o sistema sugere, o motorista decide).
-            </p>
           </Bloco>
 
+        </div>
+        )}
+
+        {abaTela === "mapa" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
+          {/* ══ MAPA — só existe quando a rota está montada/em execução ═══ */}
+          <Bloco titulo="🗺️ Mapa da Rota" cor={COR_ROTA}>
+            {paradas.length > 0 ? (
+              <>
+                <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 10px" }}>
+                  Rota montada pelo motorista — pinos verdes são locais já entregues. Atualiza sozinho a cada 10s.
+                </p>
+                <MapaRota paradas={paradas} altura={420} />
+              </>
+            ) : (
+              <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
+                Sem rota montada — esta guia habilita quando o motorista criar a rota no celular.
+              </p>
+            )}
+          </Bloco>
         </div>
         )}
       </div>
