@@ -139,46 +139,40 @@ export function FaseInicio({
                       transition: 'all 0.15s',
                     }}
                   >
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-                        {estaAberta && <span style={{ fontSize: 16 }}>🔴</span>}
-                        {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 16 }}>✅</span>}
-                        {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 16 }}>❌</span>}
-                        <span style={{ fontWeight: 700, fontSize: 14 }}>
-                          {dataFormatada}
-                        </span>
-                        {r.numero_pedido && (
+                    {/* Linha 1: identidade da rota (pedido vinculado OU rota avulsa) + status */}
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
+                        {estaAberta && <span style={{ fontSize: 15 }}>🔴</span>}
+                        {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 15 }}>✅</span>}
+                        {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 15 }}>❌</span>}
+                        {r.numero_pedido ? (
                           <span
                             data-testid={`rota-pedido-${r.id}`}
-                            style={{
-                              fontSize: 11,
-                              fontWeight: 800,
-                              padding: '2px 8px',
-                              borderRadius: 999,
-                              background: '#dbeafe',
-                              color: '#1e40af',
-                              fontFamily: 'ui-monospace, monospace',
-                            }}
+                            style={{ fontWeight: 800, fontSize: 15, color: '#1e40af', fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap' }}
                           >
-                            📦 {r.numero_pedido}
+                            📦 Pedido {r.numero_pedido}
                           </span>
+                        ) : (
+                          <span style={{ fontWeight: 700, fontSize: 14 }}>Rota avulsa</span>
                         )}
-                        <span
-                          style={{
-                            fontSize: 11,
-                            fontWeight: 600,
-                            padding: '2px 8px',
-                            borderRadius: 999,
-                            background: estaAberta ? '#fecaca' : '#e2e8f0',
-                            color: estaAberta ? '#991b1b' : '#475569',
-                          }}
-                        >
-                          {STATUS_LABEL[r.status] ?? r.status}
-                        </span>
-                      </div>
-                      <span style={{ fontSize: 12, color: '#94a3b8' }}>
-                        {(r as unknown as Record<string, unknown>).qtd_paradas as number ?? '?'} paradas
                       </span>
+                      <span
+                        style={{
+                          flexShrink: 0,
+                          fontSize: 11,
+                          fontWeight: 600,
+                          padding: '2px 8px',
+                          borderRadius: 999,
+                          background: estaAberta ? '#fecaca' : '#e2e8f0',
+                          color: estaAberta ? '#991b1b' : '#475569',
+                        }}
+                      >
+                        {STATUS_LABEL[r.status] ?? r.status}
+                      </span>
+                    </div>
+                    {/* Linha 2: data + paradas */}
+                    <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
+                      {dataFormatada} · {(r as unknown as Record<string, unknown>).qtd_paradas as number ?? '?'} paradas
                     </div>
                     {estaAberta && (
                       <p style={{ margin: '6px 0 0', fontSize: 12, color: '#b91c1c' }}>

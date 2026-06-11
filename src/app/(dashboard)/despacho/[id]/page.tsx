@@ -16,7 +16,7 @@ import { useState, useEffect } from "react";
 import { useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import {
-  PageHeader, Btn, Badge, Alert,
+  PageHeader, Btn, Badge,
 } from "@/components/ui/ds";
 import { MapaRota, type MapaRotaProps } from "@/components/MapaRota";
 import { FluxoStepper } from "./_components/FluxoStepper";
@@ -198,10 +198,8 @@ export default function DespachoDetalhePage() {
   const [motoristasOp, setMotoristasOp] = useState<MotoristaOpcao[]>([]);
   const [despachoSaving, setDespachoSaving] = useState(false);
   const [despachoErr, setDespachoErr] = useState("");
-  // Roteirização
+  // Paradas da rota (montada pelo MOTORISTA no celular — o painel só exibe)
   const [paradas, setParadas] = useState<ParadaMapa[]>([]);
-  const [roteirizando, setRoteirizando] = useState(false);
-  const [rotaMsg, setRotaMsg] = useState<{ tipo: "success" | "error" | "info"; texto: string } | null>(null);
 
   useEffect(() => {
     const load = async () => {
@@ -368,53 +366,6 @@ export default function DespachoDetalhePage() {
     setParadas((paradasRes.data ?? []) as unknown as ParadaMapa[]);
     setEntregas((entregasRes.data ?? []) as unknown as EntregaPedido[]);
     setRotaExec(((rotaRes.data ?? [])[0] ?? null) as RotaExec | null);
-  };
-
-  const roteirizar = async () => {
-    if (!pedido) return;
-    const mot = one(pedido.motoristas);
-    if (!mot?.id || !pedido.empresa_id) {
-      setRotaMsg({ tipo: "error", texto: "Pedido ainda não foi despachado — despache primeiro para roteirizar." });
-      return;
-    }
-    if (entregas.length === 0) {
-      setRotaMsg({ tipo: "error", texto: "Pedido sem entregas pra roteirizar." });
-      return;
-    }
-    setRoteirizando(true);
-    setRotaMsg({ tipo: "info", texto: "Geocodificando os destinos e otimizando a rota… (pode levar alguns segundos)" });
-    try {
-      const res = await fetch("/api/routing/otimizar", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        // origem omitida de propósito: o servidor usa o depósito (endereço da empresa).
-        body: JSON.stringify({ motorista_id: mot.id, empresa_id: pedido.empresa_id, pedido_id: pedido.id }),
-      });
-      const json = await res.json();
-      if (!res.ok) {
-        const motivo = json?.motivo ? ` (${json.motivo})` : "";
-        const dica = json?.error === "otimizacao_falhou"
-          ? " — verifique se o VROOM_URL está configurado."
-          : json?.error === "todas_geocoding_falharam"
-          ? " — nenhum destino pôde ser geocodificado (endereços muito vagos?)."
-          : "";
-        setRotaMsg({ tipo: "error", texto: `Falha ao roteirizar: ${json?.error ?? res.status}${motivo}${dica}` });
-        return;
-      }
-      await recarregarRota();
-      const naoAtend = Array.isArray(json?.nao_atendidas) ? json.nao_atendidas.length : 0;
-      const nParadas = Array.isArray(json?.paradas) ? json.paradas.length : 0;
-      const km = typeof json?.distancia_total_km === "number" ? json.distancia_total_km.toFixed(1) : "?";
-      setRotaMsg(
-        naoAtend > 0
-          ? { tipo: "info", texto: `Rota gerada com ${nParadas} parada(s). ${naoAtend} entrega(s) ficaram de fora (endereço não geocodificado).` }
-          : { tipo: "success", texto: `✓ Rota otimizada: ${nParadas} parada(s), ${km} km.` }
-      );
-    } catch (e) {
-      setRotaMsg({ tipo: "error", texto: `Erro de rede ao roteirizar: ${(e as Error).message}` });
-    } finally {
-      setRoteirizando(false);
-    }
   };
 
   if (loading) return (
@@ -617,38 +568,26 @@ export default function DespachoDetalhePage() {
         {abaTela === "rota" && (
         <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
 
-          {/* ══ MAPA + ROTEIRIZAR ═════════════════════════════════════════ */}
-          <Bloco titulo="🗺️ Mapa e Roteirização" cor={COR_ROTA}>
-              <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", marginBottom: "12px" }}>
-                <Btn
-                  variant="primary"
-                  disabled={roteirizando || entregas.length === 0 || !despachado}
-                  onClick={roteirizar}
-                >
-                  {roteirizando ? "Roteirizando…" : paradas.length > 0 ? "🔄 Re-roteirizar" : "🧭 Roteirizar"}
-                </Btn>
-                <span style={{ fontSize: "12px", color: "#94a3b8" }}>
-                  {entregas.length === 0
-                    ? "Adicione entregas ao pedido para roteirizar."
-                    : !despachado
-                    ? "Despache o pedido primeiro — a rota é calculada para o motorista."
-                    : "Parte do depósito (endereço da empresa) e ordena os destinos das entregas."}
-                </span>
-              </div>
-
-              {rotaMsg && (
-                <div style={{ marginBottom: "12px" }}>
-                  <Alert variant={rotaMsg.tipo === "success" ? "success" : rotaMsg.tipo === "error" ? "error" : "info"}>
-                    {rotaMsg.texto}
-                  </Alert>
-                </div>
-              )}
+          {/* ══ MAPA DA ROTA (montada pelo MOTORISTA — o painel só exibe) ═ */}
+          <Bloco
+            titulo="🗺️ Mapa da Rota"
+            cor={COR_ROTA}
+            acoes={
+              <Btn href={`/pedidos/importar?pedido_id=${id}`} variant="outline" size="xs" title="Jogar as notas fiscais: captura endereço e itens">
+                📥 Importar notas (XML)
+              </Btn>
+            }
+          >
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 10px" }}>
+                A rota é montada e otimizada pelo <strong>motorista no celular</strong> — aqui o painel acompanha.
+                Pelo sistema você joga as notas fiscais (endereço + itens) pra alimentar o pedido.
+              </p>
 
               {paradas.length > 0 ? (
                 <MapaRota paradas={paradas} altura={380} />
               ) : (
                 <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
-                  Nenhuma rota gerada ainda. Clique em <strong>Roteirizar</strong> para calcular a ordem ótima das entregas.
+                  Nenhuma rota montada ainda — quando o motorista criar a rota deste pedido no celular, o mapa aparece aqui.
                 </p>
               )}
           </Bloco>

@@ -130,16 +130,20 @@ function RotaContent(): React.ReactElement {
     };
   }, [motoristaId, beta]);
 
-  // Restaura a âncora do despacho (sobrevive a refresh) e carrega os despachos
-  // em aberto do motorista pra lista da fase inicio (best-effort; offline fica vazio).
-  // Beta é standalone: sem âncora e sem despachos.
+  // Restaura a âncora do despacho (sobrevive a refresh). Beta não tem âncora.
   useEffect(() => {
     if (!motoristaId || beta) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setPedidoAncora(lerAncora());
-    let cancelado = false;
-    (async () => {
-      try {
+  }, [motoristaId, beta]);
+
+  // Carrega os despachos em aberto (best-effort; offline fica vazio). É chamado
+  // SEMPRE que a tela volta pra fase inicio e quando o app volta ao foco — o
+  // card do despacho some sozinho quando o motorista cria a rota, SEM F5
+  // (regra do dono: usuário comum nunca atualiza página).
+  const carregarDespachos = useCallback(async () => {
+    if (!motoristaId || beta) return;
+    try {
         const supabase = createClient();
         const { data: peds } = await supabase.from('pedidos')
           .select('id,numero,status,data_inicio_prevista,local_carregamento,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))')
@@ -201,11 +205,35 @@ function RotaContent(): React.ReactElement {
             tem_rota: comRotaPainel.has(p.id),
           };
         });
-        if (!cancelado) setDespachos(montados);
+        setDespachos(montados);
       } catch { /* offline ou erro — lista de despachos fica vazia */ }
-    })();
-    return () => { cancelado = true; };
   }, [motoristaId, beta]);
+
+  // Recarrega os despachos AUTOMATICAMENTE: ao entrar na fase inicio (inclusive
+  // voltando de em_rota/captura) e quando o app volta ao foco nessa fase.
+  useEffect(() => {
+    if (fase !== 'inicio') return;
+    const atualizarInicio = () => {
+      void carregarDespachos();
+      // histórico também — pra rota recém-criada já aparecer com o selo 📦
+      if (motoristaId && empresaId) {
+        fetch(`/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`)
+          .then((r) => (r.ok ? r.json() : null))
+          .then((d) => { if (d) setRotasHistorico(d.rotas ?? []); })
+          .catch(() => {});
+      }
+    };
+    atualizarInicio();
+    const aoVoltarFoco = () => {
+      if (document.visibilityState === 'visible') atualizarInicio();
+    };
+    document.addEventListener('visibilitychange', aoVoltarFoco);
+    window.addEventListener('focus', aoVoltarFoco);
+    return () => {
+      document.removeEventListener('visibilitychange', aoVoltarFoco);
+      window.removeEventListener('focus', aoVoltarFoco);
+    };
+  }, [fase, carregarDespachos, motoristaId, empresaId]);
 
   /** Grava/limpa a âncora (estado + aparelho). */
   const definirAncora = useCallback((a: PedidoAncora | null) => {

@@ -168,8 +168,8 @@ export default function DespachoPage() {
   const [saving, setSaving]                 = useState(false);
   const [modalErr, setModalErr]             = useState("");
   const [sucesso, setSucesso]               = useState("");
-  // Rota do pedido (roteirizar + mapa) — movida da tela do pedido pra cá (10/06)
-  const [modalRota, setModalRota] = useState<{ pedidoId: string; motoristaId: string | null } | null>(null);
+  // Mapa da rota do pedido (montada pelo motorista — aqui só visualiza)
+  const [modalRota, setModalRota] = useState<string | null>(null);
 
   // ── Carrega empresa do usuário (uma vez) ──────────────────────────────────
 
@@ -725,8 +725,8 @@ export default function DespachoPage() {
                             <Btn
                               variant="outline"
                               size="xs"
-                              onClick={() => setModalRota({ pedidoId: p.id, motoristaId: p.motorista_id ?? null })}
-                              title="Roteirizar e ver o mapa da rota"
+                              onClick={() => setModalRota(p.id)}
+                              title="Ver o mapa da rota montada pelo motorista"
                             >
                               🗺️ Rota
                             </Btn>
@@ -816,7 +816,7 @@ export default function DespachoPage() {
                       <Btn
                         variant="outline"
                         size="sm"
-                        onClick={() => setModalRota({ pedidoId: p.id, motoristaId: p.motorista_id ?? null })}
+                        onClick={() => setModalRota(p.id)}
                       >
                         🗺️ Rota
                       </Btn>
@@ -866,12 +866,10 @@ export default function DespachoPage() {
         />
       )}
 
-      {/* Rota do pedido (roteirizar + mapa) */}
-      {modalRota && empresaId && (
+      {/* Mapa da rota do pedido (montada pelo motorista) */}
+      {modalRota && (
         <ModalRota
-          pedidoId={modalRota.pedidoId}
-          empresaId={empresaId}
-          motoristaId={modalRota.motoristaId}
+          pedidoId={modalRota}
           onClose={() => setModalRota(null)}
         />
       )}
