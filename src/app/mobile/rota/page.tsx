@@ -157,15 +157,25 @@ function RotaContent(): React.ReactElement {
           entregas: Array<{ id: string; destino: string | null; nome_cliente_avulso: string | null; clientes: { nome_fantasia: string } | { nome_fantasia: string }[] | null }>;
         }>;
         const ids = lista.map((p) => p.id);
-        // Rotas abertas vinculadas: separa as PRÉ-CADASTRADAS no painel (paradas
-        // de entregas) das já MONTADAS pelo motorista (paradas de notas). Pedido
-        // com rota do motorista SAI da lista — ela aparece em "Rotas recentes"
-        // com o nº do pedido (decisão do dono 10/06).
+        // Pedido SAI da lista de cima quando o motorista JÁ COMEÇOU a rota dele:
+        // (a) existe rota montada por ele (paradas vindas de notas), OU
+        // (b) existem notas EM MONTAGEM vinculadas (capturou e saiu sem otimizar
+        //     — o progresso fica guardado e vinculado; retoma por "Continuar
+        //     captura", nunca pelo card, que zeraria a fila).
+        // Rota PRÉ-CADASTRADA no painel (paradas de entregas) mantém o card com
+        // o selo "rota pronta" pra ele puxar e ajustar. (decisão do dono 10/06)
         const comRotaPainel = new Set<string>();
-        const comRotaMotorista = new Set<string>();
+        const iniciadoPeloMotorista = new Set<string>();
         if (ids.length > 0) {
-          const { data: rts } = await supabase.from('rotas_otimizadas')
-            .select('id,pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']);
+          const [{ data: rts }, { data: notasVinc }] = await Promise.all([
+            supabase.from('rotas_otimizadas')
+              .select('id,pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']),
+            supabase.from('notas_capturadas')
+              .select('pedido_id').in('pedido_id', ids).in('status', ['capturada', 'geocodificada']),
+          ]);
+          for (const n of (notasVinc ?? []) as Array<{ pedido_id: string | null }>) {
+            if (n.pedido_id) iniciadoPeloMotorista.add(n.pedido_id);
+          }
           const rotas = (rts ?? []) as Array<{ id: string; pedido_id: string | null }>;
           if (rotas.length > 0) {
             const { data: pars } = await supabase.from('paradas')
@@ -176,13 +186,13 @@ function RotaContent(): React.ReactElement {
             );
             for (const r of rotas) {
               if (!r.pedido_id) continue;
-              if (rotasComNota.has(r.id)) comRotaMotorista.add(r.pedido_id);
+              if (rotasComNota.has(r.id)) iniciadoPeloMotorista.add(r.pedido_id);
               else comRotaPainel.add(r.pedido_id);
             }
           }
         }
         const montados: DespachoAberto[] = lista
-          .filter((p) => !comRotaMotorista.has(p.id))
+          .filter((p) => !iniciadoPeloMotorista.has(p.id))
           .map((p) => {
           const ents = Array.isArray(p.entregas) ? p.entregas : [];
           let cliente = 'Cliente não informado';
