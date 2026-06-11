@@ -402,8 +402,8 @@ export default function MotoristaPage() {
               const distTempo = fmtDistTempo(r.distancia_total_km, r.tempo_total_min);
               const conteudo = (
                 <>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                    <div style={{ fontSize: "15px", fontWeight: 700, color: cores.texto, display: "flex", alignItems: "center", gap: "8px" }}>
+                  <div style={{ display: "flex", flexWrap: "wrap", justifyContent: "space-between", alignItems: "center", gap: "4px" }}>
+                    <div style={{ fontSize: "15px", fontWeight: 700, color: cores.texto, display: "flex", flexWrap: "wrap", alignItems: "center", gap: "8px" }}>
                       {fmtDate(r.data)}
                       {r.numero_pedido && (
                         <span style={{ fontSize: "11px", fontWeight: 800, padding: "2px 8px", borderRadius: "999px", background: cores.fundoAzul, color: cores.azulTexto, fontFamily: "ui-monospace, monospace" }}>

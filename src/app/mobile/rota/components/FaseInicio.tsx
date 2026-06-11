@@ -139,25 +139,26 @@ export function FaseInicio({
                       transition: 'all 0.15s',
                     }}
                   >
-                    {/* Linha 1: identidade da rota (pedido vinculado OU rota avulsa) + status */}
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-                      <span style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 0 }}>
-                        {estaAberta && <span style={{ fontSize: 15 }}>🔴</span>}
-                        {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 15 }}>✅</span>}
-                        {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 15 }}>❌</span>}
-                        {r.numero_pedido ? (
-                          <span
-                            data-testid={`rota-pedido-${r.id}`}
-                            style={{ fontWeight: 800, fontSize: 15, color: '#1e40af', fontFamily: 'ui-monospace, monospace', whiteSpace: 'nowrap' }}
-                          >
-                            📦 Pedido {r.numero_pedido}
-                          </span>
-                        ) : (
-                          <span style={{ fontWeight: 700, fontSize: 14 }}>Rota avulsa</span>
-                        )}
-                      </span>
+                    {/* Linha 1: identidade da rota + status. flexWrap: em tela
+                        estreita o selo DESCE pra linha de baixo em vez de
+                        sobrepor o número do pedido. */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, rowGap: 4 }}>
+                      {estaAberta && <span style={{ fontSize: 15 }}>🔴</span>}
+                      {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 15 }}>✅</span>}
+                      {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 15 }}>❌</span>}
+                      {r.numero_pedido ? (
+                        <span
+                          data-testid={`rota-pedido-${r.id}`}
+                          style={{ fontWeight: 800, fontSize: 14, color: '#1e40af', fontFamily: 'ui-monospace, monospace' }}
+                        >
+                          📦 Pedido {r.numero_pedido}
+                        </span>
+                      ) : (
+                        <span style={{ fontWeight: 700, fontSize: 14 }}>Rota avulsa</span>
+                      )}
                       <span
                         style={{
+                          marginLeft: 'auto',
                           flexShrink: 0,
                           fontSize: 11,
                           fontWeight: 600,
