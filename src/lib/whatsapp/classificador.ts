@@ -5,7 +5,7 @@
  * Usa Gemini Flash com structured output (JSON garantido por schema).
  */
 
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, type Schema } from "@google/generative-ai";
 import { z } from "zod";
 import { createLogger } from "@/lib/logger";
 
@@ -44,6 +44,77 @@ async function gerarComRetry(model: ReturnType<GoogleGenerativeAI["getGenerative
     }
   }
   throw ultimo;
+}
+
+// ─── extração de campos (escritor genérico) ────────────────────────────
+// A regra declara em escopo_dados.escrita.campos O QUE extrair; aqui o Gemini
+// extrai com responseSchema dinâmico. Datas relativas ("amanhã", "sábado")
+// são resolvidas para YYYY-MM-DD usando a data local do Brasil.
+export type CampoEsperado = {
+  campo: string; rotulo?: string; tipo: "texto" | "numero" | "data";
+  obrigatorio?: boolean; pergunta?: string;
+};
+
+export async function extrairCampos(
+  mensagem: string, campos: CampoEsperado[]
+): Promise<Record<string, string | number | null>> {
+  if (!campos.length) return {};
+  const apiKey = process.env.GEMINI_API_KEY;
+  if (!apiKey) throw new Error("GEMINI_API_KEY não configurada");
+  const client = new GoogleGenerativeAI(apiKey);
+
+  const hojeBR = new Date(Date.now() - 3 * 3600_000).toISOString().slice(0, 10);
+  const descricao = campos
+    .map((c) => `- "${c.campo}" (${c.tipo}${c.obrigatorio ? ", obrigatório" : ""}): ${c.rotulo ?? c.campo}`)
+    .join("\n");
+
+  const properties: Record<string, Schema> = {};
+  for (const c of campos) {
+    properties[c.campo] = c.tipo === "numero"
+      ? { type: SchemaType.NUMBER, nullable: true }
+      : { type: SchemaType.STRING, nullable: true, description: c.tipo === "data" ? "data no formato YYYY-MM-DD" : undefined };
+  }
+
+  const prompt =
+`Extraia da mensagem os campos pedidos. Hoje é ${hojeBR} (Brasil).
+Datas relativas ("amanhã", "sábado", "dia 20") → resolva para YYYY-MM-DD.
+Campo não mencionado na mensagem → null (NÃO invente).
+
+MENSAGEM: "${mensagem}"
+
+CAMPOS:
+${descricao}`;
+
+  const model = client.getGenerativeModel({
+    model: MODELO,
+    generationConfig: {
+      responseMimeType: "application/json",
+      responseSchema: { type: SchemaType.OBJECT, properties },
+      temperature: 0,
+      maxOutputTokens: 2048,
+      // @ts-expect-error thinkingConfig é repassado direto ao REST pelo SDK legado
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  }, { timeout: 8000 });
+
+  const res = await gerarComRetry(model, prompt);
+  let txt = "";
+  try { txt = res.response.text(); } catch { /* sem candidato */ }
+  if (!txt.trim()) return {};
+  let bruto: unknown;
+  try { bruto = JSON.parse(limparJson(txt)); } catch { return {}; }
+  if (typeof bruto !== "object" || bruto === null) return {};
+
+  // só os campos declarados, com o tipo certo; resto descarta
+  const out: Record<string, string | number | null> = {};
+  for (const c of campos) {
+    const v = (bruto as Record<string, unknown>)[c.campo];
+    if (v == null || v === "") { out[c.campo] = null; continue; }
+    if (c.tipo === "numero") out[c.campo] = typeof v === "number" && Number.isFinite(v) ? v : null;
+    else if (c.tipo === "data") out[c.campo] = /^\d{4}-\d{2}-\d{2}$/.test(String(v)) ? String(v) : null;
+    else out[c.campo] = String(v).trim() || null;
+  }
+  return out;
 }
 
 export type RegraClassif = { id: string; nome: string; tipo: string; gatilhos: string[]; frases_exemplo: string[] };

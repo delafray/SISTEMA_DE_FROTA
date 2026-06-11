@@ -15,24 +15,16 @@
  * Referencia: PLANO_ROTEIRIZACAO.md secao 3.10 + passo 1.12.
  */
 
-import { useCallback, useEffect, useState, Suspense } from 'react';
+import { useCallback, useState, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import {
-  DndContext,
-  closestCenter,
   PointerSensor,
   TouchSensor,
   useSensor,
   useSensors,
   type DragEndEvent,
 } from '@dnd-kit/core';
-import {
-  SortableContext,
-  arrayMove,
-  useSortable,
-  verticalListSortingStrategy,
-} from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import { arrayMove } from '@dnd-kit/sortable';
 import { MapaRota } from '@/components/MapaRota';
 import { Tijolinho } from './components/Tijolinho';
 import { ModalHorario, type ParadaEditavel } from './components/ModalHorario';
@@ -41,43 +33,25 @@ import { distanciasEntreParadas, estimarKmTotal } from '@/lib/routing/utils';
 import { vibrar } from '@/lib/mobile/dispositivo';
 import { cores } from '@/lib/mobile/ui';
 import { fetchRota } from '@/lib/routing/api';
-import type { Parada, RotaOtimizada } from '@/lib/routing/types';
+import type { Parada } from '@/lib/routing/types';
 
-/**
- * Reordena paradas pondo as ja entregues (concluida_em != null) no topo,
- * por timestamp de conclusao ASC. Pendentes vem depois na ordem original.
- * Motorista nao quer ficar olhando pra paradas terminadas no meio da lista.
- */
-function ordenarConcluidasPrimeiro(paradas: Parada[]): Parada[] {
-  const concluidas = paradas
-    .filter((p) => p.concluida_em)
-    .sort((a, b) => (a.concluida_em ?? '').localeCompare(b.concluida_em ?? ''));
-  const pendentes = paradas.filter((p) => !p.concluida_em).sort((a, b) => a.ordem - b.ordem);
-  return [...concluidas, ...pendentes];
-}
-
-// Bipe curto sintetizado via Web Audio API (sem precisar de arquivo .mp3).
-// Cria/destroi o contexto sob demanda — leve. Falha silenciosamente em
-// browsers sem suporte (ou autoplay-blocked).
-function bipeCurto() {
-  try {
-    type WindowAudio = typeof window & { webkitAudioContext?: typeof AudioContext };
-    const w = window as WindowAudio;
-    const AC = window.AudioContext ?? w.webkitAudioContext;
-    if (!AC) return;
-    const ctx = new AC();
-    const osc = ctx.createOscillator();
-    const gain = ctx.createGain();
-    osc.frequency.value = 660; // E5 (audivel mas nao agressivo)
-    osc.type = 'sine';
-    gain.gain.setValueAtTime(0.1, ctx.currentTime);
-    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
-    osc.connect(gain).connect(ctx.destination);
-    osc.start();
-    osc.stop(ctx.currentTime + 0.12);
-    osc.onended = () => ctx.close();
-  } catch { /* sem permissao de audio — ok */ }
-}
+// Componentes e estilos extraidos
+import { useAjusteRota } from './_components/useAjusteRota';
+import { bipeCurto } from './_components/utils';
+import { HeaderAjusteRota } from './_components/HeaderAjusteRota';
+import { PopupAdicao } from './_components/PopupAdicao';
+import { AbaOrdenar } from './_components/AbaOrdenar';
+import { OverlayEscolherPosicao } from './_components/OverlayEscolherPosicao';
+import {
+  containerStyle,
+  tabsStyle,
+  tabStyle,
+  tabAtivoStyle,
+  botaoSalvarStyle,
+  erroStyle,
+  overlayStyle,
+  overlayModalStyle,
+} from './_components/estilos';
 
 type Aba = 'ordenar' | 'detalhes';
 
@@ -85,14 +59,24 @@ function AjusteRotaContent(): React.ReactElement {
   const searchParams = useSearchParams();
   const rotaId = searchParams.get('rota_id') ?? '';
 
-  const [paradas, setParadas] = useState<Parada[]>([]);
-  const [rotaInfo, setRotaInfo] = useState<RotaOtimizada | null>(null);
+  // ─── Estado carregado pelo hook ──────────────────────────────────
+  const {
+    paradas,
+    setParadas,
+    rotaInfo,
+    setRotaInfo,
+    carregando,
+    erro,
+    setErro,
+    dirty,
+    setDirty,
+    posicaoAtual,
+  } = useAjusteRota(rotaId);
+
+  // ─── Estado local da tela ────────────────────────────────────────
   const [aba, setAba] = useState<Aba>('ordenar');
-  const [carregando, setCarregando] = useState(true);
   const [salvando, setSalvando] = useState(false);
-  const [erro, setErro] = useState<string | null>(null);
   const [paradaEditando, setParadaEditando] = useState<Parada | null>(null);
-  const [dirty, setDirty] = useState(false);
   const [paradaSelecionada, setParadaSelecionada] = useState<string | null>(null);
   const [avisoLock, setAvisoLock] = useState<string | null>(null);
   // Fluxo de adicionar nova parada via header:
@@ -100,11 +84,11 @@ function AjusteRotaContent(): React.ReactElement {
   const [modoAdicao, setModoAdicao] = useState<'fechado' | 'capturando' | 'escolhendo' | 'adicionando'>('fechado');
   const [dadosNovaParada, setDadosNovaParada] = useState<NotaCapturadaInput | null>(null);
   const [erroAdicionar, setErroAdicionar] = useState<string | null>(null);
-  // Popup do ➕ (decisão do dono 10/06): rota ainda NÃO iniciada → perguntar se
-  // quer CONTINUAR a roteirização em lote (ex.: parou na 25ª de 70 notas) ou só
-  // adicionar UM endereço. Rota já iniciada (tem baixa) → vai direto no único.
+  // Popup do ➕ (decisao do dono 10/06): rota ainda NAO iniciada → perguntar se
+  // quer CONTINUAR a roteirizacao em lote (ex.: parou na 25a de 70 notas) ou so
+  // adicionar UM endereco. Rota ja iniciada (tem baixa) → vai direto no unico.
   const [escolhendoAdicao, setEscolhendoAdicao] = useState(false);
-  const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
+  const [reorganizando, setReorganizando] = useState(false);
 
   // Pointer p/ mouse + Touch p/ dedo. Ambos com long-press de 200ms — assim
   // tap curto continua selecionando a parada no mapa, mas segurar 200ms ativa
@@ -114,40 +98,7 @@ function AjusteRotaContent(): React.ReactElement {
     useSensor(TouchSensor, { activationConstraint: { delay: 200, tolerance: 5 } })
   );
 
-  // Watch GPS — marcador "voce esta aqui" no mapa. Para ao desmontar.
-  useEffect(() => {
-    if (typeof navigator === 'undefined' || !navigator.geolocation) return;
-    const watchId = navigator.geolocation.watchPosition(
-      (pos) => setPosicaoAtual({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-      () => { /* GPS off — ignora */ },
-      { enableHighAccuracy: true, maximumAge: 10000, timeout: 15000 }
-    );
-    return () => navigator.geolocation.clearWatch(watchId);
-  }, []);
-
-  // Load inicial
-  useEffect(() => {
-    if (!rotaId) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setCarregando(true);
-    fetchRota(rotaId)
-      .then((data) => {
-        setRotaInfo(data.rota);
-        // Entregues primeiro (por concluida_em ASC), pendentes depois (por ordem).
-        // Motorista nao precisa mais ficar olhando pra paradas que ja terminou
-        // no meio da lista. Renumera consecutivamente — se mudou a ordem original
-        // marca dirty pra ele salvar.
-        const ordenado = ordenarConcluidasPrimeiro(data.paradas);
-        const renumerado = ordenado.map((p, i) => ({ ...p, ordem: i + 1 }));
-        setParadas(renumerado);
-        const ordemMudou = renumerado.some((p, i) => p.id !== data.paradas[i]?.id);
-        setDirty(ordemMudou);
-        setErro(null);
-      })
-      .catch((err: Error) => setErro(err.message))
-      .finally(() => setCarregando(false));
-  }, [rotaId]);
-
+  // ─── Drag handlers ──────────────────────────────────────────────
   const handleDragEnd = useCallback(
     (event: DragEndEvent) => {
       const { active, over } = event;
@@ -179,7 +130,7 @@ function AjusteRotaContent(): React.ReactElement {
       bipeCurto();
       setDirty(true);
     },
-    []
+    [setDirty, setParadas]
   );
 
   // Drag start: vibracao curta (sinal tatil de "ergueu"). Bloqueia se fixada
@@ -204,6 +155,7 @@ function AjusteRotaContent(): React.ReactElement {
     [paradas]
   );
 
+  // ─── Edicao de parada (ModalHorario) ────────────────────────────
   const handleSalvarEdicao = useCallback(
     (mudancas: ParadaEditavel) => {
       if (!paradaEditando) return;
@@ -222,7 +174,7 @@ function AjusteRotaContent(): React.ReactElement {
       setParadaEditando(null);
       setDirty(true);
     },
-    [paradaEditando]
+    [paradaEditando, setParadas, setDirty]
   );
 
   // ─── Inverter ordem completa ─────────────────────────────────────
@@ -233,13 +185,12 @@ function AjusteRotaContent(): React.ReactElement {
     });
     vibrar([40, 20, 40]);
     setDirty(true);
-  }, []);
+  }, [setParadas, setDirty]);
 
   // ─── Reorganizar: roteiriza tudo de novo (VROOM) ─────────────────
   // Pega as paradas pendentes e pede pro VROOM reordenar do zero a partir do
   // GPS do motorista. Igual ao Inverter, so altera a ordem local + marca dirty
   // — o motorista revisa e salva. Entregues ficam pinadas no topo.
-  const [reorganizando, setReorganizando] = useState(false);
   const handleReorganizar = useCallback(async () => {
     if (!rotaId) return;
     if (paradas.filter((p) => !p.concluida_em).length < 2) return;
@@ -280,7 +231,7 @@ function AjusteRotaContent(): React.ReactElement {
     } finally {
       setReorganizando(false);
     }
-  }, [rotaId, paradas, posicaoAtual]);
+  }, [rotaId, paradas, posicaoAtual, setParadas, setDirty]);
 
   // ─── Adicionar parada — fluxo em 3 passos ────────────────────────
   const handleCapturarNova = useCallback((dados: NotaCapturadaInput) => {
@@ -348,7 +299,7 @@ function AjusteRotaContent(): React.ReactElement {
         setModoAdicao('escolhendo'); // volta pra tela de escolha
       }
     },
-    [dadosNovaParada, rotaInfo, dirty, paradas]
+    [dadosNovaParada, rotaInfo, dirty, paradas, setParadas, setRotaInfo, setDirty]
   );
 
   const handleCancelarAdicao = useCallback(() => {
@@ -357,6 +308,7 @@ function AjusteRotaContent(): React.ReactElement {
     setModoAdicao('fechado');
   }, []);
 
+  // ─── Salvar ──────────────────────────────────────────────────────
   const handleSalvar = useCallback(async () => {
     if (!rotaId || !dirty) return;
     setSalvando(true);
@@ -420,8 +372,9 @@ function AjusteRotaContent(): React.ReactElement {
     } finally {
       setSalvando(false);
     }
-  }, [rotaId, dirty, paradas]);
+  }, [rotaId, dirty, paradas, setParadas, setRotaInfo, setDirty, setErro]);
 
+  // ─── Guards de carregamento ──────────────────────────────────────
   if (!rotaId) {
     return (
       <div style={containerStyle}>
@@ -446,7 +399,7 @@ function AjusteRotaContent(): React.ReactElement {
     );
   }
 
-  // Calculos visuais dinamicos (atualizam ao reordenar)
+  // ─── Calculos visuais dinamicos (atualizam ao reordenar) ─────────
   const distancias = distanciasEntreParadas(paradas);
   const kmEstimado = estimarKmTotal(paradas);
   const kmOriginal = rotaInfo?.distancia_total_km ?? kmEstimado;
@@ -461,137 +414,35 @@ function AjusteRotaContent(): React.ReactElement {
     dirty && minExibido !== null && kmOriginal > 0
       ? Math.round((kmEstimado / kmOriginal - 1) * minExibido)
       : 0;
-  const diffSinal = (n: number) => (n > 0 ? `+${n}` : `${n}`);
-  const diffCor = (n: number) => (n > 0 ? cores.vermelho : n < 0 ? cores.verde : cores.textoFraco);
 
   return (
     <div style={containerStyle}>
-      {/* Popup do ➕: continuar o lote OU adicionar um endereço */}
+      {/* Popup do ➕: continuar o lote OU adicionar um endereco */}
       {escolhendoAdicao && rotaInfo && (
-        <div
-          data-testid="popup-adicao"
-          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
-          onClick={() => setEscolhendoAdicao(false)}
-        >
-          <div
-            style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: '20px 16px 24px', width: '100%', maxWidth: 480, boxSizing: 'border-box' }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>➕ O que você quer fazer?</div>
-            <p style={{ fontSize: 13, color: '#475569', margin: '8px 0 14px', lineHeight: 1.5 }}>
-              A rota ainda não começou — dá pra voltar e <strong>lançar várias notas de uma vez</strong> (continua de onde parou, com as {paradas.length} já lançadas na lista) ou incluir só um endereço aqui.
-            </p>
-            <button
-              type="button"
-              data-testid="btn-continuar-lote"
-              onClick={() => {
-                window.location.href = `/mobile/rota?motorista_id=${rotaInfo.motorista_id}&empresa_id=${rotaInfo.empresa_id}&continuar=${rotaInfo.id}`;
-              }}
-              style={{ width: '100%', padding: 14, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}
-            >
-              Continuar roteirização (lançar várias)
-            </button>
-            <button
-              type="button"
-              data-testid="btn-adicionar-um"
-              onClick={() => { setEscolhendoAdicao(false); setModoAdicao('capturando'); }}
-              style={{ width: '100%', marginTop: 8, padding: 14, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
-            >
-              Adicionar um endereço
-            </button>
-            <button
-              type="button"
-              onClick={() => setEscolhendoAdicao(false)}
-              style={{ width: '100%', marginTop: 8, padding: 12, background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
-            >
-              Cancelar
-            </button>
-          </div>
-        </div>
+        <PopupAdicao
+          paradasLength={paradas.length}
+          urlContinuarLote={`/mobile/rota?motorista_id=${rotaInfo.motorista_id}&empresa_id=${rotaInfo.empresa_id}&continuar=${rotaInfo.id}`}
+          onAdicionarUm={() => { setEscolhendoAdicao(false); setModoAdicao('capturando'); }}
+          onFechar={() => setEscolhendoAdicao(false)}
+        />
       )}
 
-      <header style={headerStyle}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
-          <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Ajuste de Rota</h1>
-          <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
-            <button
-              type="button"
-              onClick={() => {
-                // rota já iniciada (alguma baixa)? adicionar único direto.
-                if (paradas.some((p) => p.concluida_em)) setModoAdicao('capturando');
-                else setEscolhendoAdicao(true);
-              }}
-              title="adicionar parada"
-              aria-label="adicionar parada"
-              data-testid="btn-adicionar-parada"
-              style={iconBtnStyle}
-            >
-              ➕
-            </button>
-            <button
-              type="button"
-              onClick={handleInverter}
-              title="inverter rota completa"
-              aria-label="inverter rota"
-              data-testid="btn-inverter"
-              disabled={paradas.length < 2}
-              style={{ ...iconBtnStyle, opacity: paradas.length < 2 ? 0.4 : 1 }}
-            >
-              ⇅
-            </button>
-            <button
-              type="button"
-              onClick={handleReorganizar}
-              title="reorganizar (roteirizar tudo de novo)"
-              aria-label="reorganizar rota"
-              data-testid="btn-reorganizar"
-              disabled={paradas.filter((p) => !p.concluida_em).length < 2 || reorganizando}
-              style={{
-                ...iconBtnStyle,
-                opacity:
-                  paradas.filter((p) => !p.concluida_em).length < 2 || reorganizando ? 0.4 : 1,
-              }}
-            >
-              {reorganizando ? '…' : '🪄'}
-            </button>
-          </div>
-        </div>
-        <div style={{ fontSize: 13, color: cores.textoMedio, marginTop: 4 }}>
-          {paradas.length} paradas · {dirty && '≈ '}{kmExibido.toFixed(1)} km
-          {minExibido !== null && !dirty && <> · ≈ {Math.round(minExibido)} min</>}
-        </div>
-        {dirty && (
-          <div
-            data-testid="diff-impacto"
-            style={{
-              marginTop: 6,
-              padding: '6px 10px',
-              background: '#fff7ed',
-              border: '1px solid #fed7aa',
-              borderRadius: 6,
-              fontSize: 12,
-              display: 'flex',
-              gap: 10,
-              alignItems: 'center',
-              // flexWrap evita overflow horizontal em iPhone SE/Mini (320-375px)
-              flexWrap: 'wrap',
-            }}
-          >
-            <span style={{ fontWeight: 700, color: '#9a3412' }}>↻ Mudou:</span>
-            <span style={{ color: diffCor(diffKm), fontWeight: 600 }}>
-              {diffSinal(parseFloat(diffKm.toFixed(1)))} km
-            </span>
-            {diffMin !== 0 && (
-              <span style={{ color: diffCor(diffMin), fontWeight: 600 }}>
-                {diffSinal(diffMin)} min
-              </span>
-            )}
-            <span style={{ color: '#9a3412', marginLeft: 'auto', fontSize: 11 }}>
-              (estimativa em linha reta)
-            </span>
-          </div>
-        )}
-      </header>
+      <HeaderAjusteRota
+        paradas={paradas}
+        dirty={dirty}
+        kmExibido={kmExibido}
+        minExibido={minExibido}
+        diffKm={diffKm}
+        diffMin={diffMin}
+        reorganizando={reorganizando}
+        onAdicionar={() => {
+          // rota ja iniciada (alguma baixa)? adicionar unico direto.
+          if (paradas.some((p) => p.concluida_em)) setModoAdicao('capturando');
+          else setEscolhendoAdicao(true);
+        }}
+        onInverter={handleInverter}
+        onReorganizar={handleReorganizar}
+      />
 
       {avisoLock && (
         <div role="alert" style={{ ...erroStyle, background: cores.fundoAmbarClaro, color: cores.textoAmbar }}>
@@ -633,27 +484,15 @@ function AjusteRotaContent(): React.ReactElement {
 
       {/* Conteudo da aba ativa */}
       {aba === 'ordenar' ? (
-        <DndContext
+        <AbaOrdenar
+          paradas={paradas}
           sensors={sensors}
-          collisionDetection={closestCenter}
+          distancias={distancias}
+          paradaSelecionada={paradaSelecionada}
           onDragStart={handleDragStart}
           onDragEnd={handleDragEnd}
-        >
-          <SortableContext items={paradas.map((p) => p.id)} strategy={verticalListSortingStrategy}>
-            {paradas.map((p, i) => (
-              <div
-                key={p.id}
-                onClick={() => setParadaSelecionada(p.id === paradaSelecionada ? null : p.id)}
-              >
-                <SortableTijolinho
-                  parada={p}
-                  distanciaAnteriorKm={distancias[i]}
-                  destacado={paradaSelecionada === p.id}
-                />
-              </div>
-            ))}
-          </SortableContext>
-        </DndContext>
+          onParadaClick={(id) => setParadaSelecionada(id === paradaSelecionada ? null : id)}
+        />
       ) : (
         <div>
           {paradas.map((p) => (
@@ -716,77 +555,13 @@ function AjusteRotaContent(): React.ReactElement {
 
       {/* Overlay 2: escolha de posicao (modoAdicao=escolhendo|adicionando) */}
       {(modoAdicao === 'escolhendo' || modoAdicao === 'adicionando') && dadosNovaParada && (
-        <div
-          role="dialog"
-          aria-label="onde adicionar a parada"
-          data-testid="overlay-escolher"
-          style={overlayStyle}
-          onClick={modoAdicao === 'escolhendo' ? handleCancelarAdicao : undefined}
-        >
-          <div style={overlayModalStyle} onClick={(e) => e.stopPropagation()}>
-            <div style={{ fontSize: 18, fontWeight: 700, marginBottom: 4 }}>
-              Onde adicionar?
-            </div>
-            <div style={{ fontSize: 13, color: cores.textoFraco, marginBottom: 16 }}>
-              📍 {dadosNovaParada.endereco.logradouro}, {dadosNovaParada.numero}
-            </div>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmarAdicao('reotimizar')}
-              disabled={modoAdicao === 'adicionando'}
-              data-testid="btn-reotimizar"
-              style={{
-                ...overlayBotaoPrincipal,
-                background: cores.verde,
-                opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
-              }}
-            >
-              🎯 Reotimizar — melhor posição
-              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 2, opacity: 0.85 }}>
-                Mantém ordem atual e encaixa onde gerar menos KM extra
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => handleConfirmarAdicao('final')}
-              disabled={modoAdicao === 'adicionando'}
-              data-testid="btn-final"
-              style={{
-                ...overlayBotaoPrincipal,
-                background: cores.azul,
-                opacity: modoAdicao === 'adicionando' ? 0.5 : 1,
-              }}
-            >
-              📍 Última entrega
-              <div style={{ fontSize: 11, fontWeight: 400, marginTop: 2, opacity: 0.85 }}>
-                Vai pro final da fila — depois você reorganiza se quiser
-              </div>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleCancelarAdicao}
-              disabled={modoAdicao === 'adicionando'}
-              style={overlayBotaoSecundario}
-            >
-              Cancelar
-            </button>
-
-            {modoAdicao === 'adicionando' && (
-              <div role="status" style={{ marginTop: 12, fontSize: 13, color: cores.textoMedio, textAlign: 'center' }}>
-                ⏳ Geocodificando e adicionando…
-              </div>
-            )}
-
-            {erroAdicionar && (
-              <div role="alert" style={{ ...erroStyle, marginTop: 12 }}>
-                {erroAdicionar}
-              </div>
-            )}
-          </div>
-        </div>
+        <OverlayEscolherPosicao
+          dadosNovaParada={dadosNovaParada}
+          modoAdicao={modoAdicao}
+          erroAdicionar={erroAdicionar}
+          onConfirmar={handleConfirmarAdicao}
+          onCancelar={handleCancelarAdicao}
+        />
       )}
     </div>
   );
@@ -800,180 +575,3 @@ export default function AjusteRotaPage(): React.ReactElement {
   );
 }
 
-// ─── SortableTijolinho ──────────────────────────────────────────────
-
-function SortableTijolinho({
-  parada,
-  distanciaAnteriorKm,
-  destacado,
-}: {
-  parada: Parada;
-  distanciaAnteriorKm?: number;
-  destacado?: boolean;
-}) {
-  // Bloqueado pra reorder: fixada (motorista lockou) OU concluida (ja entregue)
-  const bloqueado = parada.fixada || Boolean(parada.concluida_em);
-
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
-    id: parada.id,
-    disabled: bloqueado,
-  });
-
-  // Listeners no wrapper inteiro = motorista pode prender o dedo em qualquer
-  // ponto do tijolinho. touchAction:'none' impede o browser de rolar a pagina
-  // enquanto o dnd-kit detecta o long-press. marginInline cria uma faixa
-  // lateral SEM touchAction:none — motorista usa ela pra rolar a pagina
-  // (antes nao tinha lugar nenhum pra apoiar o dedo).
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.5 : parada.concluida_em ? 0.55 : 1,
-    touchAction: bloqueado ? 'auto' : 'none',
-    cursor: bloqueado ? 'default' : 'grab',
-    marginInline: 16,
-  };
-
-  return (
-    <div
-      ref={setNodeRef}
-      style={style}
-      {...attributes}
-      {...(bloqueado ? {} : listeners)}
-      data-testid={`sortable-${parada.ordem}`}
-    >
-      {/* Sem draggableHandle — tijolinho inteiro e arrastavel via listeners.
-          O icone ☰ era so decorativo e tomava espaco que faltava no celular. */}
-      <Tijolinho
-        parada={parada}
-        modo="ordenar"
-        distanciaAnteriorKm={distanciaAnteriorKm}
-        destacado={destacado}
-      />
-    </div>
-  );
-}
-
-// ─── ESTILOS ────────────────────────────────────────────────────────
-
-const containerStyle: React.CSSProperties = {
-  maxWidth: 480,
-  margin: '0 auto',
-  padding: 12,
-  // Safety net pra qualquer elemento que ultrapasse o limite — em telefones de
-  // 320-375px (iPhone SE/Mini), evita scroll horizontal indesejado.
-  overflowX: 'hidden',
-  // Espacamento pra status bar e botoes do sistema (iPhone com notch)
-  paddingTop: 'max(12px, env(safe-area-inset-top))',
-  paddingBottom: 'max(12px, env(safe-area-inset-bottom))',
-};
-
-const headerStyle: React.CSSProperties = {
-  marginBottom: 10,
-};
-
-const tabsStyle: React.CSSProperties = {
-  display: 'flex',
-  gap: 4,
-  marginTop: 12,
-  marginBottom: 10,
-  borderBottom: `1px solid ${cores.borda}`,
-};
-
-const tabStyle: React.CSSProperties = {
-  flex: 1,
-  padding: '10px',
-  background: 'transparent',
-  border: 'none',
-  borderBottom: '2px solid transparent',
-  color: cores.textoFraco,
-  fontWeight: 500,
-  cursor: 'pointer',
-  fontSize: 14,
-};
-
-const tabAtivoStyle: React.CSSProperties = {
-  color: cores.azul,
-  borderBottomColor: cores.azul,
-  fontWeight: 700,
-};
-
-const botaoSalvarStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '14px',
-  marginTop: 16,
-  fontSize: 16,
-  fontWeight: 600,
-  background: cores.verde,
-  color: cores.branco,
-  border: 'none',
-  borderRadius: 8,
-  cursor: 'pointer',
-};
-
-const erroStyle: React.CSSProperties = {
-  padding: 12,
-  background: cores.fundoVermelho,
-  color: cores.vermelhoTexto,
-  borderRadius: 8,
-  fontSize: 14,
-};
-
-const iconBtnStyle: React.CSSProperties = {
-  width: 32,
-  height: 32,
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  background: cores.divisoria,
-  border: `1px solid ${cores.bordaForte}`,
-  borderRadius: 6,
-  fontSize: 16,
-  cursor: 'pointer',
-  padding: 0,
-  flexShrink: 0,
-  lineHeight: 1,
-};
-
-const overlayStyle: React.CSSProperties = {
-  position: 'fixed',
-  inset: 0,
-  background: 'rgba(0,0,0,0.5)',
-  display: 'flex',
-  alignItems: 'center',
-  justifyContent: 'center',
-  zIndex: 60,
-  padding: 12,
-};
-
-const overlayModalStyle: React.CSSProperties = {
-  background: cores.branco,
-  borderRadius: 12,
-  padding: 16,
-  width: '100%',
-  maxWidth: 420,
-  maxHeight: '92vh',
-  overflowY: 'auto',
-};
-
-const overlayBotaoPrincipal: React.CSSProperties = {
-  width: '100%',
-  padding: '14px 16px',
-  marginBottom: 8,
-  fontSize: 15,
-  fontWeight: 700,
-  color: cores.branco,
-  border: 'none',
-  borderRadius: 10,
-  cursor: 'pointer',
-  textAlign: 'left',
-};
-
-const overlayBotaoSecundario: React.CSSProperties = {
-  width: '100%',
-  padding: '10px',
-  background: 'transparent',
-  color: cores.textoFraco,
-  border: 'none',
-  fontSize: 14,
-  cursor: 'pointer',
-};

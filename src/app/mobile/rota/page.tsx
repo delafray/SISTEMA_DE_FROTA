@@ -26,36 +26,30 @@ import {
   listarTodas,
   remover,
 } from '@/lib/offline/fila';
-import { iniciarSyncWorker, sincronizarFila } from '@/lib/offline/sync';
-import { iniciarOnlineDetector, estaOnline } from '@/lib/offline/onlineDetector';
-import { salvarRotaAtiva, lerRotaAtiva, lerUltimaRotaAtiva } from '@/lib/offline/rotaCache';
+import { sincronizarFila } from '@/lib/offline/sync';
+import { salvarRotaAtiva, lerRotaAtiva } from '@/lib/offline/rotaCache';
 import { enfileirarConcluirParada, enfileirarEncerrarRota } from '@/lib/offline/acoesRota';
-import { iniciarSyncAcoesWorker, sincronizarAcoes } from '@/lib/offline/syncAcoes';
+import { sincronizarAcoes } from '@/lib/offline/syncAcoes';
 import { vibrar, lockOrientacaoRetrato } from '@/lib/mobile/dispositivo';
 import { carregarVeiculoAtivo, type VeiculoAtivo } from '@/lib/mobile/veiculoAtivo';
 import { createClient } from '@/lib/supabase/client';
 import { rotuloPedido } from '@/lib/utils/numeroPedido';
-import { DespachosAbertos, type DespachoAberto } from './components/DespachosAbertos';
+import { DespachosAbertos } from './components/DespachosAbertos';
 import { fetchRota } from '@/lib/routing/api';
 import { containerStyle, erroStyle } from './styles';
-
-// Âncora do despacho: a rota em criação pertence a este pedido (persistida no
-// aparelho pra sobreviver a refresh; limpa em "Nova rota" e ao encerrar).
-const ANCORA_KEY = 'frota_pedido_ancora';
-type PedidoAncora = { id: string; numero: string | null };
-function lerAncora(): PedidoAncora | null {
-  try {
-    const raw = localStorage.getItem(ANCORA_KEY);
-    return raw ? (JSON.parse(raw) as PedidoAncora) : null;
-  } catch { return null; }
-}
+import { useAncora } from './hooks/useAncora';
+import { useDespachos } from './hooks/useDespachos';
+import { useCarregamentoInicial } from './hooks/useCarregamentoInicial';
+import { useFaseEmRotaSync } from './hooks/useFaseEmRotaSync';
+import { useCapturaWorkers } from './hooks/useCapturaWorkers';
+import { useVoltarHardware } from './hooks/useVoltarHardware';
+import { calcularStatsRota } from '@/lib/routing/statsRota';
 import type { Fase } from './types';
 import { Header } from './components/Header';
 import { FaseInicio } from './components/FaseInicio';
 import { FaseCaptura } from './components/FaseCaptura';
 import { FaseEmRota } from './components/FaseEmRota';
 import { ModalSairCaptura } from './components/ModalSairCaptura';
-import { calcularDistanciaKm } from '@/lib/routing/geocoding';
 import type { NotaNaFila } from '@/lib/offline/types';
 import type { Parada, RotaOtimizada } from '@/lib/routing/types';
 
@@ -100,17 +94,25 @@ function RotaContent(): React.ReactElement {
   // Caminhao da alocacao ativa do motorista (apelido/modelo/placa/km) — mostrado
   // no header em todas as fases. Offline cai pro snapshot salvo no aparelho.
   const [veiculo, setVeiculo] = useState<VeiculoAtivo | null>(null);
-  // Despachos em aberto do motorista (lista na fase inicio) + âncora ativa
-  const [despachos, setDespachos] = useState<DespachoAberto[]>([]);
-  const [pedidoAncora, setPedidoAncora] = useState<PedidoAncora | null>(null);
-  const [abrindoDespacho, setAbrindoDespacho] = useState<string | null>(null);
-  // Uso do Google no mes (pra mostrar na captura: cache vs API + quanto falta
-  // pro ViaCEP). Atualiza ao entrar na captura e a cada NF capturada.
-  const [usoGoogle, setUsoGoogle] = useState<{ total: number; limite: number } | null>(null);
   // Modal de confirmacao ao apertar Voltar no meio da captura (evita descartar
-  // 5-10 NFs sem querer). Ver handlePopState abaixo.
+  // 5-10 NFs sem querer). Ver useVoltarHardware.
   const [confirmandoSaida, setConfirmandoSaida] = useState(false);
   const notasRef = useRef<NotaNaFila[]>(notas);
+
+  // Âncora do despacho + despachos em aberto + decisão da fase inicial +
+  // efeitos de sync por fase — extraídos pra hooks/ (comportamento idêntico).
+  const { pedidoAncora, definirAncora } = useAncora(motoristaId, beta);
+  const { despachos, abrindoDespacho, abrirRotaPedido } = useDespachos({
+    motoristaId, empresaId, beta, fase,
+    definirAncora, setNotas, setFase, setErro, setRotasHistorico,
+  });
+  useCarregamentoInicial({
+    motoristaId, empresaId, abrirId, continuarId, definirAncora,
+    setFase, setNotas, setRota, setParadas, setOnline, setToast, setErro, setRotasHistorico,
+  });
+  useFaseEmRotaSync({ fase, rota, paradas, setRota, setParadas, setOnline });
+  const { usoGoogle } = useCapturaWorkers({ fase, motoristaId, numNotas: notas.length, setNotas, setOnline });
+  useVoltarHardware({ fase, notasRef, setFase, setConfirmandoSaida });
 
   useEffect(() => {
     notasRef.current = notas;
@@ -134,190 +136,6 @@ function RotaContent(): React.ReactElement {
     };
   }, [motoristaId, beta]);
 
-  // Restaura a âncora do despacho (sobrevive a refresh). Beta não tem âncora.
-  useEffect(() => {
-    if (!motoristaId || beta) return;
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setPedidoAncora(lerAncora());
-  }, [motoristaId, beta]);
-
-  // Carrega os despachos em aberto (best-effort; offline fica vazio). É chamado
-  // SEMPRE que a tela volta pra fase inicio e quando o app volta ao foco — o
-  // card do despacho some sozinho quando o motorista cria a rota, SEM F5
-  // (regra do dono: usuário comum nunca atualiza página).
-  const carregarDespachos = useCallback(async () => {
-    if (!motoristaId || beta) return;
-    try {
-        const supabase = createClient();
-        const { data: peds } = await supabase.from('pedidos')
-          .select('id,numero,status,data_inicio_prevista,local_carregamento,entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia))')
-          .eq('motorista_id', motoristaId)
-          .not('status', 'in', '(concluida,concluido,cancelada,cancelado)')
-          .order('data_inicio_prevista', { ascending: true })
-          .limit(30);
-        const lista = (peds ?? []) as Array<{
-          id: string; numero: string | null; status: string;
-          data_inicio_prevista: string | null; local_carregamento: string | null;
-          entregas: Array<{ id: string; destino: string | null; nome_cliente_avulso: string | null; clientes: { nome_fantasia: string } | { nome_fantasia: string }[] | null }>;
-        }>;
-        const ids = lista.map((p) => p.id);
-        // Pedido SAI da lista de cima quando o motorista JÁ COMEÇOU a rota dele:
-        // (a) existe rota montada por ele (paradas vindas de notas), OU
-        // (b) existem notas EM MONTAGEM vinculadas (capturou e saiu sem otimizar
-        //     — o progresso fica guardado e vinculado; retoma por "Continuar
-        //     captura", nunca pelo card, que zeraria a fila).
-        // Rota PRÉ-CADASTRADA no painel (paradas de entregas) mantém o card com
-        // o selo "rota pronta" pra ele puxar e ajustar. (decisão do dono 10/06)
-        const comRotaPainel = new Set<string>();
-        const iniciadoPeloMotorista = new Set<string>();
-        if (ids.length > 0) {
-          const [{ data: rts }, { data: notasVinc }] = await Promise.all([
-            supabase.from('rotas_otimizadas')
-              .select('id,pedido_id').in('pedido_id', ids).in('status', ['otimizada', 'em_andamento']),
-            supabase.from('notas_capturadas')
-              .select('pedido_id').in('pedido_id', ids).in('status', ['capturada', 'geocodificada']),
-          ]);
-          for (const n of (notasVinc ?? []) as Array<{ pedido_id: string | null }>) {
-            if (n.pedido_id) iniciadoPeloMotorista.add(n.pedido_id);
-          }
-          const rotas = (rts ?? []) as Array<{ id: string; pedido_id: string | null }>;
-          if (rotas.length > 0) {
-            const { data: pars } = await supabase.from('paradas')
-              .select('rota_id,nota_id').in('rota_id', rotas.map((r) => r.id));
-            const rotasComNota = new Set(
-              ((pars ?? []) as Array<{ rota_id: string; nota_id: string | null }>)
-                .filter((p) => p.nota_id).map((p) => p.rota_id)
-            );
-            for (const r of rotas) {
-              if (!r.pedido_id) continue;
-              if (rotasComNota.has(r.id)) iniciadoPeloMotorista.add(r.pedido_id);
-              else comRotaPainel.add(r.pedido_id);
-            }
-          }
-        }
-        const montados: DespachoAberto[] = lista
-          .filter((p) => !iniciadoPeloMotorista.has(p.id))
-          .map((p) => {
-          const ents = Array.isArray(p.entregas) ? p.entregas : [];
-          let cliente = 'Cliente não informado';
-          for (const e of ents) {
-            const cli = Array.isArray(e.clientes) ? e.clientes[0] : e.clientes;
-            if (cli?.nome_fantasia) { cliente = cli.nome_fantasia; break; }
-            if (e.nome_cliente_avulso?.trim()) cliente = e.nome_cliente_avulso.trim();
-          }
-          const dests = ents.map((e) => e.destino?.trim()).filter(Boolean);
-          const destinos = `${ents.length} entrega${ents.length !== 1 ? 's' : ''}${dests.length > 0 ? ` · ${String(dests[0]).slice(0, 28)}${dests.length > 1 ? ` +${dests.length - 1}` : ''}` : ''}`;
-          return {
-            id: p.id,
-            numero: p.numero ?? null,
-            cliente,
-            status: p.status,
-            data_inicio_prevista: p.data_inicio_prevista,
-            local_carregamento: p.local_carregamento,
-            qtd_entregas: ents.length,
-            destinos,
-            tem_rota: comRotaPainel.has(p.id),
-          };
-        });
-        setDespachos(montados);
-      } catch { /* offline ou erro — lista de despachos fica vazia */ }
-  }, [motoristaId, beta]);
-
-  // Recarrega os despachos AUTOMATICAMENTE: ao entrar na fase inicio (inclusive
-  // voltando de em_rota/captura) e quando o app volta ao foco nessa fase.
-  useEffect(() => {
-    if (fase !== 'inicio') return;
-    const atualizarInicio = () => {
-      void carregarDespachos();
-      // histórico também — pra rota recém-criada já aparecer com o selo 📦
-      if (motoristaId && empresaId) {
-        fetch(`/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`)
-          .then((r) => (r.ok ? r.json() : null))
-          .then((d) => { if (d) setRotasHistorico(d.rotas ?? []); })
-          .catch(() => {});
-      }
-    };
-    atualizarInicio();
-    const aoVoltarFoco = () => {
-      if (document.visibilityState === 'visible') atualizarInicio();
-    };
-    document.addEventListener('visibilitychange', aoVoltarFoco);
-    window.addEventListener('focus', aoVoltarFoco);
-    return () => {
-      document.removeEventListener('visibilitychange', aoVoltarFoco);
-      window.removeEventListener('focus', aoVoltarFoco);
-    };
-  }, [fase, carregarDespachos, motoristaId, empresaId]);
-
-  /** Grava/limpa a âncora (estado + aparelho). */
-  const definirAncora = useCallback((a: PedidoAncora | null) => {
-    setPedidoAncora(a);
-    try {
-      if (a) localStorage.setItem(ANCORA_KEY, JSON.stringify(a));
-      else localStorage.removeItem(ANCORA_KEY);
-    } catch { /* localStorage indisponível */ }
-  }, []);
-
-  /** "Abrir Rota Para Este Pedido": rota pré-cadastrada vira lista editável;
-   *  sem rota, captura do zero — sempre ancorado no pedido. */
-  const abrirRotaPedido = useCallback(async (d: DespachoAberto) => {
-    setAbrindoDespacho(d.id);
-    setErro(null);
-    try {
-      // mesma limpeza do "Nova rota": zera a fila local e as notas soltas no servidor
-      await limparFila(motoristaId);
-      await fetch('/api/routing/notas/limpar', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
-      }).catch(() => {});
-
-      // Rota pré-cadastrada? Puxa as paradas EM ABERTO pra lista editável.
-      try {
-        const supabase = createClient();
-        const { data: rotas } = await supabase.from('rotas_otimizadas')
-          .select('id')
-          .eq('pedido_id', d.id)
-          .in('status', ['otimizada', 'em_andamento'])
-          .order('criada_em', { ascending: false })
-          .limit(1);
-        const rotaPrev = (rotas ?? [])[0] as { id: string } | undefined;
-        if (rotaPrev) {
-          const { data: pars } = await supabase.from('paradas')
-            .select('endereco,latitude,longitude,observacao,concluida_em')
-            .eq('rota_id', rotaPrev.id)
-            .order('ordem', { ascending: true });
-          for (const par of ((pars ?? []) as Array<{ endereco: unknown; latitude: number | null; longitude: number | null; observacao: string | null; concluida_em: string | null }>).filter(p => !p.concluida_em)) {
-            const end = (par.endereco ?? {}) as NotaNaFila['endereco'] & { cep?: string | null; numero?: string | null };
-            await adicionarNota({
-              id_local: crypto.randomUUID(),
-              motorista_id: motoristaId,
-              empresa_id: empresaId,
-              pedido_id: d.id, // paradas puxadas da rota pré-cadastrada: vínculo gravado
-              cep: end?.cep ?? '',
-              numero: end?.numero ?? '',
-              endereco: end,
-              latitude: par.latitude ?? null,
-              longitude: par.longitude ?? null,
-              observacao: par.observacao ?? null,
-              status: 'capturada',
-              capturado_em: new Date().toISOString(),
-              status_sync: 'pendente',
-              tentativas: 0,
-            });
-          }
-          void sincronizarFila();
-        }
-      } catch { /* sem rede ou sem rota — segue captura vazia */ }
-
-      setNotas(await listarTodas(motoristaId));
-      definirAncora({ id: d.id, numero: d.numero });
-      setFase('captura');
-    } finally {
-      setAbrindoDespacho(null);
-    }
-  }, [motoristaId, empresaId, definirAncora]);
-
   // Persiste a fase no localStorage pra restaurar apos refresh/crash.
   // As NFs ficam seguras no IndexedDB (Dexie), mas o estado React se perde.
   // Este flag permite restaurar instantaneamente pra 'captura' sem API call.
@@ -326,24 +144,6 @@ function RotaContent(): React.ReactElement {
       try { localStorage.setItem('frota_fase', fase); } catch { /* ignore */ }
     }
   }, [fase]);
-
-  // Contador de uso do Google — refaz a leitura a cada NF capturada, pro
-  // motorista ver se a busca subiu o contador (API) ou nao (cache).
-  useEffect(() => {
-    if (fase !== 'captura') return;
-    let cancelado = false;
-    fetch('/api/routing/geocode-uso')
-      .then((r) => (r.ok ? r.json() : null))
-      .then((d: { total?: number; limite?: number } | null) => {
-        if (!cancelado && d && typeof d.total === 'number' && typeof d.limite === 'number') {
-          setUsoGoogle({ total: d.total, limite: d.limite });
-        }
-      })
-      .catch(() => {});
-    return () => {
-      cancelado = true;
-    };
-  }, [fase, notas.length]);
 
   // Watch posicao do motorista durante "em_rota" — atualiza marcador no mapa
   // conforme ele se desloca. Para o watch ao sair da fase pra economizar
@@ -359,317 +159,6 @@ function RotaContent(): React.ReactElement {
     );
 
     return () => navigator.geolocation.clearWatch(watchId);
-  }, [fase]);
-
-  // ─── Carregamento inicial: decide fase baseado no estado ──────────
-
-  useEffect(() => {
-    if (!motoristaId || !empresaId) {
-      // eslint-disable-next-line react-hooks/set-state-in-effect
-      setFase('inicio');
-      return;
-    }
-    (async () => {
-      // CONTINUAR EM LOTE (?continuar=<rotaId>, vindo do ➕ do Ajuste): puxa as
-      // paradas em aberto da rota pra fila editável e reabre a captura. Tem
-      // prioridade sobre tudo — foi uma escolha explícita do motorista.
-      if (continuarId) {
-        try {
-          await limparFila(motoristaId);
-          await fetch('/api/routing/notas/limpar', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
-          }).catch(() => {});
-
-          const supabase = createClient();
-          const { data: rotaCont } = await supabase.from('rotas_otimizadas')
-            .select('id,pedido_id').eq('id', continuarId).maybeSingle();
-          const pedidoIdCont = (rotaCont as { pedido_id?: string | null } | null)?.pedido_id ?? null;
-
-          let numeroCont: string | null = null;
-          if (pedidoIdCont) {
-            const { data: ped } = await supabase.from('pedidos')
-              .select('numero' as never).eq('id', pedidoIdCont).maybeSingle();
-            numeroCont = (ped as { numero?: string | null } | null)?.numero ?? null;
-          }
-
-          const { data: parsCont } = await supabase.from('paradas')
-            .select('endereco,latitude,longitude,observacao,concluida_em')
-            .eq('rota_id', continuarId)
-            .order('ordem', { ascending: true });
-          for (const par of ((parsCont ?? []) as Array<{ endereco: unknown; latitude: number | null; longitude: number | null; observacao: string | null; concluida_em: string | null }>).filter(p => !p.concluida_em)) {
-            const end = (par.endereco ?? {}) as NotaNaFila['endereco'] & { cep?: string | null; numero?: string | null };
-            await adicionarNota({
-              id_local: crypto.randomUUID(),
-              motorista_id: motoristaId,
-              empresa_id: empresaId,
-              pedido_id: pedidoIdCont,
-              cep: end?.cep ?? '',
-              numero: end?.numero ?? '',
-              endereco: end,
-              latitude: par.latitude ?? null,
-              longitude: par.longitude ?? null,
-              observacao: par.observacao ?? null,
-              status: 'capturada',
-              capturado_em: new Date().toISOString(),
-              status_sync: 'pendente',
-              tentativas: 0,
-            });
-          }
-          void sincronizarFila();
-          setNotas(await listarTodas(motoristaId));
-          definirAncora(pedidoIdCont ? { id: pedidoIdCont, numero: numeroCont } : null);
-          // tira o ?continuar da URL: um refresh depois daqui NÃO pode re-puxar
-          // (re-puxar limparia a fila e mataria as notas novas capturadas)
-          try {
-            const u = new URL(window.location.href);
-            u.searchParams.delete('continuar');
-            window.history.replaceState(null, '', u.toString());
-          } catch { /* ignore */ }
-          setFase('captura');
-          return;
-        } catch {
-          // sem rede/erro — cai pro fluxo normal abaixo
-        }
-      }
-
-      // FAST PATH: restaura captura se havia notas em progresso.
-      // Roda ANTES de qualquer fetch — funciona offline e é instantâneo.
-      // Garante que refresh, crash, ou troca de versão não perde o trabalho.
-      // Exceção: deep-link ?abrir=<id> tem prioridade (veio do dashboard).
-      if (!abrirId) {
-        try {
-          const faseSalva = localStorage.getItem('frota_fase');
-          if (faseSalva === 'captura') {
-            const notasLocais = await listarTodas(motoristaId);
-            if (notasLocais.length > 0) {
-              setNotas(notasLocais);
-              const pendentes = notasLocais.filter((n) => n.status_sync === 'pendente').length;
-              if (pendentes > 0) {
-                void sincronizarFila();
-              }
-              setFase('captura');
-              return;
-            }
-          }
-        } catch { /* localStorage indisponível */ }
-      }
-
-      try {
-        // 1. Busca ultimas rotas (historico para tela de inicio)
-        const res = await fetch(
-          `/api/routing/rotas?empresa_id=${empresaId}&motorista_id=${motoristaId}&limite=5`
-        );
-        const data = await res.json();
-        const todasRotas: RotaOtimizada[] = data.rotas ?? [];
-        setRotasHistorico(todasRotas);
-
-        // Deep-link ?abrir=<rotaId>: abre direto essa rota (veio da lista da
-        // tela do motorista). Se nao achar (404), cai pro fluxo normal abaixo.
-        if (abrirId) {
-          try {
-            const rotaData = await fetchRota(abrirId);
-            setRota(rotaData.rota);
-            setParadas(rotaData.paradas);
-            setFase('em_rota');
-            return;
-          } catch {
-            // 404/erro da rota pedida — cai pro fluxo normal abaixo.
-          }
-        }
-
-        // Verifica se ha rota em andamento automaticamente carregavel
-        const rotaEmAndamento = todasRotas.find((r) =>
-          ['otimizada', 'em_andamento'].includes(r.status)
-        );
-
-        if (rotaEmAndamento) {
-          // Tem rota aberta — mas agora mostramos a tela de inicio com historico
-          // para o motorista decidir se quer continuar ou criar nova.
-          // (Antes carregava automaticamente — agora deixa o motorista escolher.)
-          setFase('inicio');
-          return;
-        }
-
-        // 2. Existem notas pendentes na fila local?
-        const notasLocais = await listarTodas(motoristaId);
-        setNotas(notasLocais);
-        if (notasLocais.length > 0) {
-          const pendentes = notasLocais.filter((n) => n.status_sync === 'pendente').length;
-          if (pendentes > 0) {
-            setToast(`⏳ ${pendentes} nota${pendentes > 1 ? 's' : ''} pendente${pendentes > 1 ? 's' : ''} — sincronizando…`);
-            setTimeout(() => setToast(null), 5000);
-            void sincronizarFila();
-          }
-          setFase('captura');
-          return;
-        }
-
-        // 3. Nada pendente — fase inicial com historico
-        setFase('inicio');
-      } catch (err) {
-        // Offline: tenta restaurar captura local antes de buscar cache de rota.
-        // Se o motorista estava capturando e atualizou sem internet, as NFs
-        // estao no IndexedDB — restaura direto pra 'captura'.
-        try {
-          const notasLocaisOffline = await listarTodas(motoristaId);
-          if (notasLocaisOffline.length > 0) {
-            setNotas(notasLocaisOffline);
-            setToast('📴 Sem internet — suas notas estão seguras no aparelho.');
-            setTimeout(() => setToast(null), 5000);
-            setFase('captura');
-            return;
-          }
-        } catch { /* Dexie error — segue pro fallback */ }
-
-        // Offline / erro de rede: tenta retomar a rota guardada localmente pra o
-        // motorista seguir navegando e exportando pro Google Maps sem internet.
-        // Com deep-link, prioriza a rota pedida; senao, a ultima salva.
-        const cache =
-          (abrirId ? await lerRotaAtiva(abrirId) : null) ??
-          (await lerUltimaRotaAtiva(motoristaId));
-        if (cache) {
-          setRota(cache.rota);
-          setParadas(cache.paradas);
-          setOnline(false);
-          setToast('📴 Sem internet — usando a rota salva no aparelho.');
-          setTimeout(() => setToast(null), 5000);
-          setFase('em_rota');
-          return;
-        }
-        setErro(`Falha ao carregar: ${(err as Error).message}`);
-        setFase('inicio');
-      }
-    })();
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [motoristaId, empresaId, abrirId, continuarId]);
-
-  // ─── Persiste a rota ativa localmente (IndexedDB) ──────────────────
-  // Sempre que a rota entra/atualiza na fase em_rota, guarda um snapshot pra o
-  // motorista ver paradas + mapa + exportar pro Google Maps mesmo offline. Roda
-  // tambem a cada baixa de parada (paradas muda), mantendo o progresso salvo.
-  useEffect(() => {
-    if (fase !== 'em_rota' || !rota) return;
-    void salvarRotaAtiva({ rota, paradas });
-  }, [fase, rota, paradas]);
-
-  // ─── Sync das ACOES offline (concluir/encerrar) na fase em_rota ────
-  // Enquanto o motorista esta na rota, mantemos um worker tentando reenviar as
-  // baixas/encerramentos feitos offline. O evento `online` dispara na hora em
-  // que a internet volta; o interval cobre sinal intermitente que nao dispara
-  // o evento. Ao sair da fase, para tudo.
-  useEffect(() => {
-    if (fase !== 'em_rota') return;
-    const parar = iniciarSyncAcoesWorker(8000);
-    const aoVoltarOnline = () => {
-      setOnline(true);
-      void sincronizarAcoes();
-    };
-    window.addEventListener('online', aoVoltarOnline);
-    return () => {
-      parar();
-      window.removeEventListener('online', aoVoltarOnline);
-    };
-  }, [fase]);
-
-  // ─── Auto-refresh ao voltar de outra tela (ex: ajuste-rota) ────────
-  // Quando o motorista navega pra /mobile/ajuste-rota e volta (botao voltar
-  // do browser ou troca de aba), a pagina restaura do cache com dados stale.
-  // visibilitychange detecta o retorno e re-busca a rota do banco.
-  useEffect(() => {
-    if (fase !== 'em_rota' || !rota) return;
-    const rotaId = rota.id;
-
-    const handleVisibility = async () => {
-      if (document.visibilityState !== 'visible') return;
-      try {
-        const data = await fetchRota(rotaId);
-        setRota(data.rota);
-        setParadas(data.paradas);
-      } catch {
-        // Offline ou erro — ignora silenciosamente, dados stale melhor que nada
-      }
-    };
-
-    document.addEventListener('visibilitychange', handleVisibility);
-    // pageshow com persisted=true cobre bfcache (Safari/iOS armazena a pagina
-    // inteira e nao dispara visibilitychange ao voltar com swipe)
-    const handlePageShow = (e: PageTransitionEvent) => {
-      if (e.persisted) void handleVisibility();
-    };
-    window.addEventListener('pageshow', handlePageShow);
-
-    return () => {
-      document.removeEventListener('visibilitychange', handleVisibility);
-      window.removeEventListener('pageshow', handlePageShow as EventListener);
-    };
-  }, [fase, rota]);
-
-  // ─── Workers de sync + online detector na fase captura ────────────
-
-  useEffect(() => {
-    if (fase !== 'captura' || !motoristaId) return;
-
-    const stopWorker = iniciarSyncWorker(5000);
-    const stopDetector = iniciarOnlineDetector();
-    // eslint-disable-next-line react-hooks/set-state-in-effect
-    setOnline(estaOnline());
-
-    const handleOnline = () => setOnline(true);
-    const handleOffline = () => setOnline(false);
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    const intervalo = setInterval(async () => {
-      const todas = await listarTodas(motoristaId);
-      setNotas(todas);
-    }, 3000);
-
-    return () => {
-      stopWorker();
-      stopDetector();
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-      clearInterval(intervalo);
-    };
-  }, [fase, motoristaId]);
-
-  // ─── Interceptar botão Voltar do celular (Hardware Back Button) ────
-  useEffect(() => {
-    const handlePopState = () => {
-      // Durante a captura com notas, o Voltar NAO descarta direto: re-empilha
-      // #captura (pra a pagina nao sair de fato) e abre o modal de confirmacao.
-      // Sem isso, um toque sem querer no Voltar jogava o motorista pra tela
-      // inicial e perdia as 5-10 NFs ja capturadas.
-      if (fase === 'captura' && notasRef.current.length > 0) {
-        window.history.pushState(null, '', '#captura');
-        setConfirmandoSaida(true);
-        return;
-      }
-      const hash = window.location.hash.replace('#', '');
-      if (!hash) {
-        setFase('inicio');
-      } else if (['captura', 'otimizando', 'em_rota'].includes(hash)) {
-        setFase(hash as Fase);
-      }
-    };
-
-    if (fase !== 'carregando') {
-      const currentHash = window.location.hash.replace('#', '');
-      if (fase === 'inicio' && currentHash) {
-        window.history.replaceState(null, '', window.location.pathname + window.location.search);
-      } else if (fase !== 'inicio' && currentHash !== fase) {
-        if (currentHash) {
-          window.history.replaceState(null, '', `#${fase}`);
-        } else {
-          window.history.pushState(null, '', `#${fase}`);
-        }
-      }
-    }
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
   }, [fase]);
 
   // ─── Handlers ──────────────────────────────────────────────────────
@@ -1038,33 +527,11 @@ function RotaContent(): React.ReactElement {
     setFase('inicio');
   }, [empresaId, motoristaId, rota, paradas, definirAncora, pedidoAncora]);
 
-  // ─── Calculo dinamico de distancias ────────────────────────────────
-  const statsDinamicos = useMemo(() => {
-    if (fase !== 'em_rota' || !posicaoAtual || paradas.length === 0) return null;
-    const pendentes = paradas.filter(p => !p.concluida_em).sort((a,b) => a.ordem - b.ordem);
-    if (pendentes.length === 0) return null; // tudo entregue
-
-    const fator = 1.35; // Fator para estimar ruas reais a partir de linha reta
-    const minPerKm = 3; // ~20km/h media urbana
-
-    const proxima = pendentes[0];
-    const distProxima = calcularDistanciaKm(posicaoAtual.lat, posicaoAtual.lng, proxima.latitude, proxima.longitude) * fator;
-
-    let distFaltam = distProxima;
-    for (let i = 0; i < pendentes.length - 1; i++) {
-      distFaltam += calcularDistanciaKm(
-        pendentes[i].latitude, pendentes[i].longitude,
-        pendentes[i+1].latitude, pendentes[i+1].longitude
-      ) * fator;
-    }
-
-    return {
-      proxKm: distProxima,
-      proxMin: Math.round(distProxima * minPerKm),
-      faltamKm: distFaltam,
-      faltamMin: Math.round(distFaltam * minPerKm),
-    };
-  }, [fase, posicaoAtual, paradas]);
+  // ─── Calculo dinamico de distancias (função pura em lib/routing/statsRota) ──
+  const statsDinamicos = useMemo(
+    () => (fase === 'em_rota' ? calcularStatsRota(posicaoAtual, paradas) : null),
+    [fase, posicaoAtual, paradas]
+  );
 
   // ─── Validacao de params ──────────────────────────────────────────
   if (!motoristaId || !empresaId) {

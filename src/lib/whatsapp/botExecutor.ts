@@ -107,6 +107,104 @@ export async function executarConsulta(
   return `📋 ${tabela} (${linhas.length}):\n${corpo}${extra}`;
 }
 
+// ─── ESCRITOR GENÉRICO (v1: REGISTRAR/INSERT) ───────────────────────────
+// A regra declara em escopo_dados.escrita o alvo e os campos esperados; a IA
+// só EXTRAI valores (classificador.extrairCampos). Aqui o sistema valida tudo
+// contra a allowlist e monta o INSERT deterministicamente.
+
+export type CampoEscrita = {
+  campo: string; rotulo?: string; tipo: "texto" | "numero" | "data";
+  obrigatorio?: boolean; pergunta?: string;
+};
+export type EscritaConfig = {
+  tabela: string; acao: "registrar"; sem_empresa_id?: boolean;
+  fixos?: Record<string, string | number | boolean>;
+  campos: CampoEscrita[];
+};
+
+/** Lê e valida escopo_dados.escrita (shape + identificadores). null = não tem/inválida. */
+export function escritaDaRegra(escopoDados: unknown): EscritaConfig | null {
+  const e = (escopoDados as { escrita?: unknown })?.escrita as EscritaConfig | undefined;
+  if (!e || typeof e !== "object" || e.acao !== "registrar") return null;
+  if (typeof e.tabela !== "string" || !IDENT.test(e.tabela)) return null;
+  if (!Array.isArray(e.campos) || e.campos.length === 0) return null;
+  for (const c of e.campos) {
+    if (typeof c?.campo !== "string" || !IDENT.test(c.campo)) return null;
+    if (!["texto", "numero", "data"].includes(c.tipo)) return null;
+  }
+  for (const k of Object.keys(e.fixos ?? {})) if (!IDENT.test(k)) return null;
+  return e;
+}
+
+/**
+ * Confirma a escrita genérica: REVALIDA a allowlist (a regra pode ter mudado
+ * entre a proposta e o "sim"), exige obrigatórios e monta o INSERT só com
+ * colunas permitidas (ação "registrar" na matriz) + empresa_id.
+ */
+export async function commitEscritaGenerica(
+  sb: SupabaseClient, ctx: { empresa_id: string },
+  escrita: EscritaConfig, escopo: EscopoColunas,
+  valores: Record<string, string | number | null>
+): Promise<{ ok: true } | { ok: false; motivo: string }> {
+  const permitidas = colunasPermitidas(escopo, escrita.tabela, "registrar");
+  const linha: Record<string, unknown> = {};
+  for (const c of escrita.campos) {
+    const v = valores[c.campo] ?? null;
+    if (c.obrigatorio && v == null) return { ok: false, motivo: `Faltou ${c.rotulo ?? c.campo}.` };
+    if (v == null) continue;
+    if (!permitidas.includes(c.campo)) return { ok: false, motivo: `O campo ${c.campo} não está liberado na matriz da regra (ação Inclui).` };
+    if (c.tipo === "numero" && !(typeof v === "number" && Number.isFinite(v))) return { ok: false, motivo: `${c.rotulo ?? c.campo} precisa ser um número.` };
+    if (c.tipo === "data" && !/^\d{4}-\d{2}-\d{2}$/.test(String(v))) return { ok: false, motivo: `${c.rotulo ?? c.campo} precisa ser uma data.` };
+    linha[c.campo] = v;
+  }
+  if (Object.keys(linha).length === 0) return { ok: false, motivo: "Nenhum campo pra gravar." };
+  for (const [k, v] of Object.entries(escrita.fixos ?? {})) linha[k] = v;
+  if (!escrita.sem_empresa_id) linha.empresa_id = ctx.empresa_id;
+
+  const { error } = await sb.from(escrita.tabela).insert(linha);
+  if (error) return { ok: false, motivo: "Erro ao gravar. Confere a matriz da regra (campo bloqueado/tabela)." };
+  return { ok: true };
+}
+
+/** Preview da escrita pro propose→confirm ("• Motorista: Zé"). */
+export function previewEscrita(escrita: EscritaConfig, valores: Record<string, string | number | null>): string {
+  return escrita.campos
+    .filter((c) => valores[c.campo] != null)
+    .map((c) => `• ${c.rotulo ?? c.campo}: ${c.tipo === "data" ? String(valores[c.campo]).split("-").reverse().join("/") : valores[c.campo]}`)
+    .join("\n");
+}
+
+// ─── CONSULTA COM SOMA/PERÍODO (escopo_dados.consulta_soma) ─────────────
+// {coluna, periodo: "hoje"|"semana"|"mes", coluna_data?: string} → SUM no período.
+export type ConsultaSoma = { coluna: string; periodo?: "hoje" | "semana" | "mes"; coluna_data?: string };
+
+export async function consultaSoma(
+  sb: SupabaseClient, escopo: EscopoColunas, ctx: { empresa_id: string },
+  cfg: ConsultaSoma, veiculoId?: string | null
+): Promise<string> {
+  const tabela = tabelaDaAcao(escopo, "consultar");
+  if (!tabela) return "Essa regra não tem colunas de consulta definidas (veja Tabelas e campos).";
+  assertIdent(tabela); assertIdent(cfg.coluna);
+  const colData = cfg.coluna_data ?? "created_at";
+  assertIdent(colData);
+
+  const agoraBR = Date.now() - 3 * 3600_000;
+  const hojeYmd = new Date(agoraBR).toISOString().slice(0, 10);
+  let inicio = new Date(`${hojeYmd}T00:00:00.000Z`).getTime() + 3 * 3600_000;
+  if (cfg.periodo === "semana") inicio -= 6 * 86_400_000;
+  if (cfg.periodo === "mes") inicio = new Date(`${hojeYmd.slice(0, 8)}01T03:00:00.000Z`).getTime();
+
+  let q = sb.from(tabela).select(cfg.coluna).eq("empresa_id", ctx.empresa_id)
+    .gte(colData, new Date(inicio).toISOString());
+  if (veiculoId && TABELAS_COM_VEICULO.has(tabela)) q = q.eq("veiculo_id", veiculoId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  const total = rows.reduce((s, r) => s + Number(r[cfg.coluna] ?? 0), 0);
+  const rotuloPeriodo = cfg.periodo === "mes" ? "no mês" : cfg.periodo === "semana" ? "na semana" : "hoje";
+  return `💰 Total ${rotuloPeriodo}: R$ ${total.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} (${rows.length} lançamento${rows.length === 1 ? "" : "s"})`;
+}
+
 // ─── STATUS DA FROTA (consulta) ─────────────────────────────────────────
 // alocacoes NÃO tem empresa_id → filtra pelos veículos da empresa.
 // Alocação ABERTA = fim IS NULL (mesmo critério do painel/VinculoResponsavel).

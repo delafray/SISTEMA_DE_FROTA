@@ -26,9 +26,12 @@ import { createLogger } from "@/lib/logger";
 import {
   executarConsulta, acharVeiculo, commitAtualizarKm, colunasPermitidas,
   consultarStatusFrota, lerAlocacaoAberta, commitMudarStatus,
-  type EscopoColunas,
+  escritaDaRegra, commitEscritaGenerica, previewEscrita, consultaSoma,
+  type EscopoColunas, type EscritaConfig, type ConsultaSoma,
 } from "@/lib/whatsapp/botExecutor";
+import { extrairCampos } from "@/lib/whatsapp/classificador";
 import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica, parseStatusVeiculo, STATUS_VEICULO_LABEL } from "@/lib/whatsapp/botParse";
+import { LEITORES } from "@/lib/whatsapp/botLeitores";
 
 const log = createLogger("classificadorBot");
 const TTL_MIN = 5;
@@ -45,7 +48,8 @@ type Pendente =
   | { tipo: "desambiguacao"; opcoes: string[]; alvo: string | null; valor: number | null; tentativas?: number }
   | { tipo: "confirmacao"; acao: "km"; veiculo_id: string; km_novo: number; km_atual: number; updated_at: string | null; rotulo: string }
   | { tipo: "confirmacao"; acao: "anotar"; texto: string }
-  | { tipo: "confirmacao"; acao: "status_veiculo"; veiculo_id: string; status_novo: "manutencao" | "parado"; aloc_id: string | null; rotulo: string };
+  | { tipo: "confirmacao"; acao: "status_veiculo"; veiculo_id: string; status_novo: "manutencao" | "parado"; aloc_id: string | null; rotulo: string }
+  | { tipo: "confirmacao"; acao: "escrita"; regra_nome: string; valores: Record<string, string | number | null>; resumo: string };
 
 // R4: reserva idempotente com status. 'duplicada' = já processada (ok) ou em curso recente.
 async function reservarWamid(supa: SupabaseClient, wamid: string): Promise<"reservado" | "duplicada"> {
@@ -115,7 +119,10 @@ async function limparPendente(supa: SupabaseClient, telefone: string) {
 }
 
 // ─── regra carregada com escopo de colunas ─────────────────────────────
-type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas; gatilho_inicio: boolean };
+type RegraFull = RegraCtx & {
+  acoes: string[]; escopo: EscopoColunas; gatilho_inicio: boolean;
+  consulta_dedicada: string | null; escrita: EscritaConfig | null; consulta_soma: ConsultaSoma | null;
+};
 
 /** Executa UMA regra já resolvida. Retorna o texto a responder. */
 async function executarRegra(
@@ -197,6 +204,23 @@ async function executarRegra(
     return `${aviso}🔄 Mudar status do ${rotulo}\nDe:   ${de}\nPara: ${STATUS_VEICULO_LABEL[statusNovo]}\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
   }
 
+  // ESCRITA GENÉRICA (escopo_dados.escrita, v1 = registrar): a IA só extrai os
+  // campos declarados; preview → "sim" → INSERT pela allowlist (escritor genérico).
+  if (regra.escrita && regra.acoes.includes("registrar")) {
+    let valores: Record<string, string | number | null>;
+    try { valores = await extrairCampos(texto, regra.escrita.campos); }
+    catch (e) {
+      log.error("extrair_campos_erro", { regra: regra.nome, message: e instanceof Error ? e.message : String(e) });
+      return "❌ Não consegui entender os dados agora. Manda de novo?";
+    }
+    const faltando = regra.escrita.campos.find((c) => c.obrigatorio && valores[c.campo] == null);
+    if (faltando) return faltando.pergunta ?? `Qual ${faltando.rotulo ?? faltando.campo}?`;
+    const resumo = previewEscrita(regra.escrita, valores);
+    if (!resumo) return regra.escrita.campos[0]?.pergunta ?? "Não peguei os dados. Manda completo?";
+    await salvarPendente(supa, telefone, { tipo: "confirmacao", acao: "escrita", regra_nome: regra.nome, valores, resumo });
+    return `📝 *${regra.nome}*\n${resumo}\n\nResponda *sim* pra confirmar ou *não* pra cancelar.`;
+  }
+
   // CONSULTAR
   if (colunasPermitidas(regra.escopo, Object.keys(regra.escopo)[0] ?? "", "consultar").length > 0 || regra.acoes.includes("consultar")) {
     try {
@@ -208,6 +232,15 @@ async function executarRegra(
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
         await registrarUso(supa, telefone, v.veiculo, doContexto);
         veiculoId = v.veiculo.id;
+      }
+      // LEITOR DEDICADO (escopo_dados.consulta_dedicada): consultas do gestor que
+      // cruzam tabelas/somam (andamento de rota, resumo do dia…). A genérica não faz join.
+      if (regra.consulta_dedicada && LEITORES[regra.consulta_dedicada]) {
+        return await LEITORES[regra.consulta_dedicada](supa, ctx, { veiculoId: veiculoId ?? null });
+      }
+      // SOMA COM PERÍODO (escopo_dados.consulta_soma): "quanto gastei esse mês" → SUM.
+      if (regra.consulta_soma) {
+        return await consultaSoma(supa, regra.escopo, ctx, regra.consulta_soma, veiculoId);
       }
       // STATUS DA FROTA: escopo pede alocacoes.status → consulta dedicada com
       // status real (alocação aberta) + nome do motorista. A genérica não faz join.
@@ -250,6 +283,13 @@ async function resolverPendente(
       return r.ok
         ? `✅ ${pend.rotulo} agora está em *${STATUS_VEICULO_LABEL[pend.status_novo]}*. Já aparece no painel.`
         : `❌ ${r.motivo}`;
+    }
+    if (pend.acao === "escrita") {
+      // revalida contra a regra ATUAL (pode ter sido editada/desativada entre a proposta e o sim)
+      const regraAtual = regrasFull.find((r) => r.nome === pend.regra_nome);
+      if (!regraAtual?.escrita) return "Essa ação não está mais disponível (a regra mudou). Manda de novo.";
+      const r = await commitEscritaGenerica(supa, { empresa_id: empresaId }, regraAtual.escrita, regraAtual.escopo, pend.valores);
+      return r.ok ? `✅ Registrado!\n${pend.resumo}\n\nJá está no painel.` : `❌ ${r.motivo}`;
     }
     const r = await commitAtualizarKm(supa, { empresa_id: empresaId }, pend.veiculo_id, pend.km_novo, pend.km_atual);
     return r.ok
@@ -320,6 +360,13 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
       resposta: r.resposta, ativa: r.ativa, fixa: r.fixa, acoes: r.acoes ?? [],
       escopo: ((r.escopo_dados as Record<string, unknown>)?.colunas as EscopoColunas) ?? {},
       gatilho_inicio: r.gatilho_inicio ?? false,
+      consulta_dedicada: typeof (r.escopo_dados as Record<string, unknown>)?.consulta_dedicada === "string"
+        ? ((r.escopo_dados as Record<string, unknown>).consulta_dedicada as string) : null,
+      escrita: escritaDaRegra(r.escopo_dados),
+      consulta_soma: (() => {
+        const s = (r.escopo_dados as { consulta_soma?: ConsultaSoma })?.consulta_soma;
+        return s && typeof s.coluna === "string" ? s : null;
+      })(),
     }));
 
     // 1) estado pendente? Resolve sim/não ou seleção. Se a resposta NÃO resolve
