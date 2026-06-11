@@ -6,6 +6,10 @@
 
 ---
 
+> 🧭 **Comece pela [matriz-implantacao-contas.md](matriz-implantacao-contas.md)**: o que é manual ×
+> o que é script, o que exige cartão/celular do CONTRATANTE, e a regra de ouro (toda conta nasce
+> em nome do cliente). Este arquivo aqui é a ordem técnica; a matriz é a logística humana.
+
 ## Pré-requisitos do cliente
 
 | Item | Para que serve |
