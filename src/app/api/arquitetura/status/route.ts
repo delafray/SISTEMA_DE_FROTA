@@ -52,14 +52,18 @@ export async function GET() {
 
   const geminiKey = process.env.GEMINI_API_KEY;
   const deepgramKey = process.env.DEEPGRAM_API_KEY;
+  // URLs vêm das envs (cada implantação tem sua VM) — sem env, o ping é pulado (null).
+  const evoUrl = process.env.EVOLUTION_API_URL;
+  const osrmUrl = process.env.OSRM_URL;
+  const vroomUrl = process.env.VROOM_URL;
 
   const [
     evo, osrm, vroom, gemini, deepgram,
     dbCheck, msgs, pedidos, entregas, rotas, notas, lembretes,
   ] = await Promise.all([
-    ping('http://129.80.27.159:8080/'),
-    ping('http://129.80.27.159:5000/route/v1/driving/-46.63,-23.55;-46.65,-23.56?overview=false'),
-    ping('http://129.80.27.159:3000/health'),
+    evoUrl ? ping(`${evoUrl}/`) : Promise.resolve(null),
+    osrmUrl ? ping(`${osrmUrl}/route/v1/driving/-46.63,-23.55;-46.65,-23.56?overview=false`) : Promise.resolve(null),
+    vroomUrl ? ping(`${vroomUrl}/health`) : Promise.resolve(null),
     geminiKey
       ? ping(`https://generativelanguage.googleapis.com/v1beta/models?pageSize=1&key=${geminiKey}`)
       : Promise.resolve(null),

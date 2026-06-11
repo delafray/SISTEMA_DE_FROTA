@@ -55,7 +55,16 @@ DEEPGRAM_MODEL=nova-3                                     ← modelo de transcri
 GOOGLE_MAPS_API_KEY=sua-google-maps-key
 
 # ── Overpass API (validação de coordenadas / self-hosted na VM Oracle) ──
-OVERPASS_URL=http://129.80.27.159:12345/api/interpreter  ← Overpass self-hosted na VM Oracle (porta 12345)
+OVERPASS_URL=http://IP-DA-VM:12345/api/interpreter        ← Overpass self-hosted na VM Oracle (porta 12345)
+
+# ── FLAGS DO BOT (CRÍTICAS — sem elas o bot nasce "burro") ──
+# Config recomendada (a mesma da produção):
+MODO_CLASSIFICADOR=true                                   ← LIGA o motor de regras (classificador Gemini).
+#                                                           ausente/false = NENHUMA regra responde!
+MODO_SOMENTE_LEMBRETE=true                                ← rede de segurança: o que o classificador não
+#                                                           tratar vira lembrete (nunca se perde mensagem)
+# LEMBRETE_EMPRESA_DEFAULT=                               ← opcional: uuid da empresa padrão p/ lembretes
+#                                                           de números não cadastrados
 
 # ── Guarda de cota Gemini (SÓ free tier) ────────────
 # Descomente apenas se estiver no plano GRATUITO:

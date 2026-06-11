@@ -20,12 +20,17 @@ async function ping(name: string, url: string): Promise<ServiceCheck> {
 }
 
 export async function GET() {
-  const [evo, vercel] = await Promise.all([
-    ping('WhatsApp (Evolution API)', 'http://129.80.27.159:8080/'),
-    ping('Backend (Vercel)', 'https://sistema-de-frota.vercel.app'),
+  // URLs por env (cada implantação tem sua VM/app) — sem hard-code de IP.
+  const evoUrl = process.env.EVOLUTION_API_URL;
+  const appUrl = process.env.APP_URL
+    ?? (process.env.VERCEL_PROJECT_PRODUCTION_URL ? `https://${process.env.VERCEL_PROJECT_PRODUCTION_URL}` : null);
+
+  const checks = await Promise.all([
+    evoUrl ? ping('WhatsApp (Evolution API)', `${evoUrl}/`) : Promise.resolve({ name: 'WhatsApp (Evolution API)', ok: false }),
+    appUrl ? ping('Backend (Vercel)', appUrl) : Promise.resolve({ name: 'Backend (Vercel)', ok: true }),
   ]);
 
-  const services = [evo, vercel];
+  const services = checks;
   const allOk = services.every(s => s.ok);
 
   return Response.json({ ok: allOk, services });
