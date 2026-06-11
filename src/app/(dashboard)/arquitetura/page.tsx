@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import {
   ReactFlow, MiniMap, Controls, Background,
   useNodesState, useEdgesState, addEdge, BackgroundVariant,
@@ -55,8 +55,8 @@ const SYSTEM: Record<string, ServiceData> = {
   app: {
     id: 'app', label: 'App Mobile', subline: 'Next.js PWA', icon: '📲',
     desc: 'Tela mobile do motorista. Captura NFs, confirma rotas e registra ocorrências no campo.',
-    status: 'DÉBITO TÉCNICO',
-    alert: 'Componentes monolíticos (>30KB) na tela de Rota. Acoplamento forte com GPS e Máquina de Estados. Precisa virar Custom Hooks.',
+    status: 'OK',
+    alert: undefined, // débito resolvido 11/06/2026: tela de Rota refatorada (6 custom hooks extraídos: âncora, despachos, carregamento inicial, sync em rota, workers de captura, voltar hardware)
     tech: 'React, IndexedDB, Dexie', repo: 'src/app/mobile/',
     features: [
       {
@@ -696,11 +696,70 @@ function ServiceInfoPanel({ data, onDrillDown, onClose }: { data: ServiceData; o
 
 // ─── Página principal ─────────────────────────────────────────────────────────
 
+// ─── Status VIVO: payload do /api/arquitetura/status ──────────────────────────
+
+type PingInfo = { ok: boolean; ms: number | null } | null;
+type StatusVivo = {
+  verificado_em: string;
+  servicos: { evo: PingInfo; osrm: PingInfo; vroom: PingInfo; db: PingInfo; gemini: PingInfo; deepgram: PingInfo };
+  hoje: { msgs_bot: number; pedidos: number; entregas_concluidas: number; rotas: number; notas_capturadas: number; lembretes: number };
+};
+
+/** Combina 2 pings num dot só (ok/parcial/falha). null (sem chave) não derruba. */
+function dotDuplo(a: PingInfo, b: PingInfo): 'ok' | 'falha' | 'parcial' {
+  const oks = [a, b].filter((p) => p !== null).map((p) => p!.ok);
+  if (oks.length === 0) return 'parcial';
+  if (oks.every(Boolean)) return 'ok';
+  if (oks.every((o) => !o)) return 'falha';
+  return 'parcial';
+}
+const tick = (p: PingInfo, nome: string) => `${nome} ${p === null ? '—' : p.ok ? '✓' : '✗'}`;
+
+/** Mapeia o payload pro `vivo` de cada nó do canvas. */
+function vivoPorNo(s: StatusVivo): Record<string, { dot?: 'ok' | 'falha' | 'parcial'; texto?: string }> {
+  const { servicos: sv, hoje } = s;
+  return {
+    // Vercel respondeu o fetch → App/Dashboard/API/Bot estão de pé por definição.
+    app:    { dot: 'ok', texto: `${hoje.notas_capturadas} notas · ${hoje.rotas} rotas hoje` },
+    dash:   { dot: 'ok', texto: `${hoje.pedidos} pedidos · ${hoje.lembretes} lembretes hoje` },
+    api:    { dot: 'ok', texto: `${hoje.rotas} rotas otimizadas hoje` },
+    router: { dot: 'ok', texto: `${hoje.msgs_bot} mensagens hoje` },
+    evo:    { dot: sv.evo?.ok ? 'ok' : 'falha', texto: sv.evo?.ok ? `Conectado (${sv.evo.ms}ms)` : 'FORA DO AR — bot mudo!' },
+    osrm:   { dot: dotDuplo(sv.osrm, sv.vroom), texto: `${tick(sv.osrm, 'OSRM')} · ${tick(sv.vroom, 'VROOM')}` },
+    db:     { dot: sv.db?.ok ? 'ok' : 'falha', texto: sv.db?.ok ? `${hoje.pedidos} pedidos · ${hoje.entregas_concluidas} entregas hoje` : 'SEM RESPOSTA' },
+    ai:     { dot: dotDuplo(sv.gemini, sv.deepgram), texto: `${tick(sv.gemini, 'Gemini')} · ${tick(sv.deepgram, 'Deepgram')}` },
+  };
+}
+
 export default function ArquiteturaPage() {
-  const [nodes, , onNodesChange] = useNodesState(INITIAL_NODES);
+  const [nodes, setNodes, onNodesChange] = useNodesState(INITIAL_NODES);
   const [edges, setEdges, onEdgesChange] = useEdgesState(INITIAL_EDGES);
   const [selectedService, setSelectedService] = useState<ServiceData | null>(null);
   const [drillDown, setDrillDown] = useState<ServiceData | null>(null);
+  const [statusVivo, setStatusVivo] = useState<StatusVivo | null>(null);
+  const [semConexao, setSemConexao] = useState(false);
+
+  // Poll do status vivo (30s): pinta a luz 🟢/🔴 e a atividade do dia em cada nó.
+  useEffect(() => {
+    let cancelado = false;
+    const checar = async () => {
+      try {
+        const res = await fetch('/api/arquitetura/status', { cache: 'no-store' });
+        if (!res.ok) throw new Error(String(res.status));
+        const data: StatusVivo = await res.json();
+        if (cancelado) return;
+        setStatusVivo(data);
+        setSemConexao(false);
+        const mapa = vivoPorNo(data);
+        setNodes((nds) => nds.map((n) => (mapa[n.id] ? { ...n, data: { ...n.data, vivo: mapa[n.id] } } : n)));
+      } catch {
+        if (!cancelado) setSemConexao(true);
+      }
+    };
+    checar();
+    const intervalo = setInterval(checar, 30_000);
+    return () => { cancelado = true; clearInterval(intervalo); };
+  }, [setNodes]);
 
   const onConnect = useCallback(
     (params: any) => setEdges(eds => addEdge(params, eds)),
@@ -727,6 +786,35 @@ export default function ArquiteturaPage() {
         <p className="text-slate-500 text-sm mt-1">
           Clique num bloco para ver detalhes. Clique em <strong>"Ver componentes internos"</strong> para ver quais tabelas cada parte do sistema acessa.
         </p>
+
+        {/* ── Faixa de status vivo: o "bater o olho" ───────────────────────── */}
+        {semConexao && (
+          <div className="mt-3 px-4 py-2.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-sm font-semibold">
+            📴 Sem conexão com o servidor — status ao vivo indisponível.
+          </div>
+        )}
+        {statusVivo && (() => {
+          const sv = statusVivo.servicos;
+          const fora: string[] = [];
+          if (sv.evo && !sv.evo.ok) fora.push('WhatsApp (Evolution)');
+          if (sv.osrm && !sv.osrm.ok) fora.push('OSRM');
+          if (sv.vroom && !sv.vroom.ok) fora.push('VROOM');
+          if (sv.db && !sv.db.ok) fora.push('Banco (Supabase)');
+          if (sv.gemini && !sv.gemini.ok) fora.push('Gemini');
+          if (sv.deepgram && !sv.deepgram.ok) fora.push('Deepgram');
+          const hora = new Date(statusVivo.verificado_em).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+          return (
+            <div className={`mt-3 px-4 py-2.5 rounded-lg border text-sm font-semibold flex flex-wrap items-center gap-x-4 gap-y-1 ${
+              fora.length ? 'bg-rose-50 border-rose-200 text-rose-700' : 'bg-emerald-50 border-emerald-200 text-emerald-700'
+            }`}>
+              <span>{fora.length ? `🔴 FORA DO AR: ${fora.join(', ')}` : '🟢 Tudo no ar'}</span>
+              <span className="text-slate-500 font-medium">
+                Hoje: 💬 {statusVivo.hoje.msgs_bot} msgs · 📋 {statusVivo.hoje.pedidos} pedidos · 📦 {statusVivo.hoje.entregas_concluidas} entregas · 🛣️ {statusVivo.hoje.rotas} rotas
+              </span>
+              <span className="text-slate-400 font-normal text-xs">verificado {hora} · atualiza a cada 30s</span>
+            </div>
+          );
+        })()}
       </div>
 
       <div className="w-full flex-1 min-h-[600px] border border-slate-200 rounded-xl bg-white shadow-sm relative overflow-hidden flex">
