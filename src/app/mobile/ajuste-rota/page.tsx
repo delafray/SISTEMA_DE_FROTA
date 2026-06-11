@@ -100,6 +100,10 @@ function AjusteRotaContent(): React.ReactElement {
   const [modoAdicao, setModoAdicao] = useState<'fechado' | 'capturando' | 'escolhendo' | 'adicionando'>('fechado');
   const [dadosNovaParada, setDadosNovaParada] = useState<NotaCapturadaInput | null>(null);
   const [erroAdicionar, setErroAdicionar] = useState<string | null>(null);
+  // Popup do ➕ (decisão do dono 10/06): rota ainda NÃO iniciada → perguntar se
+  // quer CONTINUAR a roteirização em lote (ex.: parou na 25ª de 70 notas) ou só
+  // adicionar UM endereço. Rota já iniciada (tem baixa) → vai direto no único.
+  const [escolhendoAdicao, setEscolhendoAdicao] = useState(false);
   const [posicaoAtual, setPosicaoAtual] = useState<{ lat: number; lng: number } | null>(null);
 
   // Pointer p/ mouse + Touch p/ dedo. Ambos com long-press de 200ms — assim
@@ -462,13 +466,61 @@ function AjusteRotaContent(): React.ReactElement {
 
   return (
     <div style={containerStyle}>
+      {/* Popup do ➕: continuar o lote OU adicionar um endereço */}
+      {escolhendoAdicao && rotaInfo && (
+        <div
+          data-testid="popup-adicao"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setEscolhendoAdicao(false)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: '20px 16px 24px', width: '100%', maxWidth: 480, boxSizing: 'border-box' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>➕ O que você quer fazer?</div>
+            <p style={{ fontSize: 13, color: '#475569', margin: '8px 0 14px', lineHeight: 1.5 }}>
+              A rota ainda não começou — dá pra voltar e <strong>lançar várias notas de uma vez</strong> (continua de onde parou, com as {paradas.length} já lançadas na lista) ou incluir só um endereço aqui.
+            </p>
+            <button
+              type="button"
+              data-testid="btn-continuar-lote"
+              onClick={() => {
+                window.location.href = `/mobile/rota?motorista_id=${rotaInfo.motorista_id}&empresa_id=${rotaInfo.empresa_id}&continuar=${rotaInfo.id}`;
+              }}
+              style={{ width: '100%', padding: 14, background: '#2563eb', color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 800, cursor: 'pointer' }}
+            >
+              Continuar roteirização (lançar várias)
+            </button>
+            <button
+              type="button"
+              data-testid="btn-adicionar-um"
+              onClick={() => { setEscolhendoAdicao(false); setModoAdicao('capturando'); }}
+              style={{ width: '100%', marginTop: 8, padding: 14, background: '#f0fdf4', color: '#166534', border: '1px solid #bbf7d0', borderRadius: 10, fontSize: 15, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Adicionar um endereço
+            </button>
+            <button
+              type="button"
+              onClick={() => setEscolhendoAdicao(false)}
+              style={{ width: '100%', marginTop: 8, padding: 12, background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Cancelar
+            </button>
+          </div>
+        </div>
+      )}
+
       <header style={headerStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
           <h1 style={{ fontSize: 18, fontWeight: 700, margin: 0 }}>Ajuste de Rota</h1>
           <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
             <button
               type="button"
-              onClick={() => setModoAdicao('capturando')}
+              onClick={() => {
+                // rota já iniciada (alguma baixa)? adicionar único direto.
+                if (paradas.some((p) => p.concluida_em)) setModoAdicao('capturando');
+                else setEscolhendoAdicao(true);
+              }}
               title="adicionar parada"
               aria-label="adicionar parada"
               data-testid="btn-adicionar-parada"

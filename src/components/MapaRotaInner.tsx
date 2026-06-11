@@ -7,7 +7,7 @@
  */
 
 import { useMemo } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, Tooltip } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, Tooltip, useMap } from 'react-leaflet';
 import { divIcon, type LatLngBoundsExpression, type LatLngExpression } from 'leaflet';
 // CSS do Leaflet vive em globals.css (carregado no bundle inicial) — importar
 // aqui dentro do componente dinamico (ssr:false) carrega tarde e os tiles
@@ -47,6 +47,53 @@ function pinoPosicaoAtual() {
     iconSize: [20, 20],
     iconAnchor: [10, 10],
   });
+}
+
+/**
+ * Botão 🎯 "ver rota inteira" (decisão do dono 10/06): re-enquadra todos os
+ * pinos + posição atual. Salva o motorista que arrastou/zoomou sem querer e
+ * "se perdeu" no mapa — um toque e volta a ver tudo. Fica logo abaixo do
+ * controle de zoom (+/−), no mesmo estilo visual do Leaflet.
+ */
+function BotaoEnquadrar({ bounds }: { bounds: LatLngBoundsExpression }) {
+  const map = useMap();
+  return (
+    <button
+      type="button"
+      title="Ver a rota inteira"
+      aria-label="ver a rota inteira"
+      data-testid="btn-enquadrar"
+      onClick={(e) => {
+        e.stopPropagation();
+        e.preventDefault();
+        map.fitBounds(bounds, { padding: [30, 30] });
+      }}
+      onDoubleClick={(e) => e.stopPropagation()}
+      onMouseDown={(e) => e.stopPropagation()}
+      onTouchStart={(e) => e.stopPropagation()}
+      style={{
+        position: 'absolute',
+        top: 84,            // logo abaixo do +/− do zoom
+        left: 10,
+        zIndex: 1000,       // mesma camada dos controles do Leaflet
+        width: 34,
+        height: 34,
+        background: '#fff',
+        border: '2px solid rgba(0,0,0,0.2)',
+        borderRadius: 6,
+        fontSize: 17,
+        lineHeight: 1,
+        cursor: 'pointer',
+        boxShadow: '0 1px 4px rgba(0,0,0,0.2)',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 0,
+      }}
+    >
+      🎯
+    </button>
+  );
 }
 
 function pinoNumeradoIcon(
@@ -124,6 +171,7 @@ export default function MapaRotaInner({
           url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
           attribution='&copy; OpenStreetMap contributors'
         />
+        <BotaoEnquadrar bounds={bounds} />
         {polylineCoords.length > 0 && (
           <Polyline
             positions={polylineCoords}

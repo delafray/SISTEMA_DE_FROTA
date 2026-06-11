@@ -35,7 +35,9 @@ export function FaseEmRota({
   paradaSelecionada: string | null;
   onSelectParada: (id: string | null) => void;
   onConcluirParada: (id: string, aprenderPonto?: boolean) => void | Promise<void>;
-  onEncerrar: () => void;
+  /** Encerra a rota. `motivo` vem preenchido quando o motorista encerrou com
+   *  entregas pendentes (vira aviso pro gestor no painel). */
+  onEncerrar: (motivo?: string) => void;
   posicaoAtual: { lat: number; lng: number } | null;
 }) {
   // Proxima parada = primeira nao concluida
@@ -72,6 +74,12 @@ export function FaseEmRota({
   // Modal "Encaminhar rota ao Google" — motorista escolhe ate 9 paradas e
   // manda o bloco pro Google Maps (multistop).
   const [mostrarEncaminhar, setMostrarEncaminhar] = useState(false);
+
+  // Confirmacao do ENCERRAR (decisao do dono 10/06: nunca encerrar seco).
+  // Com entregas pendentes, o motivo e OBRIGATORIO e vira aviso pro gestor.
+  const [confirmandoEncerrar, setConfirmandoEncerrar] = useState(false);
+  const [motivoEncerrar, setMotivoEncerrar] = useState('');
+  const pendentesCount = paradas.filter((p) => !p.concluida_em).length;
   const confirmarConcluir = useCallback(async () => {
     if (!paradaConfirmando) return;
     const id = paradaConfirmando;
@@ -105,12 +113,82 @@ export function FaseEmRota({
 
       <div style={{ marginTop: 12, display: 'flex', gap: 8 }}>
         <a href={`/mobile/ajuste-rota?rota_id=${rota.id}`} style={btnLinkStyle} data-testid="link-ajustar">
-          ⚙️ Ajustar ordem
+          Ajustar/Incluir
         </a>
-        <button type="button" onClick={onEncerrar} style={btnEncerrarStyle} data-testid="btn-encerrar">
-          🏁 Encerrar rota
+        <button
+          type="button"
+          onClick={() => { vibrar(20); setMotivoEncerrar(''); setConfirmandoEncerrar(true); }}
+          style={btnEncerrarStyle}
+          data-testid="btn-encerrar"
+        >
+          Encerrar rota
         </button>
       </div>
+
+      {/* Popup de confirmação do encerramento — nunca encerra seco */}
+      {confirmandoEncerrar && (
+        <div
+          data-testid="modal-encerrar"
+          style={{ position: 'fixed', inset: 0, background: 'rgba(15,23,42,0.55)', zIndex: 60, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+          onClick={() => setConfirmandoEncerrar(false)}
+        >
+          <div
+            style={{ background: '#fff', borderRadius: '16px 16px 0 0', padding: '20px 16px 24px', width: '100%', maxWidth: 480, boxSizing: 'border-box' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div style={{ fontSize: 17, fontWeight: 800, color: '#0f172a' }}>🏁 Encerrar a rota?</div>
+
+            {pendentesCount > 0 ? (
+              <>
+                <div style={{ marginTop: 10, padding: '10px 12px', background: '#fef2f2', border: '1px solid #fecaca', borderRadius: 8, fontSize: 13, fontWeight: 700, color: '#991b1b' }}>
+                  ⚠️ Ainda faltam {pendentesCount} entrega{pendentesCount > 1 ? 's' : ''} pendente{pendentesCount > 1 ? 's' : ''}.
+                </div>
+                <label style={{ display: 'block', fontSize: 13, fontWeight: 600, color: '#334155', margin: '12px 0 6px' }}>
+                  Por que está encerrando sem terminar? (obrigatório)
+                </label>
+                <textarea
+                  data-testid="motivo-encerrar"
+                  value={motivoEncerrar}
+                  onChange={(e) => setMotivoEncerrar(e.target.value)}
+                  placeholder="Ex.: cliente fechado, caminhão quebrou, fim do expediente…"
+                  rows={2}
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '10px 12px', fontSize: 14, border: '1px solid #cbd5e1', borderRadius: 8, resize: 'none' }}
+                />
+                <p style={{ fontSize: 11, color: '#94a3b8', margin: '6px 0 0' }}>O gestor será avisado no painel com este motivo.</p>
+              </>
+            ) : (
+              <p style={{ fontSize: 13, color: '#475569', margin: '10px 0 0' }}>
+                Todas as {paradas.length} entregas foram baixadas. A rota será marcada como concluída.
+              </p>
+            )}
+
+            <button
+              type="button"
+              data-testid="btn-confirmar-encerrar"
+              disabled={pendentesCount > 0 && !motivoEncerrar.trim()}
+              onClick={() => {
+                setConfirmandoEncerrar(false);
+                onEncerrar(pendentesCount > 0 ? motivoEncerrar.trim() : undefined);
+              }}
+              style={{
+                width: '100%', marginTop: 14, padding: 14,
+                background: pendentesCount > 0 && !motivoEncerrar.trim() ? '#94a3b8' : '#dc2626',
+                color: '#fff', border: 'none', borderRadius: 10, fontSize: 15, fontWeight: 800,
+                cursor: pendentesCount > 0 && !motivoEncerrar.trim() ? 'not-allowed' : 'pointer',
+              }}
+            >
+              🏁 Encerrar rota{pendentesCount > 0 ? ' mesmo assim' : ''}
+            </button>
+            <button
+              type="button"
+              onClick={() => setConfirmandoEncerrar(false)}
+              style={{ width: '100%', marginTop: 8, padding: 12, background: '#f1f5f9', color: '#334155', border: 'none', borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: 'pointer' }}
+            >
+              Continuar entregando
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Discreto: encaminhar um bloco de ate 9 paradas pro Google Maps */}
       <button

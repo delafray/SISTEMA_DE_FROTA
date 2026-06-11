@@ -436,6 +436,10 @@ describe('RotaPage — fase em_rota', () => {
 
     await user.click(screen.getByTestId('btn-encerrar'));
 
+    // Encerrar NUNCA é seco (decisão do dono 10/06): abre popup de confirmação.
+    await waitFor(() => screen.getByTestId('modal-encerrar'));
+    await user.click(screen.getByTestId('btn-confirmar-encerrar'));
+
     await waitFor(() => expect(screen.getByTestId('btn-iniciar')).toBeDefined());
 
     // Verifica se PATCH /api/routing/rota/r1 foi chamado com { status: 'concluida' }

@@ -53,16 +53,19 @@ export const erroStyle: CSSProperties = {
   marginBottom: 12,
 };
 
+// Botões da fase em_rota — fundos bem DISTINTOS (decisão do dono 10/06):
+// Ajustar/Incluir = azul sólido (ação construtiva); Encerrar = vermelho claro
+// com borda (destrutiva — e protegida por popup de confirmação).
 export const btnLinkStyle: CSSProperties = {
   flex: 1,
   padding: '10px',
-  background: cores.divisoria,
-  color: cores.textoMedio,
+  background: cores.azul,
+  color: '#fff',
   textAlign: 'center',
-  borderRadius: 6,
+  borderRadius: 8,
   textDecoration: 'none',
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 700,
   whiteSpace: 'nowrap',
 };
 
@@ -71,10 +74,10 @@ export const btnEncerrarStyle: CSSProperties = {
   padding: '10px',
   background: cores.fundoVermelho,
   color: cores.vermelhoTexto,
-  border: 'none',
-  borderRadius: 6,
+  border: `1px solid ${cores.bordaVermelha}`,
+  borderRadius: 8,
   fontSize: 13,
-  fontWeight: 600,
+  fontWeight: 700,
   cursor: 'pointer',
   whiteSpace: 'nowrap',
 };

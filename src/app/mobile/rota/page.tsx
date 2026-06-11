@@ -70,6 +70,10 @@ function RotaContent(): React.ReactElement {
   // Deep-link opcional: ?abrir=<rotaId> abre direto essa rota (veio da lista de
   // rotas na tela do motorista), pulando a tela de historico.
   const abrirId = searchParams.get('abrir') ?? '';
+  // ?continuar=<rotaId> (vem do ➕ do Ajuste de Rota): puxa as paradas em aberto
+  // da rota pra lista EDITÁVEL e reabre a captura em lote — pro motorista que
+  // parou na 25ª de 70 notas seguir lançando no fluxo normal.
+  const continuarId = searchParams.get('continuar') ?? '';
   // Total opcional via ?total=N. Se nao vier, header mostra so "NF X" (motorista
   // nao precisa saber/declarar o total — pode ser 5 ou 70).
   const totalParam = Number(searchParams.get('total'));
@@ -366,6 +370,70 @@ function RotaContent(): React.ReactElement {
       return;
     }
     (async () => {
+      // CONTINUAR EM LOTE (?continuar=<rotaId>, vindo do ➕ do Ajuste): puxa as
+      // paradas em aberto da rota pra fila editável e reabre a captura. Tem
+      // prioridade sobre tudo — foi uma escolha explícita do motorista.
+      if (continuarId) {
+        try {
+          await limparFila(motoristaId);
+          await fetch('/api/routing/notas/limpar', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ motorista_id: motoristaId, empresa_id: empresaId }),
+          }).catch(() => {});
+
+          const supabase = createClient();
+          const { data: rotaCont } = await supabase.from('rotas_otimizadas')
+            .select('id,pedido_id').eq('id', continuarId).maybeSingle();
+          const pedidoIdCont = (rotaCont as { pedido_id?: string | null } | null)?.pedido_id ?? null;
+
+          let numeroCont: string | null = null;
+          if (pedidoIdCont) {
+            const { data: ped } = await supabase.from('pedidos')
+              .select('numero' as never).eq('id', pedidoIdCont).maybeSingle();
+            numeroCont = (ped as { numero?: string | null } | null)?.numero ?? null;
+          }
+
+          const { data: parsCont } = await supabase.from('paradas')
+            .select('endereco,latitude,longitude,observacao,concluida_em')
+            .eq('rota_id', continuarId)
+            .order('ordem', { ascending: true });
+          for (const par of ((parsCont ?? []) as Array<{ endereco: unknown; latitude: number | null; longitude: number | null; observacao: string | null; concluida_em: string | null }>).filter(p => !p.concluida_em)) {
+            const end = (par.endereco ?? {}) as NotaNaFila['endereco'] & { cep?: string | null; numero?: string | null };
+            await adicionarNota({
+              id_local: crypto.randomUUID(),
+              motorista_id: motoristaId,
+              empresa_id: empresaId,
+              pedido_id: pedidoIdCont,
+              cep: end?.cep ?? '',
+              numero: end?.numero ?? '',
+              endereco: end,
+              latitude: par.latitude ?? null,
+              longitude: par.longitude ?? null,
+              observacao: par.observacao ?? null,
+              status: 'capturada',
+              capturado_em: new Date().toISOString(),
+              status_sync: 'pendente',
+              tentativas: 0,
+            });
+          }
+          void sincronizarFila();
+          setNotas(await listarTodas(motoristaId));
+          definirAncora(pedidoIdCont ? { id: pedidoIdCont, numero: numeroCont } : null);
+          // tira o ?continuar da URL: um refresh depois daqui NÃO pode re-puxar
+          // (re-puxar limparia a fila e mataria as notas novas capturadas)
+          try {
+            const u = new URL(window.location.href);
+            u.searchParams.delete('continuar');
+            window.history.replaceState(null, '', u.toString());
+          } catch { /* ignore */ }
+          setFase('captura');
+          return;
+        } catch {
+          // sem rede/erro — cai pro fluxo normal abaixo
+        }
+      }
+
       // FAST PATH: restaura captura se havia notas em progresso.
       // Roda ANTES de qualquer fetch — funciona offline e é instantâneo.
       // Garante que refresh, crash, ou troca de versão não perde o trabalho.
@@ -474,7 +542,8 @@ function RotaContent(): React.ReactElement {
         setFase('inicio');
       }
     })();
-  }, [motoristaId, empresaId, abrirId]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [motoristaId, empresaId, abrirId, continuarId]);
 
   // ─── Persiste a rota ativa localmente (IndexedDB) ──────────────────
   // Sempre que a rota entra/atualiza na fase em_rota, guarda um snapshot pra o
@@ -902,7 +971,22 @@ function RotaContent(): React.ReactElement {
     [rota, paradas, posicaoAtual, empresaId]
   );
 
-  const handleEncerrarRota = useCallback(async () => {
+  const handleEncerrarRota = useCallback(async (motivo?: string) => {
+    // Encerrou com entregas pendentes → avisa o gestor no painel (lembrete com
+    // Realtime), com o nº do pedido quando a rota está ancorada. Best-effort.
+    if (motivo && rota) {
+      try {
+        const pendentes = paradas.filter((p) => !p.concluida_em).length;
+        const ref = pedidoAncora
+          ? `do pedido ${rotuloPedido(pedidoAncora.numero, pedidoAncora.id)}`
+          : 'de rota avulsa';
+        await createClient().from('lembretes').insert({
+          texto: `🏁 Motorista encerrou a rota ${ref} com ${pendentes} entrega${pendentes > 1 ? 's' : ''} pendente${pendentes > 1 ? 's' : ''} — motivo: ${motivo}`,
+          origem: 'app_motorista',
+          empresa_id: empresaId || null,
+        });
+      } catch { /* sem rede — o encerramento segue; aviso é best-effort */ }
+    }
     if (rota) {
       // fetch() NAO rejeita em HTTP 500/404 — so em erro de rede. Antes
       // o catch ignorava silenciosamente erros do servidor: motorista
@@ -952,7 +1036,7 @@ function RotaContent(): React.ReactElement {
       // Ignora erro — historico vai estar levemente desatualizado mas nao critico
     }
     setFase('inicio');
-  }, [empresaId, motoristaId, rota, paradas, definirAncora]);
+  }, [empresaId, motoristaId, rota, paradas, definirAncora, pedidoAncora]);
 
   // ─── Calculo dinamico de distancias ────────────────────────────────
   const statsDinamicos = useMemo(() => {

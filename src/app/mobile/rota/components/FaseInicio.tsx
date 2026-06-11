@@ -139,10 +139,8 @@ export function FaseInicio({
                       transition: 'all 0.15s',
                     }}
                   >
-                    {/* Linha 1: identidade da rota + status. flexWrap: em tela
-                        estreita o selo DESCE pra linha de baixo em vez de
-                        sobrepor o número do pedido. */}
-                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6, rowGap: 4 }}>
+                    {/* Linha 1: só a identidade da rota (pedido vinculado OU avulsa) */}
+                    <div style={{ display: 'flex', flexWrap: 'wrap', alignItems: 'center', gap: 6 }}>
                       {estaAberta && <span style={{ fontSize: 15 }}>🔴</span>}
                       {!estaAberta && r.status === 'concluida' && <span style={{ fontSize: 15 }}>✅</span>}
                       {!estaAberta && r.status === 'cancelada' && <span style={{ fontSize: 15 }}>❌</span>}
@@ -156,9 +154,14 @@ export function FaseInicio({
                       ) : (
                         <span style={{ fontWeight: 700, fontSize: 14 }}>Rota avulsa</span>
                       )}
+                    </div>
+                    {/* Linha 2: data + paradas à esquerda, selo de status à direita */}
+                    <div style={{ marginTop: 4, display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8 }}>
+                      <span style={{ fontSize: 12, color: '#64748b' }}>
+                        {dataFormatada} · {(r as unknown as Record<string, unknown>).qtd_paradas as number ?? '?'} paradas
+                      </span>
                       <span
                         style={{
-                          marginLeft: 'auto',
                           flexShrink: 0,
                           fontSize: 11,
                           fontWeight: 600,
@@ -170,10 +173,6 @@ export function FaseInicio({
                       >
                         {STATUS_LABEL[r.status] ?? r.status}
                       </span>
-                    </div>
-                    {/* Linha 2: data + paradas */}
-                    <div style={{ marginTop: 4, fontSize: 12, color: '#64748b' }}>
-                      {dataFormatada} · {(r as unknown as Record<string, unknown>).qtd_paradas as number ?? '?'} paradas
                     </div>
                     {estaAberta && (
                       <p style={{ margin: '6px 0 0', fontSize: 12, color: '#b91c1c' }}>
