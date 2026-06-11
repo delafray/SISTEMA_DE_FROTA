@@ -28,6 +28,30 @@ Motivo: o Supabase corta em ~1000 linhas por chamada e o dono projeta 10.000+ pe
 
 ---
 
+# 🗄️ Banco e APIs — RASTRO OBRIGATÓRIO — REGRA DO DONO (11/06/2026)
+
+O kit de implantação (`db/schema_base_*.sql` + seeds + guias) só vale se ACOMPANHAR o sistema.
+**Toda IA que mudar banco ou adicionar serviço DEVE deixar o rastro documentado, na mesma tarefa:**
+
+1. **Mudou o BANCO** (DDL — tabela/coluna/view/função/trigger/grant, por qualquer via: SQL Editor,
+   MCP, REST): criar `db/migration_<nome>.sql` idempotente + adicionar na tabela de blocos de
+   [`implantacao-cliente.md`](framework/03-deploy/implantacao-cliente.md). Se tocou em
+   função/trigger/grant → re-gerar `db/schema_base_complemento.sql` (com `db/gerar_schema_complemento.sql`);
+   se tocou em tabela/view → re-gerar `db/schema_base_completo.sql` (com `db/gerar_schema_base.sql`).
+2. **Mudou REGRAS do bot via REST/tela** (regras, contexto_ia): re-exportar os seeds
+   (`db/seeds/seed_regras_bot.sql` / `seed_contexto_ia.sql` — padrão json_populate_recordset).
+3. **Nova API/serviço/env var**: registrar nos QUATRO lugares —
+   `framework/02-apis-e-chaves/env-template.md` (a var comentada) ·
+   `framework/02-apis-e-chaves/todas-as-apis.md` (linha no mapa) ·
+   `framework/03-deploy/matriz-implantacao-contas.md` (manual×script×conta de quem) ·
+   `src/lib/apis/catalogoApis.ts` (página /uso-apis), se o serviço tiver conta/cota.
+4. **PROIBIDO** IP/URL/chave de UMA implantação hard-coded no código — sempre env var
+   (lição de 11/06: monitores pingavam a VM do dono cravada no fonte).
+
+Motivo: o sistema é VENDIDO via implantação do zero — banco e docs dessincronizados = cliente novo quebrado.
+
+---
+
 # 🤖 Política de delegação a subagentes (Claude Code) — REGRA DO DONO
 
 Ao delegar trabalho a subagentes (Agent/Workflow), escolher o modelo pela natureza da tarefa:
