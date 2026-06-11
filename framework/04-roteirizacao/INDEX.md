@@ -6,9 +6,9 @@
 |---|---|
 | [osrm-vroom-setup.md](osrm-vroom-setup.md) | OSRM + VROOM: como funciona, como subir, manutenção |
 
-## Documentos de referência (na raiz)
-- [PLANO_ROTEIRIZACAO.md](../../PLANO_ROTEIRIZACAO.md) — plano completo de roteirização (68KB)
-- [PLANO_EXECUCAO_OSRM_VM.md](../../PLANO_EXECUCAO_OSRM_VM.md) — execução da VM Oracle
+## Documentos de referência
+- [PLANO_ROTEIRIZACAO.md](../../PLANO_ROTEIRIZACAO.md) — plano completo de roteirização (raiz; referenciado em comentários do código)
+- [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md §12](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md) — 16 passos de instalação da VM (ex-PLANO_EXECUCAO_OSRM_VM)
 
 ## Veja também
 - [Deploy → Oracle Cloud](../03-deploy/oracle-cloud.md) — VM onde rodam

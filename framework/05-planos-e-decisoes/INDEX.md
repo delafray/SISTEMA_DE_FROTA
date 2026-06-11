@@ -6,12 +6,11 @@
 |---|---|
 | [acoes-pendentes.md](acoes-pendentes.md) | O que falta fazer (bloqueadores, decisões, validações) |
 
-## Documentos de referência (na raiz — grandes demais para migrar)
+## Documentos de referência
 
-| Documento | Tamanho | Conteúdo |
-|---|---|---|
-| [PLANO_DE_PROJETO.md](../../PLANO_DE_PROJETO.md) | 177KB | Plano geral do projeto |
-| [logistica.md](../../logistica.md) | 68KB | Análises de 8 IAs sobre o sistema |
-| [log.md](../../log.md) | 23KB | Análise consolidada + plano de ação em 6 fases |
-| [PLANO_ROTEIRIZACAO.md](../../PLANO_ROTEIRIZACAO.md) | 68KB | Plano completo de roteirização |
-| [PLANO_LIMPEZA_MODELO.md](../../PLANO_LIMPEZA_MODELO.md) | 13KB | Limpeza e refatoração do modelo |
+| Documento | Conteúdo |
+|---|---|
+| [PLANO_ROTEIRIZACAO.md](../../PLANO_ROTEIRIZACAO.md) | Plano completo de roteirização (referenciado em comentários do código — não mover) |
+| [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md) | Garimpo da faxina 10/06: tudo que prestava dos .md deletados (PLANO_DE_PROJETO, empresa01–04, pesquisas etc.) — ⚠️ precisa refatoração |
+
+> Faxina 10/06/2026: PLANO_DE_PROJETO.md, logistica.md, log.md e PLANO_LIMPEZA_MODELO.md foram deletados (executados/obsoletos); o que prestava está no arquivão acima.

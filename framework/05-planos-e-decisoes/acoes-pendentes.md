@@ -2,7 +2,7 @@
 
 > 📎 Voltar ao [INDEX de Planos](INDEX.md) | [INDEX principal](../INDEX.md)
 >
-> Fonte: [ACOES_PENDENTES_USUARIO.md](../../ACOES_PENDENTES_USUARIO.md)
+> Fonte original (`ACOES_PENDENTES_USUARIO.md`) deletada na faxina de 10/06 — esta página é agora a lista canônica.
 
 ---
 
@@ -59,5 +59,4 @@
 
 ## Veja também
 
-- [ACOES_PENDENTES_USUARIO.md](../../ACOES_PENDENTES_USUARIO.md) — detalhes completos com comandos
-- [log.md](../../log.md) — plano de ação em 6 fases
+- [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md) — garimpo da faxina 10/06 (planos futuros não implementados)

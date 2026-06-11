@@ -3,7 +3,7 @@
 > 📎 Voltar ao [INDEX de Roteirização](INDEX.md) | [INDEX principal](../INDEX.md)
 >
 > Referência complementar: [ORACLE_CLOUD_SETUP.md](../../ORACLE_CLOUD_SETUP.md) (IDs de recursos, script PowerShell)
-> Plano original: [PLANO_EXECUCAO_OSRM_VM.md](../../PLANO_EXECUCAO_OSRM_VM.md) (16 passos com validação)
+> Plano original (16 passos, garimpado na faxina 10/06): [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md §12](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md)
 
 ---
 
@@ -255,5 +255,5 @@ const resultado = await estimarRota({
 
 - [../03-deploy/oracle-cloud.md](../03-deploy/oracle-cloud.md) — specs da VM, IDs, comandos OCI
 - [ORACLE_CLOUD_SETUP.md](../../ORACLE_CLOUD_SETUP.md) — script PowerShell completo
-- [PLANO_EXECUCAO_OSRM_VM.md](../../PLANO_EXECUCAO_OSRM_VM.md) — 16 passos com validação detalhada
+- [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md §12](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md) — 16 passos de instalação da VM (ex-PLANO_EXECUCAO_OSRM_VM)
 - [../02-apis-e-chaves/env-template.md](../02-apis-e-chaves/env-template.md) — OSRM_URL, VROOM_URL

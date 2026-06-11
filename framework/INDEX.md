@@ -57,7 +57,7 @@
 |---|---|
 | Ver o que falta fazer / ações pendentes | [acoes-pendentes.md](05-planos-e-decisoes/acoes-pendentes.md) |
 
-> Documentos grandes de referência (PLANO_DE_PROJETO 177KB, logistica 68KB, PLANO_ROTEIRIZACAO 68KB) continuam na raiz do projeto. Links em [05-planos-e-decisoes/INDEX.md](05-planos-e-decisoes/INDEX.md).
+> Faxina de 10/06/2026: os documentos grandes da raiz (PLANO_DE_PROJETO, logistica, log, planos executados) foram **deletados** — o que prestava foi garimpado para [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md](../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md). Só [PLANO_ROTEIRIZACAO.md](../PLANO_ROTEIRIZACAO.md) segue na raiz (referenciado em comentários do código).
 
 ---
 
@@ -87,6 +87,7 @@
 | Arquitetura pesquisada (com fontes) do motor de regras no-code genérico | [docs/MOTOR_REGRAS_ARQUITETURA.md](../docs/MOTOR_REGRAS_ARQUITETURA.md) |
 | **Motor do bot: classificador Gemini ligado ao WhatsApp** (flag `MODO_CLASSIFICADOR`, consulta/altera-KM/desambiguação, segurança) | [docs/BOT_CLASSIFICADOR_INTEGRACAO.md](../docs/BOT_CLASSIFICADOR_INTEGRACAO.md) |
 | **TODA a pesquisa de logística consolidada** (nomenclatura Pedido/Despacho, importação de notas, benchmarks TMS/SaaS, 4 empresas, decisões já tomadas) | [docs/PESQUISAS_CONSOLIDADO.md](../docs/PESQUISAS_CONSOLIDADO.md) |
+| **Garimpo da faxina 10/06** — planos futuros não implementados (crons, LGPD, importação XML/XLS, empresas 01–04, broker, motor de regras, setup VM) ⚠️ precisa refatoração | [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md](../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md) |
 
 > ⚠️ Decisão do dono (05/06/2026): lembretes **sem nenhuma regra** (empresa, usuário, role, RLS). **Não recolocar travas sem ordem explícita.**
 > 🤖 Motor do bot (classificador) implantado 05/06/2026 atrás de `MODO_CLASSIFICADOR` (default OFF). Ligar exige `db/migration_bot_classificador.sql`. Detalhes: [docs/BOT_CLASSIFICADOR_INTEGRACAO.md](../docs/BOT_CLASSIFICADOR_INTEGRACAO.md).
@@ -133,16 +134,11 @@ framework/
 
 ---
 
-## Documentos legados (raiz do projeto)
+## Documentos legados
 
-Os seguintes arquivos foram **deletados** da raiz (conteúdo migrado para cá):
-- ~~WHATSAPP_BOT_SETUP.md~~ → `01-whatsapp-bot/setup-evolution.md`
-- ~~MAPA_APIS.md~~ → `02-apis-e-chaves/todas-as-apis.md`
-- ~~GUIA_IMPLANTACAO_CLIENTE.md~~ → `03-deploy/implantacao-cliente.md`
-- ~~ONBOARDING.md~~ → `03-deploy/onboarding-empresa.md`
-- ~~PLANO_IA_WHATSAPP.md~~ → `01-whatsapp-bot/arquitetura.md`
+Faxinas anteriores deletaram .md obsoletos da raiz/docs (conteúdo migrado para cá ou garimpado). Na faxina de **10/06/2026** saíram: PLANO_DE_PROJETO, logistica, log, documentacao, PLANO_LIMPEZA_MODELO, PLANO_EXECUCAO_OSRM_VM, RESEARCH_OPEN_SOURCE_TMS, ACOES_PENDENTES_USUARIO, docs/empresa01–04, PLANO_LOGISTICA_4_EMPRESAS, RESEARCH/PROPOSTA/REDESIGN/PROGRESSO_PEDIDOS_DESPACHO, docs/pesquisas-brutas/. O que prestava está em [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md](../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md).
 
-Estes **permanecem** na raiz (documentos de referência grandes):
+Documentos de referência vivos fora do framework:
 
 | Arquivo | Referenciado por |
 |---|---|
@@ -150,7 +146,8 @@ Estes **permanecem** na raiz (documentos de referência grandes):
 | [docs/GUIA_APIS_SETUP.md](../docs/GUIA_APIS_SETUP.md) | `02-apis-e-chaves/todas-as-apis.md` |
 | [docs/LEMBRETES_SEM_TRAVA.md](../docs/LEMBRETES_SEM_TRAVA.md) | Decisões de produto (índice acima) |
 | [ORACLE_CLOUD_SETUP.md](../ORACLE_CLOUD_SETUP.md) | `03-deploy/oracle-cloud.md` |
+| [PLANO_ROTEIRIZACAO.md](../PLANO_ROTEIRIZACAO.md) | Comentários no código (`Referencia: passo X`) |
 
 ---
 
-*Última atualização: 05/06/2026 — Lembretes SEM TRAVA: qualquer número grava (sem empresa/usuário/role/RLS), painel com Realtime instantâneo. Doc: docs/LEMBRETES_SEM_TRAVA.md*
+*Última atualização: 10/06/2026 — Faxina dos .md: ~20 arquivos obsoletos deletados; conteúdo útil garimpado em docs/arquivo/ARQUIVAO_PARA_REFATORAR.md.*

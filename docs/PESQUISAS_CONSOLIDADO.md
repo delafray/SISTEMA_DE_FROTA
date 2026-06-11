@@ -67,7 +67,7 @@ Template CSV de referência (Routific/Detrack/Onfleet): `address` (obrigatório)
 
 ## 6. Modelos de negócio — as 4 empresas (pesquisa 06/06)
 
-Visão completa em `docs/PLANO_LOGISTICA_4_EMPRESAS.md` + planos executáveis `docs/empresa01.md` a `empresa04.md`:
+Os planos detalhados (ex-`PLANO_LOGISTICA_4_EMPRESAS.md` e `empresa01–04.md`) foram garimpados para `docs/arquivo/ARQUIVAO_PARA_REFATORAR.md` (§6–§9) na faxina de 10/06:
 
 1. **Empresa 1 — Transportadora** (atual): Modo A (notas antecipadas → rota → POD) + Modo B (frete na hora via WhatsApp). Migration aplicada, roteirização ligada ao pedido, POD implementado.
 2. **Empresa 2 — Híbrida** (própria + terceiros): roteirização antecipada de ~500 notas, setorização, torre de controle dupla, `executor_tipo`.
@@ -84,25 +84,13 @@ Os campos `origem_demanda`, `executor_tipo`, `pedido_pai_id` + tabelas `rotas`/`
 - ✅ Política de delegação por modelo (CLAUDE.md): haiku=pesquisa, sonnet=código simples, opus/principal=difícil+importante, revisão no principal.
 - ✅ CT-e/MDF-e/canhoto fiscal: fase 2 (confirmado também no plano empresa01 §5).
 
-## 8. Arquivos-fonte (material bruto completo)
+## 8. Arquivos-fonte (deletados na faxina de 10/06/2026)
 
-| Arquivo | Data | Conteúdo |
-|---|---|---|
-| `RESEARCH_OPEN_SOURCE_TMS.md` (raiz) | 06/06 | TMS/engines open-source, data models, fluxo dos 4 tipos de empresa, URLs |
-| `docs/PLANO_LOGISTICA_4_EMPRESAS.md` | 06/06 | Plano mestre dos 4 modelos de negócio |
-| `docs/empresa01.md` … `empresa04.md` | 06/06 | Planos executáveis por tipo de empresa |
-| `docs/RESEARCH_PEDIDOS_DESPACHO_2026-06-09.md` | 09/06 | **Bruto dos 14 agentes**: nomenclatura, fluxos, recomendações e ~140 fontes com resumo (7 ângulos de fóruns + 7 de GitHub/SaaS) |
-| `docs/PROPOSTA_PEDIDOS_DESPACHO.md` | 09/06 | Proposta sintetizada que o dono aprovou (menus, telas, importação) |
-| `docs/AUDITORIA_CONTEXTO_2026-06-06.md` | 06/06 | Auditoria de contexto do projeto |
+Os brutos abaixo foram lidos um a um, o conteúdo ainda útil foi extraído para **`docs/arquivo/ARQUIVAO_PARA_REFATORAR.md`**, e os arquivos foram deletados (recuperáveis no histórico do git, commits ≤ 10/06):
 
-## 9. Arquivos brutos resgatados das sessões antigas (`docs/pesquisas-brutas/`)
+- `RESEARCH_OPEN_SOURCE_TMS.md`, `docs/PLANO_LOGISTICA_4_EMPRESAS.md`, `docs/empresa01–04.md` (4 modelos de empresa → arquivão §6–§9)
+- `docs/RESEARCH_PEDIDOS_DESPACHO_2026-06-09.md`, `docs/PROPOSTA_PEDIDOS_DESPACHO.md` (glossário fiscal, importação, benchmarks → arquivão §3–§5)
+- `docs/AUDITORIA_CONTEXTO_2026-06-06.md` (furos do bot → arquivão §11)
+- `docs/pesquisas-brutas/` — 3 dumps de 215 agentes (~1MB); o único com conteúdo não consolidado era a sessão mega de logística (motor de regras/estado pendente → arquivão §10)
 
-Em 09/06 foram extraídos dos transcritos das sessões do Claude Code (que ficavam fora do repositório) a missão + entrega final de **215 agentes** de 3 sessões grandes:
-
-| Arquivo | Sessão | Conteúdo |
-|---|---|---|
-| `pesquisas-brutas/2026-05-27a30_roteirizacao-deepgram_28-agentes.md` (204 KB) | 27–30/05 | UX de apps de roteirização/last-mile pro motorista; integração Deepgram (transcrição de áudio WhatsApp); auditorias de código |
-| `pesquisas-brutas/2026-06-04_bot-motor-regras_32-agentes.md` (67 KB) | 04/06 | Fan-out de pesquisa sobre o bot Gemini/Evolution API (base do motor de regras) |
-| `pesquisas-brutas/2026-06-05a06_logistica-mega_155-agentes.md` (728 KB) | 05–06/06 | Sessão gigante: motor de regras no-code (pesquisa web citada + investigação do código), classificador Gemini, propose→confirm, segurança serverless, e a pesquisa de logística que gerou o RESEARCH_OPEN_SOURCE_TMS e os planos empresa01–04 |
-
-> **Escopo:** este consolidado (seções 1–7) resume a pesquisa de **logística**. A pesquisa do **bot/motor de regras** (sessões de 04–06/06) já está destilada em `docs/MOTOR_REGRAS_ARQUITETURA.md`, `docs/BOT_CLASSIFICADOR_INTEGRACAO.md` e `docs/BOT_FRAMEWORK.md` — os brutos acima servem de fonte se precisar reabrir algum tema.
+> **Escopo:** este consolidado (seções 1–7) resume a pesquisa de **logística**. A pesquisa do **bot/motor de regras** já está destilada em `docs/MOTOR_REGRAS_ARQUITETURA.md`, `docs/BOT_CLASSIFICADOR_INTEGRACAO.md` e `docs/BOT_FRAMEWORK.md`.

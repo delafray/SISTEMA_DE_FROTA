@@ -3,7 +3,7 @@
 > 📎 Voltar ao [INDEX de Deploy](INDEX.md) | [INDEX principal](../INDEX.md)
 >
 > Documentação completa: [ORACLE_CLOUD_SETUP.md](../../ORACLE_CLOUD_SETUP.md)
-> Plano de execução: [PLANO_EXECUCAO_OSRM_VM.md](../../PLANO_EXECUCAO_OSRM_VM.md)
+> Plano de execução (16 passos, garimpado na faxina 10/06): [docs/arquivo/ARQUIVAO_PARA_REFATORAR.md §12](../../docs/arquivo/ARQUIVAO_PARA_REFATORAR.md)
 
 ---
 
