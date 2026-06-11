@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   andamentoRotas, entregasDia, pedidosAbertos, resumoDia,
-  vencimentos, ondeEsta, meusLembretes, LEITORES,
+  vencimentos, ondeEsta, meusLembretes, avariasVeiculo, manutencoesPeriodicas, LEITORES,
 } from "@/lib/whatsapp/botLeitores";
 
 /**
@@ -165,11 +165,78 @@ describe("meusLembretes (R7)", () => {
   });
 });
 
+describe("avariasVeiculo (R8)", () => {
+  it("nenhuma avaria → ✅", async () => {
+    const sb = fakeSb({ avarias: [], veiculos: [] });
+    expect(await avariasVeiculo(sb, ctx, {})).toMatch(/nenhuma avaria/i);
+  });
+  it("separa em aberto (com urgência) de resolvidas, com caminhão na frota inteira", async () => {
+    const sb = fakeSb({
+      avarias: [
+        { veiculo_id: "v1", status: "aberta", urgencia: "critica", descricao_motorista: "freio fazendo barulho", resolvido_em: null, created_at: "2026-06-10T12:00:00Z" },
+        { veiculo_id: "v2", status: "aberta", urgencia: "baixa", descricao_motorista: "retrovisor trincado", resolvido_em: "2026-06-09T10:00:00Z", created_at: "2026-06-08T12:00:00Z" },
+      ],
+      veiculos: [{ id: "v1", apelido: "Leão", placa: null }, { id: "v2", apelido: "Touro", placa: null }],
+    });
+    const r = await avariasVeiculo(sb, ctx, {});
+    expect(r).toMatch(/Em aberto \(1\)/);
+    expect(r).toContain("Leão — freio fazendo barulho");
+    expect(r).toMatch(/CRÍTICA/);
+    expect(r).toMatch(/Histórico recente \(1\)/);
+    expect(r).toContain("Touro — retrovisor trincado");
+  });
+  it("com veículo → omite o nome do caminhão nas linhas", async () => {
+    const sb = fakeSb({
+      avarias: [{ veiculo_id: "v1", status: "em_reparo", urgencia: "media", descricao_motorista: "embreagem dura", resolvido_em: null, created_at: "2026-06-10T12:00:00Z" }],
+      veiculos: [{ id: "v1", apelido: "Leão", placa: null }],
+    });
+    const r = await avariasVeiculo(sb, ctx, { veiculoId: "v1" });
+    expect(r).toContain("Avarias do Leão");
+    expect(r).toContain("• embreagem dura");
+    expect(r).toMatch(/em reparo/);
+  });
+});
+
+describe("manutencoesPeriodicas (R9)", () => {
+  it("nada configurado → orienta cadastrar tipos", async () => {
+    const sb = fakeSb({ proxima_manutencao_veiculo: [], veiculos: [] });
+    expect(await manutencoesPeriodicas(sb, ctx, {})).toMatch(/cadastre os tipos/i);
+  });
+  it("frota: vencidas + chegando detalhadas, em dia só contagem", async () => {
+    const sb = fakeSb({
+      proxima_manutencao_veiculo: [
+        { veiculo_id: "v1", placa: "ABC0001", tipo_nome: "Troca de óleo", status: "vencido", km_faltando: -1200, km_proxima: 100000, data_proxima: null, criticidade: "alta" },
+        { veiculo_id: "v2", placa: "DEF0002", tipo_nome: "Filtro de ar", status: "proximo", km_faltando: 800, km_proxima: 120000, data_proxima: "2026-06-20", criticidade: "media" },
+        { veiculo_id: "v2", placa: "DEF0002", tipo_nome: "Correia", status: "ok", km_faltando: 9000, km_proxima: 130000, data_proxima: null, criticidade: "baixa" },
+      ],
+      veiculos: [{ id: "v1", apelido: "Leão", placa: "ABC0001" }, { id: "v2", apelido: "Touro", placa: "DEF0002" }],
+    });
+    const r = await manutencoesPeriodicas(sb, ctx, {});
+    expect(r).toMatch(/VENCIDAS \(1\)/);
+    expect(r).toContain("Troca de óleo do Leão (passou 1.200 km)");
+    expect(r).toMatch(/Chegando \(1\)/);
+    expect(r).toContain("Filtro de ar do Touro (faltam 800 km · 20/06)");
+    expect(r).toMatch(/1 item em dia/);
+  });
+  it("um caminhão: lista também o que está em dia, sem repetir o nome", async () => {
+    const sb = fakeSb({
+      proxima_manutencao_veiculo: [
+        { veiculo_id: "v1", placa: "ABC0001", tipo_nome: "Troca de óleo", status: "ok", km_faltando: 4500, km_proxima: 105000, data_proxima: null, criticidade: "alta" },
+      ],
+      veiculos: [{ id: "v1", apelido: "Leão", placa: "ABC0001" }],
+    });
+    const r = await manutencoesPeriodicas(sb, ctx, { veiculoId: "v1" });
+    expect(r).toContain("Manutenções periódicas do Leão");
+    expect(r).toMatch(/Em dia \(1\)/);
+    expect(r).toContain("• Troca de óleo (faltam 4.500 km)");
+  });
+});
+
 describe("dispatch LEITORES", () => {
-  it("tem as 7 chaves do plano", () => {
+  it("tem as 9 chaves do plano", () => {
     expect(Object.keys(LEITORES).sort()).toEqual([
-      "andamento_rotas", "entregas_dia", "meus_lembretes", "onde_esta",
-      "pedidos_abertos", "resumo_dia", "vencimentos",
+      "andamento_rotas", "avarias", "entregas_dia", "manutencoes_periodicas", "meus_lembretes",
+      "onde_esta", "pedidos_abertos", "resumo_dia", "vencimentos",
     ]);
   });
 });

@@ -270,6 +270,89 @@ export async function ondeEsta(sb: SupabaseClient, ctx: CtxLeitor, opts: OptsLei
     `\n_(posição aproximada pela última entrega — rastreador em tempo real entra depois)_`;
 }
 
+// ─── R8: AVARIAS ("quais as avarias do leão?" / "todas as avarias") ────
+const AVARIA_STATUS: Record<string, string> = { aberta: "🔴 aberta", em_reparo: "🔧 em reparo" };
+const URGENCIA_TXT: Record<string, string> = { critica: "CRÍTICA ⚠️", alta: "ALTA ⚠️", media: "média", baixa: "baixa" };
+
+export async function avariasVeiculo(sb: SupabaseClient, ctx: CtxLeitor, opts: OptsLeitor): Promise<string> {
+  let q = sb.from("avarias")
+    .select("veiculo_id,status,urgencia,descricao_motorista,resolvido_em,created_at")
+    .eq("empresa_id", ctx.empresa_id)
+    .order("created_at", { ascending: false }).limit(20);
+  if (opts.veiculoId) q = q.eq("veiculo_id", opts.veiculoId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const avs = data ?? [];
+  if (!avs.length) return opts.veiculoId ? "✅ Nenhuma avaria registrada pra esse caminhão." : "✅ Nenhuma avaria registrada na frota.";
+
+  const veics = await veiculosDaEmpresa(sb, ctx.empresa_id, opts.veiculoId ?? null);
+  const nomeVeic = new Map(veics.map((v) => [v.id, v.apelido ?? v.placa ?? "?"]));
+
+  const linha = (a: (typeof avs)[number]) => {
+    const desc = (a.descricao_motorista ?? "sem descrição").slice(0, 60);
+    const st = a.resolvido_em ? `✅ resolvida ${diaHoraLocal(a.resolvido_em).slice(0, 5)}` : (AVARIA_STATUS[a.status] ?? a.status);
+    const urg = !a.resolvido_em && a.urgencia ? ` · ${URGENCIA_TXT[a.urgencia] ?? a.urgencia}` : "";
+    const quem = opts.veiculoId ? "" : `${nomeVeic.get(a.veiculo_id) ?? "?"} — `;
+    return `• ${quem}${desc} (${st}${urg} · ${diaHoraLocal(a.created_at).slice(0, 5)})`;
+  };
+
+  const abertas = avs.filter((a) => !a.resolvido_em);
+  const resolvidas = avs.filter((a) => a.resolvido_em);
+  const partes: string[] = [];
+  if (abertas.length) partes.push(`🔧 Em aberto (${abertas.length}):\n${abertas.map(linha).join("\n")}`);
+  if (resolvidas.length) partes.push(`Histórico recente (${resolvidas.length}):\n${resolvidas.slice(0, LIMITE_LISTA).map(linha).join("\n")}`);
+  const rot = opts.veiculoId ? ` do ${nomeVeic.get(opts.veiculoId) ?? "caminhão"}` : " da frota";
+  return `🛠️ Avarias${rot}:\n${partes.join("\n\n")}`;
+}
+
+// ─── R9: MANUTENÇÕES PERIÓDICAS ("troca de óleo do leão tá em dia?") ───
+// Fonte: view proxima_manutencao_veiculo (tipo a tipo: vencido/proximo/em dia,
+// km_faltando e data_proxima) — a mesma que o financeiro usa pra provisão.
+
+type ProxManut = {
+  veiculo_id: string | null; placa: string | null; tipo_nome: string | null;
+  status: string | null; km_faltando: number | null; km_proxima: number | null;
+  data_proxima: string | null; criticidade: string | null;
+};
+
+export async function manutencoesPeriodicas(sb: SupabaseClient, ctx: CtxLeitor, opts: OptsLeitor): Promise<string> {
+  let q = sb.from("proxima_manutencao_veiculo")
+    .select("veiculo_id,placa,tipo_nome,status,km_faltando,km_proxima,data_proxima,criticidade")
+    .eq("empresa_id", ctx.empresa_id);
+  if (opts.veiculoId) q = q.eq("veiculo_id", opts.veiculoId);
+  const { data, error } = await q;
+  if (error) throw new Error(error.message);
+  const itens = (data ?? []) as ProxManut[];
+  if (!itens.length) return "Nenhuma manutenção periódica configurada ainda (cadastre os tipos no painel).";
+
+  const veics = await veiculosDaEmpresa(sb, ctx.empresa_id, opts.veiculoId ?? null);
+  const nome = new Map(veics.map((v) => [v.id, v.apelido ?? v.placa ?? "?"]));
+  const rot = (i: ProxManut) => (opts.veiculoId ? "" : ` do ${nome.get(i.veiculo_id ?? "") ?? i.placa ?? "?"}`);
+  const quando = (i: ProxManut) => {
+    const partes: string[] = [];
+    if (i.km_faltando != null) partes.push(i.km_faltando < 0 ? `passou ${Math.abs(i.km_faltando).toLocaleString("pt-BR")} km` : `faltam ${i.km_faltando.toLocaleString("pt-BR")} km`);
+    if (i.data_proxima) partes.push(dataBr(i.data_proxima));
+    return partes.join(" · ") || "sem referência";
+  };
+
+  const vencidas = itens.filter((i) => i.status === "vencido");
+  const proximas = itens.filter((i) => i.status === "proximo");
+  const emDia = itens.filter((i) => i.status !== "vencido" && i.status !== "proximo");
+
+  const partes: string[] = [];
+  if (vencidas.length) partes.push(`🔴 VENCIDAS (${vencidas.length}):\n${vencidas.map((i) => `• ${i.tipo_nome ?? "manutenção"}${rot(i)} (${quando(i)})`).join("\n")}`);
+  if (proximas.length) partes.push(`🟡 Chegando (${proximas.length}):\n${proximas.map((i) => `• ${i.tipo_nome ?? "manutenção"}${rot(i)} (${quando(i)})`).join("\n")}`);
+  if (opts.veiculoId && emDia.length) {
+    partes.push(`✅ Em dia (${emDia.length}):\n${emDia.slice(0, LIMITE_LISTA).map((i) => `• ${i.tipo_nome ?? "manutenção"} (${quando(i)})`).join("\n")}`);
+  } else if (emDia.length) {
+    partes.push(`✅ ${emDia.length} item${emDia.length > 1 ? "s" : ""} em dia no resto da frota.`);
+  }
+  if (!vencidas.length && !proximas.length && !partes.length) partes.push("✅ Tudo em dia.");
+
+  const alvo = opts.veiculoId ? ` do ${nome.get(opts.veiculoId) ?? "caminhão"}` : " da frota";
+  return `🔧 Manutenções periódicas${alvo}:\n${partes.join("\n\n")}`;
+}
+
 // ─── R7: MEUS LEMBRETES ("o que eu te falei pra anotar?") ──────────────
 // Lembretes são SEM TRAVA (decisão do dono): não filtra por empresa.
 export async function meusLembretes(sb: SupabaseClient, _ctx: CtxLeitor, _opts: OptsLeitor): Promise<string> {
@@ -294,4 +377,6 @@ export const LEITORES: Record<string, Leitor> = {
   vencimentos,
   onde_esta: ondeEsta,
   meus_lembretes: meusLembretes,
+  avarias: avariasVeiculo,
+  manutencoes_periodicas: manutencoesPeriodicas,
 };

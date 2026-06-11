@@ -83,6 +83,14 @@
 - **Negativas críticas:** "anota", "me lembra" (isso é CRIAR lembrete, regra fixa). Gatilho_inicio talvez.
 - **Dedicada:** `"meus_lembretes"`
 
+### R8 — Avarias com leitor dedicado (adicionada 11/06, pedido do dono)
+- A regra "Consultar Avarias" ganhou leitor dedicado (`consulta_dedicada: "avarias"`): por caminhão
+  ("quais as avarias do leão") ou frota inteira ("todas as avarias já conhecidas") — em aberto com
+  urgência + histórico resolvido recente. Caminhão omitido nas linhas quando a pergunta é de um só.
+- **PENDENTE (pedido do dono): versão pro MOTORISTA** ("minhas avarias" = caminhão alocado a ele) —
+  exige o telefone do motorista no caminho do classificador (hoje motorista entra pelos flows);
+  por enquanto a regra é geral (qualquer autorizado pergunta nomeando o caminhão).
+
 ## Arquitetura anti-conflito (obrigatória)
 
 1. **Mapa de vizinhança**: cada regra nova nasce com `frases_negativas` apontando as vizinhas
