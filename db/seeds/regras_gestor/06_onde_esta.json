@@ -1,0 +1,54 @@
+{
+  "nome": "Onde Está o Caminhão",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "onde está",
+    "última entrega",
+    "onde tá",
+    "posição do caminhão",
+    "foi pra onde",
+    "onde foi parar",
+    "última localização"
+  ],
+  "frases_exemplo": [
+    "onde está o leão agora",
+    "onde tá o caminhão",
+    "qual foi a última entrega do leão",
+    "onde foi parar o touro",
+    "posição do caminhão",
+    "onde tá rodando",
+    "o leão foi pra onde",
+    "última localização do touro"
+  ],
+  "frases_negativas": [
+    "status da frota",
+    "caminhão parado",
+    "caminhão em manutenção",
+    "qual o status",
+    "atualizar km",
+    "quantas entregas",
+    "rota de hoje",
+    "meus lembretes"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: última entrega CONCLUÍDA do veículo como posição aproximada + situação da rota. Avisa que é a posição da última entrega. Requer consulta_dedicada=ondeEsta.",
+  "escopo_dados": {
+    "consulta_dedicada": "ondeEsta",
+    "colunas": {
+      "veiculos": {
+        "apelido": ["consultar"],
+        "placa": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}

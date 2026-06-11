@@ -1,0 +1,54 @@
+{
+  "nome": "Entregas Hoje",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "entregas hoje",
+    "quantas entregas",
+    "entregas pendentes",
+    "entregas do dia",
+    "entrega feita",
+    "lista de entregas"
+  ],
+  "frases_exemplo": [
+    "quantas entregas hoje",
+    "quais entregas estão pendentes",
+    "entregas do dia",
+    "o que ainda não foi entregue hoje",
+    "me lista as entregas de hoje",
+    "quantas entregas foram feitas",
+    "tem entrega pendente hoje",
+    "como tá as entregas"
+  ],
+  "frases_negativas": [
+    "rota de hoje",
+    "andamento da rota",
+    "status da frota",
+    "atualizar km",
+    "abastecimento",
+    "manutenção",
+    "pedido em aberto",
+    "me dá um resumo"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: entregas de hoje por status + lista das pendentes com cliente. Requer consulta_dedicada=entregasDia.",
+  "escopo_dados": {
+    "consulta_dedicada": "entregasDia",
+    "colunas": {
+      "entregas": {
+        "status": ["consultar"],
+        "destino": ["consultar"],
+        "nome_cliente_avulso": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}

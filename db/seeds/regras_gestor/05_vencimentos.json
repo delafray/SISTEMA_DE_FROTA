@@ -1,0 +1,58 @@
+{
+  "nome": "Vencimentos Frota",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "vencimento",
+    "ipva",
+    "licenciamento",
+    "seguro vence",
+    "cnh vence",
+    "revisão vence",
+    "documento vencendo"
+  ],
+  "frases_exemplo": [
+    "tem ipva vencendo",
+    "quando vence o licenciamento",
+    "cnh de algum motorista vence",
+    "o seguro tá vencendo",
+    "documentos a vencer",
+    "tem revisão a vencer",
+    "o que vence nos próximos dias",
+    "me avisa do vencimento"
+  ],
+  "frases_negativas": [
+    "status da frota",
+    "caminhão parado",
+    "atualizar km",
+    "quilometragem atual",
+    "próxima manutenção",
+    "entregas hoje",
+    "pedidos abertos",
+    "meus lembretes"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: vencimentos nos próximos 30 dias — IPVA, licenciamento, seguro, revisão, CNH dos motoristas. Requer consulta_dedicada=vencimentos.",
+  "escopo_dados": {
+    "consulta_dedicada": "vencimentos",
+    "colunas": {
+      "veiculos": {
+        "ipva_vencimento": ["consultar"],
+        "licenciamento_vencimento": ["consultar"],
+        "seguro_vencimento": ["consultar"],
+        "data_proxima_revisao": ["consultar"],
+        "km_proxima_revisao": ["consultar"],
+        "km_atual": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}

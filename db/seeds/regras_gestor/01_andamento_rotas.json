@@ -1,0 +1,55 @@
+{
+  "nome": "Andamento Rotas",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "rota de hoje",
+    "andamento da rota",
+    "motorista saiu",
+    "entregou quantos",
+    "paradas feitas",
+    "quantas paradas",
+    "rota tá andando"
+  ],
+  "frases_exemplo": [
+    "como tá a rota de hoje",
+    "o motorista já saiu",
+    "quantas paradas foram feitas",
+    "como tá o andamento da rota",
+    "tá entregando direito",
+    "já entregou quanto da rota",
+    "a rota tá andando",
+    "o caminhão já partiu"
+  ],
+  "frases_negativas": [
+    "status da frota",
+    "caminhão parado",
+    "caminhão em manutenção",
+    "quilometragem",
+    "atualizar km",
+    "quanto litros",
+    "abastecimento",
+    "pedido em aberto"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: andamento das rotas de hoje (paradas feitas/total, última às HH:MM). Requer escopo_dados.consulta_dedicada=andamentoRotas.",
+  "escopo_dados": {
+    "consulta_dedicada": "andamentoRotas",
+    "colunas": {
+      "rotas_otimizadas": {
+        "status": ["consultar"],
+        "motorista_id": ["consultar"],
+        "distancia_total_km": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}

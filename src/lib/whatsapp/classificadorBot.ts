@@ -28,6 +28,7 @@ import {
   consultarStatusFrota, lerAlocacaoAberta, commitMudarStatus,
   type EscopoColunas,
 } from "@/lib/whatsapp/botExecutor";
+import { LEITORES_GESTOR } from "@/lib/whatsapp/botLeitores";
 import { parseSimNao, parseSelecao, ehReset, comecaComGatilho, limparLembrete, ehReferenciaGenerica, parseStatusVeiculo, STATUS_VEICULO_LABEL } from "@/lib/whatsapp/botParse";
 
 const log = createLogger("classificadorBot");
@@ -115,7 +116,7 @@ async function limparPendente(supa: SupabaseClient, telefone: string) {
 }
 
 // ─── regra carregada com escopo de colunas ─────────────────────────────
-type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas; gatilho_inicio: boolean };
+type RegraFull = RegraCtx & { acoes: string[]; escopo: EscopoColunas; gatilho_inicio: boolean; consulta_dedicada?: string };
 
 /** Executa UMA regra já resolvida. Retorna o texto a responder. */
 async function executarRegra(
@@ -208,6 +209,11 @@ async function executarRegra(
         if (v.tipo === "varios") return `Tem mais de um parecido com "${alvoEff}": ${v.veiculos.map((x) => x.apelido ?? x.placa).join(", ")}. Qual?`;
         await registrarUso(supa, telefone, v.veiculo, doContexto);
         veiculoId = v.veiculo.id;
+      }
+      // Leitor dedicado (gestor leigo): se a regra tem consulta_dedicada, despacha.
+      if (regra.consulta_dedicada) {
+        const fn = LEITORES_GESTOR[regra.consulta_dedicada];
+        if (fn) return await fn(supa, ctx, veiculoId);
       }
       // STATUS DA FROTA: escopo pede alocacoes.status → consulta dedicada com
       // status real (alocação aberta) + nome do motorista. A genérica não faz join.
@@ -320,6 +326,7 @@ export async function classificarERotear(msg: ParsedMessage, identity: UserIdent
       resposta: r.resposta, ativa: r.ativa, fixa: r.fixa, acoes: r.acoes ?? [],
       escopo: ((r.escopo_dados as Record<string, unknown>)?.colunas as EscopoColunas) ?? {},
       gatilho_inicio: r.gatilho_inicio ?? false,
+      consulta_dedicada: (r.escopo_dados as Record<string, unknown>)?.consulta_dedicada as string | undefined,
     }));
 
     // 1) estado pendente? Resolve sim/não ou seleção. Se a resposta NÃO resolve

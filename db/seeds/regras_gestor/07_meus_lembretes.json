@@ -1,0 +1,55 @@
+{
+  "nome": "Ver Lembretes",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "meus lembretes",
+    "ver lembretes",
+    "o que anotei",
+    "lembretes pendentes",
+    "tem lembrete",
+    "quais lembretes"
+  ],
+  "frases_exemplo": [
+    "quais são meus lembretes",
+    "me mostra os lembretes pendentes",
+    "o que eu anotei",
+    "tem lembrete pra ver",
+    "lista meus lembretes",
+    "o que tá anotado",
+    "ver o que ficou anotado",
+    "meus lembretes pendentes"
+  ],
+  "frases_negativas": [
+    "anotar",
+    "lembra que",
+    "lembrete de",
+    "anota aí",
+    "não esquece de",
+    "salva que",
+    "rota de hoje",
+    "status da frota",
+    "atualizar km"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: lembretes não resolvidos (ciente_em IS NULL) da empresa, mais recentes primeiro. Requer consulta_dedicada=meusLembretes.",
+  "escopo_dados": {
+    "consulta_dedicada": "meusLembretes",
+    "colunas": {
+      "lembretes": {
+        "texto": ["consultar"],
+        "criado_em": ["consultar"],
+        "criado_por_nome": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}
