@@ -51,6 +51,7 @@ function WhatsAppSection({ empresaId }: { empresaId: string }) {
   // Contagem regressiva de 60s quando QR aparece
   useEffect(() => {
     if (!qr) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCountdown(60);
     const tick = setInterval(() => {
       setCountdown(n => {

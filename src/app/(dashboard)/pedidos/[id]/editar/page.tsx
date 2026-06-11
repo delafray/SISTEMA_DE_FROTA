@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, FormSection, FormField, inputStyle, selectStyle,
@@ -350,9 +351,9 @@ export default function EditarPedidoPage() {
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
                   Motorista, veículo e KM são definidos na tela de <strong>Despacho</strong> e pelo fluxo do
                   motorista. Aqui ficam apenas para conferência.{" "}
-                  <a href="/despacho" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 600 }}>
+                  <Link href="/despacho" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 600 }}>
                     Ir para o Despacho →
-                  </a>
+                  </Link>
                 </div>
 
                 <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>

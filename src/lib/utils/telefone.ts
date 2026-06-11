@@ -34,7 +34,7 @@ export function variacoesTelefone(input: string): string[] {
   if (!d.startsWith("55")) return [d];
   const corpo = d.slice(2);                 // DDD + número
   const ddd = corpo.slice(0, 2);
-  let num = corpo.slice(2);
+  const num = corpo.slice(2);
   const set = new Set<string>();
   const add = (n: string) => { set.add("55" + ddd + n); set.add(ddd + n); };
   add(num);

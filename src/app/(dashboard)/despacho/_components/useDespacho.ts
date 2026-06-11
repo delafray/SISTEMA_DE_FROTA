@@ -187,6 +187,7 @@ export function useDespacho(): UseDespachoReturn {
 
   useEffect(() => {
     if (!empresaId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     carregarContagens(empresaId);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
@@ -198,7 +199,7 @@ export function useDespacho(): UseDespachoReturn {
     const load = async () => {
       setLoading(true);
       const from = pagina * PAGE_SIZE_DESPACHO;
-      const to   = from + PAGE_SIZE_DESPACHO - 1;
+      const to = from + PAGE_SIZE_DESPACHO - 1;
 
       // Busca no SERVIDOR: o termo casa cliente/destino/nome avulso, que moram
       // nas ENTREGAS — prefetch dos pedido_ids que casam e filtra com .in().

@@ -188,6 +188,7 @@ export function LembretesWidget() {
   // Postgres dispara → esta página recarrega na hora). Requer a tabela na
   // publication `supabase_realtime` (ver migration_lembretes_sem_trava.sql).
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     carregar();
 
     const supabase = createClient();

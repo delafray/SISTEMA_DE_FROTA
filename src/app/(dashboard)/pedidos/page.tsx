@@ -10,6 +10,7 @@ import {
   KpiCard, EmptyState, SearchInput, selectStyle,
 } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
+import { Paginacao } from "@/components/ui/Paginacao";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
 type EntregaLite = {
@@ -230,6 +231,7 @@ export default function PedidosListPage() {
   }, [empresaId]);
 
   // Ao mudar o filtro de status, volta para a primeira página
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { setPagina(0); }, [filtro]);
 
   // ── Refinamento client-side instantâneo (a busca REAL roda no servidor
@@ -268,39 +270,6 @@ export default function PedidosListPage() {
   }), [total, kpiAgendadas, kpiAndamento, kpiConcluidas]);
 
   const totalPaginas = Math.ceil(total / PAGE_SIZE);
-
-  // ── Controles de paginação (reutilizáveis) ────────────────────────────────
-  const Paginacao = ({ mobile = false }: { mobile?: boolean }) =>
-    totalPaginas > 1 ? (
-      <div style={{
-        display: "flex", alignItems: "center", gap: "10px",
-        justifyContent: mobile ? "center" : "flex-end",
-        padding: "8px 0",
-      }}>
-        {!mobile && (
-          <span style={{ fontSize: "13px", color: "#64748b" }}>
-            Página {pagina + 1} de {totalPaginas} &nbsp;·&nbsp; {total} pedidos
-          </span>
-        )}
-        <Btn
-          variant="outline" size={mobile ? "sm" : "xs"}
-          disabled={pagina === 0 || loading}
-          onClick={() => setPagina(p => Math.max(0, p - 1))}
-        >
-          ← Anterior
-        </Btn>
-        {mobile && (
-          <span style={{ fontSize: "13px", color: "#64748b" }}>{pagina + 1}/{totalPaginas}</span>
-        )}
-        <Btn
-          variant="outline" size={mobile ? "sm" : "xs"}
-          disabled={pagina >= totalPaginas - 1 || loading}
-          onClick={() => setPagina(p => p + 1)}
-        >
-          Próxima →
-        </Btn>
-      </div>
-    ) : null;
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
@@ -409,7 +378,7 @@ export default function PedidosListPage() {
               })}
             </tbody>
           </DataTable>
-          <Paginacao />
+          <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={total} loading={loading} onPagina={setPagina} />
         </div>
 
         {/* ── Busca Mobile ────────────────────────────────────────────────── */}
@@ -448,7 +417,7 @@ export default function PedidosListPage() {
             );
           })}
         </MobileList>
-        <div className="mobile-only"><Paginacao mobile /></div>
+        <div className="mobile-only"><Paginacao mobile pagina={pagina} totalPaginas={totalPaginas} total={total} loading={loading} onPagina={setPagina} /></div>
 
         <MobileFAB href="/pedidos/novo" label="Novo Pedido" />
       </div>

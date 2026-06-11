@@ -52,6 +52,7 @@ export function useAjusteRota(rotaId: string): AjusteRotaEstado {
   // Load inicial
   useEffect(() => {
     if (!rotaId) return;
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     setCarregando(true);
     fetchRota(rotaId)
       .then((data) => {

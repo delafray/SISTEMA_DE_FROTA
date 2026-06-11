@@ -13,6 +13,7 @@
  */
 
 import { DataTable, Th, Td, Btn, Alert, SearchInput, EmptyState, PageHeader } from "@/components/ui/ds";
+import { Paginacao } from "@/components/ui/Paginacao";
 import { MobileList } from "@/components/mobile";
 import { ModalDespacho } from "./_components/ModalDespacho";
 import { ModalRota }     from "./_components/ModalRota";
@@ -54,40 +55,6 @@ export default function DespachoPage() {
   } = useDespacho();
 
   const algumselecionado = selecionados.size > 0;
-
-  // ── Controles de paginação (reutilizáveis desktop/mobile) ───────────────────
-
-  const Paginacao = ({ mobile = false }: { mobile?: boolean }) =>
-    totalPaginas > 1 ? (
-      <div style={{
-        display: "flex", alignItems: "center", gap: "10px",
-        justifyContent: mobile ? "center" : "flex-end",
-        padding: "8px 0",
-      }}>
-        {!mobile && (
-          <span style={{ fontSize: "13px", color: "#64748b" }}>
-            Página {pagina + 1} de {totalPaginas} · {total} pedidos
-          </span>
-        )}
-        <Btn
-          variant="outline" size={mobile ? "sm" : "xs"}
-          disabled={pagina === 0 || loading}
-          onClick={() => setPagina(p => Math.max(0, p - 1))}
-        >
-          ← Anterior
-        </Btn>
-        {mobile && (
-          <span style={{ fontSize: "13px", color: "#64748b" }}>{pagina + 1}/{totalPaginas}</span>
-        )}
-        <Btn
-          variant="outline" size={mobile ? "sm" : "xs"}
-          disabled={pagina >= totalPaginas - 1 || loading}
-          onClick={() => setPagina(p => p + 1)}
-        >
-          Próxima →
-        </Btn>
-      </div>
-    ) : null;
 
   // ── Render ──────────────────────────────────────────────────────────────────
 
@@ -212,7 +179,7 @@ export default function DespachoPage() {
               ))}
             </tbody>
           </DataTable>
-          <Paginacao />
+          <Paginacao pagina={pagina} totalPaginas={totalPaginas} total={total} loading={loading} onPagina={setPagina} />
         </div>
 
         {/* Lista Mobile */}
@@ -236,7 +203,7 @@ export default function DespachoPage() {
             />
           ))}
         </MobileList>
-        <div className="mobile-only"><Paginacao mobile /></div>
+        <div className="mobile-only"><Paginacao mobile pagina={pagina} totalPaginas={totalPaginas} total={total} loading={loading} onPagina={setPagina} /></div>
 
         {/* FAB Mobile para despachar selecionados */}
         {algumselecionado && (

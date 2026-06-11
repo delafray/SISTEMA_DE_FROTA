@@ -15,6 +15,15 @@ const ACOES = [
   { v: "inativo", label: "Inativar veículo" },
 ] as const;
 
+// Componentes de módulo (criar dentro do componente remonta a subárvore a cada render)
+const Dot = ({ on }: { on: boolean }) => <span style={{ width: 9, height: 9, borderRadius: "50%", background: on ? "#16a34a" : "#f59e0b", display: "inline-block", flexShrink: 0 }} />;
+const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
+  <div style={{ paddingLeft: 14, borderLeft: "1px solid #e2e8f0" }}>
+    <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".06em" }}>{label}</div>
+    <div style={{ fontSize: 15, fontWeight: 700, color: color ?? "#1e293b" }}>{value}</div>
+  </div>
+);
+
 const toLocal = (iso: string) => { const d = new Date(iso); const p = (n: number) => String(n).padStart(2, "0"); return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`; };
 const fmt = (iso: string) => new Date(iso).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", year: "2-digit", hour: "2-digit", minute: "2-digit" });
 const km = (n: number | null | undefined) => (n != null ? n.toLocaleString("pt-BR") : "—");
@@ -68,6 +77,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
 
   // carga + REALTIME: km muda pelo sistema, zap ou app → a tela atualiza sozinha
   useEffect(() => {
+    // eslint-disable-next-line react-hooks/set-state-in-effect
     load();
     const canal = supabase
       .channel(`veiculo-vinculo-${veiculoId}`)
@@ -143,16 +153,8 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
     await load();
   };
 
-  const Dot = ({ on }: { on: boolean }) => <span style={{ width: 9, height: 9, borderRadius: "50%", background: on ? "#16a34a" : "#f59e0b", display: "inline-block", flexShrink: 0 }} />;
   const atualMot = atual?.status === "operacional" ? motById(atual.motorista_id) : null;
   const rodadoAtual = atual && atual.km_evento != null && kmLocal != null ? kmLocal - atual.km_evento : null;
-
-  const Stat = ({ label, value, color }: { label: string; value: string; color?: string }) => (
-    <div style={{ paddingLeft: 14, borderLeft: "1px solid #e2e8f0" }}>
-      <div style={{ fontSize: 10, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: ".06em" }}>{label}</div>
-      <div style={{ fontSize: 15, fontWeight: 700, color: color ?? "#1e293b" }}>{value}</div>
-    </div>
-  );
 
   return (
     <div style={{ border: "1px solid #e2e8f0", borderRadius: 10, padding: 14, background: "#fff" }}>

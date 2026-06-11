@@ -332,7 +332,7 @@ export default function DadosRegraPage() {
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={thSty}>Coluna</th>
-                    <th style={thSty}>Rótulo (ex.: "Motorista")</th>
+                    <th style={thSty}>Rótulo (ex.: &ldquo;Motorista&rdquo;)</th>
                     <th style={thSty}>Tipo</th>
                     <th style={{ ...thSty, textAlign: "center" }}>Obrig.</th>
                     <th style={thSty}>Pergunta do bot</th>
@@ -343,7 +343,7 @@ export default function DadosRegraPage() {
                   {camposEscrita.length === 0 && (
                     <tr>
                       <td colSpan={6} style={{ ...tdSty, color: "#94a3b8", fontSize: 12, padding: "10px 8px" }}>
-                        Nenhum campo ainda. Clique "Adicionar campo" abaixo.
+                        Nenhum campo ainda. Clique &ldquo;Adicionar campo&rdquo; abaixo.
                       </td>
                     </tr>
                   )}

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, FormField, inputStyle,
@@ -683,9 +684,9 @@ export default function NovoPedidoSimplePage() {
           {/* ── LINK MODO AVANÇADO ── */}
           <p style={{ textAlign: "center", fontSize: "12px", color: "#94a3b8", paddingBottom: "16px" }}>
             Precisa selecionar entregas existentes?{" "}
-            <a href="/pedidos/novo-avancado" style={{ color: "#2563eb", textDecoration: "underline" }}>
+            <Link href="/pedidos/novo-avancado" style={{ color: "#2563eb", textDecoration: "underline" }}>
               Usar modo avançado
-            </a>
+            </Link>
           </p>
         </form>
       </div>

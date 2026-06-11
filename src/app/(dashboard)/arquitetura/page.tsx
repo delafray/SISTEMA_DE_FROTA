@@ -784,7 +784,7 @@ export default function ArquiteturaPage() {
       <div className="mb-6">
         <h1 className="text-2xl font-bold text-slate-800">Canvas da Arquitetura</h1>
         <p className="text-slate-500 text-sm mt-1">
-          Clique num bloco para ver detalhes. Clique em <strong>"Ver componentes internos"</strong> para ver quais tabelas cada parte do sistema acessa.
+          Clique num bloco para ver detalhes. Clique em <strong>&ldquo;Ver componentes internos&rdquo;</strong> para ver quais tabelas cada parte do sistema acessa.
         </p>
 
         {/* ── Faixa de status vivo: o "bater o olho" ───────────────────────── */}
