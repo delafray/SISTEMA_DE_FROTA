@@ -13,7 +13,7 @@
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
-import { getMediaUrl, type ParsedMessage } from '@/lib/whatsapp/messageParser';
+import { getMediaAsBase64DataUrl, type ParsedMessage } from '@/lib/whatsapp/messageParser';
 import type { UserIdentity } from '@/lib/whatsapp/auth';
 
 const log = createLogger('prints_zap');
@@ -30,15 +30,22 @@ export async function arquivarPrintZap(msg: ParsedMessage, identity: UserIdentit
   try {
     if (msg.tipo !== 'foto' || !msg.mediaId) return;
 
-    const mediaUrl = await getMediaUrl(msg.mediaId);
-    if (!mediaUrl) {
-      log.warn('print_sem_media_url', { from: msg.from });
-      return;
+    // A mídia do WhatsApp vem CRIPTOGRAFADA no CDN (.enc) — baixar a URL direta
+    // grava bytes inúteis. A Evolution API descriptografa via messageId e devolve
+    // base64 (mesmo caminho do áudio). Sem isso, o print salvo não abre.
+    const dataUrl = await getMediaAsBase64DataUrl(msg.messageId);
+    if (!dataUrl) {
+      log.warn('print_descriptografia_falhou', { from: msg.from, msg_id: msg.messageId });
+      return; // melhor não gravar do que gravar lixo cifrado
     }
 
     const empresaId = 'empresa_id' in identity ? (identity.empresa_id ?? null) : null;
-    const url = await persistirMidiaNoR2(mediaUrl, chaveMidia('prints', empresaId));
-    if (!url) return;
+    const url = await persistirMidiaNoR2(dataUrl, chaveMidia('prints', empresaId));
+    if (!url || url.startsWith('data:')) {
+      // R2 não configurado/falhou — sem URL durável não há o que registrar
+      log.warn('print_r2_indisponivel', { from: msg.from });
+      return;
+    }
 
     const nome = 'nome' in identity ? ((identity as { nome?: string | null }).nome ?? null) : null;
     const { error } = await getSupabase().from('prints_zap').insert({
