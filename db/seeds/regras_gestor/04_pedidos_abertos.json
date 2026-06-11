@@ -1,0 +1,55 @@
+{
+  "nome": "Pedidos Abertos",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "pedidos abertos",
+    "pedidos em aberto",
+    "pedidos pendentes",
+    "pedido sem fechar",
+    "pedido não concluído",
+    "pedidos ativos"
+  ],
+  "frases_exemplo": [
+    "quais pedidos estão abertos",
+    "pedidos em aberto",
+    "tem pedido pendente",
+    "me lista os pedidos abertos",
+    "quantos pedidos não fecharam",
+    "pedidos que ainda não concluíram",
+    "quais pedidos tão ativos",
+    "pedidos sem fechar"
+  ],
+  "frases_negativas": [
+    "entregas hoje",
+    "quantas entregas",
+    "rota de hoje",
+    "status da frota",
+    "atualizar km",
+    "abastecimento",
+    "manutenção",
+    "avaria",
+    "me dá um resumo"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: pedidos sem despacho / em andamento ainda não concluídos, com número e cliente. Requer consulta_dedicada=pedidosAbertos.",
+  "escopo_dados": {
+    "consulta_dedicada": "pedidosAbertos",
+    "colunas": {
+      "pedidos": {
+        "status": ["consultar"],
+        "numero": ["consultar"],
+        "cliente_id": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}

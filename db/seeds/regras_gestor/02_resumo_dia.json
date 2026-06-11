@@ -1,0 +1,54 @@
+{
+  "nome": "Resumo do Dia",
+  "tipo": "consultar",
+  "acoes": ["consultar"],
+  "ativa": false,
+  "prioridade": 45,
+  "fixa": false,
+  "gatilho_inicio": false,
+  "exige_confirmacao": false,
+  "gatilhos": [
+    "resumo do dia",
+    "como tá o dia",
+    "foto do dia",
+    "situação geral",
+    "balanço do dia",
+    "resumo geral"
+  ],
+  "frases_exemplo": [
+    "me dá um resumo do dia",
+    "como tá o dia hoje",
+    "qual a situação geral",
+    "tudo bem hoje",
+    "balanço do dia",
+    "o que tá acontecendo",
+    "foto do dia",
+    "como tá a frota hoje"
+  ],
+  "frases_negativas": [
+    "atualizar km",
+    "mudar status",
+    "coloca em manutenção",
+    "última revisão",
+    "próxima revisão",
+    "ipva",
+    "licenciamento",
+    "cnh vence",
+    "meus lembretes",
+    "rota de hoje"
+  ],
+  "quem_pode_disparar": ["qualquer"],
+  "resposta": null,
+  "observacao": "Leitor dedicado: foto rápida do dia — frota (rodando/parado/manutenção), entregas, pedidos novos, avarias, diesel. Requer consulta_dedicada=resumoDia.",
+  "escopo_dados": {
+    "consulta_dedicada": "resumoDia",
+    "colunas": {
+      "entregas": {
+        "status": ["consultar"]
+      }
+    }
+  },
+  "campos": {},
+  "empresas_alvo": [],
+  "versao": 1
+}
