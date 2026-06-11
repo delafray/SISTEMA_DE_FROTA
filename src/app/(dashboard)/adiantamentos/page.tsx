@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao, type Ordem } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -69,6 +69,12 @@ export default function AdiantamentosPage() {
 
   // --- debounce da busca ---
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Ordenação no cabeçalho — corre no SERVIDOR (lista paginada).
+  // Ao reordenar, volta para a primeira página para não exibir página parcial.
+  const { ordem, thSort } = useOrdenacao(() => undefined);
+  // Nota: não chamamos setPagina(0) aqui pois buscarPagina já recebe paginaAlvo=0;
+  // o efeito de debounce abaixo detecta a mudança de `ordem` e dispara a recarga.
 
   // -----------------------------------------------------------------------
   // Helpers
@@ -159,7 +165,8 @@ export default function AdiantamentosPage() {
     paginaAlvo: number,
     buscaAtual: string,
     filtroStatusAtual: string,
-    append: boolean
+    append: boolean,
+    ordemAtual: Ordem
   ) => {
     const supabase = createClient();
     const empresaId = empresaIdRef.current;
@@ -199,10 +206,20 @@ export default function AdiantamentosPage() {
             let q: any = supabase
         .from("adiantamentos")
         .select("id,valor,tipo,status,justificativa,data_pagamento,created_at,motorista_id,motoristas(nome)")
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: true })
-        .range(from, to);
+        .eq("empresa_id", empresaId);
+
+      // Ordenação escolhida no cabeçalho — roda no servidor antes do .range().
+      // Join to-one (motorista_id) ordena via embed do PostgREST.
+      const asc = ordemAtual?.asc ?? true;
+      switch (ordemAtual?.col) {
+        case "data":      q = q.order("created_at", { ascending: asc }); break;
+        case "motorista": q = q.order("motoristas(nome)", { ascending: asc, nullsFirst: false }); break;
+        case "tipo":      q = q.order("tipo", { ascending: asc }); break;
+        case "valor":     q = q.order("valor", { ascending: asc }); break;
+        case "status":    q = q.order("status", { ascending: asc }); break;
+        default:          q = q.order("created_at", { ascending: false }); // mais recente primeiro
+      }
+      q = q.order("id", { ascending: true }).range(from, to);
       q = aplicarFiltros(q, termoSanitizado, filtroStatusAtual, motoristaIds);
 
       const { data } = await q;
@@ -236,7 +253,7 @@ export default function AdiantamentosPage() {
       empresaIdRef.current = ue.empresa_id;
 
       await Promise.all([
-        buscarPagina(0, "", "", false),
+        buscarPagina(0, "", "", false, null),
         carregarKpis(supabase, ue.empresa_id),
       ]);
     };
@@ -245,25 +262,25 @@ export default function AdiantamentosPage() {
   }, []);
 
   // -----------------------------------------------------------------------
-  // Reage a mudanças de busca/filtro com debounce de 350ms
+  // Reage a mudanças de busca / filtro / ordenação com debounce de 350ms
   // -----------------------------------------------------------------------
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
     debounceRef.current = setTimeout(() => {
-      buscarPagina(0, busca, filtroStatus, false);
+      buscarPagina(0, busca, filtroStatus, false, ordem);
     }, 350);
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
     };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca, filtroStatus]);
+  }, [busca, filtroStatus, ordem]);
 
   // -----------------------------------------------------------------------
   // "Carregar mais"
   // -----------------------------------------------------------------------
   const handleCarregarMais = () => {
     if (!loadingMais) {
-      buscarPagina(pagina + 1, busca, filtroStatus, true);
+      buscarPagina(pagina + 1, busca, filtroStatus, true, ordem);
     }
   };
 
@@ -310,11 +327,11 @@ export default function AdiantamentosPage() {
         <DataTable count={linhas.length} label="adiantamentos" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Data</Th>
-              <Th>Motorista</Th>
-              <Th>Tipo</Th>
-              <Th>Valor</Th>
-              <Th>Status</Th>
+              <Th {...thSort("data")}>Data</Th>
+              <Th {...thSort("motorista")}>Motorista</Th>
+              <Th {...thSort("tipo")}>Tipo</Th>
+              <Th {...thSort("valor")}>Valor</Th>
+              <Th {...thSort("status")}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -336,7 +353,9 @@ export default function AdiantamentosPage() {
                   ? new Date(a.created_at).toLocaleDateString("pt-BR")
                   : "—";
                 return (
-                  <Tr key={a.id}>
+                  // Linha inteira clicável → edição do adiantamento.
+                  // Cliques em button/a/input dentro da linha são ignorados pelo Tr.
+                  <Tr key={a.id} onClick={() => router.push(`/adiantamentos/${a.id}/editar`)}>
                     <Td>{data}</Td>
                     <Td>{a.motoristas?.nome ?? "—"}</Td>
                     <Td>{TIPO_LABEL[a.tipo] ?? a.tipo}</Td>

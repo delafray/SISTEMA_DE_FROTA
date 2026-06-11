@@ -236,6 +236,34 @@ export const Th: React.FC<
   );
 };
 
+// ─── ORDENAÇÃO NO SERVIDOR (listas paginadas) ────────────────────────────────
+// Padrão das listagens (ver framework/07-arquitetura-e-ui/padrao-listagens.md):
+// listas paginadas de 100 em 100 NÃO podem ordenar só o array da página — o
+// hook guarda a coluna/direção e a tela traduz em .order() na query.
+// Uso: const { ordem, thSort } = useOrdenacao(() => setPagina(0));
+//      <Th {...thSort("status")}>Status</Th>
+//      no load: switch (ordem?.col) { case "status": q = q.order(...) ... }
+export type Ordem = { col: string; asc: boolean } | null;
+
+export function useOrdenacao(aoMudar?: () => void) {
+  const [ordem, setOrdem] = React.useState<Ordem>(null);
+
+  const ordenarPor = (col: string) => {
+    aoMudar?.();
+    setOrdem(prev => prev?.col === col ? { col, asc: !prev.asc } : { col, asc: true });
+  };
+
+  /** Props prontas pro <Th> ordenável: <Th {...thSort("cliente")}>Cliente</Th> */
+  const thSort = (col: string) => ({
+    sortKey: col,
+    activeSortKey: ordem?.col,
+    sortDirection: (ordem?.asc ? "asc" : "desc") as "asc" | "desc",
+    onSort: ordenarPor,
+  });
+
+  return { ordem, ordenarPor, thSort };
+}
+
 export function useTableSort<T>(
   data: T[],
   defaultKey: string = "",

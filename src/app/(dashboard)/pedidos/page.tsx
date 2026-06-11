@@ -7,7 +7,7 @@ import { normalizar } from "@/lib/utils/normalizar";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   PageHeader, DataTable, Th, Td, Tr, Badge, Btn,
-  KpiCard, EmptyState, SearchInput, selectStyle,
+  KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao,
 } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { Paginacao } from "@/components/ui/Paginacao";
@@ -115,6 +115,12 @@ export default function PedidosListPage() {
   // (regra do dono 10/06: a tela tem que mostrar o que ainda está em jogo).
   const [busca, setBusca]   = useState("");
   const [filtro, setFiltro] = useState("abertos");
+
+  // Ordenação por clique no cabeçalho (dono 11/06: "agrupo de forma simples —
+  // tudo do Leão, tudo do Falcão, o que está pendente"). Roda no SERVIDOR
+  // (lista paginada); exceção "cliente": mora nas ENTREGAS (join to-many, o
+  // PostgREST não ordena o pai por ele) → ordena os 100 da página.
+  const { ordem, thSort } = useOrdenacao(() => setPagina(0));
   const buscaDeferred = useDeferredValue(busca);
   // Busca aplicada no SERVIDOR (regra do CLAUDE.md) — debounce de 350ms
   const [buscaServidor, setBuscaServidor] = useState("");
@@ -195,10 +201,22 @@ export default function PedidosListPage() {
           "id,numero,status,valor_pedido,pago,created_at,data_inicio_prevista,motoristas(nome),veiculos(placa,apelido,modelo),entregas(id,destino,nome_cliente_avulso,clientes(nome_fantasia,apelido))",
           { count: "exact" }
         )
-        .eq("empresa_id", empresaId)
-        .order("created_at", { ascending: false })
-        .order("id", { ascending: true })
-        .range(from, to);
+        .eq("empresa_id", empresaId);
+
+      // Ordenação escolhida no cabeçalho (servidor). "cliente" não tem coluna
+      // ordenável aqui (vem das entregas) → mantém a padrão e ordena na página.
+      const asc = ordem?.asc ?? true;
+      switch (ordem?.col) {
+        case "numero":    q = q.order("numero", { ascending: asc, nullsFirst: false }); break;
+        case "previsto":  q = q.order("data_inicio_prevista", { ascending: asc, nullsFirst: false }); break;
+        case "caminhao":  q = q.order("veiculos(apelido)", { ascending: asc, nullsFirst: false })
+                               .order("veiculos(placa)", { ascending: asc }); break;
+        case "valor":     q = q.order("valor_pedido", { ascending: asc, nullsFirst: false }); break;
+        case "pagamento": q = q.order("pago", { ascending: asc }); break;
+        case "status":    q = q.order("status", { ascending: asc }); break;
+        default:          q = q.order("created_at", { ascending: false });
+      }
+      q = q.order("id", { ascending: true }).range(from, to);
 
       if (filtro === "abertos") q = q.not("status", "in", `(${STATUS_FECHADOS.join(",")})`);
       else if (filtro) q = q.eq("status", filtro);
@@ -210,7 +228,7 @@ export default function PedidosListPage() {
       setLoading(false);
     };
     load();
-  }, [empresaId, pagina, filtro, buscaServidor]);
+  }, [empresaId, pagina, filtro, buscaServidor, ordem]);
 
   // ── KPIs globais por status (head-count; corretos em qualquer página) ─────
   useEffect(() => {
@@ -257,9 +275,14 @@ export default function PedidosListPage() {
 
   const filtradas = useMemo(() => {
     const q = normalizar(buscaDeferred);
-    if (!q) return indexado;
-    return indexado.filter(row => row.hay.includes(q));
-  }, [indexado, buscaDeferred]);
+    const lista = q ? indexado.filter(row => row.hay.includes(q)) : indexado;
+    // "cliente" ordena aqui (página atual) — ver comentário do tipo Ordem.
+    if (ordem?.col === "cliente") {
+      return [...lista].sort((a, b) =>
+        ordem.asc ? a.cliente.localeCompare(b.cliente) : b.cliente.localeCompare(a.cliente));
+    }
+    return lista;
+  }, [indexado, buscaDeferred, ordem]);
 
   // ── KPIs — total da query atual + contagens GLOBAIS por status (head-count) ─
   const kpis = useMemo(() => ({
@@ -311,14 +334,14 @@ export default function PedidosListPage() {
           >
             <thead>
               <tr>
-                <Th>Nº</Th>
-                <Th>Cliente</Th>
-                <Th>Previsto</Th>
+                <Th {...thSort("numero")}>Nº</Th>
+                <Th {...thSort("cliente")}>Cliente</Th>
+                <Th {...thSort("previsto")}>Previsto</Th>
                 <Th>Destinos</Th>
-                <Th>Caminhão / Motorista</Th>
-                <Th>Valor (R$)</Th>
-                <Th>Pagamento</Th>
-                <Th>Status</Th>
+                <Th {...thSort("caminhao")}>Caminhão / Motorista</Th>
+                <Th {...thSort("valor")}>Valor (R$)</Th>
+                <Th {...thSort("pagamento")}>Pagamento</Th>
+                <Th {...thSort("status")}>Status</Th>
                 <Th></Th>
               </tr>
             </thead>
@@ -331,7 +354,10 @@ export default function PedidosListPage() {
                 const veicLabel = veiculo ? (veiculo.apelido?.trim() || `${veiculo.placa} · ${veiculo.modelo}`) : null;
                 const cancelado = p.status === "cancelada" || p.status === "cancelado";
                 return (
-                  <Tr key={p.id}>
+                  // Linha inteira clicável → EDIÇÃO do pedido ("pedido se trata
+                  // no pedido"; /pedidos/[id] é só redirect pro despacho).
+                  // Cliques em botões/links da linha são ignorados pelo Tr.
+                  <Tr key={p.id} onClick={() => router.push(`/pedidos/${p.id}/editar`)}>
                     <Td style={{ fontFamily: "ui-monospace, monospace", fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap" }}>
                       {rotuloPedido(p.numero, p.id)}
                     </Td>

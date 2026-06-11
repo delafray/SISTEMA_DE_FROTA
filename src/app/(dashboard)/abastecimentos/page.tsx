@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -48,6 +48,10 @@ export default function AbastecimentosPage() {
 
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Ordenação no cabeçalho — corre no SERVIDOR (lista paginada).
+  // Ao reordenar, volta para a primeira página para não exibir página parcial.
+  const { ordem, thSort } = useOrdenacao(() => setPagina(0));
+
   // ─── Auth / empresa ───────────────────────────────────────────────────────
   useEffect(() => {
     const init = async () => {
@@ -63,7 +67,7 @@ export default function AbastecimentosPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ─── Busca / filtro com debounce ──────────────────────────────────────────
+  // ─── Busca / filtro / ordenação com debounce ──────────────────────────────
   useEffect(() => {
     if (!empresaId) return;
     if (debounceRef.current) clearTimeout(debounceRef.current);
@@ -74,7 +78,7 @@ export default function AbastecimentosPage() {
     }, 350);
     return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [busca, filtro, empresaId]);
+  }, [busca, filtro, empresaId, ordem]);
 
   // ─── Helpers de query ─────────────────────────────────────────────────────
   async function resolverIdsRelacionados(supabase: ReturnType<typeof createClient>, termoNorm: string, eid: string) {
@@ -130,10 +134,22 @@ export default function AbastecimentosPage() {
     let q = supabase
       .from("abastecimentos")
       .select("id,km_no_abast,litros,valor_litro,valor_total,posto,confirmado,created_at,veiculo_id,motorista_id,veiculos(placa,modelo),motoristas(nome)", { count: "exact" })
-      .eq("empresa_id", eid)
-      .order("created_at", { ascending: false })
-      .order("id", { ascending: true })
-      .range(from, to);
+      .eq("empresa_id", eid);
+
+    // Ordenação escolhida no cabeçalho — roda no servidor antes do .range().
+    // Joins to-one (veiculo_id / motorista_id) ordenam via embed do PostgREST.
+    const asc = ordem?.asc ?? true;
+    switch (ordem?.col) {
+      case "data":      q = q.order("created_at", { ascending: asc }); break;
+      case "veiculo":   q = q.order("veiculos(placa)", { ascending: asc, nullsFirst: false }); break;
+      case "motorista": q = q.order("motoristas(nome)", { ascending: asc, nullsFirst: false }); break;
+      case "posto":     q = q.order("posto", { ascending: asc, nullsFirst: false }); break;
+      case "litros":    q = q.order("litros", { ascending: asc }); break;
+      case "total":     q = q.order("valor_total", { ascending: asc }); break;
+      case "status":    q = q.order("confirmado", { ascending: asc }); break;
+      default:          q = q.order("created_at", { ascending: false }); // mais recente primeiro
+    }
+    q = q.order("id", { ascending: true }).range(from, to);
 
     if (filtro === "confirmado") q = q.eq("confirmado", true);
     if (filtro === "pendente")   q = q.eq("confirmado", false);
@@ -220,15 +236,15 @@ export default function AbastecimentosPage() {
         <DataTable count={linhas.length} label="abastecimentos" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Data</Th>
-              <Th>Veículo</Th>
-              <Th>Motorista</Th>
-              <Th>Posto</Th>
+              <Th {...thSort("data")}>Data</Th>
+              <Th {...thSort("veiculo")}>Veículo</Th>
+              <Th {...thSort("motorista")}>Motorista</Th>
+              <Th {...thSort("posto")}>Posto</Th>
               <Th style={{ textAlign: "right" }}>KM</Th>
-              <Th style={{ textAlign: "right" }}>Litros</Th>
+              <Th {...thSort("litros")} style={{ textAlign: "right" }}>Litros</Th>
               <Th style={{ textAlign: "right" }}>Valor/L</Th>
-              <Th style={{ textAlign: "right" }}>Total</Th>
-              <Th>Status</Th>
+              <Th {...thSort("total")} style={{ textAlign: "right" }}>Total</Th>
+              <Th {...thSort("status")}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -248,7 +264,9 @@ export default function AbastecimentosPage() {
               linhas.map(a => {
                 const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
                 return (
-                  <Tr key={a.id}>
+                  // Linha inteira clicável → edição do abastecimento.
+                  // Cliques em button/a/input dentro da linha são ignorados pelo Tr.
+                  <Tr key={a.id} onClick={() => router.push(`/abastecimentos/${a.id}/editar`)}>
                     <Td>{data}</Td>
                     <Td>{a.veiculos ? `${a.veiculos.placa} — ${a.veiculos.modelo}` : "—"}</Td>
                     <Td>{a.motoristas?.nome ?? "—"}</Td>

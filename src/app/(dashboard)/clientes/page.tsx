@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -63,6 +63,10 @@ export default function ClientesPage() {
     });
   }, [todos, haystack, buscaDeferred, filtroAtivo]);
 
+  // Ordenação client-side (cadastro pequeno — carrega tudo de uma vez).
+  // Sem padrão: abre na ordem do servidor; reordena só ao clicar no cabeçalho.
+  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "", "asc");
+
   const toolbar = (
     <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
       <SearchInput
@@ -94,12 +98,12 @@ export default function ClientesPage() {
         <DataTable count={filtrados.length} label="clientes" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Nome Fantasia</Th>
-              <Th>Razão Social</Th>
-              <Th>CNPJ/CPF</Th>
-              <Th>Cidade</Th>
-              <Th>UF</Th>
-              <Th>Status</Th>
+              <Th sortKey="nome_fantasia" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Nome Fantasia</Th>
+              <Th sortKey="razao_social" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Razão Social</Th>
+              <Th sortKey="documento" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>CNPJ/CPF</Th>
+              <Th sortKey="cidade" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Cidade</Th>
+              <Th sortKey="uf" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>UF</Th>
+              <Th sortKey="ativo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -116,8 +120,8 @@ export default function ClientesPage() {
                 </td>
               </tr>
             ) : (
-              filtrados.map(c => (
-                <Tr key={c.id}>
+              ordenados.map(c => (
+                <Tr key={c.id} onClick={() => router.push(`/clientes/${c.id}/editar`)}>
                   <Td>{c.nome_fantasia}</Td>
                   <Td>{c.razao_social ?? "—"}</Td>
                   <Td>{c.documento ?? "—"}</Td>
@@ -139,7 +143,7 @@ export default function ClientesPage() {
 
         {/* Mobile: cards */}
         <MobileList count={filtrados.length} label="clientes">
-          {loading ? null : filtrados.map(c => (
+          {loading ? null : ordenados.map(c => (
             <MobileCard
               key={c.id}
               href={`/clientes/${c.id}/editar`}

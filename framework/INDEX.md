@@ -76,6 +76,7 @@
 |---|---------|
 | Implementar um Canvas visual de Arquitetura no Painel (React Flow) | [canvas-interativo.md](07-arquitetura-e-ui/canvas-interativo.md) |
 | Ver como funciona o Uptime Kuma, badge de status e portas abertas | [monitoramento-uptime-kuma.md](07-arquitetura-e-ui/monitoramento-uptime-kuma.md) |
+| **Criar/mexer em tela de LISTAGEM** (linha clicável, ordenação, paginação — padrão obrigatório) | [padrao-listagens.md](07-arquitetura-e-ui/padrao-listagens.md) |
 
 ---
 

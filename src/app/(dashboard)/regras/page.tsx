@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 import { REGRA_TIPO_LABEL, type RegraTipo } from "@/lib/schemas/regra";
@@ -68,6 +68,11 @@ export default function RegrasPage() {
     });
   }, [todas, haystack, buscaDeferred]);
 
+  // Ordenação client-side (cadastro pequeno — carrega tudo de uma vez).
+  // Sem padrão: a tela abre na ordem do servidor (fixa+prioridade+nome) e só
+  // reordena quando o usuário clica num cabeçalho.
+  const { sortedData: ordenadas, sortKey, sortDirection, handleSort } = useTableSort(filtradas, "", "asc");
+
   const tipoBadge = (t: string) => {
     const variant = t === "consultar" ? "info" : t === "registrar" ? "warning" : "success";
     return <Badge variant={variant}>{REGRA_TIPO_LABEL[t as RegraTipo] ?? t}</Badge>;
@@ -103,12 +108,12 @@ export default function RegrasPage() {
         <DataTable count={filtradas.length} label="regras" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Nome</Th>
-              <Th>Tipo</Th>
+              <Th sortKey="nome" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Nome</Th>
+              <Th sortKey="tipo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Tipo</Th>
               <Th>Frases</Th>
               <Th>Empresas</Th>
-              <Th>Prioridade</Th>
-              <Th>Status</Th>
+              <Th sortKey="prioridade" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Prioridade</Th>
+              <Th sortKey="ativa" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -125,8 +130,8 @@ export default function RegrasPage() {
                 </td>
               </tr>
             ) : (
-              filtradas.map(r => (
-                <Tr key={r.id}>
+              ordenadas.map(r => (
+                <Tr key={r.id} onClick={() => router.push(`/regras/${r.id}/editar`)}>
                   <Td>{r.fixa && <span title="Regra fixa">🔒 </span>}{r.nome}</Td>
                   <Td>{tipoBadge(r.tipo)}</Td>
                   <Td>{r.frases_exemplo?.length ?? 0}</Td>
@@ -147,7 +152,7 @@ export default function RegrasPage() {
         </div>
 
         <MobileList count={filtradas.length} label="regras">
-          {loading ? null : filtradas.map(r => (
+          {loading ? null : ordenadas.map(r => (
             <MobileCard
               key={r.id}
               href={`/regras/${r.id}/editar`}

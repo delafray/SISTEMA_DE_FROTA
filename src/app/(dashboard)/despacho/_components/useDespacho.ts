@@ -9,6 +9,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { useOrdenacao, type Ordem } from "@/components/ui/ds";
 import { normalizar } from "@/lib/utils/normalizar";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
@@ -30,6 +31,7 @@ export type PedidoIndexado = {
   cliente: string;
   hay: string;
 };
+
 
 export type UseDespachoReturn = {
   // Dados
@@ -54,6 +56,10 @@ export type UseDespachoReturn = {
   pagina: number;
   setPagina: React.Dispatch<React.SetStateAction<number>>;
   totalPaginas: number;
+
+  // Ordenação por cabeçalho (padrão das listagens — ver useOrdenacao no ds)
+  ordem: Ordem;
+  thSort: ReturnType<typeof useOrdenacao>["thSort"];
 
   // Seleção
   selecionados: Set<string>;
@@ -111,6 +117,11 @@ export function useDespacho(): UseDespachoReturn {
     const t = setTimeout(() => { setBuscaServidor(busca); setPagina(0); }, 350);
     return () => clearTimeout(t);
   }, [busca]);
+
+  // Ordenação por clique no cabeçalho (dono 11/06: agrupar "tudo do Leão",
+  // "o que está pendente" etc.). Roda no SERVIDOR (lista paginada); exceção
+  // "cliente": mora nas ENTREGAS (join to-many) → ordena os 100 da página.
+  const { ordem, thSort } = useOrdenacao(() => setPagina(0));
 
   // Seleção múltipla pra despachar em lote
   const [selecionados, setSelecionados] = useState<Set<string>>(new Set());
@@ -246,8 +257,19 @@ export function useDespacho(): UseDespachoReturn {
 
       if (idsBusca) q = q.in("id", idsBusca);
 
+      // Ordenação escolhida no cabeçalho (servidor). "cliente" não tem coluna
+      // ordenável aqui (vem das entregas) → mantém a padrão e ordena na página.
+      const asc = ordem?.asc ?? true;
+      switch (ordem?.col) {
+        case "numero":   q = q.order("numero", { ascending: asc, nullsFirst: false }); break;
+        case "previsto": q = q.order("data_inicio_prevista", { ascending: asc, nullsFirst: false }); break;
+        case "caminhao": q = q.order("veiculos(apelido)", { ascending: asc, nullsFirst: false })
+                              .order("veiculos(placa)", { ascending: asc }); break;
+        case "status":   q = q.order("status", { ascending: asc }); break;
+        default:         q = q.order("created_at", { ascending: false });
+      }
+
       const { data, count } = await (q
-        .order("created_at", { ascending: false })
         .order("id", { ascending: true })
         .range(from, to) as unknown as Promise<{ data: PedidoDespacho[] | null; count: number | null }>);
 
@@ -257,7 +279,7 @@ export function useDespacho(): UseDespachoReturn {
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, pagina, buscaServidor]);
+  }, [empresaId, pagina, buscaServidor, ordem]);
 
   // ── Refinamento client-side instantâneo (a busca REAL roda no servidor via
   //    buscaServidor; isto só filtra a página atual enquanto digita) ──────────
@@ -278,6 +300,14 @@ export function useDespacho(): UseDespachoReturn {
   const filtrados = useMemo(() => {
     const q = normalizar(buscaDeferred);
     const lista = q ? pedidosIndexados.filter(r => r.hay.includes(q)) : pedidosIndexados;
+    // "cliente" ordena aqui (página atual) — ver comentário em OrdemColDespacho.
+    if (ordem?.col === "cliente") {
+      return [...lista].sort((a, b) =>
+        ordem.asc ? a.cliente.localeCompare(b.cliente) : b.cliente.localeCompare(a.cliente));
+    }
+    // Com ordenação escolhida no cabeçalho, respeita a ordem que veio do servidor.
+    if (ordem) return lista;
+    // Padrão: mais próximo de sair primeiro (data prevista crescente).
     return [...lista].sort((a, b) => {
       const da = a.p.data_inicio_prevista, db = b.p.data_inicio_prevista;
       if (!da && !db) return 0;
@@ -285,7 +315,7 @@ export function useDespacho(): UseDespachoReturn {
       if (!db) return -1;
       return da.localeCompare(db);
     });
-  }, [pedidosIndexados, buscaDeferred]);
+  }, [pedidosIndexados, buscaDeferred, ordem]);
 
   // ── Seleção ──────────────────────────────────────────────────────────────────
 
@@ -480,6 +510,9 @@ export function useDespacho(): UseDespachoReturn {
     pagina,
     setPagina,
     totalPaginas,
+    // Ordenação
+    ordem,
+    thSort,
     // Seleção
     selecionados,
     toggleSelecionado,

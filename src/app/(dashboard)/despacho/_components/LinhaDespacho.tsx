@@ -27,11 +27,13 @@ type Props = {
   onDespachar: () => void;
   onTrocar: () => void;
   onVerRota: () => void;
+  /** Clique na linha inteira → detalhe do despacho (botões/checkbox ficam de fora). */
+  onAbrir: () => void;
 };
 
 export function LinhaDespacho({
   p, entregas, cliente,
-  selecionado, onToggle, onDespachar, onTrocar, onVerRota,
+  selecionado, onToggle, onDespachar, onTrocar, onVerRota, onAbrir,
 }: Props) {
   const veicObj    = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
   const motObj     = one<{ nome: string }>(p.motoristas);
@@ -41,7 +43,7 @@ export function LinhaDespacho({
   const despachado = !!(veicLabel || motObj);
 
   return (
-    <Tr style={{ background: selecionado ? "#eff6ff" : undefined }}>
+    <Tr onClick={onAbrir} style={{ background: selecionado ? "#eff6ff" : undefined }}>
 
       {/* Checkbox de seleção */}
       <Td style={{ textAlign: "center" }}>

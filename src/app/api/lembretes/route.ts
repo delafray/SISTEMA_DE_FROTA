@@ -36,5 +36,25 @@ export async function GET(req: NextRequest) {
   }
 
   if (errMsg) return NextResponse.json({ lembretes: [], erro: errMsg }, { status: 200 });
+
+  // Anexa o histórico de providências (lembrete_notas). Se a tabela ainda não
+  // existir (migration_lembrete_notas.sql não rodada), segue sem notas.
+  if (rows && rows.length > 0) {
+    const ids = rows.map(r => r.id as string);
+    const { data: notas } = await supabase
+      .from('lembrete_notas')
+      .select('lembrete_id, nota, criado_em')
+      .in('lembrete_id', ids)
+      .order('criado_em', { ascending: true });
+
+    const porLembrete = new Map<string, { nota: string; criado_em: string }[]>();
+    for (const n of notas ?? []) {
+      const lista = porLembrete.get(n.lembrete_id) ?? [];
+      lista.push({ nota: n.nota, criado_em: n.criado_em });
+      porLembrete.set(n.lembrete_id, lista);
+    }
+    rows = rows.map(r => ({ ...r, notas: porLembrete.get(r.id as string) ?? [] }));
+  }
+
   return NextResponse.json({ lembretes: rows ?? [] });
 }

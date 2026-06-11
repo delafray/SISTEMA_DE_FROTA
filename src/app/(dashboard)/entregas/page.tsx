@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useTableSort } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useOrdenacao } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -240,6 +240,10 @@ export default function PedidosPage() {
     setReceitaPaga(todosPago.reduce((s, r) => s + (r.valor_pedido ?? 0), 0));
   }, []);
 
+  // Ordenação no SERVIDOR (lista paginada — ordenar só os 100 da página mentiria).
+  // Ao trocar coluna, volta para a primeira página para a contagem bater.
+  const { ordem, thSort } = useOrdenacao(() => setPagina(0));
+
   // ── Carregamento da lista principal ──────────────────────────────────────
   const carregarPagina = useCallback(async (
     supabase: ReturnType<typeof createClient>,
@@ -278,12 +282,24 @@ export default function PedidosPage() {
       // Query de dados
       const from = paginaAtual * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
-      const dataQ = supabase.from("pedidos")
+      // Ordenação no servidor: switch pela coluna escolhida no cabeçalho.
+      // nullsFirst: false → registros sem valor ficam no fim (comportamento esperado).
+      // Desempate estável por id antes do .range() para paginação consistente.
+      const asc = ordem?.asc ?? true;
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      let dataQ: any = supabase.from("pedidos")
         .select("id,numero,status,valor_pedido,km_inicial,km_final,data_inicio_prevista,pago,data_pagamento,veiculos(placa,modelo),motoristas(nome)")
-        .eq("empresa_id", empId)
-        .order("created_at", { ascending: false })
-        .order("id",         { ascending: true })
-        .range(from, to);
+        .eq("empresa_id", empId);
+      switch (ordem?.col) {
+        case "status":    dataQ = dataQ.order("status",                { ascending: asc }); break;
+        case "veiculo":   dataQ = dataQ.order("veiculos(placa)",       { ascending: asc, nullsFirst: false }); break;
+        case "motorista": dataQ = dataQ.order("motoristas(nome)",      { ascending: asc, nullsFirst: false }); break;
+        case "previsto":  dataQ = dataQ.order("data_inicio_prevista",  { ascending: asc, nullsFirst: false }); break;
+        case "valor":     dataQ = dataQ.order("valor_pedido",          { ascending: asc, nullsFirst: false }); break;
+        case "km":        dataQ = dataQ.order("km_inicial",            { ascending: asc, nullsFirst: false }); break;
+        default:          dataQ = dataQ.order("created_at",            { ascending: false }); // padrão: mais recente primeiro
+      }
+      dataQ = dataQ.order("id", { ascending: true }).range(from, to);
       const filteredDataQ = aplicarFiltros(dataQ, {
         filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim, relacionados, buscaServidor,
       });
@@ -323,7 +339,7 @@ export default function PedidosPage() {
       if (paginaAtual === 0) setLoading(false); else setLoadingMais(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, buscaServidor, filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim, aplicarFiltros, prefetchRelacionados]);
+  }, [empresaId, buscaServidor, filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim, ordem, aplicarFiltros, prefetchRelacionados]);
 
   // ── KPIs: globais da empresa, não dependem de busca/filtro ────────────────
   useEffect(() => {
@@ -333,13 +349,13 @@ export default function PedidosPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresaId]);
 
-  // ── Efeito principal: recarrega quando empresa ou filtros mudam ───────────
+  // ── Efeito principal: recarrega quando empresa, filtros ou ordenação mudam ─
   useEffect(() => {
     if (!empresaId) return;
     // eslint-disable-next-line react-hooks/set-state-in-effect
     carregarPagina(createClient(), empresaId, 0, false);
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [empresaId, buscaServidor, filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim]);
+  }, [empresaId, buscaServidor, filtroStatus, mostrarPagos, filtroPeriodo, dataInicio, dataFim, ordem]);
 
   // ── Carregar mais (append) ────────────────────────────────────────────────
   const handleCarregarMais = () => {
@@ -370,9 +386,6 @@ export default function PedidosPage() {
       alert("Erro inesperado: " + (err instanceof Error ? err.message : String(err)));
     }
   };
-
-  // ── Ordenação client-side (dentro da página carregada) ───────────────────
-  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(linhas, "status", "asc");
 
   // ── KPI derivados ────────────────────────────────────────────────────────
   const kpiConcluidoPendente = kpiConcluido !== null && kpiConcluidoPago !== null
@@ -456,12 +469,12 @@ export default function PedidosPage() {
         <DataTable count={linhas.length} label="pedidos" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th sortKey="status" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
-              <Th sortKey="veiculos.placa" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Veículo</Th>
-              <Th sortKey="motoristas.nome" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Motorista</Th>
-              <Th sortKey="data_inicio_prevista" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Início</Th>
-              <Th sortKey="valor_pedido" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>Valor (R$)</Th>
-              <Th sortKey="km_inicial" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort} style={{ textAlign: "right" }}>KM Inicial</Th>
+              <Th {...thSort("status")}>Status</Th>
+              <Th {...thSort("veiculo")}>Veículo</Th>
+              <Th {...thSort("motorista")}>Motorista</Th>
+              <Th {...thSort("previsto")}>Início</Th>
+              <Th {...thSort("valor")} style={{ textAlign: "right" }}>Valor (R$)</Th>
+              <Th {...thSort("km")} style={{ textAlign: "right" }}>KM Inicial</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -478,7 +491,8 @@ export default function PedidosPage() {
                 </td>
               </tr>
             ) : (
-              ordenados.map(pedido => {
+              // Ordenação vem do servidor (switch acima no carregarPagina).
+              linhas.map(pedido => {
                 const veiculo   = Array.isArray(pedido.veiculos) ? pedido.veiculos[0] : pedido.veiculos;
                 const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
                 const concluido = pedido.status === "concluido" || pedido.status === "concluida";
@@ -545,7 +559,7 @@ export default function PedidosPage() {
         </div>
 
         <MobileList count={linhas.length} label="pedidos">
-          {loading ? null : ordenados.map(pedido => {
+          {loading ? null : linhas.map(pedido => {
             const veiculo   = Array.isArray(pedido.veiculos) ? pedido.veiculos[0] : pedido.veiculos;
             const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
             const concluido = pedido.status === "concluido" || pedido.status === "concluida";

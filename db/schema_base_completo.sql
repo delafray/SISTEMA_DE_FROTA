@@ -1155,6 +1155,22 @@ CREATE TABLE IF NOT EXISTS lembretes (
 );
 
 -- -----------------------------------------------------------------------------
+-- 47b. lembrete_notas (providências anotadas ao dar ciente — migration_lembrete_notas)
+-- -----------------------------------------------------------------------------
+CREATE TABLE IF NOT EXISTS lembrete_notas (
+  id          uuid        NOT NULL DEFAULT gen_random_uuid(),
+  lembrete_id uuid        NOT NULL,
+  nota        text        NOT NULL,
+  criado_em   timestamptz NOT NULL DEFAULT now(),
+  CONSTRAINT lembrete_notas_pkey PRIMARY KEY (id),
+  CONSTRAINT lembrete_notas_lembrete_id_fkey
+    FOREIGN KEY (lembrete_id) REFERENCES lembretes(id) ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS lembrete_notas_lembrete
+  ON lembrete_notas (lembrete_id, criado_em);
+
+-- -----------------------------------------------------------------------------
 -- 48. regras
 -- -----------------------------------------------------------------------------
 CREATE TABLE IF NOT EXISTS regras (

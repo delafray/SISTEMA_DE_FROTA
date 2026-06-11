@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -61,6 +61,10 @@ export default function EmpresasPage() {
     });
   }, [todas, haystack, buscaDeferred]);
 
+  // Ordenação client-side (cadastro pequeno — carrega tudo de uma vez).
+  // Sem padrão: abre na ordem do servidor; reordena só ao clicar no cabeçalho.
+  const { sortedData: ordenadas, sortKey, sortDirection, handleSort } = useTableSort(filtradas, "", "asc");
+
   const fmtCnpj = (v: string) =>
     v.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
 
@@ -88,10 +92,10 @@ export default function EmpresasPage() {
         <DataTable count={filtradas.length} label="empresas" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Nome Fantasia</Th>
-              <Th>CNPJ</Th>
-              <Th>Cidade</Th>
-              <Th>UF</Th>
+              <Th sortKey="nome_fantasia" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Nome Fantasia</Th>
+              <Th sortKey="cnpj" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>CNPJ</Th>
+              <Th sortKey="cidade" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Cidade</Th>
+              <Th sortKey="uf" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>UF</Th>
               <Th>Telefone</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
@@ -109,8 +113,8 @@ export default function EmpresasPage() {
                 </td>
               </tr>
             ) : (
-              filtradas.map(e => (
-                <Tr key={e.id}>
+              ordenadas.map(e => (
+                <Tr key={e.id} onClick={() => router.push(`/empresas/${e.id}/editar`)}>
                   <Td>
                     {e.nome_fantasia}
                     {e.id === empresaId && <Badge variant="info"> ATUAL</Badge>}
@@ -135,7 +139,7 @@ export default function EmpresasPage() {
         </div>
 
         <MobileList count={filtradas.length} label="empresas">
-          {loading ? null : filtradas.map(e => (
+          {loading ? null : ordenadas.map(e => (
             <MobileCard
               key={e.id}
               href={`/empresas/${e.id}/editar`}

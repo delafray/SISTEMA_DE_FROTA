@@ -5,7 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -108,6 +108,10 @@ export default function MotoristasPage() {
   // eslint-disable-next-line react-hooks/purity, react-hooks/exhaustive-deps -- Date.now() é a fonte do "agora" p/ dias até CNH vencer; `todos` na dep recomputa o "agora" a cada recarga da lista (intencional)
   const agora = useMemo(() => Date.now(), [todos]);
 
+  // Ordenação client-side (cadastro pequeno — carrega tudo de uma vez).
+  // Sem padrão: abre na ordem do servidor; reordena só ao clicar no cabeçalho.
+  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "", "asc");
+
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Motoristas" subtitle="Gerencie os motoristas da frota" count={loading ? undefined : todos.length}>
@@ -120,14 +124,14 @@ export default function MotoristasPage() {
         <DataTable count={filtrados.length} label="motoristas" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Nome</Th>
-              <Th>CPF</Th>
-              <Th>CNH</Th>
-              <Th>Cat. CNH</Th>
-              <Th>Vencimento CNH</Th>
+              <Th sortKey="nome" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Nome</Th>
+              <Th sortKey="cpf" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>CPF</Th>
+              <Th sortKey="cnh_numero" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>CNH</Th>
+              <Th sortKey="cnh_categoria" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Cat. CNH</Th>
+              <Th sortKey="cnh_validade" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Vencimento CNH</Th>
               <Th>Usuário</Th>
               <Th>Caminhão</Th>
-              <Th>Status</Th>
+              <Th sortKey="ativo" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Status</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
           </thead>
@@ -144,13 +148,13 @@ export default function MotoristasPage() {
                 </td>
               </tr>
             ) : (
-              filtrados.map(m => {
+              ordenados.map(m => {
                 const cnhDate = m.cnh_validade ? new Date(m.cnh_validade + "T00:00:00") : null;
                 const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - agora) / 86400000) : null;
                 const cnhVar  = diasCnh === null ? "default" : diasCnh < 0 ? "danger" : diasCnh < 30 ? "warning" : "success";
 
                 return (
-                  <Tr key={m.id}>
+                  <Tr key={m.id} muted={!m.ativo} onClick={() => router.push(`/motoristas/${m.id}/editar`)}>
                     <Td>{m.nome}</Td>
                     <Td>{m.cpf}</Td>
                     <Td>{m.cnh_numero ?? "—"}</Td>
@@ -183,7 +187,7 @@ export default function MotoristasPage() {
 
         {/* Mobile: cards */}
         <MobileList count={filtrados.length} label="motoristas">
-          {loading ? null : filtrados.map(m => {
+          {loading ? null : ordenados.map(m => {
             const cnhDate = m.cnh_validade ? new Date(m.cnh_validade + "T00:00:00") : null;
             const diasCnh = cnhDate ? Math.ceil((cnhDate.getTime() - agora) / 86400000) : null;
             const cnhVar  = diasCnh === null ? "default" as const : diasCnh < 0 ? "danger" as const : diasCnh < 30 ? "warning" as const : "success" as const;

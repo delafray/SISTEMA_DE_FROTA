@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { normalizar } from "@/lib/utils/normalizar";
-import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle } from "@/components/ui/ds";
+import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { RemoverUsuarioBtn } from "@/components/ui/RemoverUsuarioBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
 
@@ -86,6 +86,11 @@ export default function UsuariosPage() {
     });
   }, [todos, haystack, buscaDeferred, filtroRole]);
 
+  // Ordenação client-side (cadastro pequeno — carrega tudo de uma vez).
+  // "perfis.nome" funciona via dot-notation no useTableSort. Sem padrão: abre
+  // na ordem do servidor; reordena só ao clicar no cabeçalho.
+  const { sortedData: ordenados, sortKey, sortDirection, handleSort } = useTableSort(filtrados, "", "asc");
+
   const toolbar = (
     <div style={{ display: "flex", gap: "8px", alignItems: "center", flex: 1 }}>
       <SearchInput
@@ -117,9 +122,9 @@ export default function UsuariosPage() {
         <DataTable count={filtrados.length} label="usuários" toolbar={toolbar}>
           <thead>
             <tr>
-              <Th>Nome</Th>
-              <Th>Usuário (Login)</Th>
-              <Th>Role</Th>
+              <Th sortKey="perfis.nome" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Nome</Th>
+              <Th sortKey="perfis.login" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Usuário (Login)</Th>
+              <Th sortKey="role" activeSortKey={sortKey} sortDirection={sortDirection} onSort={handleSort}>Role</Th>
               <Th>Padrão</Th>
               <Th style={{ textAlign: "right" }}>Ações</Th>
             </tr>
@@ -137,11 +142,12 @@ export default function UsuariosPage() {
                 </td>
               </tr>
             ) : (
-              filtrados.map(u => {
+              ordenados.map(u => {
                 const nome  = getNome(u);
                 const isMe  = u.usuario_id === meId;
                 return (
-                  <Tr key={u.usuario_id}>
+                  // O próprio usuário não tem tela de edição acessível — clique só para outros
+                  <Tr key={u.usuario_id} onClick={isMe ? undefined : () => router.push(`/usuarios/${u.usuario_id}/editar`)}>
                     <Td>
                       {nome || "—"}
                       {isMe && <Badge variant="default"> VOCÊ</Badge>}
@@ -174,7 +180,7 @@ export default function UsuariosPage() {
         </div>
 
         <MobileList count={filtrados.length} label="usuários">
-          {loading ? null : filtrados.map(u => {
+          {loading ? null : ordenados.map(u => {
             const nome = getNome(u);
             const isMe = u.usuario_id === meId;
             return (

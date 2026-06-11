@@ -1751,6 +1751,35 @@ export type Database = {
           },
         ]
       }
+      lembrete_notas: {
+        Row: {
+          criado_em: string
+          id: string
+          lembrete_id: string
+          nota: string
+        }
+        Insert: {
+          criado_em?: string
+          id?: string
+          lembrete_id: string
+          nota: string
+        }
+        Update: {
+          criado_em?: string
+          id?: string
+          lembrete_id?: string
+          nota?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "lembrete_notas_lembrete_id_fkey"
+            columns: ["lembrete_id"]
+            isOneToOne: false
+            referencedRelation: "lembretes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       lembretes: {
         Row: {
           ciente_em: string | null

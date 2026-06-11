@@ -90,6 +90,7 @@
 | 13 | `db/migration_fix_lembretes_fk.sql` | Corrige FK de lembretes → perfis |
 | 14 | `db/migration_lembretes_qualquer_usuario.sql` | Qualquer usuário vê/grava lembrete |
 | 15 | `db/migration_lembretes_sem_trava.sql` | Remove travas de empresa/usuário (decisão do dono) |
+| 15b | `db/migration_lembrete_notas.sql` | Tabela `lembrete_notas` — providências anotadas ao dar ciente (popup ocultar/manter na tela) |
 
 ### Bloco 5 — Motor de regras + autorizações (no-code)
 | # | Arquivo | O que faz |

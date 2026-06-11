@@ -12,6 +12,7 @@
  *   - ModalRota          → modal de mapa da rota (já existia)
  */
 
+import { useRouter } from "next/navigation";
 import { DataTable, Th, Td, Btn, Alert, SearchInput, EmptyState, PageHeader } from "@/components/ui/ds";
 import { Paginacao } from "@/components/ui/Paginacao";
 import { MobileList } from "@/components/mobile";
@@ -23,6 +24,7 @@ import { CardDespachoMobile } from "./_components/CardDespachoMobile";
 import { useDespacho }   from "./_components/useDespacho";
 
 export default function DespachoPage() {
+  const router = useRouter();
   const {
     filtrados,
     veiculos,
@@ -37,6 +39,7 @@ export default function DespachoPage() {
     pagina,
     setPagina,
     totalPaginas,
+    thSort,
     selecionados,
     toggleSelecionado,
     todosSelecionados,
@@ -134,12 +137,12 @@ export default function DespachoPage() {
                     title="Selecionar todos"
                   />
                 </Th>
-                <Th>Nº</Th>
-                <Th>Cliente</Th>
-                <Th>Previsto</Th>
+                <Th {...thSort("numero")}>Nº</Th>
+                <Th {...thSort("cliente")}>Cliente</Th>
+                <Th {...thSort("previsto")}>Previsto</Th>
                 <Th>Destinos</Th>
-                <Th>Caminhão / Motorista</Th>
-                <Th>Status</Th>
+                <Th {...thSort("caminhao")}>Caminhão / Motorista</Th>
+                <Th {...thSort("status")}>Status</Th>
                 <Th></Th>
               </tr>
             </thead>
@@ -175,6 +178,7 @@ export default function DespachoPage() {
                   onDespachar={() => abrirModal([p.id])}
                   onTrocar={() => abrirModal([p.id], true)}
                   onVerRota={() => setModalRota(p.id)}
+                  onAbrir={() => router.push(`/despacho/${p.id}`)}
                 />
               ))}
             </tbody>
