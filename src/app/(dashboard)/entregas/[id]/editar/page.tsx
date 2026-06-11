@@ -247,8 +247,10 @@ export default function EditarPedidoPage() {
             <FormSection title="Valor e Pagamento">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Pedido (R$)">
-                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
-                    value={f.valor_pedido}
+                  {/* defaultValue (não-controlado): com `value` a máscara briga com o
+                      estado a cada tecla e trava. O form só monta depois do load. */}
+                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                    defaultValue={f.valor_pedido}
                     onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
                     style={inputStyle} />
                 </FormField>

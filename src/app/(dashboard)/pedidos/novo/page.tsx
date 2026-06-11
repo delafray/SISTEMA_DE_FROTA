@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import {
   PageHeader, FormField, inputStyle,
@@ -573,15 +574,10 @@ export default function NovoPedidoSimplePage() {
 
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <FormField label="Valor do pedido (R$)">
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={valorPedido}
-                  onChange={e => setValorPedido(e.target.value)}
-                  placeholder="Ex: 1500.00"
-                  style={inputStyle}
-                />
+                {/* Máscara de moeda — sem `value` (não-controlado, senão trava a digitação) */}
+                <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                  onAccept={(_, m) => setValorPedido(String(m.unmaskedValue))}
+                  style={inputStyle} placeholder="R$ 0,00" />
               </FormField>
 
               <FormField label="Data prevista">

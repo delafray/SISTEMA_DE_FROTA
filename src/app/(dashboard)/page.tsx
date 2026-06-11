@@ -231,11 +231,12 @@ export default async function DashboardPage() {
                 🚛 Status da Frota Agora
               </div>
               <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "8px" }}>
-                {frota.map(v => {
+                {frota.map((v, i) => {
                   const emRota = v.status_pedido === "em_andamento";
                   const cfg = emRota ? cfgEmViagem : cfgDisponivel;
                   return (
-                    <div key={v.veiculo_id} style={{
+                    // veiculo_id repete quando o veículo tem mais de um pedido ativo na view
+                    <div key={`${v.veiculo_id}-${i}`} style={{
                       background: cfg.bg,
                       border: `1px solid ${cfg.border}`,
                       borderRadius: "8px",

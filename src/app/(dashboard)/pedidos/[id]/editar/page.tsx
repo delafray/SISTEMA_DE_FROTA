@@ -2,12 +2,15 @@
 
 import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
-import Link from "next/link";
+import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import {
-  PageHeader, FormSection, FormField, inputStyle, selectStyle,
+  PageHeader, FormField, inputStyle, selectStyle,
   Btn, Alert, DataTable, Th, Td, Tr, Badge, Tabs, EmptyState,
 } from "@/components/ui/ds";
+// Mesmo visual do detalhe do despacho (dono 11/06): blocos coloridos + campos em grade
+import { Bloco, LinhaCampos, Campo } from "@/app/(dashboard)/despacho/[id]/_components/shared";
+import { COR_PEDIDO, COR_DESPACHO } from "@/app/(dashboard)/despacho/[id]/_components/types";
 
 type Cliente   = { id: string; nome_fantasia: string; apelido: string | null };
 type EntregaAtual = {
@@ -232,21 +235,26 @@ export default function EditarPedidoPage() {
   );
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <form
+      onSubmit={handleSubmit}
+      // Enter num input NÃO envia o formulário (dono 11/06: Enter no campo de
+      // valor salvava e pulava pro Despacho "do nada"). Só o botão Atualizar envia.
+      onKeyDown={e => {
+        if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault();
+      }}
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
       <PageHeader
         title="Editar Pedido"
-        actions={
-          <>
-            <Btn href={`/despacho/${id}`} variant="ghost">← Voltar</Btn>
-            <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Atualizar"}
-            </Btn>
-          </>
-        }
+        actions={<Btn href={`/despacho/${id}`} variant="ghost">← Voltar</Btn>}
       />
 
-      <div style={{ padding: "0 16px", background: "#fff" }}>
+      {/* Linha das abas — fica FORA da área de scroll, então os botões à direita
+          permanecem sempre visíveis (dono 11/06: "congelados" ao rolar). */}
+      <div style={{
+        padding: "0 16px", background: "#fff",
+        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
+      }}>
         <Tabs
           active={tab}
           onChange={(id) => setTab(id as TabId)}
@@ -256,16 +264,24 @@ export default function EditarPedidoPage() {
             { id: "adicionar", label: "Adicionar Entregas", badge: selectedEntregas.size > 0 ? `+${selectedEntregas.size}` : entregasDisp.length },
           ]}
         />
+        <div style={{ display: "flex", gap: "8px", flexShrink: 0, padding: "6px 0" }}>
+          <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
+          <Btn type="submit" variant="primary" disabled={saving}>
+            {saving ? "Salvando..." : "Atualizar Pedido"}
+          </Btn>
+        </div>
       </div>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
         {tab === "dados" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "20px", maxWidth: "720px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
 
-            {/* ── CLIENTE ── */}
-            <FormSection title="Cliente">
+            {/* ══ TUDO QUE É DO PEDIDO (mesmo bloco do detalhe do despacho) ══ */}
+            <Bloco titulo="📦 Pedido" cor={COR_PEDIDO}>
+              {/* ── Cliente ── */}
+              <div style={{ fontSize: "12px", color: "#64748b", fontWeight: 700, margin: "2px 0 8px" }}>👤 Cliente</div>
               <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "12px", cursor: "pointer", fontSize: "14px", color: "#475569" }}>
                 <input
                   type="checkbox"
@@ -316,92 +332,88 @@ export default function EditarPedidoPage() {
                   </div>
                 </FormField>
               )}
-            </FormSection>
 
-            {/* ── STATUS / VALOR / DATAS ── */}
-            <FormSection title="Detalhes">
-              <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
-                <FormField label="Status">
-                  <select value={f.status} onChange={set("status")} style={selectStyle}>
-                    <option value="agendada">Agendado</option>
-                    <option value="em_andamento">Em Andamento</option>
-                    <option value="concluida">Concluído</option>
-                    <option value="cancelada">Cancelado</option>
-                  </select>
-                </FormField>
-                <FormField label="Valor do Pedido (R$)">
-                  <input type="number" step="0.01" min="0" value={f.valor_pedido} onChange={set("valor_pedido")} style={inputStyle} placeholder="0.00" />
-                </FormField>
-                <FormField label="Data Prevista (início)">
-                  <input type="date" value={f.data_inicio_prevista} onChange={set("data_inicio_prevista")} style={inputStyle} />
-                </FormField>
-                <FormField label="Data Prevista (fim)">
-                  <input type="date" value={f.data_fim_prevista} onChange={set("data_fim_prevista")} style={inputStyle} />
+              {/* ── Status / Valor / Datas — em grade, como no detalhe ── */}
+              <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "12px" }}>
+                  <FormField label="Status">
+                    <select value={f.status} onChange={set("status")} style={selectStyle}>
+                      <option value="agendada">Agendado</option>
+                      <option value="em_andamento">Em Andamento</option>
+                      <option value="concluida">Concluído</option>
+                      <option value="cancelada">Cancelado</option>
+                    </select>
+                  </FormField>
+                  <FormField label="Valor do Pedido (R$)">
+                    {/* Máscara de moeda — defaultValue (não-controlado): com `value` a
+                        máscara briga com o estado a cada tecla e trava a digitação.
+                        O form só monta depois do load, então o valor inicial aparece. */}
+                    <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                      defaultValue={f.valor_pedido}
+                      onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
+                      style={inputStyle} placeholder="R$ 0,00" />
+                  </FormField>
+                  <FormField label="Data Prevista (início)">
+                    <input type="date" value={f.data_inicio_prevista} onChange={set("data_inicio_prevista")} style={inputStyle} />
+                  </FormField>
+                  <FormField label="Data Prevista (fim)">
+                    <input type="date" value={f.data_fim_prevista} onChange={set("data_fim_prevista")} style={inputStyle} />
+                  </FormField>
+                </div>
+              </div>
+
+              {/* ── Observações ── */}
+              <div style={{ marginTop: "12px", paddingTop: "12px", borderTop: "1px solid #e2e8f0" }}>
+                <FormField label="📝 Observações">
+                  <textarea value={f.observacoes} onChange={set("observacoes")} rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%", boxSizing: "border-box" }} />
                 </FormField>
               </div>
-            </FormSection>
+            </Bloco>
 
-            {/* ── OBSERVAÇÕES ── */}
-            <FormSection title="Observações">
-              <textarea value={f.observacoes} onChange={set("observacoes")} rows={3} style={{ ...inputStyle, resize: "vertical", width: "100%", boxSizing: "border-box" }} />
-            </FormSection>
+            {/* ══ TUDO QUE É DO DESPACHO (somente leitura) ══════════════════ */}
+            <Bloco
+              titulo="🚚 Despacho e Execução — somente leitura"
+              cor={COR_DESPACHO}
+              acoes={<Btn href={`/despacho/${id}`} variant="outline" size="xs">Ir para o Despacho →</Btn>}
+            >
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 10px" }}>
+                Caminhão, motorista e KM são definidos na tela de <strong>Despacho</strong> e pelo fluxo do
+                motorista. Aqui ficam apenas para conferência.
+              </p>
 
-            {/* ── DESPACHO (SOMENTE LEITURA) ── */}
-            <FormSection title="Despacho (somente leitura)">
-              <div style={{
-                background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px",
-                padding: "16px", display: "flex", flexDirection: "column", gap: "14px",
-              }}>
-                <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  Motorista, veículo e KM são definidos na tela de <strong>Despacho</strong> e pelo fluxo do
-                  motorista. Aqui ficam apenas para conferência.{" "}
-                  <Link href="/despacho" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: 600 }}>
-                    Ir para o Despacho →
-                  </Link>
-                </div>
+              <LinhaCampos>
+                <Campo label="Caminhão"  value={veiculoLabel ?? "Não despachado"} />
+                <Campo label="Motorista" value={motoristaNome ?? "Não despachado"} />
+              </LinhaCampos>
 
-                <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-                  <div>
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>Motorista</div>
-                    <div style={{ ...inputStyle, background: "#fff", color: motoristaNome ? "#1e293b" : "#94a3b8", display: "flex", alignItems: "center" }}>
-                      {motoristaNome ?? "Não despachado"}
-                    </div>
-                  </div>
-                  <div>
-                    <div style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>Veículo</div>
-                    <div style={{ ...inputStyle, background: "#fff", color: veiculoLabel ? "#1e293b" : "#94a3b8", display: "flex", alignItems: "center" }}>
-                      {veiculoLabel ?? "Não despachado"}
-                    </div>
+              {kmEditavel ? (
+                <div style={{ marginTop: "4px" }}>
+                  <FormField label="KM Inicial (ajuste manual)">
+                    <input type="number" value={f.km_inicial} onChange={set("km_inicial")} style={inputStyle} placeholder="KM no início" />
+                  </FormField>
+                  <div style={{ fontSize: "11px", color: "#d97706", marginTop: "4px" }}>
+                    ⚠ Ajuste manual de gestor — será gravado ao salvar.
                   </div>
                 </div>
-
-                <div>
-                  <div style={{ fontSize: "12px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>
-                    KM inicial <span style={{ fontWeight: 400 }}>(automático do fluxo do motorista)</span>
+              ) : (
+                <div style={{ display: "flex", alignItems: "stretch", gap: "8px" }}>
+                  <div style={{ flex: 1 }}>
+                    <LinhaCampos cols={1}>
+                      <Campo
+                        label="KM Inicial (automático do fluxo do motorista)"
+                        value={f.km_inicial ? `${Number(f.km_inicial).toLocaleString("pt-BR")} km` : "Ainda não iniciado"}
+                      />
+                    </LinhaCampos>
                   </div>
-                  {kmEditavel ? (
-                    <div>
-                      <input type="number" value={f.km_inicial} onChange={set("km_inicial")} style={inputStyle} placeholder="KM no início" />
-                      <div style={{ fontSize: "11px", color: "#d97706", marginTop: "4px" }}>
-                        ⚠ Ajuste manual de gestor — será gravado ao salvar.
-                      </div>
-                    </div>
-                  ) : (
-                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                      <div style={{ ...inputStyle, flex: 1, background: "#fff", color: f.km_inicial ? "#1e293b" : "#94a3b8", display: "flex", alignItems: "center" }}>
-                        {f.km_inicial ? `${Number(f.km_inicial).toLocaleString("pt-BR")} km` : "Ainda não iniciado"}
-                      </div>
-                      {isGestor && (
-                        <button type="button" onClick={() => setKmEditavel(true)}
-                          style={{ fontSize: "12px", fontWeight: 600, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "6px", padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap" }}>
-                          Ajuste manual (gestor)
-                        </button>
-                      )}
-                    </div>
+                  {isGestor && (
+                    <button type="button" onClick={() => setKmEditavel(true)}
+                      style={{ fontSize: "12px", fontWeight: 600, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap", alignSelf: "center" }}>
+                      Ajuste manual (gestor)
+                    </button>
                   )}
                 </div>
-              </div>
-            </FormSection>
+              )}
+            </Bloco>
           </div>
         )}
 
@@ -484,10 +496,6 @@ export default function EditarPedidoPage() {
             )
         )}
 
-        <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
-          <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Atualizar Pedido"}</Btn>
-        </div>
       </div>
     </form>
   );

@@ -20,6 +20,7 @@ import { ModalDespacho, type VeiculoOpcao, type MotoristaOpcao } from "../_compo
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import { AbaPrincipal } from "./_components/AbaPrincipal";
+import { ConfirmStatusModal } from "./_components/ConfirmStatusModal";
 import { AbaRota } from "./_components/AbaRota";
 import { AbaMapa } from "./_components/AbaMapa";
 import {
@@ -40,6 +41,9 @@ export default function DespachoDetalhePage() {
   const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [loading, setLoading] = useState(true);
   const [updatingStatus, setUpdatingStatus] = useState(false);
+  // Confirmação de mudança de status (Iniciar/Concluir/Cancelar) — nada muda
+  // sem passar pelo popup (dono 11/06: "clico e pronto" era perigoso demais).
+  const [confirmStatus, setConfirmStatus] = useState<string | null>(null);
   // Locais de carregamento: pode ter MAIS DE UM (guardados em
   // pedidos.local_carregamento separados por " | ")
   const [novoLocal, setNovoLocal] = useState("");
@@ -157,12 +161,18 @@ export default function DespachoDetalhePage() {
     }
   };
 
-  const changeStatus = async (novoStatus: string) => {
+  const changeStatus = async (novoStatus: string, nota?: string) => {
     setUpdatingStatus(true);
     const supabase = createClient();
     const extra: Record<string, string> = {};
     if (novoStatus === "em_andamento") extra.data_inicio_real = new Date().toISOString();
     if (novoStatus === "concluida")    extra.data_fim_real    = new Date().toISOString();
+    // Contexto digitado no popup → vai pras observações com carimbo de data/hora.
+    if (nota?.trim()) {
+      const stamp = new Date().toLocaleString("pt-BR", { dateStyle: "short", timeStyle: "short" });
+      const rotulo = { em_andamento: "Iniciado", concluida: "Concluído", cancelada: "Cancelado" }[novoStatus] ?? novoStatus;
+      extra.observacoes = (pedido?.observacoes ? `${pedido.observacoes}\n` : "") + `[${rotulo} em ${stamp}] ${nota.trim()}`;
+    }
     await supabase.from("pedidos").update({ status: novoStatus, ...extra }).eq("id", id);
     setPedido(p => p ? { ...p, status: novoStatus, ...extra } : p);
     setUpdatingStatus(false);
@@ -262,7 +272,7 @@ export default function DespachoDetalhePage() {
               <Btn
                 variant="danger"
                 disabled={updatingStatus}
-                onClick={() => { if (window.confirm("Cancelar este pedido?")) changeStatus("cancelada"); }}
+                onClick={() => setConfirmStatus("cancelada")}
               >
                 Cancelar
               </Btn>
@@ -317,7 +327,7 @@ export default function DespachoDetalhePage() {
             onNovoLocalChange={setNovoLocal}
             onSalvarLocais={salvarLocais}
             onAbrirDespacho={abrirDespacho}
-            onChangeStatus={changeStatus}
+            onChangeStatus={(s) => setConfirmStatus(s)}
           />
         )}
 
@@ -346,6 +356,19 @@ export default function DespachoDetalhePage() {
           saving={despachoSaving}
           err={despachoErr}
           modoTroca={despachado}
+        />
+      )}
+
+      {/* Confirmação de Iniciar/Concluir/Cancelar — com contexto opcional */}
+      {confirmStatus && (
+        <ConfirmStatusModal
+          status={confirmStatus}
+          saving={updatingStatus}
+          onConfirm={async (nota) => {
+            await changeStatus(confirmStatus, nota);
+            setConfirmStatus(null);
+          }}
+          onClose={() => setConfirmStatus(null)}
         />
       )}
     </div>

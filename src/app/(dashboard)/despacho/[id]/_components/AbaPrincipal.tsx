@@ -8,7 +8,7 @@
 
 import { Btn, Badge } from "@/components/ui/ds";
 import { FluxoStepper } from "./FluxoStepper";
-import { Row, Bloco } from "./shared";
+import { Bloco, LinhaCampos, Campo } from "./shared";
 import {
   COR_PEDIDO, COR_DESPACHO,
   fmtDate, fmtDT,
@@ -93,11 +93,17 @@ export function AbaPrincipal({
           cor={COR_PEDIDO}
           acoes={<Btn href={`/pedidos/${pedidoId}/editar`} variant="outline" size="xs">✏️ Editar pedido</Btn>}
         >
-          <Row label="Nº do pedido" value={<span style={{ fontFamily: "ui-monospace, monospace" }}>{rotuloPedido(pedido.numero, pedido.id)}</span>} />
-          <Row label="Cliente" value={cliente} />
-          <Row label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
-          <Row label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />
-          <Row label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} />
+          {/* Agrupado (dono 11/06): valor perto da legenda, em linhas compactas.
+              Grid de 4 colunas nas duas linhas → bordas alinhadas entre elas. */}
+          <LinhaCampos cols={4}>
+            <Campo label="Cliente" value={cliente} span={2} />
+            <Campo label="Nº do pedido" value={<span style={{ fontFamily: "ui-monospace, monospace" }}>{rotuloPedido(pedido.numero, pedido.id)}</span>} />
+            <Campo label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
+          </LinhaCampos>
+          <LinhaCampos cols={4}>
+            <Campo label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} span={2} />
+            <Campo label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} span={2} />
+          </LinhaCampos>
 
           {/* Locais de carregamento — pode ter MAIS DE UM */}
           <div style={{ marginTop: "10px", paddingTop: "10px", borderTop: "1px solid #e2e8f0" }}>
@@ -171,15 +177,23 @@ export function AbaPrincipal({
             </p>
           ) : (
             <>
-              <Row label="Caminhão"  value={veiculo ? veiculoLabel(veiculo) : "—"} />
-              <Row label="Motorista" value={motorista?.nome ?? "—"} />
-              <Row label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
-              <Row label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
-              {kmRodado != null && (
-                <Row label="KM Rodados" value={<span style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</span>} />
-              )}
-              <Row label="Início Real" value={fmtDT(pedido.data_inicio_real)} />
-              <Row label="Fim Real"    value={fmtDT(pedido.data_fim_real)} />
+              {/* Agrupado (dono 11/06): caminhão+motorista · KMs · datas reais */}
+              <LinhaCampos>
+                <Campo label="Caminhão"  value={veiculo ? veiculoLabel(veiculo) : "—"} />
+                <Campo label="Motorista" value={motorista?.nome ?? "—"} />
+              </LinhaCampos>
+              {/* Com KM Rodados a linha vira 3 colunas; sem, 2 (alinhada às demais) */}
+              <LinhaCampos cols={kmRodado != null ? 3 : 2}>
+                <Campo label="KM Inicial" value={pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"} />
+                <Campo label="KM Final"   value={pedido.km_final?.toLocaleString("pt-BR") ?? "—"} />
+                {kmRodado != null && (
+                  <Campo label="KM Rodados" value={<span style={{ color: "#2563eb" }}>{kmRodado.toLocaleString("pt-BR")} km</span>} />
+                )}
+              </LinhaCampos>
+              <LinhaCampos>
+                <Campo label="Início Real" value={fmtDT(pedido.data_inicio_real)} />
+                <Campo label="Fim Real"    value={fmtDT(pedido.data_fim_real)} />
+              </LinhaCampos>
             </>
           )}
         </Bloco>

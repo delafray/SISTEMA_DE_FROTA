@@ -101,7 +101,14 @@ export default function NovoPedidoPage() {
   const sem_recursos = veiculos.length === 0 || motoristas.length === 0;
 
   return (
-    <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
+    <form
+      onSubmit={handleSubmit}
+      // Enter num input não envia o formulário — só o botão de salvar.
+      onKeyDown={e => {
+        if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault();
+      }}
+      style={{ display: "flex", flexDirection: "column", height: "100%" }}
+    >
       <PageHeader
         title="Novo Pedido"
         actions={
@@ -215,7 +222,7 @@ export default function NovoPedidoPage() {
             <FormSection title="Valor e Pagamento">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Pedido (R$)">
-                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true } }}
+                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
                     onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
                     style={inputStyle} placeholder="R$ 0,00" />
                 </FormField>

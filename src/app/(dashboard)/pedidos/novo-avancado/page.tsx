@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
+import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
@@ -433,7 +434,13 @@ export default function NovoPedidoAvancadoPage() {
 
           {/* STEP 3: VEICULO E RESUMO */}
           {step === 3 && (
-            <form onSubmit={handleSubmit}>
+            <form
+              onSubmit={handleSubmit}
+              // Enter num input não envia o formulário — só o botão de salvar.
+              onKeyDown={e => {
+                if (e.key === "Enter" && (e.target as HTMLElement).tagName === "INPUT") e.preventDefault();
+              }}
+            >
               <h2 style={{ fontSize: "20px", fontWeight: 600, marginBottom: "8px", color: "#1e293b" }}>Veículo e Detalhes do Pedido</h2>
               <p style={{ color: "#64748b", marginBottom: "24px", fontSize: "14px" }}>
                 Confira o veículo e o roteiro gerado automaticamente.
@@ -571,14 +578,12 @@ export default function NovoPedidoAvancadoPage() {
                   </FormField>
 
                   <FormField label="Valor do Pedido (R$)">
-                    <input
-                      type="number"
-                      step="0.01"
-                      value={f.valor_pedido}
-                      onChange={setFVal("valor_pedido")}
-                      placeholder="Ex: 2500.00"
-                      style={inputStyle}
-                    />
+                    {/* Máscara de moeda — defaultValue (não-controlado, senão trava a
+                        digitação); preserva o valor ao voltar de outro passo do wizard. */}
+                    <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                      defaultValue={f.valor_pedido}
+                      onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
+                      style={inputStyle} placeholder="R$ 0,00" />
                   </FormField>
 
                   <FormField label="KM Inicial do Veículo">
