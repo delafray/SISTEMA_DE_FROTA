@@ -47,6 +47,7 @@ import { extrairLembrete } from '@/lib/whatsapp/lembreteParser';
 import { criarLembrete } from '@/lib/ai/tools/frotaTools';
 import { verificarTelefone } from '@/lib/whatsapp/autorizacao';
 import { classificarERotear } from '@/lib/whatsapp/classificadorBot';
+import { arquivarPrintZap } from '@/lib/whatsapp/printsZap';
 
 
 const log = createLogger('router');
@@ -222,6 +223,14 @@ async function salvarComoLembrete(msg: ParsedMessage, identity: UserIdentity): P
 export async function processarMensagem(msg: ParsedMessage): Promise<void> {
   // 1. Identificar remetente
   const identity = await identificarRemetente(msg.from);
+
+  // 1.2. PRINTS DO ZAP (decisão do dono 10/06): TODA imagem recebida é arquivada
+  // no R2 (prints/) + registrada em prints_zap, pro dono mostrar telas do celular
+  // ao Claude. SIDE-EFFECT puro: não muda nenhuma resposta do bot (que segue
+  // tratando a imagem como sempre). Nunca lança.
+  if (msg.tipo === 'foto') {
+    await arquivarPrintZap(msg, identity);
+  }
 
   // 1.3. MODO CLASSIFICADOR — roteia pela IA/regras ANTES do lembrete. Se tratou a
   // mensagem (consulta/altera/ambíguo/anota) encerra; senão, segue pro lembrete.
