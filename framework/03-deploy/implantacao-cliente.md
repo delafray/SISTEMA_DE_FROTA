@@ -38,19 +38,31 @@
 
 ## Migrations Supabase (passo 1 — rodar todas no SQL Editor, NA ORDEM)
 
-> **Atualizado em 10/06/2026** (consolidação do item 6 da fila de pendências). A ordem abaixo segue
-> a cronologia de criação dos arquivos. Quase todas são idempotentes (`IF NOT EXISTS`), então rodar
-> de novo não quebra. Pendência conhecida: conferir `schema_routing_completo.sql` contra o banco
-> real (item 5 da fila) — a receita foi derivada do código.
+> **Atualizado em 11/06/2026.** A ordem abaixo segue a cronologia de criação dos arquivos. Quase
+> todas são idempotentes (`IF NOT EXISTS`), então rodar de novo não quebra.
+> **Pendência conhecida (a única que falta pro "sim" definitivo): ENSAIO GERAL** — criar um projeto
+> Supabase rascunho, rodar passo 0 + seeds + blocos, apontar o app local e percorrer o checklist
+> de 12 passos cronometrando. O que quebrar, corrigir aqui.
 
 ### Bloco 1 — Base
 | # | Arquivo | O que faz |
 |---|---|---|
-| 0 | Schema principal | Tabelas base (gerado pelo Supabase do projeto original) |
+| 0 | `db/schema_base_completo.sql` | Tabelas (53), constraints, FKs, índices e views — gerado do banco real em 11/06 |
+| 0b | `db/schema_base_complemento.sql` | **Funções/RPCs + triggers + GRANTs** — OBRIGATÓRIO (sem ele: KM não propaga, bot quebra e o painel não lê nada). ⚠️ Se não existir: gerar com `db/gerar_schema_complemento.sql` na produção (instruções no topo) |
 | 1 | `db/seed_tipos_manutencao.sql` | Seed de tipos de manutenção |
+| 1b | `db/seeds/seed_regras_bot.sql` | **As 18 regras do bot do zap** (gatilhos, frases, matriz, leitores) — sem isso o bot nasce burro |
+| 1c | `db/seeds/seed_contexto_ia.sql` | Contexto global do classificador |
 | 2 | `db/migration_whatsapp_historico.sql` | Histórico de conversas do bot |
 | 3 | `db/migration_session_atomic.sql` | RPC de sessão atômica |
 | 4 | `db/migration_bot_metricas.sql` | Métricas do bot |
+
+> 💡 Com o passo 0 completo, os blocos 2-6 abaixo viram REDUNDÂNCIA SEGURA (o schema gerado já
+> contém tudo; as migrations são idempotentes). Mantidos como histórico/conferência.
+
+> ⚠️ **PASSO QUE SEMPRE ESQUECE — autorizações do bot:** depois dos seeds, cadastrar os TELEFONES
+> (gestor/esposa) na tabela `telefones` e marcar as permissões de CADA regra na tela
+> **Autorizações** (`telefones.permissoes = { regra_id: nível }`). Regra sem autorização no
+> telefone = bot responde "não entendi" (lição de 11/06/2026).
 
 ### Bloco 2 — Geocoding
 | # | Arquivo | O que faz |
