@@ -119,10 +119,11 @@ qualquer coisa fiscal (NUNCA) · commits/pushes (sempre do dono).
       `[FALLBACK NUVEM] Regras zap gestor` no GitHub como contingência. Se a madrugada local
       rodou (este arquivo está ticado), **FECHAR o PR sem mergear**. Se a sessão local morreu,
       o PR é o rascunho pra retomada. Gerenciar: https://claude.ai/code/routines
-- [ ] Rodar os commits da lista acima + `git push` (Vercel deploya)
-- [ ] Confirmar deploy OK na Vercel
-- [ ] Avisar o Claude pra ATIVAR as 7 regras novas (ou ativar pela tela: Regras → cada uma → Ativa ✓)
-- [ ] Testar no zap: "o leão já saiu?" · "resumo" · "põe o leão em manutenção" (confirma com *sim*)
+- [x] (manhã 11/06) Commit `3135d23` (61 arquivos, +6.850/−3.739) + push — FEITO pelo dono
+- [x] Deploy confirmado na Vercel
+- [x] (Claude) 7 regras ATIVADAS via REST — confirmadas ativa=true em produção
+- [ ] Testar no zap: "resumo" · "o leão já saiu?" · "tem documento vencendo?" · "põe o leão em manutenção" (*sim*)
+- [ ] Fechar sem mergear o PR `[FALLBACK NUVEM]` no GitHub (se abriu)
 
 ---
 *Status geral: ✅ **CONCLUÍDO 03:30** — FASES A, B e C inteiras (A1-A9, B1-B5, C1-C6).
