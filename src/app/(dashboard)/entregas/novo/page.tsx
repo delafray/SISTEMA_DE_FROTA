@@ -70,8 +70,13 @@ export default function NovoPedidoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.veiculo_id || !f.motorista_id || !f.km_inicial) {
-      setErr("Preencha: Veículo, Motorista e KM Inicial"); return;
+    if (!f.veiculo_id || !f.motorista_id) {
+      setTab("operacional");
+      setErr("Preencha: Veículo e Motorista"); return;
+    }
+    if (!f.km_inicial) {
+      setTab("cronograma");
+      setErr("Preencha: KM Inicial"); return;
     }
     setSaving(true);
     // Frete HERDA a empresa do CAMINHÃO usado.
@@ -196,7 +201,7 @@ export default function NovoPedidoPage() {
             <FormSection title="Quilometragem">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *" hint={veiculoSel?.km_atual != null ? `Sugestão: ${veiculoSel.km_atual.toLocaleString("pt-BR")} km (atual do veículo)` : undefined}>
-                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
+                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" inputMode="decimal" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
                   {veiculoSel?.km_atual && parseFloat(f.km_inicial || "0") < veiculoSel.km_atual && f.km_inicial && (
                     <p style={{ color: "#eab308", fontSize: "10px", marginTop: "4px" }}>⚠ KM menor que o atual do veículo ({veiculoSel.km_atual.toLocaleString("pt-BR")})</p>
                   )}

@@ -24,11 +24,14 @@ export function Row({ label, value }: { label: string; value: React.ReactNode })
  *  cartões perfeitamente alinhadas entre si (dono 11/06: Nº × Fim Previsto). */
 export function LinhaCampos({ children, cols = 2 }: { children: React.ReactNode; cols?: number }) {
   return (
-    <div style={{
-      display: "grid",
-      gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
-      gap: "8px", marginBottom: "8px",
-    }}>
+    <div
+      className={cols >= 3 ? "m-grid" : "m-grid-2"}
+      style={{
+        display: "grid",
+        gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))`,
+        gap: "8px", marginBottom: "8px",
+      }}
+    >
       {children}
     </div>
   );

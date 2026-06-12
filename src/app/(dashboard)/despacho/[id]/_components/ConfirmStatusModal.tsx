@@ -95,7 +95,7 @@ export function ConfirmStatusModal({
             style={{
               padding: "8px 14px", background: "none", border: "1px solid #e2e8f0",
               borderRadius: "8px", fontSize: "12px", fontWeight: 600,
-              color: "#64748b", cursor: "pointer",
+              color: "#64748b", cursor: "pointer", minHeight: "44px",
             }}
           >
             ← Voltar
@@ -108,7 +108,7 @@ export function ConfirmStatusModal({
               background: saving ? "#d1d5db" : acao.cor,
               color: "#fff", border: "none", borderRadius: "8px",
               fontSize: "12px", fontWeight: 600,
-              cursor: saving ? "default" : "pointer",
+              cursor: saving ? "default" : "pointer", minHeight: "44px",
             }}
           >
             {saving ? "..." : acao.botao}

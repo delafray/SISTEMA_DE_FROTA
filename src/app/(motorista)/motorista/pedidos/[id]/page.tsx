@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 
 type Pedido = {
@@ -62,8 +63,7 @@ export default function MotoristaPedidoDetalhePage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const { data } = await supabase.from("pedidos")
         .select("id,numero,status,data_inicio_prevista,data_fim_prevista,data_inicio_real,data_fim_real,km_inicial,km_final,observacoes,valor_pedido,pago,veiculos(placa,marca,modelo),entregas(id,origem,destino,status,tipo_carga,clientes(nome_fantasia))")
         .eq("id", id)

@@ -33,11 +33,11 @@ export function MobileBottomNav({ onMenuPress }: { onMenuPress: () => void }) {
         display: "flex",
         alignItems: "stretch",
         justifyContent: "space-around",
-        height: "56px",
+        // altura + safe area vêm da classe .mobile-bottom-nav (mobile.css);
+        // duplicar aqui inline criava dependência frágil do !important do CSS
         background: "#313f50",
         borderTop: "1px solid rgba(255,255,255,0.08)",
         boxShadow: "0 -2px 12px rgba(0,0,0,0.15)",
-        paddingBottom: "env(safe-area-inset-bottom, 0px)",
       }}
     >
       {/* Navegação direta — cada ícone vai para a página */}

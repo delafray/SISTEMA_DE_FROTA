@@ -21,6 +21,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
@@ -84,10 +85,10 @@ export default function FaturamentoPage() {
 
   const carregar = useCallback(async () => {
     const supabase = createClient();
-    const { data: auth } = await supabase.auth.getUser();
-    if (!auth.user) { router.push("/login"); return; }
+    const user = await usuarioSessao();
+    if (!user) { router.replace("/login"); return; }
     const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-      .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+      .eq("usuario_id", user.id).eq("is_padrao", true).single();
     if (!ue?.empresa_id) { setLoading(false); return; }
     const eid = ue.empresa_id;
     setEmpresaIdPadrao(eid);
@@ -264,7 +265,7 @@ export default function FaturamentoPage() {
           {([["com_pendencia", "Com pendência"], ["quitados", "Quitados"], ["todos", "Todos"]] as const).map(([v, l]) => (
             <button key={v} type="button" onClick={() => setFiltro(v)}
               style={{
-                padding: "6px 14px", borderRadius: "16px", fontSize: "12px", fontWeight: 600,
+                padding: "6px 14px", minHeight: "44px", borderRadius: "16px", fontSize: "12px", fontWeight: 600,
                 background: filtro === v ? "#2563eb" : "#fff",
                 color: filtro === v ? "#fff" : "#475569",
                 border: "1px solid #cbd5e1", cursor: "pointer",
@@ -296,14 +297,14 @@ export default function FaturamentoPage() {
                   >
                     <span style={{ fontSize: "13px", color: "#94a3b8", width: "14px" }}>{aberto ? "▾" : "▸"}</span>
                     <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", flex: 1 }}>{g.nome}</span>
-                    <span style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
+                    <span className="m-hide" style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
                       {g.qtd} pedido{g.qtd !== 1 ? "s" : ""} · {g.qtdPagos} pago{g.qtdPagos !== 1 ? "s" : ""} · faltam {g.qtd - g.qtdPagos}
                     </span>
-                    <span style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap", minWidth: "110px", textAlign: "right" }}>
+                    <span className="m-hide" style={{ fontSize: "13px", fontWeight: 700, color: "#1e293b", whiteSpace: "nowrap", minWidth: "110px", textAlign: "right" }}>
                       {fmtBRL(g.valorTotal)}
                     </span>
                     <span style={{
-                      fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", minWidth: "130px", textAlign: "right",
+                      fontSize: "12px", fontWeight: 700, whiteSpace: "nowrap", textAlign: "right",
                       color: g.valorAberto > 0.009 ? "#d97706" : "#16a34a",
                     }}>
                       {g.valorAberto > 0.009 ? `${fmtBRL(g.valorAberto)} em aberto` : "✓ quitado"}
@@ -333,19 +334,19 @@ export default function FaturamentoPage() {
                               </span>
                               {p.forma_pagamento && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{p.forma_pagamento}</span>}
                               {situacaoPedido(p)}
-                              <span style={{ marginLeft: "auto", display: "flex", gap: "6px" }}>
+                              <span className="m-actions-row" style={{ marginLeft: "auto", display: "flex", gap: "6px", flexWrap: "wrap" }}>
                                 {!temParcelas && !p.pago && (
-                                  <Btn variant="outline" size="xs" disabled={baixando === p.id} onClick={() => baixarPedido(p.id)}>
-                                    {baixando === p.id ? "..." : "💰 Baixar"}
+                                  <Btn variant="outline" size="sm" disabled={!!baixando} loading={baixando === p.id} onClick={() => baixarPedido(p.id)}>
+                                    💰 Baixar
                                   </Btn>
                                 )}
                                 <Btn
-                                  variant={financeiroAberto ? "primary" : "outline"} size="xs"
+                                  variant={financeiroAberto ? "primary" : "outline"} size="sm"
                                   onClick={() => setPedidoAberto(financeiroAberto ? null : p.id)}
                                 >
                                   💳 Financeiro {financeiroAberto ? "▴" : "▾"}
                                 </Btn>
-                                <Btn href={`/despacho/${p.id}`} variant="ghost" size="xs" title="Detalhe operacional no Despacho">🚚</Btn>
+                                <Btn href={`/despacho/${p.id}`} variant="ghost" size="sm" title="Detalhe operacional no Despacho">🚚</Btn>
                               </span>
                             </div>
                             {financeiroAberto && (

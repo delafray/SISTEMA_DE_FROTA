@@ -10,7 +10,10 @@ process.env.NEXT_PUBLIC_SUPABASE_URL = 'https://test.supabase.co';
 process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY = 'test-anon-key';
 
 const mockRouterPush = vi.fn();
-vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockRouterPush }) }));
+// Guard e logout usam replace (11/06: chute pro login não pode entrar no
+// histórico, senão o botão voltar do celular cai no login pra sempre).
+const mockRouterReplace = vi.fn();
+vi.mock('next/navigation', () => ({ useRouter: () => ({ push: mockRouterPush, replace: mockRouterReplace }) }));
 
 vi.mock('@/lib/supabase/client', () => ({
   createClient: vi.fn(() => ({ auth: { getUser: vi.fn(), signOut: vi.fn() }, from: vi.fn() })),
@@ -52,12 +55,13 @@ describe('Motorista page — offline', () => {
     expect(link.href).toContain('motorista_id=mot-88');
     expect(link.href).toContain('empresa_id=emp-77');
     expect(mockRouterPush).not.toHaveBeenCalled(); // nao expulsou pro login
+    expect(mockRouterReplace).not.toHaveBeenCalled();
   });
 
-  it('sem sessao (online, sem cache) → manda pro login', async () => {
+  it('sem sessao (online, sem cache) → manda pro login com replace (sem poluir o historico)', async () => {
     obterSessaoComFallback.mockResolvedValue({ ok: false, origem: 'online', motivo: 'sem_sessao' });
     render(<MotoristaPage />);
-    await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/login'));
   });
 
   it('logout (Sair) corta a sessao local mas PRESERVA as rotas em cache', async () => {
@@ -71,7 +75,7 @@ describe('Motorista page — offline', () => {
     const sair = await waitFor(() => screen.getByText('Sair'));
     fireEvent.click(sair);
 
-    await waitFor(() => expect(mockRouterPush).toHaveBeenCalledWith('/login'));
+    await waitFor(() => expect(mockRouterReplace).toHaveBeenCalledWith('/login'));
     expect(limparSessaoLocal).toHaveBeenCalled();
     // Decisao do dono: nao apagar rotas ao sair (motorista nao perde acesso offline
     // se tocar Sair sem querer).

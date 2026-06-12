@@ -4,6 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
 import {
   PageHeader, FormField, inputStyle, selectStyle,
@@ -109,8 +110,7 @@ export default function NovoPedidoAvancadoPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
 
       // Disponibilidade COMPARTILHADA entre os sócios → todos os motoristas/veículos/entregas pendentes.
       const [motRes, veicRes, entRes] = await Promise.all([
@@ -322,14 +322,14 @@ export default function NovoPedidoAvancadoPage() {
         <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "32px", position: "relative" }}>
           <div style={{ position: "absolute", top: "12px", left: "0", right: "0", height: "2px", background: "#cbd5e1", zIndex: 0 }}></div>
           {[
-            { s: 1, label: "1. Motorista" },
-            { s: 2, label: "2. Entregas" },
-            { s: 3, label: "3. Veículo e Resumo" }
+            { s: 1, label: "1. Motorista", labelCurto: "1." },
+            { s: 2, label: "2. Entregas",  labelCurto: "2." },
+            { s: 3, label: "3. Veículo e Resumo", labelCurto: "3." }
           ].map(item => {
             const active = step >= item.s;
             const current = step === item.s;
             return (
-              <div key={item.s} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1, background: "#f1f5f9", padding: "0 16px" }}>
+              <div key={item.s} style={{ display: "flex", flexDirection: "column", alignItems: "center", zIndex: 1, background: "#f1f5f9", padding: "0 8px" }}>
                 <div style={{
                   width: "24px", height: "24px", borderRadius: "12px",
                   background: active ? "#2563eb" : "#e2e8f0",
@@ -340,8 +340,11 @@ export default function NovoPedidoAvancadoPage() {
                 }}>
                   {item.s}
                 </div>
-                <span style={{ fontSize: "13px", marginTop: "8px", color: active ? "#1e293b" : "#94a3b8", fontWeight: current ? 600 : 400 }}>
+                <span className="m-hide" style={{ fontSize: "13px", marginTop: "8px", color: active ? "#1e293b" : "#94a3b8", fontWeight: current ? 600 : 400 }}>
                   {item.label}
+                </span>
+                <span className="m-show-block" style={{ fontSize: "11px", marginTop: "6px", color: active ? "#1e293b" : "#94a3b8", fontWeight: current ? 700 : 400 }}>
+                  {item.labelCurto}
                 </span>
               </div>
             );
@@ -388,8 +391,8 @@ export default function NovoPedidoAvancadoPage() {
                       <tr style={{ background: "#f8fafc" }}>
                         <Th style={{ width: "32px", textAlign: "center" }}>✓</Th>
                         <Th>Rota</Th>
-                        <Th>Cliente</Th>
-                        <Th>Coleta (Data)</Th>
+                        <Th className="m-hide">Cliente</Th>
+                        <Th className="m-hide">Coleta (Data)</Th>
                       </tr>
                     </thead>
                     <tbody>
@@ -410,11 +413,11 @@ export default function NovoPedidoAvancadoPage() {
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: "pointer" }}
                               />
                             </Td>
-                            <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit" }}>
+                            <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>
                               {fr.origem?.split("-")[0] ?? "—"} → {fr.destino?.split("-")[0] ?? "—"}
                             </Td>
-                            <Td>{cliente?.nome_fantasia ?? "—"}</Td>
-                            <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
+                            <Td className="m-hide">{cliente?.nome_fantasia ?? "—"}</Td>
+                            <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
                           </Tr>
                         );
                       })}
@@ -446,7 +449,7 @@ export default function NovoPedidoAvancadoPage() {
                 Confira o veículo e o roteiro gerado automaticamente.
               </p>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
+              <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
 
                 {/* Lado Esquerdo: Veículo e Roteiro */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
@@ -583,12 +586,14 @@ export default function NovoPedidoAvancadoPage() {
                     <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
                       defaultValue={f.valor_pedido}
                       onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
+                      inputMode="decimal"
                       style={inputStyle} placeholder="R$ 0,00" />
                   </FormField>
 
                   <FormField label="KM Inicial do Veículo">
                     <input
                       type="number"
+                      inputMode="numeric"
                       value={f.km_inicial}
                       onChange={setFVal("km_inicial")}
                       placeholder={veiculos.find(v => v.id === veiculoId)?.km_atual != null ? String(veiculos.find(v => v.id === veiculoId)?.km_atual) : "Ex: 125000"}

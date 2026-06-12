@@ -65,20 +65,34 @@ function CienteModal({
 }) {
   const [nota, setNota]         = useState("");
   const [salvando, setSalvando] = useState(false);
+  const [erro, setErro]         = useState("");
   const jaCiente = !!lembrete.ciente_em;
   // Pendente + sem nota → "manter na tela" seria um clique vazio; já ciente,
   // o botão sempre faz algo (reabre), então libera mesmo sem nota.
   const manterDesabilitado = !jaCiente && nota.trim().length === 0;
 
+  // Se a gravação falhar, o modal FICA ABERTO com o erro — fechar fingindo que
+  // salvou fazia o lembrete sumir da tela com o banco intacto.
   const salvar = async (ocultar: boolean) => {
     setSalvando(true);
-    await fetch(`/api/lembretes/${lembrete.id}/ciente`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ nota: nota.trim(), ocultar }),
-    });
-    onDone(lembrete.id, nota.trim(), ocultar);
-    onClose();
+    setErro("");
+    try {
+      const res = await fetch(`/api/lembretes/${lembrete.id}/ciente`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nota: nota.trim(), ocultar }),
+      });
+      if (!res.ok) {
+        setErro(`Não foi possível salvar (erro ${res.status}). Tente de novo.`);
+        return;
+      }
+      onDone(lembrete.id, nota.trim(), ocultar);
+      onClose();
+    } catch {
+      setErro("Falha de conexão ao salvar. Verifique a internet e tente de novo.");
+    } finally {
+      setSalvando(false);
+    }
   };
 
   return (
@@ -128,12 +142,21 @@ function CienteModal({
           />
         </div>
 
+        {erro && (
+          <div role="alert" style={{
+            padding: "10px 12px", background: "#fef2f2", border: "1px solid #fca5a5",
+            borderRadius: "8px", color: "#991b1b", fontSize: "13px", fontWeight: 600,
+          }}>
+            ⚠️ {erro}
+          </div>
+        )}
+
         <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
           <button
             onClick={onClose}
             disabled={salvando}
             style={{
-              padding: "8px 14px", background: "none", border: "1px solid #e2e8f0",
+              padding: "10px 16px", minHeight: "44px", background: "none", border: "1px solid #e2e8f0",
               borderRadius: "8px", fontSize: "12px", fontWeight: 600,
               color: "#64748b", cursor: "pointer",
             }}
@@ -145,27 +168,27 @@ function CienteModal({
             disabled={salvando || manterDesabilitado}
             title={manterDesabilitado ? "Escreva a providência pra manter na tela" : undefined}
             style={{
-              padding: "8px 14px",
+              padding: "10px 16px", minHeight: "44px",
               background: salvando || manterDesabilitado ? "#fef3c7" : "#f59e0b",
               color: salvando || manterDesabilitado ? "#b45309" : "#fff",
               border: "none", borderRadius: "8px", fontSize: "12px", fontWeight: 600,
               cursor: salvando || manterDesabilitado ? "default" : "pointer",
             }}
           >
-            {salvando ? "..." : jaCiente ? "📌 Salvar e voltar pra tela" : "📌 Salvar e manter na tela"}
+            {salvando ? "Salvando..." : jaCiente ? "📌 Salvar e voltar pra tela" : "📌 Salvar e manter na tela"}
           </button>
           <button
             onClick={() => salvar(true)}
             disabled={salvando}
             style={{
-              padding: "8px 14px",
+              padding: "10px 16px", minHeight: "44px",
               background: salvando ? "#d1d5db" : "#16a34a",
               color: "#fff", border: "none", borderRadius: "8px",
               fontSize: "12px", fontWeight: 600,
               cursor: salvando ? "default" : "pointer",
             }}
           >
-            {salvando ? "..." : jaCiente ? "✅ Salvar e manter oculto" : "✅ Ciente e ocultar"}
+            {salvando ? "Salvando..." : jaCiente ? "✅ Salvar e manter oculto" : "✅ Ciente e ocultar"}
           </button>
         </div>
       </div>
@@ -216,7 +239,8 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
         onClick={e => e.stopPropagation()}
         style={{
           background: "#fff", borderRadius: "14px", width: "100%", maxWidth: 560,
-          maxHeight: "80vh", display: "flex", flexDirection: "column",
+          maxHeight: "calc(80vh - env(safe-area-inset-top, 0px) - env(safe-area-inset-bottom, 0px))",
+          display: "flex", flexDirection: "column",
           boxShadow: "0 20px 60px rgba(0,0,0,0.25)",
         }}
       >
@@ -273,7 +297,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                     <button
                       onClick={() => setCienteAlvo(l)}
                       style={{
-                        flexShrink: 0, padding: "5px 10px",
+                        flexShrink: 0, padding: "8px 12px", minHeight: "44px",
                         background: "#16a34a",
                         color: "#fff", border: "none", borderRadius: "6px",
                         fontSize: "11px", fontWeight: 600,
@@ -318,7 +342,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                       onClick={() => setCienteAlvo(l)}
                       title="Anotar providência ou voltar pros pendentes"
                       style={{
-                        flexShrink: 0, padding: "5px 10px",
+                        flexShrink: 0, padding: "8px 12px", minHeight: "44px",
                         background: "none", border: "1px solid #cbd5e1",
                         color: "#475569", borderRadius: "6px",
                         fontSize: "11px", fontWeight: 600,
@@ -416,7 +440,7 @@ export function LembretesWidget() {
               onClick={() => setModal(true)}
               style={{
                 background: "none", border: "1px solid #fde68a", borderRadius: "6px",
-                padding: "3px 10px", fontSize: "11px", fontWeight: 600,
+                padding: "8px 14px", minHeight: "44px", fontSize: "11px", fontWeight: 600,
                 color: "#92400e", cursor: "pointer",
               }}
             >
@@ -465,7 +489,7 @@ export function LembretesWidget() {
             onClick={() => setModal(true)}
             style={{
               background: "none", border: "1px solid #e2e8f0", borderRadius: "6px",
-              padding: "4px 12px", fontSize: "11px", fontWeight: 600,
+              padding: "8px 14px", minHeight: "44px", fontSize: "11px", fontWeight: 600,
               color: "#94a3b8", cursor: "pointer",
             }}
           >

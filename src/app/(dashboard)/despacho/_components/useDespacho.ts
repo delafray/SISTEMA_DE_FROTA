@@ -9,6 +9,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { useOrdenacao, type Ordem } from "@/components/ui/ds";
 import { normalizar } from "@/lib/utils/normalizar";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
@@ -141,13 +142,13 @@ export function useDespacho(): UseDespachoReturn {
 
   useEffect(() => {
     const init = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
 
       const { data: ue } = await supabase
         .from("usuario_empresas")
         .select("empresa_id")
-        .eq("usuario_id", auth.user.id)
+        .eq("usuario_id", user.id)
         .eq("is_padrao", true)
         .single();
       if (!ue?.empresa_id) return;

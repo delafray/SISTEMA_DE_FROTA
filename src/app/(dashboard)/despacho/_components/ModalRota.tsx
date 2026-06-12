@@ -45,10 +45,12 @@ export function ModalRota({
 
   return (
     <div
+      className="m-modal-overlay"
       style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 50, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}
       onClick={onClose}
     >
       <div
+        className="m-modal-content m-modal-body"
         style={{ background: "#fff", borderRadius: "12px", padding: "20px", width: "100%", maxWidth: "760px", maxHeight: "90vh", overflowY: "auto", boxSizing: "border-box" }}
         onClick={e => e.stopPropagation()}
       >
@@ -60,7 +62,9 @@ export function ModalRota({
         {loading ? (
           <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Carregando rota…</p>
         ) : paradas.length > 0 ? (
-          <MapaRota paradas={paradas} altura={420} />
+          <div style={{ maxHeight: "60vh", overflow: "hidden" }}>
+            <MapaRota paradas={paradas} altura={420} />
+          </div>
         ) : (
           <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>
             Nenhuma rota montada ainda — o motorista monta e otimiza a rota no celular;

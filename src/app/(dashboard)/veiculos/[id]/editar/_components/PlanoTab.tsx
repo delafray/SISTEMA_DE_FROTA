@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, Th, Td, Tr, Badge, EmptyState, inputStyle, selectStyle, SearchInput, Alert, Btn, FormField } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 import { normalizar } from "@/lib/utils/normalizar";
 
 type Tipo = {
@@ -215,6 +216,61 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
       {tipos.length === 0
         ? <EmptyState icon="📋" message="Nenhum tipo cadastrado. Rode db/seed_tipos_manutencao.sql ou clique em '+ Novo tipo'." />
         : (
+          <>
+          {/* Mobile */}
+          <MobileList count={filtrados.length} label="tipos de manutenção">
+            {filtrados.map(t => {
+              const p = planoDe(t.id);
+              const ativo = !!p?.ativo;
+              const count = manutCount.get(t.id) ?? 0;
+              const locked = ativo && count > 0;
+              const prox = proximas.get(t.id);
+              return (
+                <MobileCard
+                  key={t.id}
+                  title={t.nome}
+                  subtitle={t.categoria}
+                  badge={<Badge variant={CRIT_VARIANT[t.criticidade] ?? "default"}>{t.criticidade}</Badge>}
+                  highlight={!ativo ? "#cbd5e1" : undefined}
+                  details={[
+                    {
+                      label: "Ativo",
+                      value: (
+                        <input
+                          type="checkbox"
+                          checked={ativo}
+                          disabled={savingId === t.id || locked}
+                          onChange={e => toggleAtivo(t, e.target.checked)}
+                          style={{ cursor: locked ? "not-allowed" : "pointer", width: "18px", height: "18px", accentColor: "#2563eb" }}
+                          title={locked ? `Bloqueado: ${count} manutenção(ões) registrada(s)` : ""}
+                        />
+                      ),
+                    },
+                    {
+                      label: "Int. KM",
+                      value: ativo && p
+                        ? <input type="number" value={p.intervalo_km ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }} />
+                        : (t.intervalo_km?.toLocaleString("pt-BR") ?? "—"),
+                    },
+                    {
+                      label: "Int. Meses",
+                      value: ativo && p
+                        ? <input type="number" value={p.intervalo_meses ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "70px", padding: "4px 8px", fontSize: "12px" }} />
+                        : (t.intervalo_meses ?? "—"),
+                    },
+                    {
+                      label: "Próxima",
+                      value: !ativo ? "—" : prox?.km_proxima != null || prox?.data_proxima
+                        ? `${prox?.km_proxima != null ? `${prox.km_proxima.toLocaleString("pt-BR")} km` : ""}${prox?.data_proxima ? ` / ${prox.data_proxima}` : ""}`
+                        : "—",
+                    },
+                  ]}
+                />
+              );
+            })}
+          </MobileList>
+          {/* Desktop */}
+          <div className="m-hide">
           <DataTable count={filtrados.length} label="tipos">
             <thead>
               <tr>
@@ -321,6 +377,8 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
               })}
             </tbody>
           </DataTable>
+          </div>
+          </>
         )}
     </div>
   );

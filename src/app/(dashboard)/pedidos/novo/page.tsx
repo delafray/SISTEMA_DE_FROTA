@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import Link from "next/link";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import {
   PageHeader, FormField, inputStyle,
   Btn, Alert,
@@ -59,13 +60,13 @@ export default function NovoPedidoSimplePage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
 
       const { data: ue } = await supabase
         .from("usuario_empresas")
         .select("empresa_id")
-        .eq("usuario_id", auth.user.id)
+        .eq("usuario_id", user.id)
         .eq("is_padrao", true)
         .single();
 
@@ -491,7 +492,7 @@ export default function NovoPedidoSimplePage() {
                           type="button"
                           onClick={() => removerLocal(l.uid)}
                           style={{
-                            width: "32px", height: "32px", borderRadius: "6px",
+                            width: "44px", height: "44px", borderRadius: "6px",
                             border: "1px solid #e2e8f0", background: "#fff",
                             cursor: "pointer", color: "#ef4444",
                             fontSize: "18px", display: "flex", alignItems: "center", justifyContent: "center",
@@ -522,6 +523,7 @@ export default function NovoPedidoSimplePage() {
                             onClick={() => toggleLocalCadastrado(loc)}
                             style={{
                               padding: "8px 14px",
+                              minHeight: "44px",
                               borderRadius: "10px",
                               border: usado ? "2px solid #059669" : "1px solid #e2e8f0",
                               background: usado ? "#ecfdf5" : "#fff",
@@ -572,11 +574,12 @@ export default function NovoPedidoSimplePage() {
               Detalhes do Pedido
             </h2>
 
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
+            <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
               <FormField label="Valor do pedido (R$)">
                 {/* Máscara de moeda — sem `value` (não-controlado, senão trava a digitação) */}
                 <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
                   onAccept={(_, m) => setValorPedido(String(m.unmaskedValue))}
+                  inputMode="decimal"
                   style={inputStyle} placeholder="R$ 0,00" />
               </FormField>
 
@@ -625,7 +628,7 @@ export default function NovoPedidoSimplePage() {
                     onClick={() => removerEndereco(idx)}
                     disabled={enderecos.length === 1}
                     style={{
-                      width: "32px", height: "32px", borderRadius: "6px",
+                      width: "44px", height: "44px", borderRadius: "6px",
                       border: "1px solid #e2e8f0", background: enderecos.length === 1 ? "#f8fafc" : "#fff",
                       cursor: enderecos.length === 1 ? "not-allowed" : "pointer",
                       color: enderecos.length === 1 ? "#cbd5e1" : "#ef4444",
@@ -691,6 +694,7 @@ export default function NovoPedidoSimplePage() {
       {/* ── MODAL: SALVAR LOCAIS AVULSOS NO CADASTRO DO CLIENTE ── */}
       {modalSalvarLocal && (
         <div
+          className="m-modal-overlay"
           style={{
             position: "fixed", inset: 0, zIndex: 9999,
             background: "rgba(0,0,0,0.45)",
@@ -698,12 +702,15 @@ export default function NovoPedidoSimplePage() {
             padding: "16px",
           }}
         >
-          <div style={{
-            background: "#fff", borderRadius: "12px", padding: "28px",
-            width: "100%", maxWidth: "460px",
-            boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-            maxHeight: "90vh", overflowY: "auto",
-          }}>
+          <div
+            className="m-modal-content m-modal-body"
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "28px",
+              width: "100%", maxWidth: "460px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+              maxHeight: "90vh", overflowY: "auto",
+            }}
+          >
             <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>
               Salvar local(is) no cadastro?
             </h3>

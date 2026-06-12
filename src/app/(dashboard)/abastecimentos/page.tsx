@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
@@ -56,10 +57,10 @@ export default function AbastecimentosPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
     };
@@ -224,11 +225,26 @@ export default function AbastecimentosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", minWidth: 0 }}>
           <KpiCard label="Total Abastecimentos" value={kpiCount == null ? "..." : kpiCount} />
           <KpiCard label="Total Litros"         value={kpiLitros == null ? "..." : kpiLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
           <KpiCard label="Custo Total"          value={kpiCusto == null ? "..." : kpiCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
           <KpiCard label="Ticket Médio"         value={kpiCusto == null ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
+        </div>
+
+        {/* Busca e filtro — visível no mobile (fora do m-hide) */}
+        <div className="m-show" style={{ flexDirection: "column", gap: "8px", marginBottom: "8px" }}>
+          <SearchInput
+            placeholder="Buscar por veículo, motorista, posto..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+          <select value={filtro} onChange={e => setFiltro(e.target.value)}
+            style={{ ...selectStyle, width: "100%" }}>
+            <option value="">Todos</option>
+            <option value="confirmado">Confirmados</option>
+            <option value="pendente">Pendentes</option>
+          </select>
         </div>
 
         {/* Desktop: tabela */}

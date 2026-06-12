@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, Th, Td, Tr, Btn, Badge, EmptyState, FormField, inputStyle, selectStyle, Alert } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 type Tipo = { id: string; nome: string; categoria: string; intervalo_km: number | null; intervalo_meses: number | null };
 type Plano = { id: string; tipo_id: string; ativo: boolean | null; intervalo_km: number | null; intervalo_meses: number | null };
@@ -341,7 +342,7 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
 
       {showForm && (
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+          <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
             <div style={{ gridColumn: "span 3" }}>
               <FormField label="Tipo de manutenção *">
                 <select value={f.tipo_id} onChange={set("tipo_id")} style={selectStyle}>
@@ -438,50 +439,80 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
       {manuts.length === 0
         ? <EmptyState icon="🔧" message={pendentes.length > 0 ? "Use as pendências acima pra registrar a última manutenção de cada tipo ativo." : "Nenhuma manutenção lançada. Ative tipos na aba 'Plano de Manutenção' primeiro."} />
         : (
-          <DataTable count={manuts.length} label="manutenções">
-            <thead>
-              <tr>
-                <Th>Data</Th>
-                <Th>Tipo</Th>
-                <Th>Categoria</Th>
-                <Th style={{ textAlign: "right" }}>KM</Th>
-                <Th style={{ textAlign: "right" }}>Custo</Th>
-                <Th>Fornecedor</Th>
-                <Th>Status</Th>
-                <Th style={{ width: "40px" }} />
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop */}
+            <div className="m-hide">
+              <DataTable count={manuts.length} label="manutenções">
+                <thead>
+                  <tr>
+                    <Th>Data</Th>
+                    <Th>Tipo</Th>
+                    <Th>Categoria</Th>
+                    <Th style={{ textAlign: "right" }}>KM</Th>
+                    <Th style={{ textAlign: "right" }}>Custo</Th>
+                    <Th>Fornecedor</Th>
+                    <Th>Status</Th>
+                    <Th style={{ width: "40px" }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {manuts.map(m => {
+                    const t = Array.isArray(m.tipos_manutencao) ? m.tipos_manutencao[0] : m.tipos_manutencao;
+                    return (
+                      <Tr key={m.id}>
+                        <Td>{fmtDate(m.data_realizada)}</Td>
+                        <Td style={{ fontWeight: 500 }}>{t?.nome ?? "—"}</Td>
+                        <Td style={{ textTransform: "capitalize", color: "#64748b" }}>{t?.categoria ?? "—"}</Td>
+                        <Td style={{ textAlign: "right" }}>{m.km_realizada?.toLocaleString("pt-BR") ?? "—"}</Td>
+                        <Td style={{ textAlign: "right", fontWeight: 600, color: "#16a34a" }}>{fmtBRL(m.custo_total)}</Td>
+                        <Td style={{ color: "#64748b" }}>{m.fornecedor ?? "—"}</Td>
+                        <Td><Badge variant={STATUS_VARIANT[m.status] ?? "default"}>{m.status}</Badge></Td>
+                        <Td>
+                          <button type="button" onClick={() => excluir(m)}
+                            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px" }}
+                            title="Excluir">🗑</button>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
+            </div>
+            {/* Mobile */}
+            <MobileList count={manuts.length} label="manutenções">
               {manuts.map(m => {
                 const t = Array.isArray(m.tipos_manutencao) ? m.tipos_manutencao[0] : m.tipos_manutencao;
                 return (
-                  <Tr key={m.id}>
-                    <Td>{fmtDate(m.data_realizada)}</Td>
-                    <Td style={{ fontWeight: 500 }}>{t?.nome ?? "—"}</Td>
-                    <Td style={{ textTransform: "capitalize", color: "#64748b" }}>{t?.categoria ?? "—"}</Td>
-                    <Td style={{ textAlign: "right" }}>{m.km_realizada?.toLocaleString("pt-BR") ?? "—"}</Td>
-                    <Td style={{ textAlign: "right", fontWeight: 600, color: "#16a34a" }}>{fmtBRL(m.custo_total)}</Td>
-                    <Td style={{ color: "#64748b" }}>{m.fornecedor ?? "—"}</Td>
-                    <Td><Badge variant={STATUS_VARIANT[m.status] ?? "default"}>{m.status}</Badge></Td>
-                    <Td>
+                  <MobileCard
+                    key={m.id}
+                    title={t?.nome ?? "—"}
+                    subtitle={fmtDate(m.data_realizada)}
+                    badge={<Badge variant={STATUS_VARIANT[m.status] ?? "default"}>{m.status}</Badge>}
+                    details={[
+                      { label: "Categoria", value: t?.categoria ?? "—" },
+                      { label: "KM", value: m.km_realizada?.toLocaleString("pt-BR") ?? "—" },
+                      { label: "Custo", value: fmtBRL(m.custo_total) },
+                      { label: "Fornecedor", value: m.fornecedor ?? "—" },
+                    ]}
+                    actions={
                       <button type="button" onClick={() => excluir(m)}
-                        style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px" }}
-                        title="Excluir">🗑</button>
-                    </Td>
-                  </Tr>
+                        style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 8px" }}
+                        title="Excluir">🗑 Excluir</button>
+                    }
+                  />
                 );
               })}
-            </tbody>
-          </DataTable>
+            </MobileList>
+          </>
         )}
 
       {/* MODAL PROTEGIDO — Atualizar KM (Gestor) */}
       {kmModalOpen && (
-        <div style={{
+        <div className="m-modal-overlay" style={{
           position: "fixed", inset: 0, background: "rgba(15,23,42,0.6)",
           display: "flex", alignItems: "center", justifyContent: "center", zIndex: 100, padding: "16px",
         }} onClick={() => !salvandoKmGestor && setKmModalOpen(false)}>
-          <div style={{
+          <div className="m-modal-content" style={{
             background: "#fff", borderRadius: "12px", padding: "20px",
             width: "100%", maxWidth: "560px", maxHeight: "90vh", overflow: "auto",
             boxShadow: "0 10px 40px rgba(0,0,0,0.25)",

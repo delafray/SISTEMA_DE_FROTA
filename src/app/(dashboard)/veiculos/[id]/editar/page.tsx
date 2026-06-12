@@ -3,7 +3,8 @@ import React, { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, DataTable, Th, Td, Tr, Tabs } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert, DataTable, Th, Td, Tr, Tabs, Badge } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 import { EmpresaSelect } from "@/components/ui/EmpresaSelect";
 import { TransferenciaEmpresaModal } from "@/components/ui/TransferenciaEmpresaModal";
 import PlanoTab from "./_components/PlanoTab";
@@ -148,7 +149,7 @@ export default function EditarVeiculoPage() {
             <Btn href="/veiculos" variant="ghost">← Voltar</Btn>
             {tab === "dados" && (
               <>
-                <Btn href="/veiculos" variant="outline">Cancelar</Btn>
+                <span className="m-hide"><Btn href="/veiculos" variant="outline">Cancelar</Btn></span>
                 <Btn type="button" onClick={handleSubmit} variant="primary" disabled={saving}>
                   {saving ? "Salvando..." : "Atualizar"}
                 </Btn>
@@ -194,13 +195,15 @@ export default function EditarVeiculoPage() {
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
                 {/* SUB-TABS */}
-                <div style={{
+                <div className="m-tabs-scroll" style={{
                   display: "flex",
                   gap: "6px",
                   background: "#f8fafc",
                   padding: "8px",
                   borderRadius: "8px",
                   border: "1px solid #e2e8f0",
+                  overflowX: "auto",
+                  WebkitOverflowScrolling: "touch",
                 }}>
                   {([
                     { id: "principal", label: "🚛 Principal" },
@@ -400,49 +403,87 @@ export default function EditarVeiculoPage() {
             {histTab === "abast" && (
               abastecimentos.length === 0
                 ? <p style={{ fontSize: "12px", color: "#94a3b8" }}>Nenhum abastecimento registrado.</p>
-                : <DataTable count={abastecimentos.length} label="abastecimentos">
-                    <thead><tr>
-                      <Th>Data</Th><Th style={{ textAlign: "right" }}>KM</Th>
-                      <Th style={{ textAlign: "right" }}>Litros</Th><Th style={{ textAlign: "right" }}>R$/L</Th>
-                      <Th style={{ textAlign: "right" }}>Total</Th><Th>Posto</Th>
-                    </tr></thead>
-                    <tbody>
+                : <>
+                    <div className="m-hide">
+                      <DataTable count={abastecimentos.length} label="abastecimentos">
+                        <thead><tr>
+                          <Th>Data</Th><Th style={{ textAlign: "right" }}>KM</Th>
+                          <Th style={{ textAlign: "right" }}>Litros</Th><Th style={{ textAlign: "right" }}>R$/L</Th>
+                          <Th style={{ textAlign: "right" }}>Total</Th><Th>Posto</Th>
+                        </tr></thead>
+                        <tbody>
+                          {abastecimentos.map(a => (
+                            <Tr key={a.id}>
+                              <Td>{a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}</Td>
+                              <Td style={{ textAlign: "right" }}>{a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</Td>
+                              <Td style={{ textAlign: "right" }}>{a.litros.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</Td>
+                              <Td style={{ textAlign: "right" }}>{a.valor_litro != null ? `R$ ${a.valor_litro.toFixed(3)}` : "—"}</Td>
+                              <Td style={{ textAlign: "right", fontWeight: 600 }}>{a.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</Td>
+                              <Td style={{ color: "#64748b" }}>{a.posto ?? "—"}</Td>
+                            </Tr>
+                          ))}
+                        </tbody>
+                      </DataTable>
+                    </div>
+                    <MobileList count={abastecimentos.length} label="abastecimentos">
                       {abastecimentos.map(a => (
-                        <Tr key={a.id}>
-                          <Td>{a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{a.litros.toLocaleString("pt-BR", { maximumFractionDigits: 2 })}</Td>
-                          <Td style={{ textAlign: "right" }}>{a.valor_litro != null ? `R$ ${a.valor_litro.toFixed(3)}` : "—"}</Td>
-                          <Td style={{ textAlign: "right", fontWeight: 600 }}>{a.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}</Td>
-                          <Td style={{ color: "#64748b" }}>{a.posto ?? "—"}</Td>
-                        </Tr>
+                        <MobileCard
+                          key={a.id}
+                          title={a.posto ?? "Abastecimento"}
+                          subtitle={a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}
+                          details={[
+                            { label: "KM", value: a.km_no_abast?.toLocaleString("pt-BR") ?? "—" },
+                            { label: "Litros", value: a.litros.toLocaleString("pt-BR", { maximumFractionDigits: 2 }) },
+                            { label: "R$/L", value: a.valor_litro != null ? `R$ ${a.valor_litro.toFixed(3)}` : "—" },
+                            { label: "Total", value: a.valor_total.toLocaleString("pt-BR", { style: "currency", currency: "BRL" }) },
+                          ]}
+                        />
                       ))}
-                    </tbody>
-                  </DataTable>
+                    </MobileList>
+                  </>
             )}
 
             {histTab === "pedidos" && (
               pedidoHist.length === 0
                 ? <p style={{ fontSize: "12px", color: "#94a3b8" }}>Nenhum pedido registrado.</p>
-                : <DataTable count={pedidoHist.length} label="pedidos">
-                    <thead><tr>
-                      <Th>ID</Th><Th>Status</Th><Th>Data</Th>
-                      <Th style={{ textAlign: "right" }}>KM Ini.</Th><Th style={{ textAlign: "right" }}>KM Fin.</Th>
-                      <Th style={{ textAlign: "right" }}>Valor</Th>
-                    </tr></thead>
-                    <tbody>
+                : <>
+                    <div className="m-hide">
+                      <DataTable count={pedidoHist.length} label="pedidos">
+                        <thead><tr>
+                          <Th>ID</Th><Th>Status</Th><Th>Data</Th>
+                          <Th style={{ textAlign: "right" }}>KM Ini.</Th><Th style={{ textAlign: "right" }}>KM Fin.</Th>
+                          <Th style={{ textAlign: "right" }}>Valor</Th>
+                        </tr></thead>
+                        <tbody>
+                          {pedidoHist.map(ph => (
+                            <Tr key={ph.id}>
+                              <Td style={{ fontWeight: 500 }}>#{ph.id.slice(0, 8)}</Td>
+                              <Td><span style={{ fontSize: "11px", fontWeight: 600 }}>{ph.status}</span></Td>
+                              <Td>{ph.data_inicio_prevista ? new Date(ph.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</Td>
+                              <Td style={{ textAlign: "right" }}>{ph.km_inicial?.toLocaleString("pt-BR") ?? "—"}</Td>
+                              <Td style={{ textAlign: "right" }}>{ph.km_final?.toLocaleString("pt-BR") ?? "—"}</Td>
+                              <Td style={{ textAlign: "right" }}>{ph.valor_pedido != null ? `R$ ${ph.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</Td>
+                            </Tr>
+                          ))}
+                        </tbody>
+                      </DataTable>
+                    </div>
+                    <MobileList count={pedidoHist.length} label="pedidos">
                       {pedidoHist.map(ph => (
-                        <Tr key={ph.id}>
-                          <Td style={{ fontWeight: 500 }}>#{ph.id.slice(0, 8)}</Td>
-                          <Td><span style={{ fontSize: "11px", fontWeight: 600 }}>{ph.status}</span></Td>
-                          <Td>{ph.data_inicio_prevista ? new Date(ph.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{ph.km_inicial?.toLocaleString("pt-BR") ?? "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{ph.km_final?.toLocaleString("pt-BR") ?? "—"}</Td>
-                          <Td style={{ textAlign: "right" }}>{ph.valor_pedido != null ? `R$ ${ph.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—"}</Td>
-                        </Tr>
+                        <MobileCard
+                          key={ph.id}
+                          title={`#${ph.id.slice(0, 8)}`}
+                          subtitle={ph.data_inicio_prevista ? new Date(ph.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—"}
+                          badge={<Badge variant="default">{ph.status}</Badge>}
+                          details={[
+                            { label: "KM Ini.", value: ph.km_inicial?.toLocaleString("pt-BR") ?? "—" },
+                            { label: "KM Fin.", value: ph.km_final?.toLocaleString("pt-BR") ?? "—" },
+                            { label: "Valor", value: ph.valor_pedido != null ? `R$ ${ph.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}` : "—" },
+                          ]}
+                        />
                       ))}
-                    </tbody>
-                  </DataTable>
+                    </MobileList>
+                  </>
             )}
           </FormSection>
         )}

@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { telefoneCanonico, telefoneExibicao } from "@/lib/utils/telefone";
 import { ordenarAcoes } from "@/lib/schemas/regra";
 
@@ -41,13 +42,16 @@ export default function AutorizacoesPage() {
   const [tip, setTip] = useState<{ x: number; y: number; i: number } | null>(null);
   const [telModal, setTelModal] = useState<{ mode: "edit" | "novo"; id?: string; valor: string } | null>(null);
   const [usrModal, setUsrModal] = useState<{ id: string } | null>(null);
+  const [salvandoTel, setSalvandoTel] = useState(false);
+
+  // Mobile: qual card de telefone está expandido
+  const [expandido, setExpandido] = useState<string | null>(null);
 
   const mapRow = (r: Tel): Tel => ({ ...r, permissoes: (r.permissoes as Record<string, string>) ?? {} });
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const [rg, tl, pf] = await Promise.all([
         supabase.from("regras").select("id,nome,tipo,acoes").eq("ativa", true).order("prioridade", { ascending: false }).order("nome"),
         supabase.from("telefones").select("*").order("criado_em"),
@@ -70,7 +74,7 @@ export default function AutorizacoesPage() {
 
   const ciclar = (tel: Tel, regra: Regra) => {
     if (!tel.ativo) return;
-    const ciclo = ["", ...ordenarAcoes(regra.acoes ?? [])];   // cicla só pelas ações da regra
+    const ciclo = ["", ...ordenarAcoes(regra.acoes ?? [])];
     const atual = ciclo.indexOf(tel.permissoes[regra.id] ?? "");
     const prox = ciclo[(atual + 1) % ciclo.length] ?? "";
     const novo = { ...tel.permissoes };
@@ -79,19 +83,21 @@ export default function AutorizacoesPage() {
   };
 
   const salvarTel = async () => {
-    if (!telModal) return;
+    if (!telModal || salvandoTel) return;
     const canon = telefoneCanonico(telModal.valor);
     if (!canon) return;
+    setSalvandoTel(true);
     const exib = telefoneExibicao(canon);
     if (telModal.mode === "novo") {
       const { data, error } = await supabase.from("telefones")
         .insert({ telefone: canon, telefone_exibicao: exib, ativo: true, anotar: true, permissoes: {} })
         .select().single();
-      if (error) { alert(error.message); return; }
+      if (error) { alert(error.message); setSalvandoTel(false); return; }
       if (data) setTels((p) => [...p, mapRow(data as Tel)]);
     } else if (telModal.id) {
       await patch(telModal.id, { telefone: canon, telefone_exibicao: exib });
     }
+    setSalvandoTel(false);
     setTelModal(null);
   };
 
@@ -130,7 +136,8 @@ export default function AutorizacoesPage() {
         </div>
       </div>
 
-      <div style={{ flex: 1, overflow: "auto" }}>
+      {/* ── Variante Desktop: matriz completa ─────────────────────────────── */}
+      <div className="m-hide" style={{ flex: 1, overflow: "auto" }}>
         {loading ? (
           <div style={{ padding: 32, color: "#94a3b8" }}>Carregando…</div>
         ) : (
@@ -216,6 +223,136 @@ export default function AutorizacoesPage() {
         )}
       </div>
 
+      {/* ── Variante Mobile: lista de telefones em cards expansíveis ──────── */}
+      <div className="m-show-block" style={{ flex: 1, overflow: "auto", padding: "12px" }}>
+        {loading ? (
+          <div style={{ padding: 32, color: "#94a3b8", textAlign: "center" }}>Carregando…</div>
+        ) : (
+          <>
+            {/* Botão adicionar telefone no mobile */}
+            <button
+              onClick={() => setTelModal({ mode: "novo", valor: "" })}
+              style={{ display: "flex", alignItems: "center", justifyContent: "center", gap: 8, width: "100%", minHeight: 44, marginBottom: 10, padding: "10px 16px", background: "#f0fdf4", border: "1px dashed #86efac", borderRadius: 10, color: "#16a34a", fontWeight: 700, fontSize: 14, cursor: "pointer" }}>
+              + Adicionar telefone
+            </button>
+
+            {tels.length === 0 && (
+              <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 14 }}>
+                Nenhum telefone cadastrado.
+              </div>
+            )}
+
+            {tels.map((t) => {
+              const off = !t.ativo;
+              const aberto = expandido === t.id;
+              return (
+                <div key={t.id} style={{ background: "#fff", borderRadius: 10, marginBottom: 8, boxShadow: "0 1px 4px rgba(0,0,0,.07)", border: `1px solid ${off ? "#e2e8f0" : "#c7d2fe"}`, opacity: off ? 0.75 : 1 }}>
+                  {/* Cabeçalho do card — toque expande */}
+                  <button
+                    onClick={() => setExpandido(aberto ? null : t.id)}
+                    style={{ display: "flex", alignItems: "center", justifyContent: "space-between", width: "100%", minHeight: 52, padding: "10px 14px", background: "transparent", border: "none", cursor: "pointer", textAlign: "left", gap: 10 }}>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                        {t.telefone_exibicao ?? t.telefone}
+                      </div>
+                      <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                        {t.usuario_nome ?? "sem usuário vinculado"}
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
+                      {t.ativo ? (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#16a34a", background: "#dcfce7", borderRadius: 5, padding: "2px 7px" }}>Ativo</span>
+                      ) : (
+                        <span style={{ fontSize: 11, fontWeight: 700, color: "#64748b", background: "#f1f5f9", borderRadius: 5, padding: "2px 7px" }}>Inativo</span>
+                      )}
+                      <span style={{ fontSize: 18, color: "#94a3b8", lineHeight: 1 }}>{aberto ? "▲" : "▼"}</span>
+                    </div>
+                  </button>
+
+                  {/* Detalhes expansíveis */}
+                  {aberto && (
+                    <div style={{ borderTop: "1px solid #f1f5f9", padding: "10px 14px 14px" }}>
+                      {/* Linha: Ativo */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44, borderBottom: "1px solid #f8fafc", paddingBottom: 8, marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>Ativo</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>Pode usar o sistema</div>
+                        </div>
+                        <button
+                          onClick={() => patch(t.id, { ativo: !t.ativo })}
+                          style={{ minWidth: 52, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${t.ativo ? "#16a34a" : "#cbd5e1"}`, background: t.ativo ? "#16a34a" : "#fff", color: t.ativo ? "#fff" : "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
+                          {t.ativo ? "✓ Sim" : "Não"}
+                        </button>
+                      </div>
+
+                      {/* Linha: Anotar */}
+                      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44, borderBottom: "1px solid #f8fafc", paddingBottom: 8, marginBottom: 8 }}>
+                        <div>
+                          <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>Anotar</div>
+                          <div style={{ fontSize: 11, color: "#64748b" }}>Pode registrar via bot</div>
+                        </div>
+                        <button
+                          onClick={() => !off && patch(t.id, { anotar: !t.anotar })}
+                          disabled={off}
+                          style={{ minWidth: 52, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${t.anotar && !off ? "#0d9488" : "#cbd5e1"}`, background: t.anotar && !off ? "#0d9488" : "#fff", color: t.anotar && !off ? "#fff" : "#94a3b8", fontWeight: 700, fontSize: 13, cursor: off ? "not-allowed" : "pointer", opacity: off ? 0.5 : 1 }}>
+                          {t.anotar && !off ? "✓ Sim" : "Não"}
+                        </button>
+                      </div>
+
+                      {/* Permissões por regra */}
+                      {regras.length > 0 && (
+                        <>
+                          <div style={{ fontSize: 11, fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: 6, marginTop: 4 }}>Permissões por regra</div>
+                          {regras.map((rg) => {
+                            const nv = (t.permissoes[rg.id] ?? "") as Nivel;
+                            const m = META[nv];
+                            const ciclo = ["", ...ordenarAcoes(rg.acoes ?? [])];
+                            return (
+                              <div key={rg.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 44, borderBottom: "1px solid #f8fafc", paddingBottom: 6, marginBottom: 6 }}>
+                                <div style={{ flex: 1, minWidth: 0 }}>
+                                  <div style={{ fontWeight: 600, fontSize: 13, color: "#1e293b" }}>{rg.nome}</div>
+                                  <div style={{ fontSize: 11, color: "#64748b" }}>
+                                    {ciclo.filter(a => a !== "").map(a => META[a].label).join(" → ")}
+                                  </div>
+                                </div>
+                                <button
+                                  onClick={() => ciclar(t, rg)}
+                                  disabled={off}
+                                  title={off ? "Telefone inativo" : `${rg.nome}: clique para ciclar`}
+                                  style={{ minWidth: 80, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${nv ? m.border : "#e2e8f0"}`, background: nv ? m.bg : "#f8fafc", color: nv ? m.color : "#94a3b8", fontWeight: 800, fontSize: 13, cursor: off ? "not-allowed" : "pointer", opacity: off ? 0.5 : 1, whiteSpace: "nowrap" }}>
+                                  {nv ? m.label : "—"}
+                                </button>
+                              </div>
+                            );
+                          })}
+                        </>
+                      )}
+                      {regras.length === 0 && (
+                        <div style={{ fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>Crie regras em /regras para liberar permissões.</div>
+                      )}
+
+                      {/* Ações do card: editar tel / vincular usuário */}
+                      <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                        <button
+                          onClick={() => setTelModal({ mode: "edit", id: t.id, valor: t.telefone_exibicao ?? t.telefone })}
+                          style={{ flex: 1, minHeight: 44, padding: "0 12px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                          Editar número
+                        </button>
+                        <button
+                          onClick={() => setUsrModal({ id: t.id })}
+                          style={{ flex: 1, minHeight: 44, padding: "0 12px", borderRadius: 8, border: "1px solid #cbd5e1", background: "#fff", color: "#475569", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                          Vincular usuário
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </>
+        )}
+      </div>
+
       {tip && regras[tip.i] && (
         <div style={{ position: "fixed", left: Math.min(tip.x + 14, (typeof window !== "undefined" ? window.innerWidth : 1200) - 280), top: tip.y + 14, width: 260, background: "#0f172a", color: "#e2e8f0", borderRadius: 8, padding: "10px 12px", zIndex: 50, boxShadow: "0 10px 30px rgba(0,0,0,0.35)", pointerEvents: "none" }}>
           <div style={{ fontWeight: 800, fontSize: 13, marginBottom: 4 }}>{regras[tip.i].nome}</div>
@@ -224,13 +361,15 @@ export default function AutorizacoesPage() {
       )}
 
       {telModal && (
-        <Modal onClose={() => setTelModal(null)} title={telModal.mode === "novo" ? "Novo telefone" : "Editar telefone"}>
+        <Modal onClose={() => { if (!salvandoTel) setTelModal(null); }} title={telModal.mode === "novo" ? "Novo telefone" : "Editar telefone"}>
           <label style={lbl}>Número (digite como quiser, eu normalizo)</label>
-          <input autoFocus value={telModal.valor} onChange={(e) => setTelModal({ ...telModal, valor: e.target.value })} placeholder="31 98979-1317" style={inp} onKeyDown={(e) => e.key === "Enter" && salvarTel()} />
+          <input autoFocus value={telModal.valor} onChange={(e) => setTelModal({ ...telModal, valor: e.target.value })} placeholder="31 98979-1317" style={inp} inputMode="tel" onKeyDown={(e) => e.key === "Enter" && salvarTel()} />
           {telModal.valor && <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>Vai salvar como: <b>{telefoneCanonico(telModal.valor)}</b> ({telefoneExibicao(telefoneCanonico(telModal.valor))})</div>}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-            <button style={btnGhost} onClick={() => setTelModal(null)}>Cancelar</button>
-            <button style={btnPri} onClick={salvarTel}>{telModal.mode === "novo" ? "Inserir" : "Salvar"}</button>
+            <button style={btnGhost} onClick={() => setTelModal(null)} disabled={salvandoTel}>Cancelar</button>
+            <button style={{ ...btnPri, opacity: salvandoTel ? 0.65 : 1, cursor: salvandoTel ? "not-allowed" : "pointer" }} onClick={salvarTel} disabled={salvandoTel}>
+              {salvandoTel ? "Salvando…" : (telModal.mode === "novo" ? "Inserir" : "Salvar")}
+            </button>
           </div>
         </Modal>
       )}

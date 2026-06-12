@@ -41,6 +41,7 @@
 | 12 | **Vercel** | 👤 login com GitHub do cliente | 👤 import do repo + região `iad1` · 🤖 env vars via `vercel env add` (CLI) ou 👤 colar do template | médio (~15 min) |
 | 13 | **ViaCEP / Nominatim** | — sem cadastro | 🤖 já no template | nada |
 | 14 | **Banco: regras+autorizações** | — | 🤖 seeds das 18 regras · 👤 cadastrar TELEFONES do gestor/esposa + marcar autorizações na tela (lição 11/06: regra sem autorização = "não entendi") | 10 min |
+| 15 | **Monitoramento** (opcional, ex. Uptime Kuma na VM) | — (mora na VM do cliente) | 🤖 docker na VM · setar `NEXT_PUBLIC_MONITOR_URL` na Vercel (sem a var, o badge "Sistemas OK" fica sem link — nunca apontar pra VM de OUTRA implantação) | nada |
 
 ---
 

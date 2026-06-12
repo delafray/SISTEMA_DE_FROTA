@@ -133,11 +133,10 @@ export default function NovoClientePage() {
 
   return (
     <form onSubmit={handleSubmit(onSubmit)} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader 
-        title="Cadastrar Cliente" 
+      <PageHeader
+        title="Cadastrar Cliente"
         actions={
           <>
-            <Btn href="/clientes" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/clientes" variant="outline">Cancelar</Btn>
             <Btn type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar Cliente"}
@@ -152,14 +151,15 @@ export default function NovoClientePage() {
             <span>ℹ️</span> Preencha os dados básicos e salve para liberar o cadastro de endereços e contatos adicionais.
           </div>
           
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px", overflowX: "auto" }}>
             <button type="button" onClick={() => setActiveTab("dados")}
               style={{
                 padding: "10px 20px", fontSize: "13px", fontWeight: 600, textTransform: "uppercase", letterSpacing: "0.05em",
                 borderBottom: `2px solid ${activeTab === "dados" ? "#2563eb" : "transparent"}`,
                 color: activeTab === "dados" ? "#2563eb" : "#64748b",
                 background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
-                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px"
+                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px",
+                minHeight: "44px", whiteSpace: "nowrap",
               }}>
               Dados Básicos
             </button>
@@ -169,7 +169,8 @@ export default function NovoClientePage() {
                 borderBottom: `2px solid ${activeTab === "contatos" ? "#2563eb" : "transparent"}`,
                 color: activeTab === "contatos" ? "#2563eb" : "#64748b",
                 background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
-                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px"
+                cursor: "pointer", transition: "all 150ms", marginBottom: "-1px",
+                minHeight: "44px", whiteSpace: "nowrap",
               }}>
               Contatos
               {fields.length > 0 && <span style={{ marginLeft: "8px", background: "#2563eb", color: "#fff", fontSize: "10px", padding: "2px 6px", borderRadius: "10px" }}>{fields.length}</span>}
@@ -186,6 +187,7 @@ export default function NovoClientePage() {
                     <FormField label="CNPJ / CPF">
                       <IMaskInput mask={[{ mask: "000.000.000-00" }, { mask: "00.000.000/0000-00" }]}
                         onAccept={(val) => setValue("cnpj_cpf", val as string, { shouldValidate: true })}
+                        inputMode="numeric"
                         style={inputStyle} />
                       {errors.cnpj_cpf && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cnpj_cpf.message}</p>}
                     </FormField>
@@ -206,7 +208,7 @@ export default function NovoClientePage() {
                       </FormField>
                     </div>
                     <FormField label="Telefone">
-                      <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue("telefone", val as string)} style={inputStyle} />
+                      <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue("telefone", val as string)} inputMode="tel" style={inputStyle} />
                     </FormField>
                     <FormField label="E-mail">
                       <input {...register("email")} type="email" style={inputStyle} />
@@ -224,7 +226,7 @@ export default function NovoClientePage() {
                 <FormSection title="Endereço">
                   <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                     <FormField label="CEP (Busca Automática)">
-                      <IMaskInput mask="00000-000" onAccept={(val) => setValue("cep", val as string)} onBlur={handleCepBlur} style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} placeholder="00000-000" />
+                      <IMaskInput mask="00000-000" onAccept={(val) => setValue("cep", val as string)} onBlur={handleCepBlur} inputMode="numeric" style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} placeholder="00000-000" />
                       {errors.cep && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cep.message}</p>}
                     </FormField>
                     <div style={{ gridColumn: "span 3" }}>
@@ -301,10 +303,10 @@ export default function NovoClientePage() {
                           </FormField>
                         </div>
                         <FormField label="Telefone">
-                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} style={inputStyle} />
+                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <FormField label="WhatsApp">
-                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} style={inputStyle} />
+                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="E-mail">

@@ -205,6 +205,7 @@ export default function EditarClientePage() {
     color: active ? "#2563eb" : "#64748b",
     background: "transparent", borderTop: "none", borderLeft: "none", borderRight: "none",
     cursor: "pointer", transition: "all 150ms", marginBottom: "-1px",
+    minHeight: "44px", whiteSpace: "nowrap",
   });
 
   return (
@@ -213,7 +214,6 @@ export default function EditarClientePage() {
         title="Editar Cliente"
         actions={
           <>
-            <Btn href="/clientes" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/clientes" variant="outline">Cancelar</Btn>
             <Btn type="submit" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Atualizar Cliente"}
@@ -226,7 +226,7 @@ export default function EditarClientePage() {
         <div style={{ width: "100%" }}>
           {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
 
-          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px" }}>
+          <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", marginBottom: "24px", overflowX: "auto" }}>
             <button type="button" onClick={() => setActiveTab("dados")} style={tabStyle(activeTab === "dados")}>Dados Básicos</button>
             <button type="button" onClick={() => setActiveTab("contatos")} style={tabStyle(activeTab === "contatos")}>
               Contatos
@@ -249,6 +249,7 @@ export default function EditarClientePage() {
                         value={typeof (register("cnpj_cpf") as unknown as {value?: string}).value === "string" ? undefined : undefined}
                         onAccept={(val) => setValue("cnpj_cpf", val as string, { shouldValidate: true })}
                         defaultValue={undefined}
+                        inputMode="numeric"
                         style={inputStyle} />
                       {errors.cnpj_cpf && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cnpj_cpf.message}</p>}
                     </FormField>
@@ -270,7 +271,7 @@ export default function EditarClientePage() {
                     </div>
                     <FormField label="Telefone">
                       <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
-                        onAccept={(val) => setValue("telefone", val as string)} style={inputStyle} />
+                        onAccept={(val) => setValue("telefone", val as string)} inputMode="tel" style={inputStyle} />
                     </FormField>
                     <FormField label="E-mail">
                       <input {...register("email")} type="email" style={inputStyle} />
@@ -289,6 +290,7 @@ export default function EditarClientePage() {
                   <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                     <FormField label="CEP (Busca Automática)">
                       <IMaskInput mask="00000-000" onAccept={(val) => setValue("cep", val as string)} onBlur={handleCepBlur}
+                        inputMode="numeric"
                         style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} />
                     </FormField>
                     <div style={{ gridColumn: "span 3" }}>
@@ -363,10 +365,10 @@ export default function EditarClientePage() {
                           </FormField>
                         </div>
                         <FormField label="Telefone">
-                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} style={inputStyle} />
+                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <FormField label="WhatsApp">
-                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} style={inputStyle} />
+                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="E-mail">

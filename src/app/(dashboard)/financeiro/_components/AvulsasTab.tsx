@@ -73,6 +73,8 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
   const [form, setForm] = useState<Form>(formVazio());
   const [filtroCategoria, setFiltroCategoria] = useState("todas");
   const [filtroPago, setFiltroPago] = useState<"todos" | "pago" | "pendente">("todos");
+  const [salvandoId, setSalvandoId] = useState<string | null>(null);
+  const [excluindo, setExcluindo] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -164,18 +166,23 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
 
   const excluir = async (id: string) => {
     if (!confirm("Excluir esta despesa?")) return;
+    setExcluindo(true);
     const { error } = await supabase.from("despesas_avulsas").delete().eq("id", id);
-    if (error) setErro(error.message);
-    else await carregar();
+    if (error) { setErro(error.message); setExcluindo(false); return; }
+    fecharModal();
+    await carregar();
+    setExcluindo(false);
   };
 
   const marcarPago = async (id: string, pago: boolean) => {
+    setSalvandoId(id);
     const update = pago
       ? { pago: true, data_pagamento: hoje_ }
       : { pago: false, data_pagamento: null };
     const { error } = await supabase.from("despesas_avulsas").update(update).eq("id", id);
     if (error) setErro(error.message);
     else await carregar();
+    setSalvandoId(null);
   };
 
   if (loading) return <p style={{ color: "#94a3b8", padding: "16px" }}>Carregando...</p>;
@@ -210,7 +217,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
           {([["todos", "Todos"], ["pendente", "Pendentes"], ["pago", "Pagos"]] as const).map(([v, l]) => (
             <button key={v} type="button" onClick={() => setFiltroPago(v)}
               style={{
-                padding: "4px 10px", fontSize: "11px", fontWeight: 600, borderRadius: "6px",
+                padding: "4px 10px", minHeight: "44px", fontSize: "11px", fontWeight: 600, borderRadius: "6px",
                 background: filtroPago === v ? "#2563eb" : "#fff",
                 color: filtroPago === v ? "#fff" : "#475569",
                 border: "1px solid #cbd5e1", cursor: "pointer",
@@ -265,8 +272,8 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                     <Td style={{ textAlign: "center" }}>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
                         {d.pago
-                          ? <ActionBtn title="Desfazer pagamento" onClick={() => marcarPago(d.id, false)}>↩</ActionBtn>
-                          : <ActionBtn title="Marcar como pago" variant="success" onClick={() => marcarPago(d.id, true)}>✓</ActionBtn>
+                          ? <ActionBtn title="Desfazer pagamento" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, false)}>↩</ActionBtn>
+                          : <ActionBtn title="Marcar como pago" variant="success" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, true)}>✓</ActionBtn>
                         }
                         <ActionBtn title="Excluir" variant="danger" onClick={() => excluir(d.id)}>✕</ActionBtn>
                       </div>
@@ -298,6 +305,15 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                     { label: "Venc.", value: fmtDate(d.data_vencimento) },
                     { label: "Valor", value: fmtBRL(d.valor) },
                   ]}
+                  actions={
+                    <div style={{ display: "flex", gap: "6px" }}>
+                      {d.pago
+                        ? <Btn size="xs" variant="outline" disabled={salvandoId === d.id} loading={salvandoId === d.id} onClick={() => marcarPago(d.id, false)}>↩ Desfazer</Btn>
+                        : <Btn size="xs" variant="outline" disabled={salvandoId === d.id} loading={salvandoId === d.id} onClick={() => marcarPago(d.id, true)}>✓ Pagar</Btn>
+                      }
+                      <Btn size="xs" variant="danger" onClick={() => excluir(d.id)}>✕ Excluir</Btn>
+                    </div>
+                  }
                 />
               );
             })}
@@ -385,7 +401,9 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
             <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
               <Btn variant="outline" onClick={fecharModal} disabled={salvando}>Cancelar</Btn>
               {editandoId && (
-                <Btn variant="danger" onClick={() => excluir(editandoId).then(fecharModal)} disabled={salvando}>Excluir</Btn>
+                <Btn variant="danger" onClick={() => excluir(editandoId)} disabled={salvando || excluindo} loading={excluindo}>
+                  {excluindo ? "Excluindo..." : "Excluir"}
+                </Btn>
               )}
               <Btn variant="primary" onClick={salvar} disabled={salvando}>
                 {salvando ? "Salvando..." : editandoId ? "Salvar" : "Criar Despesa"}

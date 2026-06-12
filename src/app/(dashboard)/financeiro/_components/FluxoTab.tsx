@@ -121,7 +121,7 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
       {erro && <Alert variant="error">⚠ {erro}</Alert>}
 
       {/* Barra de KPIs/controles */}
-      <div style={{
+      <div className="m-kpi-grid" style={{
         display: "grid", gap: "12px",
         gridTemplateColumns: "repeat(auto-fit, minmax(180px, 1fr))",
       }}>
@@ -162,7 +162,7 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
           {(["7d", "30d", "60d", "90d"] as Periodo[]).map(p => (
             <button key={p} type="button" onClick={() => setPeriodo(p)}
               style={{
-                padding: "4px 12px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
+                padding: "4px 12px", minHeight: "44px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
                 background: periodo === p ? "#2563eb" : "#fff",
                 color: periodo === p ? "#fff" : "#475569",
                 border: "1px solid #cbd5e1", cursor: "pointer",

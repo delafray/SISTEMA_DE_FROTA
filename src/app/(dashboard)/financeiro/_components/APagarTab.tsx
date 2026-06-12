@@ -134,22 +134,22 @@ export default function APagarTab({ empresas }: { empresas: string[] }) {
 
       {/* Controles */}
       <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
-        <div style={{ display: "flex", gap: "4px" }}>
+        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
           {([["pendentes", "Pendentes"], ["atrasados", "Atrasados"], ["todos", "Todos"]] as const).map(([v, l]) => (
             <button key={v} type="button" onClick={() => setFiltro(v)}
               style={{
-                padding: "4px 12px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
+                padding: "4px 12px", minHeight: "44px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
                 background: filtro === v ? "#2563eb" : "#fff",
                 color: filtro === v ? "#fff" : "#475569",
                 border: "1px solid #cbd5e1", cursor: "pointer",
               }}>{l}</button>
           ))}
         </div>
-        <div style={{ display: "flex", gap: "4px", marginLeft: "auto" }}>
+        <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
           {(["30d", "60d", "90d"] as const).map(p => (
             <button key={p} type="button" onClick={() => setPeriodo(p)}
               style={{
-                padding: "3px 10px", fontSize: "11px", fontWeight: 600, borderRadius: "6px",
+                padding: "3px 10px", minHeight: "44px", fontSize: "11px", fontWeight: 600, borderRadius: "6px",
                 background: periodo === p ? "#64748b" : "#fff",
                 color: periodo === p ? "#fff" : "#94a3b8",
                 border: "1px solid #e2e8f0", cursor: "pointer",
@@ -256,11 +256,11 @@ export default function APagarTab({ empresas }: { empresas: string[] }) {
 
       {/* Modal Baixa */}
       {modalBaixa && (
-        <div style={{
+        <div className="m-modal-overlay" style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
           alignItems: "center", justifyContent: "center", zIndex: 1000,
         }}>
-          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "360px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "400px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>Confirmar Pagamento</h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 16px" }}>{modalBaixa.evento.descricao}</p>
 

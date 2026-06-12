@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useOrdenacao } from "@/components/ui/ds";
@@ -87,10 +88,10 @@ export default function PedidosPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (ue?.empresa_id) setEmpresaId(ue.empresa_id);
     };
     init();
@@ -367,7 +368,11 @@ export default function PedidosPage() {
   };
 
   // ── Marcar pago ──────────────────────────────────────────────────────────
+  const [loadingPago, setLoadingPago] = useState<Set<string>>(new Set());
+
   const handleMarcarPago = async (id: string) => {
+    if (loadingPago.has(id)) return;
+    setLoadingPago(prev => new Set(prev).add(id));
     try {
       const supabase = createClient();
       const today = new Date().toLocaleDateString("en-CA");
@@ -384,6 +389,8 @@ export default function PedidosPage() {
       }
     } catch (err) {
       alert("Erro inesperado: " + (err instanceof Error ? err.message : String(err)));
+    } finally {
+      setLoadingPago(prev => { const s = new Set(prev); s.delete(id); return s; });
     }
   };
 
@@ -465,6 +472,24 @@ export default function PedidosPage() {
             sub={receitaTotal === null ? undefined : `Total Geral: R$ ${receitaTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} />
         </div>
 
+        <div className="m-show-block" style={{ display: "none" }}>
+          <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", alignItems: "center" }}>
+            <SearchInput placeholder="Buscar veículo ou motorista..." value={busca} onChange={e => setBusca(e.target.value)} />
+            <select value={filtroStatus} onChange={e => { setFiltroStatus(e.target.value); setPagina(0); }}
+              style={{ ...selectStyle, flex: "1 1 120px" }}
+              disabled={mostrarPagos}>
+              <option value="">Todos os status</option>
+              <option value="agendado">Agendado</option>
+              <option value="em_andamento">Em Andamento</option>
+              <option value="concluido">Concluído</option>
+              <option value="cancelado">Cancelado</option>
+            </select>
+            <Btn variant={mostrarPagos ? "primary" : "outline"} onClick={() => { setMostrarPagos(!mostrarPagos); if (!mostrarPagos) setFiltroStatus(""); setPagina(0); }}>
+              {mostrarPagos ? "↩ Ativos" : "💰 Pagos"}
+            </Btn>
+          </div>
+        </div>
+
         <div className="m-hide">
         <DataTable count={linhas.length} label="pedidos" toolbar={toolbar}>
           <thead>
@@ -542,9 +567,10 @@ export default function PedidosPage() {
                                 await handleMarcarPago(pedido.id);
                               }
                             }}
-                            style={{ background: "none", border: "none", color: "#16a34a", fontWeight: 600, cursor: "pointer", padding: 0, fontSize: "inherit", fontFamily: "inherit" }}
+                            disabled={loadingPago.has(pedido.id)}
+                            style={{ background: "none", border: "none", color: "#16a34a", fontWeight: 600, cursor: loadingPago.has(pedido.id) ? "wait" : "pointer", padding: "8px 4px", minHeight: "44px", fontSize: "inherit", fontFamily: "inherit", opacity: loadingPago.has(pedido.id) ? 0.6 : 1 }}
                           >
-                            Receber
+                            {loadingPago.has(pedido.id) ? "..." : "Receber"}
                           </button>
                         )}
                         <DeleteBtn id={pedido.id} table="pedidos" label="pedido" />
@@ -567,7 +593,8 @@ export default function PedidosPage() {
             return (
               <MobileCard
                 key={pedido.id}
-                href={`/entregas/${pedido.id}/editar`}
+                // onClick (não href): card com botão dentro viraria <a> aninhado
+                onClick={() => router.push(`/entregas/${pedido.id}`)}
                 title={`Pedido ${rotuloPedido((pedido as { numero?: string | null }).numero, pedido.id)}`}
                 subtitle={motorista?.nome ?? "Sem motorista"}
                 badge={<Badge variant={STATUS_VAR[pedido.status] ?? "default"}>{STATUS_LABEL[pedido.status] ?? pedido.status}</Badge>}
@@ -578,6 +605,9 @@ export default function PedidosPage() {
                   { label: "Início", value: pedido.data_inicio_prevista ? new Date(pedido.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR") : "—" },
                   { label: "Pgto", value: pedido.pago ? <Badge variant="success">Pago</Badge> : concluido ? <Badge variant="danger">Pendente</Badge> : "A faturar" },
                 ]}
+                actions={
+                  <Btn href={`/entregas/${pedido.id}/editar`} size="sm" variant="outline" onClick={e => e.stopPropagation()}>Editar</Btn>
+                }
               />
             );
           })}

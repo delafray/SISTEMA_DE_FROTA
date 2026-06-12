@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 
 type Detalhe = {
   id: string; status: string; empresa_id: string | null;
@@ -130,8 +131,7 @@ export default function MotoristaEntregaDetalhePage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
 
       const { data } = await supabase
         .from("entregas")

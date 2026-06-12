@@ -4,8 +4,10 @@ import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { saveAs } from "file-saver";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { PageHeader, KpiCard, DataTable, Th, Td, Tr, Badge, Btn, selectStyle, EmptyState } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 type PedidoResultado = {
   id: string | null;
@@ -101,10 +103,10 @@ export default function RelatoriosPage() {
     const load = async () => {
       setLoading(true);
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       // Pedidos com resultado (receita por pedido)
@@ -262,7 +264,7 @@ export default function RelatoriosPage() {
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
         {/* Filtro */}
-        <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+        <div className="m-stack" style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
           <span style={{ fontSize: "13px", color: "#64748b", fontWeight: 600 }}>Período:</span>
 
           <div style={{ display: "flex", border: "1px solid #e2e8f0", borderRadius: "8px", overflow: "hidden" }}>
@@ -276,23 +278,24 @@ export default function RelatoriosPage() {
                 fontWeight: modo === key ? 700 : 500,
                 background: modo === key ? "#2563eb" : "#fff",
                 color: modo === key ? "#fff" : "#475569",
+                minHeight: "44px",
               }}>{label}</button>
             ))}
           </div>
 
           {modo === "mes" && (
             <>
-              <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...selectStyle, width: "150px" }}>
+              <select value={mes} onChange={e => setMes(e.target.value)} style={{ ...selectStyle, minWidth: "120px", flex: 1 }}>
                 {meses.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
               </select>
-              <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, width: "90px" }}>
+              <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, minWidth: "80px", flex: "0 0 auto" }}>
                 {anos.map(a => <option key={a}>{a}</option>)}
               </select>
             </>
           )}
 
           {modo === "ano" && (
-            <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, width: "100px" }}>
+            <select value={ano} onChange={e => setAno(e.target.value)} style={{ ...selectStyle, minWidth: "80px", flex: "0 0 auto" }}>
               {anos.map(a => <option key={a}>{a}</option>)}
             </select>
           )}
@@ -300,10 +303,10 @@ export default function RelatoriosPage() {
           {modo === "range" && (
             <>
               <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                style={{ ...selectStyle, width: "150px" }} />
+                style={{ ...selectStyle, minWidth: "130px", flex: 1 }} />
               <span style={{ color: "#94a3b8", fontSize: "13px" }}>→</span>
               <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                style={{ ...selectStyle, width: "150px" }} />
+                style={{ ...selectStyle, minWidth: "130px", flex: 1 }} />
             </>
           )}
 
@@ -311,7 +314,7 @@ export default function RelatoriosPage() {
         </div>
 
         {/* KPIs */}
-        <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px" }}>
           <KpiCard label="Pedidos no Período" value={loading ? "..." : kpis.qtd} />
           <KpiCard label="Receita Total"       value={loading ? "..." : fmtBRL(kpis.receita)}  color="success" />
           <KpiCard label="Custo Total"         value={loading ? "..." : fmtBRL(kpis.custo)}    color="danger" />
@@ -321,7 +324,7 @@ export default function RelatoriosPage() {
         </div>
 
         {/* Tabs */}
-        <div style={{ display: "flex", borderBottom: "1px solid #e2e8f0", gap: "0" }}>
+        <div className="m-tabs-scroll" style={{ display: "flex", borderBottom: "1px solid #e2e8f0", gap: "0" }}>
           {([
             ["periodo",   "Por Período"],
             ["motorista", "Por Motorista"],
@@ -332,6 +335,7 @@ export default function RelatoriosPage() {
               fontSize: "13px", fontWeight: tab === key ? 700 : 500,
               color: tab === key ? "#2563eb" : "#64748b",
               borderBottom: tab === key ? "2px solid #2563eb" : "2px solid transparent",
+              minHeight: "44px", whiteSpace: "nowrap",
             }}>
               {label}
             </button>
@@ -340,42 +344,84 @@ export default function RelatoriosPage() {
 
         {/* Conteúdo da aba */}
         {tab === "periodo" && (
-          <DataTable count={pedidos.length} label="pedidos">
-            <thead>
-              <tr>
-                <Th>Status</Th>
-                <Th>Data Início</Th>
-                <Th>Motorista</Th>
-                <Th>Veículo</Th>
-                <Th style={{ textAlign: "right" }}>Receita</Th>
-                <Th style={{ textAlign: "right" }}>Qtd Entregas</Th>
-                <Th style={{ textAlign: "right" }}>KM</Th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop */}
+            <div className="m-hide">
+              <DataTable count={pedidos.length} label="pedidos">
+                <thead>
+                  <tr>
+                    <Th>Status</Th>
+                    <Th>Data Início</Th>
+                    <Th>Motorista</Th>
+                    <Th>Veículo</Th>
+                    <Th style={{ textAlign: "right" }}>Receita</Th>
+                    <Th style={{ textAlign: "right" }}>Qtd Entregas</Th>
+                    <Th style={{ textAlign: "right" }}>KM</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {loading ? (
+                    <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
+                  ) : pedidos.length === 0 ? (
+                    <tr><td colSpan={7}><EmptyState message="Nenhum pedido encontrado para este período." icon="📊" /></td></tr>
+                  ) : (
+                    pedidos.map(f => {
+                      const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
+                      const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
+                      return (
+                        <Tr key={f.id}>
+                          <Td><Badge variant={statusVar[f.status ?? ""] ?? "default"}>{f.status ?? "—"}</Badge></Td>
+                          <Td>{f.data_inicio_real ? new Date(f.data_inicio_real).toLocaleDateString("pt-BR") : "—"}</Td>
+                          <Td style={{ color: "#64748b" }}>{m?.nome ?? "—"}</Td>
+                          <Td style={{ color: "#64748b" }}>{v ? `${v.placa} — ${v.modelo}` : "—"}</Td>
+                          <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(f.receita)}</Td>
+                          <Td style={{ textAlign: "right" }}>{f.qtd_entregas ?? 0}</Td>
+                          <Td style={{ textAlign: "right" }}>{f.km_total?.toLocaleString("pt-BR") ?? "—"}</Td>
+                        </Tr>
+                      );
+                    })
+                  )}
+                </tbody>
+              </DataTable>
+            </div>
+
+            {/* Mobile */}
+            <div className="m-show-block">
               {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</td></tr>
-              ) : pedidos.length === 0 ? (
-                <tr><td colSpan={7}><EmptyState message="Nenhum pedido encontrado para este período." icon="📊" /></td></tr>
+                <div style={{ color: "#94a3b8", fontSize: "13px", textAlign: "center", padding: "32px" }}>Carregando...</div>
               ) : (
-                pedidos.map(f => {
-                  const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
-                  const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
-                  return (
-                    <Tr key={f.id}>
-                      <Td><Badge variant={statusVar[f.status ?? ""] ?? "default"}>{f.status ?? "—"}</Badge></Td>
-                      <Td>{f.data_inicio_real ? new Date(f.data_inicio_real).toLocaleDateString("pt-BR") : "—"}</Td>
-                      <Td style={{ color: "#64748b" }}>{m?.nome ?? "—"}</Td>
-                      <Td style={{ color: "#64748b" }}>{v ? `${v.placa} — ${v.modelo}` : "—"}</Td>
-                      <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(f.receita)}</Td>
-                      <Td style={{ textAlign: "right" }}>{f.qtd_entregas ?? 0}</Td>
-                      <Td style={{ textAlign: "right" }}>{f.km_total?.toLocaleString("pt-BR") ?? "—"}</Td>
-                    </Tr>
-                  );
-                })
+                <MobileList
+                  count={pedidos.length}
+                  label="pedidos"
+                  emptyMessage="Nenhum pedido encontrado para este período."
+                  emptyIcon="📊"
+                >
+                  {pedidos.map(f => {
+                    const m = Array.isArray(f.motoristas) ? f.motoristas[0] : f.motoristas;
+                    const v = Array.isArray(f.veiculos)   ? f.veiculos[0]   : f.veiculos;
+                    const statusColor = f.status === "concluido" ? "#16a34a"
+                      : f.status === "em_andamento" ? "#2563eb"
+                      : f.status === "cancelado" ? "#ef4444" : "#eab308";
+                    return (
+                      <MobileCard
+                        key={f.id}
+                        title={m?.nome ?? "Sem motorista"}
+                        subtitle={v ? `${v.placa} — ${v.modelo}` : "Sem veículo"}
+                        badge={<Badge variant={statusVar[f.status ?? ""] ?? "default"}>{f.status ?? "—"}</Badge>}
+                        highlight={statusColor}
+                        details={[
+                          { label: "Data Início", value: f.data_inicio_real ? new Date(f.data_inicio_real).toLocaleDateString("pt-BR") : "—" },
+                          { label: "Receita",     value: <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtBRL(f.receita)}</span> },
+                          { label: "Entregas",    value: f.qtd_entregas ?? 0 },
+                          { label: "KM",          value: f.km_total?.toLocaleString("pt-BR") ?? "—" },
+                        ]}
+                      />
+                    );
+                  })}
+                </MobileList>
               )}
-            </tbody>
-          </DataTable>
+            </div>
+          </>
         )}
 
         {tab === "motorista" && (
@@ -384,26 +430,49 @@ export default function RelatoriosPage() {
             : porMotorista.length === 0
               ? <EmptyState message="Nenhum pedido concluído neste período." icon="📊" />
               : (
-                <DataTable count={porMotorista.length} label="motoristas">
-                  <thead>
-                    <tr>
-                      <Th>Motorista</Th>
-                      <Th style={{ textAlign: "right" }}>Qtd Pedidos</Th>
-                      <Th style={{ textAlign: "right" }}>Receita</Th>
-                      <Th style={{ textAlign: "right" }}>KM Rodado</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {porMotorista.map(r => (
-                      <Tr key={r.chave}>
-                        <Td style={{ fontWeight: 600 }}>{r.label}</Td>
-                        <Td style={{ textAlign: "right" }}>{r.qtdPedidos}</Td>
-                        <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
-                        <Td style={{ textAlign: "right" }}>{r.km.toLocaleString("pt-BR")}</Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </DataTable>
+                <>
+                  {/* Desktop */}
+                  <div className="m-hide">
+                    <DataTable count={porMotorista.length} label="motoristas">
+                      <thead>
+                        <tr>
+                          <Th>Motorista</Th>
+                          <Th style={{ textAlign: "right" }}>Qtd Pedidos</Th>
+                          <Th style={{ textAlign: "right" }}>Receita</Th>
+                          <Th style={{ textAlign: "right" }}>KM Rodado</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {porMotorista.map(r => (
+                          <Tr key={r.chave}>
+                            <Td style={{ fontWeight: 600 }}>{r.label}</Td>
+                            <Td style={{ textAlign: "right" }}>{r.qtdPedidos}</Td>
+                            <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
+                            <Td style={{ textAlign: "right" }}>{r.km.toLocaleString("pt-BR")}</Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+
+                  {/* Mobile */}
+                  <div className="m-show-block">
+                    <MobileList count={porMotorista.length} label="motoristas">
+                      {porMotorista.map(r => (
+                        <MobileCard
+                          key={r.chave}
+                          title={r.label}
+                          highlight="#2563eb"
+                          details={[
+                            { label: "Qtd Pedidos", value: r.qtdPedidos },
+                            { label: "Receita",     value: <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</span> },
+                            { label: "KM Rodado",   value: r.km.toLocaleString("pt-BR") },
+                          ]}
+                        />
+                      ))}
+                    </MobileList>
+                  </div>
+                </>
               )
         )}
 
@@ -413,34 +482,61 @@ export default function RelatoriosPage() {
             : porVeiculo.length === 0
               ? <EmptyState message="Nenhum dado de veículo neste período." icon="🚛" />
               : (
-                <DataTable count={porVeiculo.length} label="veículos">
-                  <thead>
-                    <tr>
-                      <Th>Veículo</Th>
-                      <Th style={{ textAlign: "right" }}>Pedidos</Th>
-                      <Th style={{ textAlign: "right" }}>Receita</Th>
-                      <Th style={{ textAlign: "right" }}>Combustível</Th>
-                      <Th style={{ textAlign: "right" }}>Despesas</Th>
-                      <Th style={{ textAlign: "right" }}>Custo Total</Th>
-                      <Th style={{ textAlign: "right" }}>Lucro</Th>
-                      <Th style={{ textAlign: "right" }}>Margem</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {porVeiculo.map(r => (
-                      <Tr key={r.chave}>
-                        <Td style={{ fontWeight: 600 }}>{r.label}</Td>
-                        <Td style={{ textAlign: "right" }}>{r.qtdPedidos}</Td>
-                        <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
-                        <Td style={{ textAlign: "right", color: "#64748b" }}>{fmtBRL(r.custoCombustivel)}</Td>
-                        <Td style={{ textAlign: "right", color: "#64748b" }}>{fmtBRL(r.custoDespesas)}</Td>
-                        <Td style={{ textAlign: "right", color: "#dc2626" }}>{fmtBRL(r.custoTotal)}</Td>
-                        <Td style={{ textAlign: "right", fontWeight: 700, color: r.lucro >= 0 ? "#16a34a" : "#dc2626" }}>{fmtBRL(r.lucro)}</Td>
-                        <Td style={{ textAlign: "right", color: r.margem >= 0 ? "#16a34a" : "#dc2626" }}>{fmtPct(r.margem)}</Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </DataTable>
+                <>
+                  {/* Desktop */}
+                  <div className="m-hide">
+                    <DataTable count={porVeiculo.length} label="veículos">
+                      <thead>
+                        <tr>
+                          <Th>Veículo</Th>
+                          <Th style={{ textAlign: "right" }}>Pedidos</Th>
+                          <Th style={{ textAlign: "right" }}>Receita</Th>
+                          <Th style={{ textAlign: "right" }}>Combustível</Th>
+                          <Th style={{ textAlign: "right" }}>Despesas</Th>
+                          <Th style={{ textAlign: "right" }}>Custo Total</Th>
+                          <Th style={{ textAlign: "right" }}>Lucro</Th>
+                          <Th style={{ textAlign: "right" }}>Margem</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {porVeiculo.map(r => (
+                          <Tr key={r.chave}>
+                            <Td style={{ fontWeight: 600 }}>{r.label}</Td>
+                            <Td style={{ textAlign: "right" }}>{r.qtdPedidos}</Td>
+                            <Td style={{ textAlign: "right", color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</Td>
+                            <Td style={{ textAlign: "right", color: "#64748b" }}>{fmtBRL(r.custoCombustivel)}</Td>
+                            <Td style={{ textAlign: "right", color: "#64748b" }}>{fmtBRL(r.custoDespesas)}</Td>
+                            <Td style={{ textAlign: "right", color: "#dc2626" }}>{fmtBRL(r.custoTotal)}</Td>
+                            <Td style={{ textAlign: "right", fontWeight: 700, color: r.lucro >= 0 ? "#16a34a" : "#dc2626" }}>{fmtBRL(r.lucro)}</Td>
+                            <Td style={{ textAlign: "right", color: r.margem >= 0 ? "#16a34a" : "#dc2626" }}>{fmtPct(r.margem)}</Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+
+                  {/* Mobile */}
+                  <div className="m-show-block">
+                    <MobileList count={porVeiculo.length} label="veículos">
+                      {porVeiculo.map(r => (
+                        <MobileCard
+                          key={r.chave}
+                          title={r.label}
+                          highlight={r.lucro >= 0 ? "#16a34a" : "#dc2626"}
+                          details={[
+                            { label: "Pedidos",      value: r.qtdPedidos },
+                            { label: "Receita",      value: <span style={{ color: "#16a34a", fontWeight: 600 }}>{fmtBRL(r.receita)}</span> },
+                            { label: "Combustível",  value: fmtBRL(r.custoCombustivel) },
+                            { label: "Despesas",     value: fmtBRL(r.custoDespesas) },
+                            { label: "Custo Total",  value: <span style={{ color: "#dc2626" }}>{fmtBRL(r.custoTotal)}</span> },
+                            { label: "Lucro",        value: <span style={{ fontWeight: 700, color: r.lucro >= 0 ? "#16a34a" : "#dc2626" }}>{fmtBRL(r.lucro)}</span> },
+                            { label: "Margem",       value: <span style={{ color: r.margem >= 0 ? "#16a34a" : "#dc2626" }}>{fmtPct(r.margem)}</span> },
+                          ]}
+                        />
+                      ))}
+                    </MobileList>
+                  </div>
+                </>
               )
         )}
 

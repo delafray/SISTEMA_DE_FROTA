@@ -230,7 +230,7 @@ export default async function DashboardPage() {
               <div style={{ fontSize: "11px", fontWeight: 700, color: "#374151", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
                 🚛 Status da Frota Agora
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(180px, 1fr))", gap: "8px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(150px, 1fr))", gap: "8px" }}>
                 {frota.map((v, i) => {
                   const emRota = v.status_pedido === "em_andamento";
                   const cfg = emRota ? cfgEmViagem : cfgDisponivel;
@@ -260,13 +260,13 @@ export default async function DashboardPage() {
           );
         })()}
 
-        <div className="kpi-grid-3 m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+        <div className="kpi-grid-3 m-kpi-grid" style={{ display: "grid", gap: "12px" }}>
           <KpiCard label="Total de Pedidos"  value={totalPedidos ?? 0}     color="info" />
           <KpiCard label="Em Andamento"      value={pedidosAndamento ?? 0} color="warning" />
           <KpiCard label="Agendados"         value={pedidosAgendados ?? 0} color="default" />
         </div>
 
-        <div className="kpi-grid-4 m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
+        <div className="kpi-grid-4 m-kpi-grid" style={{ display: "grid", gap: "12px" }}>
           <KpiCard label="Veículos Ativos"       value={veiculosAtivos ?? 0}   color="success" />
           <KpiCard label="Motoristas Ativos"     value={motoristasAtivos ?? 0} color="success" />
           <KpiCard label="Receita do Mês"        value={fmtBRL(receitaMes)}    color="success" />
@@ -286,7 +286,7 @@ export default async function DashboardPage() {
               <div style={{ fontSize: "11px", fontWeight: 700, color: "#1e40af", textTransform: "uppercase", letterSpacing: "0.06em", marginBottom: "8px" }}>
                 🚛 Em Rota Agora
               </div>
-              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))", gap: "10px" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(240px, 1fr))", gap: "10px" }}>
                 {ativos.map(p => {
                   const m = Array.isArray(p.motoristas) ? p.motoristas[0] : p.motoristas;
                   const v = Array.isArray(p.veiculos)   ? p.veiculos[0]   : p.veiculos;
@@ -356,7 +356,7 @@ export default async function DashboardPage() {
               </table>
             </div>
 
-            <div className="m-show" style={{ display: "none", flexDirection: "column", gap: "0" }}>
+            <div className="m-show" style={{ flexDirection: "column", gap: "0" }}>
               {pedidosRecentesArr.map(p => {
                 const m = Array.isArray(p.motoristas) ? p.motoristas[0] : p.motoristas;
                 const v = Array.isArray(p.veiculos)   ? p.veiculos[0]   : p.veiculos;

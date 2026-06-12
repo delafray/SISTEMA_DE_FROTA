@@ -67,11 +67,7 @@ export default function EditarUsuarioPage() {
         title={`Editar Usuário — ${nome || "..."}`}
         actions={
           <>
-            <Btn href="/usuarios" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-            <Btn type="submit" form="edit-user-form" variant="primary" disabled={pending}>
-              {pending ? "Salvando..." : "Atualizar"}
-            </Btn>
           </>
         }
       />

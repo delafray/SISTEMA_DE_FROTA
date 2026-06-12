@@ -217,7 +217,7 @@ export default function DespachoPage() {
             className="m-fab mobile-only"
             title={`Despachar ${selecionados.size} selecionado(s)`}
             aria-label={`Despachar ${selecionados.size} selecionado(s)`}
-            style={{ fontSize: "12px", width: "auto", padding: "0 16px", borderRadius: "24px" }}
+            style={{ fontSize: "12px", minHeight: "44px", minWidth: "44px", paddingLeft: "20px", paddingRight: "20px", borderRadius: "24px", width: "auto" }}
           >
             Despachar {selecionados.size}
           </button>

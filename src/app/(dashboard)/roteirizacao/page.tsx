@@ -27,6 +27,7 @@ import {
   selectStyle,
 } from '@/components/ui/ds';
 import { googleMapsMultiStop } from '@/lib/routing/deepLinks';
+import { MobileCard, MobileList } from '@/components/mobile';
 
 /**
  * Monta link wa.me com a rota formatada pra enviar ao motorista.
@@ -213,7 +214,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
   if (loading) return <div style={{ padding: 20 }}>Carregando...</div>;
 
   return (
-    <div style={{ padding: '20px', maxWidth: 1200, margin: '0 auto' }}>
+    <div style={{ padding: '16px', maxWidth: 1200, margin: '0 auto', paddingBottom: 'calc(16px + env(safe-area-inset-bottom))' }}>
       <PageHeader title="Roteirização" subtitle="Otimize rotas e veja o histórico." />
 
       {/* FORM: Otimizar nova rota */}
@@ -230,7 +231,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
           🚀 Otimizar nova rota
         </h2>
 
-        <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div className="m-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div>
             <label style={labelStyle}>Motorista *</label>
             <select
@@ -251,6 +252,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
             <label style={labelStyle}>Origem — Latitude *</label>
             <input
               type="number"
+              inputMode="decimal"
               step="0.000001"
               value={origemLat}
               onChange={(e) => setOrigemLat(e.target.value)}
@@ -263,6 +265,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
             <label style={labelStyle}>Origem — Longitude *</label>
             <input
               type="number"
+              inputMode="decimal"
               step="0.000001"
               value={origemLng}
               onChange={(e) => setOrigemLng(e.target.value)}
@@ -276,7 +279,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
           <Btn variant="outline" onClick={handleUsarMinhaLocalizacao}>
             📍 Usar minha localização
           </Btn>
-          <Btn variant="primary" onClick={handleOtimizar} disabled={otimizando}>
+          <Btn variant="primary" onClick={handleOtimizar} loading={otimizando}>
             {otimizando ? 'Otimizando…' : '🎯 Otimizar agora'}
           </Btn>
         </div>
@@ -351,45 +354,83 @@ export default function RoteirizacaoPage(): React.ReactElement {
         {rotas.length === 0 ? (
           <EmptyState message="Nenhuma rota ainda. Crie a primeira otimizando uma rota acima." />
         ) : (
-          <DataTable>
-            <thead>
-              <Tr>
-                <Th>Data</Th>
-                <Th>Motorista</Th>
-                <Th>Paradas</Th>
-                <Th>Km</Th>
-                <Th>Tempo</Th>
-                <Th>Status</Th>
-                <Th>Ações</Th>
-              </Tr>
-            </thead>
-            <tbody>
-              {rotas.map((r) => (
-                <Tr key={r.id}>
-                  <Td>{r.data}</Td>
-                  <Td>{motoristaNome(r.motorista_id)}</Td>
-                  <Td>{r.qtd_paradas}</Td>
-                  <Td>{r.distancia_total_km?.toFixed(1) ?? '—'} km</Td>
-                  <Td>{r.tempo_total_min ?? '—'} min</Td>
-                  <Td>
-                    <Badge variant={r.status === 'concluida' ? 'success' : r.status === 'em_andamento' ? 'info' : 'default'}>
-                      {r.status}
-                    </Badge>
-                  </Td>
-                  <Td>
-                    <a
-                      href={`/mobile/ajuste-rota?rota_id=${r.id}`}
-                      style={{ color: '#2563eb', fontSize: 13 }}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Ajustar →
-                    </a>
-                  </Td>
-                </Tr>
-              ))}
-            </tbody>
-          </DataTable>
+          <>
+            {/* Tabela — desktop */}
+            <div className="m-hide">
+              <DataTable>
+                <thead>
+                  <Tr>
+                    <Th>Data</Th>
+                    <Th>Motorista</Th>
+                    <Th>Paradas</Th>
+                    <Th>Km</Th>
+                    <Th>Tempo</Th>
+                    <Th>Status</Th>
+                    <Th>Ações</Th>
+                  </Tr>
+                </thead>
+                <tbody>
+                  {rotas.map((r) => (
+                    <Tr key={r.id}>
+                      <Td>{r.data}</Td>
+                      <Td>{motoristaNome(r.motorista_id)}</Td>
+                      <Td>{r.qtd_paradas}</Td>
+                      <Td>{r.distancia_total_km?.toFixed(1) ?? '—'} km</Td>
+                      <Td>{r.tempo_total_min ?? '—'} min</Td>
+                      <Td>
+                        <Badge variant={r.status === 'concluida' ? 'success' : r.status === 'em_andamento' ? 'info' : 'default'}>
+                          {r.status}
+                        </Badge>
+                      </Td>
+                      <Td>
+                        <a
+                          href={`/mobile/ajuste-rota?rota_id=${r.id}`}
+                          style={{ color: '#2563eb', fontSize: 13 }}
+                          target="_blank"
+                          rel="noreferrer"
+                        >
+                          Ajustar →
+                        </a>
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </div>
+
+            {/* Cards — mobile */}
+            <div className="m-show-block">
+              <MobileList count={rotas.length} label="rotas">
+                {rotas.map((r) => (
+                  <MobileCard
+                    key={r.id}
+                    title={motoristaNome(r.motorista_id)}
+                    subtitle={r.data}
+                    badge={
+                      <Badge variant={r.status === 'concluida' ? 'success' : r.status === 'em_andamento' ? 'info' : 'default'}>
+                        {r.status}
+                      </Badge>
+                    }
+                    details={[
+                      { label: 'Paradas', value: r.qtd_paradas },
+                      { label: 'Km', value: r.distancia_total_km != null ? `${r.distancia_total_km.toFixed(1)} km` : '—' },
+                      { label: 'Tempo', value: r.tempo_total_min != null ? `${r.tempo_total_min} min` : '—' },
+                    ]}
+                    actions={
+                      <a
+                        href={`/mobile/ajuste-rota?rota_id=${r.id}`}
+                        style={{ color: '#2563eb', fontSize: 13, minHeight: 44, display: 'inline-flex', alignItems: 'center' }}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Ajustar →
+                      </a>
+                    }
+                  />
+                ))}
+              </MobileList>
+            </div>
+          </>
         )}
       </section>
     </div>
@@ -426,6 +467,9 @@ const resultadoStyle: React.CSSProperties = {
 
 const btnLinkStyle: React.CSSProperties = {
   padding: '8px 14px',
+  minHeight: 44,
+  display: 'inline-flex',
+  alignItems: 'center',
   color: '#fff',
   borderRadius: 6,
   textDecoration: 'none',

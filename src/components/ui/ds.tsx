@@ -14,6 +14,16 @@ import { UserProfile } from "@/components/ui/UserProfile";
 // ─── BTN ───────────────────────────────────────────────────────────────────────
 type BtnVariant = "primary" | "danger" | "ghost" | "outline";
 
+/** Spinner inline (SMIL — anima sem depender de CSS global) */
+const BtnSpinner: React.FC = () => (
+  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" aria-hidden style={{ flexShrink: 0 }}>
+    <circle cx="12" cy="12" r="9" stroke="currentColor" strokeOpacity="0.3" strokeWidth="3" />
+    <path d="M21 12a9 9 0 0 0-9-9" stroke="currentColor" strokeWidth="3" strokeLinecap="round">
+      <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+    </path>
+  </svg>
+);
+
 export const Btn = React.forwardRef<
   HTMLButtonElement,
   React.ButtonHTMLAttributes<HTMLButtonElement> & {
@@ -21,8 +31,10 @@ export const Btn = React.forwardRef<
     size?: "xs" | "sm" | "md";
     href?: string;
     icon?: React.ReactNode;
+    /** Ação async em curso: desabilita, mostra spinner e segura clique duplo. */
+    loading?: boolean;
   }
->(({ children, variant = "primary", size = "sm", href, icon, className = "", ...props }, ref) => {
+>(({ children, variant = "primary", size = "sm", href, icon, loading = false, className = "", disabled, ...props }, ref) => {
   const colors: Record<BtnVariant, React.CSSProperties> = {
     primary: { background: "#2563eb", color: "#fff" },
     danger:  { background: "#ef4444", color: "#fff" },
@@ -40,18 +52,40 @@ export const Btn = React.forwardRef<
     ...sizes[size],
     display: "inline-flex",
     alignItems: "center",
+    justifyContent: "center",
     gap: "6px",
     fontWeight: 600,
     borderRadius: "8px",
     border: colors[variant].border as string || "none",
-    cursor: "pointer",
+    cursor: loading ? "wait" : "pointer",
+    opacity: loading ? 0.75 : undefined,
     transition: "all 150ms",
     textDecoration: "none",
     whiteSpace: "nowrap",
   };
 
-  if (href) return <Link href={href} style={style} className={className}>{icon}{children}</Link>;
-  return <button ref={ref} style={style} className={className} {...props}>{icon}{children}</button>;
+  // m-touch: alvo de toque mínimo 44px no mobile (Apple HIG) — só age <768px.
+  const cls = `m-touch ${className}`.trim();
+
+  // Link precisa do onClick repassado (ex.: stopPropagation dentro de card clicável)
+  if (href) {
+    return (
+      <Link
+        href={href}
+        style={style}
+        className={cls}
+        onClick={props.onClick as unknown as React.MouseEventHandler<HTMLAnchorElement>}
+      >
+        {icon}{children}
+      </Link>
+    );
+  }
+  return (
+    <button ref={ref} style={style} className={cls} disabled={disabled || loading} {...props}>
+      {loading ? <BtnSpinner /> : icon}
+      {children}
+    </button>
+  );
 });
 Btn.displayName = "Btn";
 
@@ -508,8 +542,10 @@ export const Alert: React.FC<{
 // ─── SEARCH INPUT ──────────────────────────────────────────────────────────────
 export const SearchInput: React.FC<
   React.InputHTMLAttributes<HTMLInputElement>
-> = (props) => (
+> = ({ className = "", ...props }) => (
   <input
+    // m-search-full: no mobile o campo ocupa a largura toda (mobile.css)
+    className={`m-search-full ${className}`.trim()}
     style={{
       ...inputStyle,
       width: "100%",
@@ -528,7 +564,7 @@ export const ActionBtn = React.forwardRef<
     href?: string;
     title: string;
   }
->(({ children, variant = "default", href, ...props }, ref) => {
+>(({ children, variant = "default", href, className = "", ...props }, ref) => {
   const colors = {
     default: "#94a3b8",
     danger:  "#ef4444",
@@ -550,7 +586,10 @@ export const ActionBtn = React.forwardRef<
     transition: "all 150ms",
   };
 
-  if (href) return <Link href={href} style={style} title={props.title}>{children}</Link>;
-  return <button ref={ref} style={style} {...props}>{children}</button>;
+  // m-touch-grow: 28px no desktop; no mobile cresce pro alvo de 44px (mobile.css)
+  const cls = `m-touch-grow ${className}`.trim();
+
+  if (href) return <Link href={href} style={style} className={cls} title={props.title}>{children}</Link>;
+  return <button ref={ref} style={style} className={cls} {...props}>{children}</button>;
 });
 ActionBtn.displayName = "ActionBtn";

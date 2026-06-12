@@ -177,7 +177,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
           {rodadoAtual != null && <Stat label="Rodado até agora" value={`${km(rodadoAtual)} km`} color="#16a34a" />}
         </div>
         <button type="button" onClick={abrirPopup}
-          style={{ padding: "8px 14px", background: "#1e40af", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+          style={{ padding: "12px 14px", background: "#1e40af", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, fontSize: 13, cursor: "pointer", minHeight: "44px" }}>
           {atual ? "Trocar / Retirar vínculo" : "Definir vínculo"}
         </button>
       </div>
@@ -206,7 +206,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
 
       {popup && (
         <div onClick={() => setPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460, maxHeight: "80vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, fontSize: 14 }}>Trocar vínculo do veículo</div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
               {erro && <div style={{ padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#b91c1c", fontSize: 12 }}>{erro}</div>}
@@ -225,7 +225,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
                       const sel = motSel === m.id;
                       return (
                         <button key={m.id} type="button" onClick={() => escolherMotorista(m)}
-                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "8px 10px", border: "none", borderBottom: "1px solid #f1f5f9", textAlign: "left", cursor: "pointer", fontSize: 13, background: sel ? "#dbeafe" : outro ? "#fff7ed" : "#fff" }}>
+                          style={{ display: "flex", alignItems: "center", gap: 8, width: "100%", padding: "11px 10px", border: "none", borderBottom: "1px solid #f1f5f9", textAlign: "left", cursor: "pointer", fontSize: 13, background: sel ? "#dbeafe" : outro ? "#fff7ed" : "#fff", minHeight: "44px" }}>
                           <Dot on={!!m.usuario_id} />
                           <span style={{ fontWeight: 600 }}>{m.nome}</span>
                           {outro && <span style={{ marginLeft: "auto", fontSize: 11, color: "#b45309", fontWeight: 700 }}>🚛 {outro.placa ?? "?"}{outro.apelido ? ` (${outro.apelido})` : ""}</span>}

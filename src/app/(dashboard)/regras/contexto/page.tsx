@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { PageHeader, FormField, inputStyle, Btn } from "@/components/ui/ds";
 import { variacoesTelefone } from "@/lib/utils/telefone";
 import { montarContextoIA, type RegraCtx, type TelCtx, type Contexto } from "@/lib/whatsapp/montarContexto";
@@ -20,8 +21,7 @@ export default function ContextoPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const { data } = await supabase.from("regras")
         .select("id,nome,tipo,gatilhos,frases_exemplo,resposta,ativa,fixa")
         .order("fixa", { ascending: false }).order("prioridade", { ascending: false });
@@ -65,7 +65,7 @@ export default function ContextoPage() {
 
           <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 2fr", gap: 16 }}>
             <FormField label="Telefone (digite como quiser)">
-              <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="31 98979-1317" style={inputStyle} />
+              <input value={telefone} onChange={(e) => setTelefone(e.target.value)} placeholder="31 98979-1317" inputMode="tel" style={inputStyle} />
             </FormField>
             <FormField label="Mensagem do usuário">
               <input value={mensagem} onChange={(e) => setMensagem(e.target.value)} style={inputStyle} />

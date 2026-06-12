@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
 import { RemoverUsuarioBtn } from "@/components/ui/RemoverUsuarioBtn";
@@ -34,12 +35,12 @@ export default function UsuariosPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
-      setMeId(auth.user.id);
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
+      setMeId(user.id);
 
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
 
@@ -118,6 +119,24 @@ export default function UsuariosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Toolbar mobile — visível só no mobile, acima das cards */}
+        <div className="m-show-block" style={{ marginBottom: "12px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <SearchInput
+              placeholder="Buscar por nome ou login..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+            />
+            <select value={filtroRole} onChange={e => setFiltroRole(e.target.value)}
+              style={{ ...selectStyle, width: "100%" }}>
+              <option value="">Todos os perfis</option>
+              <option value="master">Master</option>
+              <option value="gestor">Gestor</option>
+              <option value="motorista">Motorista</option>
+            </select>
+          </div>
+        </div>
+
         <div className="m-hide">
         <DataTable count={filtrados.length} label="usuários" toolbar={toolbar}>
           <thead>
@@ -186,7 +205,8 @@ export default function UsuariosPage() {
             return (
               <MobileCard
                 key={u.usuario_id}
-                href={isMe ? undefined : `/usuarios/${u.usuario_id}/editar`}
+                // onClick (não href): card com botão dentro viraria <a> aninhado
+                onClick={isMe ? undefined : () => router.push(`/usuarios/${u.usuario_id}/editar`)}
                 title={nome || "—"}
                 subtitle={getLogin(u)}
                 badge={
@@ -195,6 +215,11 @@ export default function UsuariosPage() {
                   </Badge>
                 }
                 highlight={isMe ? "#2563eb" : undefined}
+                actions={!isMe ? (
+                  <div onClick={e => e.stopPropagation()}>
+                    <RemoverUsuarioBtn usuarioId={u.usuario_id} empresaId={empresaId} />
+                  </div>
+                ) : undefined}
               />
             );
           })}

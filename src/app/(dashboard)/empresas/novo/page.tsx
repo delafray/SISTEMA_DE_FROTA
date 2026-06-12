@@ -98,6 +98,7 @@ export default function NovaEmpresaPage() {
                   <IMaskInput
                     mask="00.000.000/0000-00"
                     onAccept={(v) => setRaw("cnpj", v as string)}
+                    inputMode="numeric"
                     style={inputStyle}
                     required
                   />
@@ -119,6 +120,7 @@ export default function NovaEmpresaPage() {
                   <IMaskInput
                     mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
                     onAccept={(v) => setRaw("telefone", v as string)}
+                    inputMode="tel"
                     style={inputStyle}
                   />
                 </FormField>
@@ -142,6 +144,7 @@ export default function NovaEmpresaPage() {
                     mask="00000-000"
                     onAccept={(v) => setRaw("cep", v as string)}
                     onBlur={handleCepBlur}
+                    inputMode="numeric"
                     style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }}
                     placeholder="00000-000"
                   />

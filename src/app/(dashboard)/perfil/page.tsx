@@ -62,7 +62,7 @@ export default function PerfilPage() {
       <PageHeader title="Meu Perfil" />
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
-        <div style={{ maxWidth: 520 }}>
+        <div style={{ maxWidth: 520, width: "100%" }}>
           {msg && (
             <div style={{ marginBottom: 16 }}>
               <Alert variant={msg.tipo === "ok" ? "success" : "error"}>

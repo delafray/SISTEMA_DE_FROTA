@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 type Veiculo   = { id: string; placa: string; modelo: string };
@@ -41,10 +42,10 @@ export default function EditarAbastecimentoPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       const [{ data: abast }, { data: v }, { data: m }] = await Promise.all([
@@ -149,24 +150,24 @@ export default function EditarAbastecimentoPage() {
             <FormSection title="Dados do Abastecimento">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="KM no Abastecimento">
-                  <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" min="0" style={inputStyle} placeholder="150000" />
+                  <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" inputMode="numeric" min="0" style={inputStyle} placeholder="150000" />
                 </FormField>
                 <FormField label="Litros *">
-                  <input value={f.litros} onChange={set("litros")} type="number" step="0.01" min="0" style={inputStyle} placeholder="100.00" />
+                  <input value={f.litros} onChange={set("litros")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="100.00" />
                 </FormField>
                 <FormField label="Valor por Litro (R$)">
-                  <input value={f.valor_litro} onChange={set("valor_litro")} type="number" step="0.001" min="0" style={inputStyle} placeholder="6.490" />
+                  <input value={f.valor_litro} onChange={set("valor_litro")} type="number" inputMode="decimal" step="0.001" min="0" style={inputStyle} placeholder="6.490" />
                 </FormField>
                 <FormField label="Valor Total (R$) *">
-                  <input value={f.valor_total} onChange={set("valor_total")} type="number" step="0.01" min="0" style={inputStyle} placeholder="649.00" />
+                  <input value={f.valor_total} onChange={set("valor_total")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="649.00" />
                 </FormField>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Posto">
                     <input value={f.posto} onChange={set("posto")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="POSTO IPIRANGA BR-101" />
                   </FormField>
                 </div>
-                <div style={{ display: "flex", alignItems: "flex-end", paddingBottom: "10px" }}>
-                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer" }}>
+                <div style={{ display: "flex", alignItems: "flex-end" }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", minHeight: "44px", padding: "12px 0" }}>
                     <input
                       type="checkbox"
                       checked={f.confirmado}

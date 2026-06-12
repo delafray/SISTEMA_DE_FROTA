@@ -68,7 +68,7 @@ export default function NovoVeiculoPage() {
         actions={
           <>
             <Btn href="/veiculos" variant="ghost">← Voltar para Lista</Btn>
-            <Btn href="/veiculos" variant="outline">Cancelar</Btn>
+            <span className="m-hide"><Btn href="/veiculos" variant="outline">Cancelar</Btn></span>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
@@ -159,20 +159,20 @@ export default function NovoVeiculoPage() {
                   <input value={f.cor} onChange={set("cor")} style={{ ...inputStyle, textTransform: "uppercase" }} placeholder="BRANCO" />
                 </FormField>
                 <FormField label="Eixos">
-                  <input value={f.eixos} onChange={set("eixos")} type="number" style={inputStyle} />
+                  <input value={f.eixos} onChange={set("eixos")} type="number" inputMode="numeric" style={inputStyle} />
                 </FormField>
 
                 <FormField label="KM Atual">
-                  <input value={f.km_atual} onChange={set("km_atual")} type="number" style={inputStyle} />
+                  <input value={f.km_atual} onChange={set("km_atual")} type="number" inputMode="numeric" style={inputStyle} />
                 </FormField>
                 <FormField label="Cap. Carga (kg)">
-                  <input value={f.capacidade_carga_kg} onChange={set("capacidade_carga_kg")} type="number" style={inputStyle} />
+                  <input value={f.capacidade_carga_kg} onChange={set("capacidade_carga_kg")} type="number" inputMode="decimal" style={inputStyle} />
                 </FormField>
                 <FormField label="PBT (kg)">
-                  <input value={f.pbt_kg} onChange={set("pbt_kg")} type="number" style={inputStyle} />
+                  <input value={f.pbt_kg} onChange={set("pbt_kg")} type="number" inputMode="decimal" style={inputStyle} />
                 </FormField>
                 <FormField label="Tanque (L)">
-                  <input value={f.capacidade_tanque} onChange={set("capacidade_tanque")} type="number" style={inputStyle} />
+                  <input value={f.capacidade_tanque} onChange={set("capacidade_tanque")} type="number" inputMode="decimal" style={inputStyle} />
                 </FormField>
               </div>
             </FormSection>
@@ -191,7 +191,7 @@ export default function NovoVeiculoPage() {
                   <input value={f.apolice_numero} onChange={set("apolice_numero")} style={inputStyle} />
                 </FormField>
                 <FormField label="Valor Aquisição (R$)">
-                  <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" style={inputStyle} />
+                  <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" inputMode="decimal" style={inputStyle} />
                 </FormField>
               </div>
             </FormSection>

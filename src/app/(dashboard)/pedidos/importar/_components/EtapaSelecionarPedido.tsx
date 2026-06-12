@@ -2,6 +2,7 @@
 
 // ─── Etapa 1: Seletor de pedido de destino ───────────────────────────────────
 
+import { useState } from "react";
 import { Alert, Btn, FormField, selectStyle } from "@/components/ui/ds";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import type { PedidoOpcao } from "./tipos";
@@ -30,6 +31,13 @@ export function EtapaSelecionarPedido({
   onChangePedido,
   onConfirmar,
 }: Props) {
+  const [confirming, setConfirming] = useState(false);
+
+  const handleConfirmar = () => {
+    setConfirming(true);
+    onConfirmar();
+  };
+
   return (
     <div style={{ background: "#fff", borderRadius: "12px", padding: "28px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
       <h2 style={{ fontSize: "15px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>
@@ -70,10 +78,11 @@ export function EtapaSelecionarPedido({
             <Btn
               type="button"
               variant="primary"
-              disabled={!pedidoSelecionadoId}
-              onClick={onConfirmar}
+              disabled={!pedidoSelecionadoId || confirming}
+              loading={confirming}
+              onClick={handleConfirmar}
             >
-              Continuar com este pedido
+              {confirming ? "Carregando..." : "Continuar com este pedido"}
             </Btn>
           </div>
         </>

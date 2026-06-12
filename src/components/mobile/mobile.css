@@ -132,6 +132,12 @@
     min-height: 44px;
     min-width: 44px;
   }
+  /* Para botões com width/height inline fixos (ex.: ActionBtn 28px):
+     min-* vence width/height inline sem precisar de !important. */
+  .m-touch-grow {
+    min-height: 44px;
+    min-width: 44px;
+  }
 }
 
 /* ── Card de listagem mobile ── */

@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import JSZip from "jszip";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   parseLoteNFe,
@@ -81,13 +82,13 @@ export function useImportacao(pedidoIdUrl: string | null) {
   // ── carrega empresa ────────────────────────────────────────────────────────
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
 
       const { data: ue } = await supabase
         .from("usuario_empresas")
         .select("empresa_id")
-        .eq("usuario_id", auth.user.id)
+        .eq("usuario_id", user.id)
         .eq("is_padrao", true)
         .single();
 

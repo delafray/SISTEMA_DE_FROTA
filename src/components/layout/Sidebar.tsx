@@ -54,9 +54,24 @@ function SystemStatusBadge() {
   const label  = status.ok ? 'Sistemas OK' : 'Verificar serviços';
   const tip    = status.services.map(s => `${s.ok ? '✅' : '❌'} ${s.name}`).join('\n');
 
+  // URL do painel de monitoramento por env var — IP cravado de UMA implantação
+  // no fonte é proibido (regra do dono 11/06). Sem a var, o badge vira só status.
+  const monitorUrl = process.env.NEXT_PUBLIC_MONITOR_URL;
+  if (!monitorUrl) {
+    return (
+      <span title={tip || label} style={{ display: 'flex', alignItems: 'center', gap: '7px', padding: '5px 8px' }}>
+        <span style={{
+          width: '8px', height: '8px', borderRadius: '50%',
+          backgroundColor: color, flexShrink: 0, boxShadow: `0 0 6px ${color}88`,
+        }} />
+        <span style={{ fontSize: '11px', color: `${color}cc`, fontWeight: 500 }}>{label}</span>
+      </span>
+    );
+  }
+
   return (
     <a
-      href="http://129.80.27.159:3001"
+      href={monitorUrl}
       target="_blank"
       rel="noopener noreferrer"
       title={tip || label}
@@ -149,7 +164,7 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const handleSignOut = async () => {
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   return (

@@ -134,7 +134,8 @@ function WhatsAppSection({ empresaId }: { empresaId: string }) {
             <input
               value={novoNumero}
               onChange={e => setNovoNumero(e.target.value.replace(/\D/g, ''))}
-              style={{ ...inputStyle, width: 240 }}
+              inputMode="numeric"
+              style={{ ...inputStyle, width: "100%", maxWidth: 240 }}
               placeholder="5531999887766"
               maxLength={15}
             />
@@ -142,7 +143,7 @@ function WhatsAppSection({ empresaId }: { empresaId: string }) {
           <Btn
             type="button"
             variant="primary"
-            disabled={loading}
+            loading={loading}
             onClick={handleReconectar}
           >
             {loading ? 'Gerando QR...' : qr ? '🔄 Novo QR' : '📱 Reconectar WhatsApp'}
@@ -279,6 +280,7 @@ export default function EditarEmpresaPage() {
                 <FormField label="CNPJ">
                   <IMaskInput mask="00.000.000/0000-00" value={form.cnpj}
                     onAccept={(v) => setForm(f => ({ ...f, cnpj: v as string }))}
+                    inputMode="numeric"
                     style={inputStyle} />
                 </FormField>
                 <div style={{ gridColumn: "span 3" }}>
@@ -298,6 +300,7 @@ export default function EditarEmpresaPage() {
                   <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
                     value={form.telefone}
                     onAccept={(v) => setForm(f => ({ ...f, telefone: v as string }))}
+                    inputMode="tel"
                     style={inputStyle} />
                 </FormField>
                 <div style={{ gridColumn: "span 2" }}>
@@ -315,6 +318,7 @@ export default function EditarEmpresaPage() {
                   <IMaskInput mask="00000-000" value={form.cep}
                     onAccept={(v) => setForm(f => ({ ...f, cep: v as string }))}
                     onBlur={handleCepBlur}
+                    inputMode="numeric"
                     style={{ ...inputStyle, background: "#f0f9ff", borderColor: "#bae6fd" }} />
                 </FormField>
                 <div style={{ gridColumn: "span 3" }}>

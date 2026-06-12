@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { normalizar } from "@/lib/utils/normalizar";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
@@ -139,10 +140,10 @@ export default function PedidosListPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (ue?.empresa_id) setEmpresaId(ue.empresa_id as string);
     };
     init();
@@ -408,16 +409,26 @@ export default function PedidosListPage() {
         </div>
 
         {/* ── Busca Mobile ────────────────────────────────────────────────── */}
-        <div className="mobile-only" style={{ marginBottom: "4px" }}>
+        <div className="mobile-only" style={{ marginBottom: "4px", display: "flex", flexDirection: "column", gap: "8px" }}>
           <SearchInput
             placeholder="Buscar nº do pedido, cliente, destino, motorista ou placa..."
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
+          <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+            <option value="abertos">Em aberto (não concluídos)</option>
+            <option value="">Todos os status</option>
+            <option value="agendada">Agendado</option>
+            <option value="em_andamento">Em Andamento</option>
+            <option value="concluida">Concluído</option>
+            <option value="cancelada">Cancelado</option>
+          </select>
         </div>
 
         <MobileList count={filtradas.length} label="pedidos">
-          {loading ? null : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
+          {loading ? (
+            <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8" }}>Carregando...</div>
+          ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
             const concluido   = p.status === "concluida" || p.status === "concluido";
             const cancelado   = p.status === "cancelada" || p.status === "cancelado";
             const statusColor = concluido ? "#16a34a" : p.status === "em_andamento" ? "#2563eb" : cancelado ? "#ef4444" : "#eab308";
@@ -425,7 +436,7 @@ export default function PedidosListPage() {
             return (
               <MobileCard
                 key={p.id}
-                href={`/despacho/${p.id}`}
+                onClick={() => router.push(`/despacho/${p.id}`)}
                 title={cliente}
                 subtitle={resumoDestinos(entregas)}
                 badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}
@@ -439,6 +450,9 @@ export default function PedidosListPage() {
                   { label: "Veículo",    value: veicLabel },
                   { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
                 ]}
+                actions={
+                  <Btn href={`/pedidos/${p.id}/editar`} size="sm" onClick={e => e.stopPropagation()}>Editar</Btn>
+                }
               />
             );
           })}

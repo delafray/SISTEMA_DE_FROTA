@@ -32,15 +32,11 @@ export default function NovoUsuarioPage() {
 
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
-      <PageHeader 
-        title="Novo Usuário" 
+      <PageHeader
+        title="Novo Usuário"
         actions={
           <>
-            <Btn href="/usuarios" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-            <Btn type="submit" form="user-form" variant="primary" disabled={pending}>
-              {pending ? "Criando..." : "Salvar"}
-            </Btn>
           </>
         }
       />

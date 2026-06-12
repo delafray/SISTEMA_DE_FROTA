@@ -78,6 +78,7 @@ export function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onC
 
   return (
     <div
+      className="m-modal-overlay"
       style={{
         position: "fixed", inset: 0, zIndex: 9999,
         background: "rgba(0,0,0,0.45)",
@@ -86,14 +87,17 @@ export function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onC
       }}
       onClick={e => { if (e.target === e.currentTarget) onClose(); }}
     >
-      <div style={{
-        background: "#fff",
-        borderRadius: "12px",
-        padding: "28px",
-        width: "100%",
-        maxWidth: "480px",
-        boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
-      }}>
+      <div
+        className="m-modal-content m-modal-body"
+        style={{
+          background: "#fff",
+          borderRadius: "12px",
+          padding: "28px",
+          width: "100%",
+          maxWidth: "480px",
+          boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+        }}
+      >
         <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>
           {titulo}
         </h2>

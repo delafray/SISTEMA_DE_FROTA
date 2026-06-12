@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { empresaDoVeiculo } from "@/lib/utils/empresaDe";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
@@ -39,8 +40,7 @@ export default function NovoAbastecimentoPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       // Disponibilidade COMPARTILHADA entre os sócios → mostra TODOS os caminhões/motoristas ativos.
       const [{ data: v }, { data: m }] = await Promise.all([
         supabase.from("veiculos").select("id,placa,modelo").eq("ativo", true).order("placa"),
@@ -125,16 +125,16 @@ export default function NovoAbastecimentoPage() {
             <FormSection title="Dados do Abastecimento">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                 <FormField label="KM no Abastecimento">
-                  <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" min="0" style={inputStyle} placeholder="150000" />
+                  <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" inputMode="numeric" min="0" style={inputStyle} placeholder="150000" />
                 </FormField>
                 <FormField label="Litros *">
-                  <input value={f.litros} onChange={set("litros")} type="number" step="0.01" min="0" style={inputStyle} placeholder="100.00" />
+                  <input value={f.litros} onChange={set("litros")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="100.00" />
                 </FormField>
                 <FormField label="Valor por Litro (R$)">
-                  <input value={f.valor_litro} onChange={set("valor_litro")} type="number" step="0.001" min="0" style={inputStyle} placeholder="6.490" />
+                  <input value={f.valor_litro} onChange={set("valor_litro")} type="number" inputMode="decimal" step="0.001" min="0" style={inputStyle} placeholder="6.490" />
                 </FormField>
                 <FormField label="Valor Total (R$) *">
-                  <input value={f.valor_total} onChange={set("valor_total")} type="number" step="0.01" min="0" style={inputStyle} placeholder="649.00" />
+                  <input value={f.valor_total} onChange={set("valor_total")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="649.00" />
                 </FormField>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Posto">

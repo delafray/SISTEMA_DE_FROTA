@@ -13,6 +13,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { PageHeader, Btn } from "@/components/ui/ds";
 
 // Tabelas seguras + colunas de negócio (curado — nunca auth/perfis/telefones/regras).
@@ -73,6 +74,7 @@ export default function DadosRegraPage() {
   const [escopo, setEscopo] = useState<Record<string, unknown>>({});
   const [colunas, setColunas] = useState<Colunas>({});
   const [loading, setLoading] = useState(true);
+  const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
 
   // Estado da seção de escrita
@@ -87,8 +89,7 @@ export default function DadosRegraPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const { data } = await supabase.from("regras").select("nome,acoes,escopo_dados").eq("id", id).maybeSingle();
       if (data) {
         setNome(data.nome);
@@ -147,6 +148,8 @@ export default function DadosRegraPage() {
   };
 
   const salvar = async () => {
+    if (salvando) return;
+    setSalvando(true);
     setMsg("");
 
     // Montar escopo_dados final
@@ -155,42 +158,46 @@ export default function DadosRegraPage() {
     if (escritaFinal) escopoDadosFinal.escrita = escritaFinal;
     else delete escopoDadosFinal.escrita; // não gravar chave vazia
 
-    // --- Validação antes de gravar ---
-    const agora = Date.now();
-    const temAvisoRecente = agora - avisoValidacaoTs.current < SALVAR_MESMO_ASSIM_MS;
+    try {
+      // --- Validação antes de gravar ---
+      const agora = Date.now();
+      const temAvisoRecente = agora - avisoValidacaoTs.current < SALVAR_MESMO_ASSIM_MS;
 
-    if (!temAvisoRecente) {
-      try {
-        const res = await fetch("/api/regras/validar", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ escopo_dados: escopoDadosFinal }),
-        });
-        if (res.ok) {
-          const { ok: valOk, problemas } = await res.json() as {
-            ok: boolean;
-            problemas: { tabela: string; coluna: string; tipo: string; detalhe: string }[];
-          };
-          if (!valOk && problemas.length > 0) {
-            avisoValidacaoTs.current = Date.now();
-            const lista = problemas.map((p) => `${p.tabela}.${p.coluna} (${p.tipo})`).join(", ");
-            setMsg(`⚠️ Problemas: ${lista}. Clique Salvar novamente para gravar mesmo assim.`);
-            return; // não salva
+      if (!temAvisoRecente) {
+        try {
+          const res = await fetch("/api/regras/validar", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ escopo_dados: escopoDadosFinal }),
+          });
+          if (res.ok) {
+            const { ok: valOk, problemas } = await res.json() as {
+              ok: boolean;
+              problemas: { tabela: string; coluna: string; tipo: string; detalhe: string }[];
+            };
+            if (!valOk && problemas.length > 0) {
+              avisoValidacaoTs.current = Date.now();
+              const lista = problemas.map((p) => `${p.tabela}.${p.coluna} (${p.tipo})`).join(", ");
+              setMsg(`⚠️ Problemas: ${lista}. Clique Salvar novamente para gravar mesmo assim.`);
+              return; // não salva
+            }
           }
+          // Se res não ok (ex: 500), ignora e segue salvando (infra não bloqueia)
+        } catch {
+          // Falha de rede — segue com save normal
         }
-        // Se res não ok (ex: 500), ignora e segue salvando (infra não bloqueia)
-      } catch {
-        // Falha de rede — segue com save normal
       }
-    }
 
-    // Gravar (cast via JSON para satisfazer o tipo Json do Supabase)
-    const { error } = await supabase.from("regras")
-      .update({ escopo_dados: JSON.parse(JSON.stringify(escopoDadosFinal)), atualizado_em: new Date().toISOString() })
-      .eq("id", id);
-    avisoValidacaoTs.current = 0; // resetar após salvar
-    setMsg(error ? `Erro: ${error.message}` : "Salvo ✓");
-    setTimeout(() => setMsg(""), 2500);
+      // Gravar (cast via JSON para satisfazer o tipo Json do Supabase)
+      const { error } = await supabase.from("regras")
+        .update({ escopo_dados: JSON.parse(JSON.stringify(escopoDadosFinal)), atualizado_em: new Date().toISOString() })
+        .eq("id", id);
+      avisoValidacaoTs.current = 0; // resetar após salvar
+      setMsg(error ? `Erro: ${error.message}` : "Salvo ✓");
+      setTimeout(() => setMsg(""), 2500);
+    } finally {
+      setSalvando(false);
+    }
   };
 
   if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>Carregando…</div>;
@@ -212,7 +219,7 @@ export default function DadosRegraPage() {
       <PageHeader title={`Tabelas e campos — ${nome}`} actions={
         <>
           <Btn href={`/regras/${id}/editar`} variant="ghost">← Voltar</Btn>
-          <Btn onClick={salvar}>Salvar</Btn>
+          <Btn onClick={salvar} loading={salvando}>Salvar</Btn>
         </>
       } />
 
@@ -224,8 +231,8 @@ export default function DadosRegraPage() {
         )}
       </div>
 
-      {/* Matriz de colunas × ações */}
-      <div style={{ flex: "none", overflow: "auto", maxHeight: "60vh" }}>
+      {/* Matriz de colunas × ações — desktop */}
+      <div className="m-hide" style={{ flex: "none", overflow: "auto", maxHeight: "60vh" }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, width: "max-content" }}>
           <thead>
             {/* nomes das tabelas (agrupando) */}
@@ -277,6 +284,58 @@ export default function DadosRegraPage() {
             })}
           </tbody>
         </table>
+      </div>
+
+      {/* Variante mobile: lista vertical por tabela, colunas com toggles de ação */}
+      <div className="m-show-block" style={{ flex: 1, overflow: "auto", padding: "8px 12px 24px" }}>
+        {CAMPOS.map((g) => (
+          <div key={g.tabela} style={{ marginBottom: 16, background: "#fff", borderRadius: 8, border: "1px solid #e2e8f0", overflow: "hidden" }}>
+            <div style={{ background: "#0f172a", color: "#e2e8f0", fontSize: 11, fontWeight: 700, padding: "6px 12px", textTransform: "uppercase", letterSpacing: ".04em" }}>
+              {g.tabela}
+            </div>
+            {g.colunas.map((c) => (
+              <div key={c} style={{ display: "flex", alignItems: "center", borderBottom: "1px solid #f1f5f9", padding: "0 12px" }}>
+                <div style={{ flex: 1, fontSize: 12, color: "#334155", fontWeight: 600, paddingRight: 8 }}>{c}</div>
+                <div style={{ display: "flex", gap: 4 }}>
+                  {ACOES.map((a) => {
+                    const ativa = podeAcao(a.key);
+                    const on = marcado(g.tabela, c, a.key);
+                    return (
+                      <button
+                        key={a.key}
+                        type="button"
+                        onClick={() => toggle(g.tabela, c, a.key)}
+                        disabled={!ativa}
+                        title={ativa ? `${g.tabela}.${c} — ${a.label}` : "Ação fora do Acesso desta regra"}
+                        style={{
+                          minWidth: 44,
+                          minHeight: 44,
+                          border: "1px solid",
+                          borderColor: ativa ? a.color : "#e2e8f0",
+                          borderRadius: 6,
+                          background: !ativa ? "#f8fafc" : on ? a.bg : "#fff",
+                          color: ativa ? a.color : "#cbd5e1",
+                          fontWeight: 700,
+                          fontSize: 11,
+                          cursor: ativa ? "pointer" : "not-allowed",
+                          display: "flex",
+                          flexDirection: "column",
+                          alignItems: "center",
+                          justifyContent: "center",
+                          gap: 1,
+                          padding: "4px 6px",
+                        }}
+                      >
+                        <span style={{ fontSize: 14, lineHeight: 1 }}>{on ? "✓" : "○"}</span>
+                        <span style={{ fontSize: 9, lineHeight: 1 }}>{a.label}</span>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            ))}
+          </div>
+        ))}
       </div>
 
       {/* ------------------------------------------------------------------ */}

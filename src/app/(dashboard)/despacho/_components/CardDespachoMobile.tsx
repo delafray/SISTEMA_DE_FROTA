@@ -5,6 +5,7 @@
  * Extraído de despacho/page.tsx — sem mudança de comportamento ou visual.
  */
 
+import { useRouter } from "next/navigation";
 import { Badge, Btn } from "@/components/ui/ds";
 import { MobileCard } from "@/components/mobile";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
@@ -34,6 +35,7 @@ export function CardDespachoMobile({
   p, entregas, cliente,
   selecionado, onToggle, onDespachar, onTrocar, onVerRota,
 }: Props) {
+  const router = useRouter();
   const veicObj    = one<{ placa: string; apelido: string | null; modelo: string }>(p.veiculos);
   const motObj     = one<{ nome: string }>(p.motoristas);
   const veicLabel  = veicObj
@@ -45,6 +47,7 @@ export function CardDespachoMobile({
     <MobileCard
       title={`${rotuloPedido(p.numero, p.id)} · ${cliente}`}
       subtitle={resumoDestinos(entregas)}
+      onClick={() => router.push(`/despacho/${p.id}`)}
       badge={
         <Badge variant={STATUS_VAR[p.status] ?? "default"}>
           {STATUS_LABEL[p.status] ?? p.status}
@@ -59,8 +62,7 @@ export function CardDespachoMobile({
       ]}
       actions={
         !despachado ? (
-          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-            <Btn href={`/despacho/${p.id}`} variant="outline" size="sm">Ver</Btn>
+          <div style={{ display: "flex", gap: "8px", width: "100%" }} onClick={e => e.stopPropagation()}>
             <Btn
               variant="primary"
               size="sm"
@@ -86,8 +88,7 @@ export function CardDespachoMobile({
             </Btn>
           </div>
         ) : (
-          <div style={{ display: "flex", gap: "8px", width: "100%" }}>
-            <Btn href={`/despacho/${p.id}`} variant="outline" size="sm">Ver</Btn>
+          <div style={{ display: "flex", gap: "8px", width: "100%" }} onClick={e => e.stopPropagation()}>
             <Btn variant="outline" size="sm" onClick={onVerRota}>
               🗺️ Rota
             </Btn>

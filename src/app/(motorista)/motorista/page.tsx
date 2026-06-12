@@ -79,8 +79,10 @@ export default function MotoristaPage() {
       // local; offline (sem rede) usa o perfil salvo (valido por 7 dias).
       const auth = await obterSessaoComFallback(supabase);
       if (!auth.ok || !auth.sessao) {
-        if (auth.motivo === "role_negado") { router.push("/"); return; }
-        router.push("/login");
+        // replace: chute de guard não pode virar entrada de histórico (senão o
+        // botão voltar do celular passa a cair no login pra sempre).
+        if (auth.motivo === "role_negado") { router.replace("/"); return; }
+        router.replace("/login");
         return;
       }
 
@@ -142,7 +144,7 @@ export default function MotoristaPage() {
     await limparSessaoLocal();
     const supabase = createClient();
     await supabase.auth.signOut();
-    router.push("/login");
+    router.replace("/login");
   };
 
   // Pós-sucesso dos popups: atualiza o caminhão na tela e o snapshot offline

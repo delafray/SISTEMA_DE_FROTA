@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
@@ -31,10 +32,10 @@ export default function MotoristasPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       const data = await loadAll<Motorista>((from, to) =>
@@ -119,6 +120,26 @@ export default function MotoristasPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Mobile: toolbar de busca/filtro */}
+        <div className="m-show-block" style={{ marginBottom: "8px" }}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <SearchInput
+              placeholder="Buscar nome, CPF, cargo..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+            />
+            <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)}
+              style={{ ...selectStyle, minWidth: "100px", flex: "0 0 auto" }}>
+              <option value="">Todos</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </select>
+          </div>
+          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>
+            {filtrados.length} de {todos.length} motoristas
+          </div>
+        </div>
+
         {/* Desktop: tabela */}
         <div className="m-hide">
         <DataTable count={filtrados.length} label="motoristas" toolbar={toolbar}>

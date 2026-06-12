@@ -140,7 +140,7 @@ export function AbaPrincipal({
                   onKeyDown={e => { if (e.key === "Enter" && novoLocal.trim()) { e.preventDefault(); onSalvarLocais([...locais, novoLocal]); } }}
                   placeholder="Endereço de coleta (ex.: depósito, fornecedor...)"
                 />
-                <Btn variant="outline" size="xs" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => onSalvarLocais([...locais, novoLocal])}>
+                <Btn variant="outline" size="sm" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => onSalvarLocais([...locais, novoLocal])}>
                   {salvandoLocal ? "..." : "+ Adicionar"}
                 </Btn>
               </div>

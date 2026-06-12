@@ -78,8 +78,8 @@ export function EtapaPreview({
             </Th>
             <Th>Destinatário / Cliente</Th>
             <Th>Endereço</Th>
-            <Th>Nº Nota</Th>
-            <Th style={{ textAlign: "right" }}>Valor da Nota</Th>
+            <Th className="m-hide">Nº Nota</Th>
+            <Th className="m-hide" style={{ textAlign: "right" }}>Valor da Nota</Th>
             <Th>Status</Th>
           </tr>
         </thead>
@@ -99,8 +99,8 @@ export function EtapaPreview({
               <Td style={{ maxWidth: "280px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {l.endereco}
               </Td>
-              <Td>{l.numeroNota || "—"}</Td>
-              <Td style={{ textAlign: "right" }}>{fmtValor(l.valorNota)}</Td>
+              <Td className="m-hide">{l.numeroNota || "—"}</Td>
+              <Td className="m-hide" style={{ textAlign: "right" }}>{fmtValor(l.valorNota)}</Td>
               <Td>
                 {l.jaImportada ? (
                   <Badge variant="warning">Já importada</Badge>
@@ -147,8 +147,9 @@ export function EtapaPreview({
           type="button"
           variant="primary"
           disabled={importando || countSelecionadas === 0}
+          loading={importando}
           onClick={onImportar}
-          style={{ minWidth: "200px" }}
+          style={{ minWidth: "200px", minHeight: "44px", padding: "10px 20px", fontSize: "14px" }}
         >
           {importando
             ? "Importando..."

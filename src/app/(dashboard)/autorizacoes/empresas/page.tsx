@@ -9,6 +9,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { PageHeader, Btn } from "@/components/ui/ds";
 
 type Perfil = { id: string; nome: string };
@@ -21,11 +22,12 @@ export default function EmpresasGestorPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [vinc, setVinc] = useState<Set<string>>(new Set()); // "usuario_id|empresa_id"
   const [loading, setLoading] = useState(true);
+  // Estado de loading por usuário durante marcarTodas
+  const [marcarLoading, setMarcarLoading] = useState<Record<string, string | null>>({}); // uid → mensagem progresso ou null
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const [pf, emp, ue] = await Promise.all([
         supabase.from("perfis").select("id,nome").eq("ativo", true).order("nome"),
         supabase.from("empresas").select("id,nome_fantasia,razao_social").order("nome_fantasia"),
@@ -47,17 +49,33 @@ export default function EmpresasGestorPage() {
     const tinha = vinc.has(key);
     setVinc((prev) => { const n = new Set(prev); if (tinha) n.delete(key); else n.add(key); return n; });
     if (tinha) {
-      await supabase.from("usuario_empresas").delete().eq("usuario_id", uid).eq("empresa_id", eid);
+      const { error } = await supabase.from("usuario_empresas").delete().eq("usuario_id", uid).eq("empresa_id", eid);
+      if (error) {
+        // reverter estado local se banco falhou
+        setVinc((prev) => { const n = new Set(prev); n.add(key); return n; });
+      }
     } else {
       const primeira = ![...vinc].some((k) => k.startsWith(uid + "|")); // 1ª empresa do user = padrão
-      await supabase.from("usuario_empresas").insert({ usuario_id: uid, empresa_id: eid, is_padrao: primeira });
+      const { error } = await supabase.from("usuario_empresas").insert({ usuario_id: uid, empresa_id: eid, is_padrao: primeira });
+      if (error) {
+        // reverter estado local se banco falhou
+        setVinc((prev) => { const n = new Set(prev); n.delete(key); return n; });
+      }
     }
   };
 
   const marcarTodas = async (uid: string, marcar: boolean) => {
-    for (const e of empresas) {
-      if (tem(uid, e.id) !== marcar) await toggle(uid, e.id);
+    if (marcarLoading[uid]) return; // proteção contra clique duplo
+    const pendentes = empresas.filter((e) => tem(uid, e.id) !== marcar);
+    if (pendentes.length === 0) return;
+    let feitos = 0;
+    setMarcarLoading((prev) => ({ ...prev, [uid]: `Salvando 0/${pendentes.length}…` }));
+    for (const e of pendentes) {
+      await toggle(uid, e.id);
+      feitos++;
+      setMarcarLoading((prev) => ({ ...prev, [uid]: `Salvando ${feitos}/${pendentes.length}…` }));
     }
+    setMarcarLoading((prev) => ({ ...prev, [uid]: null }));
   };
 
   if (loading) return <div style={{ padding: 32, color: "#94a3b8" }}>Carregando…</div>;
@@ -74,7 +92,8 @@ export default function EmpresasGestorPage() {
         A <b>secretária</b> deve ter <b>todas</b> marcadas (vê tudo). {empresas.length === 0 && <b style={{ color: "#b45309" }}>Cadastre as empresas primeiro em /empresas.</b>}
       </div>
 
-      <div style={{ flex: 1, overflow: "auto", padding: 16 }}>
+      {/* ── Variante Desktop: tabela completa ─────────────────────────────── */}
+      <div className="m-hide" style={{ flex: 1, overflow: "auto", padding: 16 }}>
         <table style={{ borderCollapse: "separate", borderSpacing: 0, background: "#fff", borderRadius: 8, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,.08)" }}>
           <thead>
             <tr>
@@ -86,6 +105,7 @@ export default function EmpresasGestorPage() {
           <tbody>
             {perfis.map((p) => {
               const todas = empresas.length > 0 && empresas.every((e) => tem(p.id, e.id));
+              const progresso = marcarLoading[p.id];
               return (
                 <tr key={p.id}>
                   <td style={{ ...td, textAlign: "left", fontWeight: 600, color: "#1e293b" }}>{p.nome}</td>
@@ -96,8 +116,9 @@ export default function EmpresasGestorPage() {
                   ))}
                   <td style={td}>
                     <button type="button" onClick={() => marcarTodas(p.id, !todas)}
-                      style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid #cbd5e1", background: todas ? "#dcfce7" : "#fff", color: todas ? "#15803d" : "#475569", cursor: "pointer" }}>
-                      {todas ? "✓ todas" : "marcar"}
+                      disabled={!!progresso}
+                      style={{ fontSize: 11, padding: "3px 8px", borderRadius: 6, border: "1px solid #cbd5e1", background: todas ? "#dcfce7" : "#fff", color: todas ? "#15803d" : "#475569", cursor: progresso ? "not-allowed" : "pointer", opacity: progresso ? 0.65 : 1, whiteSpace: "nowrap" }}>
+                      {progresso ?? (todas ? "✓ todas" : "marcar")}
                     </button>
                   </td>
                 </tr>
@@ -106,6 +127,64 @@ export default function EmpresasGestorPage() {
             {perfis.length === 0 && <tr><td style={td} colSpan={empresas.length + 2}>Nenhum usuário ativo.</td></tr>}
           </tbody>
         </table>
+      </div>
+
+      {/* ── Variante Mobile: cards por usuário com toggles de empresa ──────── */}
+      <div className="m-show-block" style={{ flex: 1, overflow: "auto", padding: "12px" }}>
+        {perfis.length === 0 && (
+          <div style={{ textAlign: "center", padding: "32px 0", color: "#94a3b8", fontSize: 14 }}>
+            Nenhum usuário ativo.
+          </div>
+        )}
+
+        {perfis.map((p) => {
+          const todas = empresas.length > 0 && empresas.every((e) => tem(p.id, e.id));
+          const progresso = marcarLoading[p.id];
+          const qtdAtivas = empresas.filter((e) => tem(p.id, e.id)).length;
+          return (
+            <div key={p.id} style={{ background: "#fff", borderRadius: 10, marginBottom: 10, boxShadow: "0 1px 4px rgba(0,0,0,.07)", border: "1px solid #e2e8f0", overflow: "hidden" }}>
+              {/* Cabeçalho do card */}
+              <div style={{ padding: "12px 14px", borderBottom: "1px solid #f1f5f9", display: "flex", alignItems: "center", justifyContent: "space-between", gap: 10 }}>
+                <div>
+                  <div style={{ fontWeight: 700, fontSize: 14, color: "#1e293b" }}>{p.nome}</div>
+                  <div style={{ fontSize: 12, color: "#64748b", marginTop: 2 }}>
+                    {qtdAtivas} de {empresas.length} empresa{empresas.length !== 1 ? "s" : ""}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => marcarTodas(p.id, !todas)}
+                  disabled={!!progresso || empresas.length === 0}
+                  style={{ minHeight: 44, padding: "0 14px", borderRadius: 8, border: `1px solid ${todas ? "#86efac" : "#cbd5e1"}`, background: todas ? "#dcfce7" : "#f8fafc", color: todas ? "#15803d" : "#475569", fontWeight: 700, fontSize: 13, cursor: (progresso || empresas.length === 0) ? "not-allowed" : "pointer", opacity: progresso ? 0.65 : 1, whiteSpace: "nowrap" }}>
+                  {progresso ?? (todas ? "✓ Todas" : "Marcar todas")}
+                </button>
+              </div>
+
+              {/* Lista de empresas como toggles */}
+              {empresas.length === 0 ? (
+                <div style={{ padding: "12px 14px", fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>
+                  Nenhuma empresa cadastrada.
+                </div>
+              ) : (
+                empresas.map((e, idx) => {
+                  const ativa = tem(p.id, e.id);
+                  return (
+                    <div key={e.id} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", minHeight: 48, padding: "8px 14px", borderBottom: idx < empresas.length - 1 ? "1px solid #f8fafc" : "none" }}>
+                      <div style={{ fontWeight: 500, fontSize: 14, color: "#1e293b" }}>{e.nome}</div>
+                      <button
+                        type="button"
+                        onClick={() => toggle(p.id, e.id)}
+                        disabled={!!progresso}
+                        style={{ minWidth: 56, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${ativa ? "#2563eb" : "#cbd5e1"}`, background: ativa ? "#2563eb" : "#fff", color: ativa ? "#fff" : "#64748b", fontWeight: 700, fontSize: 13, cursor: progresso ? "not-allowed" : "pointer", opacity: progresso ? 0.65 : 1 }}>
+                        {ativa ? "✓ Sim" : "Não"}
+                      </button>
+                    </div>
+                  );
+                })
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );

@@ -35,7 +35,7 @@ export function FluxoStepper({
       flexWrap: "wrap",
       opacity: cancelado ? 0.55 : 1,
     }}>
-      <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: "320px" }}>
+      <div style={{ display: "flex", alignItems: "center", flex: 1, minWidth: "200px" }}>
         {etapas.map((e, i) => {
           const atual = !cancelado && i === atualIdx;
           const done = e.done;

@@ -3,6 +3,7 @@
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 
 type VeiculoInfo = { id: string; placa: string; marca: string; modelo: string };
 
@@ -43,16 +44,16 @@ function NovoAbastecimentoForm() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
 
       const { data: perfil } = await supabase
-        .from("perfis").select("motorista_id").eq("id", auth.user.id).single();
+        .from("perfis").select("motorista_id").eq("id", user.id).single();
       const mId = perfil?.motorista_id ?? null;
       setMotoristaId(mId ?? "");
 
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
 

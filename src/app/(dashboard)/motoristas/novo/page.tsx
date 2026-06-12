@@ -80,7 +80,7 @@ export default function NovoMotoristaPage() {
         actions={
           <>
             <Btn href="/motoristas" variant="ghost">← Voltar</Btn>
-            <Btn href="/motoristas" variant="outline">Cancelar</Btn>
+            <span className="m-hide"><Btn href="/motoristas" variant="outline">Cancelar</Btn></span>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
@@ -186,12 +186,12 @@ export default function NovoMotoristaPage() {
                 <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Salário Fixo Mensal (R$)">
-                      <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" style={inputStyle} placeholder="0,00" />
+                      <input value={f.salario_fixo} onChange={set("salario_fixo")} type="number" step="0.01" inputMode="decimal" style={inputStyle} placeholder="0,00" />
                     </FormField>
                   </div>
                   <div style={{ gridColumn: "span 2" }}>
                     <FormField label="Valor da Diária por Pedido (R$)">
-                      <input value={f.valor_diaria_por_pedido} onChange={set("valor_diaria_por_pedido")} type="number" step="0.01" style={inputStyle} placeholder="0,00" />
+                      <input value={f.valor_diaria_por_pedido} onChange={set("valor_diaria_por_pedido")} type="number" step="0.01" inputMode="decimal" style={inputStyle} placeholder="0,00" />
                     </FormField>
                   </div>
                 </div>

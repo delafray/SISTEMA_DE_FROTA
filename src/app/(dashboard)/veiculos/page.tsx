@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
@@ -30,10 +31,10 @@ export default function VeiculosPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       const data = await loadAll<Veiculo>((from, to) =>
@@ -299,11 +300,31 @@ export default function VeiculosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
-        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gap: "16px" }}>
           <KpiCard label="Total"     value={loading ? "..." : todos.length}  />
           <KpiCard label="Ativos"    value={loading ? "..." : ativos}   color="success" />
           <KpiCard label="Inativos"  value={loading ? "..." : inativos} color="danger" />
           <KpiCard label="Em viagem" value={0}                          color="info" />
+        </div>
+
+        {/* Mobile: toolbar de busca/filtro */}
+        <div className="m-show-block">
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <SearchInput
+              placeholder="Buscar placa, marca..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+            />
+            <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)}
+              style={{ ...selectStyle, minWidth: "100px", flex: "0 0 auto" }}>
+              <option value="">Todos</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </select>
+          </div>
+          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>
+            {filtrados.length} de {todos.length} veículos
+          </div>
         </div>
 
         {/* Desktop: tabela */}

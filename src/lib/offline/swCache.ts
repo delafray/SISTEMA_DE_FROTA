@@ -59,6 +59,32 @@ export function shellsParaPrecache(): string[] {
   return ['/motorista', '/mobile/rota', '/login'];
 }
 
+/**
+ * True se a resposta de uma NAVEGAÇÃO pode ir pro cache de shell.
+ * Resposta REDIRECIONADA nunca entra: cachear o HTML de destino sob a URL
+ * original gravava a tela de /login SOB uma URL do dashboard — e o botão
+ * voltar offline passava a servir o login no lugar da tela do gestor.
+ */
+export function deveCachearNavegacao(res: { ok: boolean; redirected: boolean }): boolean {
+  return res.ok && !res.redirected;
+}
+
+/**
+ * Shells de fallback offline POR ÁREA. O fallback antigo servia qualquer shell
+ * da lista (inclusive '/login') pra qualquer rota — um back offline no
+ * dashboard renderizava a tela de login mesmo com sessão válida.
+ * - /login → a própria shell de login;
+ * - área do motorista (/motorista, /mobile) → shells offline-first do app;
+ * - dashboard do gestor → NENHUMA (mostra a página 503 "Sem conexão").
+ */
+export function shellsFallbackPara(pathname: string): string[] {
+  if (pathname === '/login') return ['/login'];
+  if (pathname.startsWith('/motorista') || pathname.startsWith('/mobile')) {
+    return ['/motorista', '/mobile/rota', '/login'];
+  }
+  return [];
+}
+
 export function nomeCacheShell(versao: string): string {
   return `frota-shell-${versao}`;
 }

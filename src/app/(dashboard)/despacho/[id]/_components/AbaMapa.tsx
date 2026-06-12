@@ -25,7 +25,9 @@ export function AbaMapa({ paradas }: AbaMapaProps) {
             <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 10px" }}>
               Rota montada pelo motorista — pinos verdes são locais já entregues. Atualiza sozinho a cada 10s.
             </p>
-            <MapaRota paradas={paradas} altura={420} />
+            <div style={{ maxHeight: "min(420px, 60vh)", overflow: "hidden" }}>
+              <MapaRota paradas={paradas} altura={420} />
+            </div>
           </>
         ) : (
           <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>

@@ -94,7 +94,7 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
 
       {showForm && (
         <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "16px" }}>
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
+          <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: "12px" }}>
             <div style={{ gridColumn: "span 3" }}>
               <FormField label="Descrição da avaria *" hint="Ex: pneu traseiro esquerdo estourou na BR-101 km 245">
                 <textarea value={f.descricao} onChange={set("descricao")} rows={3}
@@ -159,7 +159,7 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
                     <Td><Badge variant={URG_VARIANT[av.urgencia] ?? "default"}>{av.urgencia}</Badge></Td>
                     <Td>
                       <select value={av.status} onChange={e => mudarStatus(av, e.target.value)}
-                        style={{ ...selectStyle, padding: "2px 6px", fontSize: "11px", width: "auto" }}>
+                        style={{ ...selectStyle, padding: "8px 6px", fontSize: "11px", width: "auto", minHeight: "44px" }}>
                         <option value="aberta">Aberta</option>
                         <option value="em_reparo">Em reparo</option>
                         <option value="resolvida">Resolvida</option>

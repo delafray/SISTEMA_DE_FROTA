@@ -28,6 +28,7 @@
 | 15 | **OSRM** | Cálculo de rotas | Grátis (self-hosted) | Na VM Oracle |
 | 16 | **VROOM** | Otimização VRP | Grátis (self-hosted) | Na VM Oracle |
 | 17 | **Overpass** | Validação de coordenadas | Grátis / sem cadastro | — |
+| 18 | **Painel de monitoramento** (opcional, ex. Uptime Kuma) | Link do badge "Sistemas OK" da sidebar | Grátis (self-hosted na VM) | env `NEXT_PUBLIC_MONITOR_URL`; sem a var o badge fica sem link |
 
 **Custo total: ~R$ 5-20/mês** (só OpenAI é obrigatoriamente pago; Railway cancelado)
 

@@ -131,7 +131,7 @@ export default function NovaRegraPage() {
                 </select>
               </FormField>
               <FormField label="Prioridade">
-                <input type="number" value={form.prioridade} onChange={(e) => setForm((f) => ({ ...f, prioridade: Number(e.target.value) }))} style={inputStyle} />
+                <input type="number" inputMode="numeric" value={form.prioridade} onChange={(e) => setForm((f) => ({ ...f, prioridade: Number(e.target.value) }))} style={inputStyle} />
               </FormField>
             </div>
             <div style={{ display: "flex", gap: "20px", marginTop: "8px" }}>

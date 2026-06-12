@@ -291,7 +291,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
         };
 
         const chipBase: React.CSSProperties = {
-          padding: "4px 10px",
+          padding: "8px 10px",
           borderRadius: "6px",
           fontSize: "13px",
           fontWeight: 500,
@@ -299,6 +299,10 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
           border: "1px solid transparent",
           transition: "all 120ms",
           userSelect: "none",
+          minHeight: "44px",
+          display: "inline-flex",
+          alignItems: "center",
+          justifyContent: "center",
         };
         const chipInactive: React.CSSProperties = { ...chipBase, background: "#f1f5f9", color: "#475569", borderColor: "#e2e8f0" };
         const chipActive: React.CSSProperties = { ...chipBase, background: "#1e40af", color: "#fff", borderColor: "#1e40af" };
@@ -332,12 +336,12 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
             <div>
               <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Mês</div>
-              <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
+              <div style={{ display: "flex", gap: "4px", marginBottom: "4px", flexWrap: "wrap" }}>
                 {monthsFirst.map(m => (
                   <span key={m} style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</span>
                 ))}
               </div>
-              <div style={{ display: "flex", gap: "4px" }}>
+              <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                 {monthsSecond.map(m => (
                   <span key={m} style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</span>
                 ))}
@@ -449,8 +453,8 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
             )}
 
             {!isFechado && (
-              <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", background: "#f8fafc", padding: "12px", borderRadius: "8px" }}>
-                <div style={{ flex: 1 }}>
+              <div style={{ display: "flex", gap: "12px", alignItems: "flex-end", background: "#f8fafc", padding: "12px", borderRadius: "8px", flexWrap: "wrap" }}>
+                <div style={{ flex: 1, minWidth: "120px" }}>
                   <label style={{ fontSize: "12px", color: "#64748b", display: "block", marginBottom: "4px" }}>Tipo</label>
                   <select value={novoAjuste.tipo} onChange={e => setNovoAjuste({ ...novoAjuste, tipo: e.target.value })} style={selectStyle}>
                     <option value="desconto">Desconto</option>
@@ -460,17 +464,17 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                     <option value="multa">Multa</option>
                   </select>
                 </div>
-                <div style={{ flex: 2 }}>
+                <div style={{ flex: 2, minWidth: "150px" }}>
                   <label style={{ fontSize: "12px", color: "#64748b", display: "block", marginBottom: "4px" }}>Descrição</label>
                   <input value={novoAjuste.descricao} onChange={e => setNovoAjuste({ ...novoAjuste, descricao: e.target.value })} style={inputStyle} placeholder="Ex: Bônus por pontualidade" />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: "120px" }}>
                   <label style={{ fontSize: "12px", color: "#64748b", display: "block", marginBottom: "4px" }}>Valor (R$)</label>
-                  <input type="number" step="0.01" value={novoAjuste.valor} onChange={e => setNovoAjuste({ ...novoAjuste, valor: e.target.value })} style={inputStyle} placeholder="0.00" />
+                  <input type="number" step="0.01" inputMode="decimal" value={novoAjuste.valor} onChange={e => setNovoAjuste({ ...novoAjuste, valor: e.target.value })} style={inputStyle} placeholder="0.00" />
                 </div>
-                <div style={{ flex: 1 }}>
+                <div style={{ flex: 1, minWidth: "100px" }}>
                   <label style={{ fontSize: "12px", color: "#64748b", display: "block", marginBottom: "4px" }}>Parcelas</label>
-                  <input type="number" min="1" value={novoAjuste.parcelas} onChange={e => setNovoAjuste({ ...novoAjuste, parcelas: e.target.value })} style={inputStyle} />
+                  <input type="number" min="1" inputMode="numeric" value={novoAjuste.parcelas} onChange={e => setNovoAjuste({ ...novoAjuste, parcelas: e.target.value })} style={inputStyle} />
                 </div>
                 <Btn type="button" onClick={addAjuste}>Adicionar</Btn>
               </div>
@@ -542,8 +546,8 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
       {/* MODAL FECHAMENTO (3 STEPS) */}
       {modalStep > 0 && (
-        <div style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
-          <div style={{ background: "#fff", borderRadius: "12px", width: "500px", maxWidth: "90%", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}>
+        <div className="m-modal-overlay" style={{ position: "fixed", top: 0, left: 0, right: 0, bottom: 0, background: "rgba(0,0,0,0.6)", zIndex: 9999, display: "flex", alignItems: "center", justifyContent: "center" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", width: "500px", maxWidth: "90%", boxShadow: "0 20px 25px -5px rgba(0,0,0,0.1)", overflow: "hidden" }}>
 
             {/* Step 1: Resumo */}
             {modalStep === 1 && (

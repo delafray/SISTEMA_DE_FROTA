@@ -48,6 +48,9 @@ export default function DespachoDetalhePage() {
   // pedidos.local_carregamento separados por " | ")
   const [novoLocal, setNovoLocal] = useState("");
   const [salvandoLocal, setSalvandoLocal] = useState(false);
+  // Erro de gravação (status/locais) — sem isso a falha era silenciosa e a tela
+  // fingia que salvou (estado local atualizado com o banco intacto).
+  const [erroGravacao, setErroGravacao] = useState("");
   // Abas da tela: principal (pedido + despacho), rota (notas + montagem +
   // execução em tempo real) e mapa (SÓ habilita quando a rota existe)
   const [abaTela, setAbaTela] = useState<"principal" | "rota" | "mapa">("principal");
@@ -163,6 +166,7 @@ export default function DespachoDetalhePage() {
 
   const changeStatus = async (novoStatus: string, nota?: string) => {
     setUpdatingStatus(true);
+    setErroGravacao("");
     const supabase = createClient();
     const extra: Record<string, string> = {};
     if (novoStatus === "em_andamento") extra.data_inicio_real = new Date().toISOString();
@@ -173,23 +177,47 @@ export default function DespachoDetalhePage() {
       const rotulo = { em_andamento: "Iniciado", concluida: "Concluído", cancelada: "Cancelado" }[novoStatus] ?? novoStatus;
       extra.observacoes = (pedido?.observacoes ? `${pedido.observacoes}\n` : "") + `[${rotulo} em ${stamp}] ${nota.trim()}`;
     }
-    await supabase.from("pedidos").update({ status: novoStatus, ...extra }).eq("id", id);
-    setPedido(p => p ? { ...p, status: novoStatus, ...extra } : p);
-    setUpdatingStatus(false);
+    try {
+      const { error } = await supabase.from("pedidos").update({ status: novoStatus, ...extra }).eq("id", id);
+      if (error) {
+        setErroGravacao(`Não foi possível mudar o status: ${error.message}`);
+        return; // banco intacto → tela também fica intacta
+      }
+      setPedido(p => p ? { ...p, status: novoStatus, ...extra } : p);
+    } catch {
+      setErroGravacao("Falha de conexão ao mudar o status. Verifique a internet e tente de novo.");
+    } finally {
+      setUpdatingStatus(false);
+    }
   };
 
   /** Grava a lista de locais (join " | ") e propaga como origem das entregas. */
   const salvarLocais = async (lista: string[]) => {
     if (!pedido) return;
     setSalvandoLocal(true);
+    setErroGravacao("");
     const supabase = createClient();
     const texto = lista.map(s => s.trim()).filter(Boolean).join(" | ") || null;
-    await supabase.from("pedidos").update({ local_carregamento: texto }).eq("id", pedido.id);
-    await supabase.from("entregas").update({ origem: texto ?? "Depósito" }).eq("pedido_id", pedido.id);
-    setPedido(p => p ? { ...p, local_carregamento: texto } : p);
-    setEntregas(prev => prev.map(e => ({ ...e, origem: texto ?? "Depósito" })));
-    setNovoLocal("");
-    setSalvandoLocal(false);
+    try {
+      const { error: errPedido } = await supabase.from("pedidos").update({ local_carregamento: texto }).eq("id", pedido.id);
+      if (errPedido) {
+        setErroGravacao(`Não foi possível salvar os locais: ${errPedido.message}`);
+        return;
+      }
+      const { error: errEntregas } = await supabase.from("entregas").update({ origem: texto ?? "Depósito" }).eq("pedido_id", pedido.id);
+      if (errEntregas) {
+        setErroGravacao(`Locais salvos no pedido, mas houve erro ao propagar às entregas: ${errEntregas.message}`);
+        setPedido(p => p ? { ...p, local_carregamento: texto } : p);
+        return;
+      }
+      setPedido(p => p ? { ...p, local_carregamento: texto } : p);
+      setEntregas(prev => prev.map(e => ({ ...e, origem: texto ?? "Depósito" })));
+      setNovoLocal("");
+    } catch {
+      setErroGravacao("Falha de conexão ao salvar os locais. Verifique a internet e tente de novo.");
+    } finally {
+      setSalvandoLocal(false);
+    }
   };
 
   const recarregarRota = async () => {
@@ -286,8 +314,22 @@ export default function DespachoDetalhePage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {erroGravacao && (
+          <div role="alert" style={{
+            display: "flex", alignItems: "center", gap: "10px", marginBottom: "16px",
+            padding: "12px 16px", background: "#fef2f2", border: "1px solid #fca5a5",
+            borderRadius: "8px", color: "#991b1b", fontSize: "13px", fontWeight: 600,
+          }}>
+            <span>⚠️ {erroGravacao}</span>
+            <button type="button" onClick={() => setErroGravacao("")} style={{
+              marginLeft: "auto", border: "none", background: "transparent", color: "#991b1b",
+              fontSize: "16px", cursor: "pointer", minHeight: "44px", minWidth: "44px",
+            }}>✕</button>
+          </div>
+        )}
+
         {/* Abas: Principal | Rota (notas + tempo real) | Mapa (só com rota montada) */}
-        <div style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        <div className="m-tabs-scroll" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
           {([["principal", "📋 Principal", true], ["rota", "🚛 Rota", true], ["mapa", "🗺️ Mapa", paradas.length > 0]] as const).map(([v, l, habilitada]) => (
             <button
               key={v}

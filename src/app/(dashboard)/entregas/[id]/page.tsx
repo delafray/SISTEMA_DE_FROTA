@@ -175,7 +175,7 @@ export default function PedidoDetalhePage() {
           <hr style={{ marginTop: "10px", marginBottom: "10px", border: "none", borderTop: "1px solid #cbd5e1" }} />
         </div>
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
+        <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", maxWidth: "900px" }}>
 
           <FormSection title="Datas e Quilometragem">
             <Row label="Início Previsto"   value={fmtDate(pedido.data_inicio_prevista)} />
@@ -217,7 +217,7 @@ export default function PedidoDetalhePage() {
           )}
 
           {entregas.length > 0 && (
-            <div style={{ gridColumn: "span 2" }}>
+            <div style={{ gridColumn: "span 2", overflowX: "auto" }}>
               <FormSection title={`Entregas do Pedido (${entregas.length})`}>
                 <DataTable>
                   <thead>
@@ -243,7 +243,7 @@ export default function PedidoDetalhePage() {
             </div>
           )}
 
-          <div style={{ gridColumn: "span 2" }}>
+          <div style={{ gridColumn: "span 2", overflowX: "auto" }}>
             <FormSection title={`Abastecimentos do Veículo (${abastecimentos.length})`}>
               {abastecimentos.length === 0 ? (
                 <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhum abastecimento registrado para o veículo.</p>

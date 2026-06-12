@@ -4,6 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import {
   PageHeader, FormField, inputStyle, selectStyle,
   Btn, Alert, DataTable, Th, Td, Tr, Badge, Tabs, EmptyState,
@@ -79,10 +80,10 @@ export default function EditarPedidoPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id,role")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
       setEmpresaId(ue.empresa_id);
       setIsGestor(ROLES_GESTOR.includes((ue as { role?: string }).role ?? ""));
@@ -249,22 +250,31 @@ export default function EditarPedidoPage() {
         actions={<Btn href={`/despacho/${id}`} variant="ghost">← Voltar</Btn>}
       />
 
-      {/* Linha das abas — fica FORA da área de scroll, então os botões à direita
-          permanecem sempre visíveis (dono 11/06: "congelados" ao rolar). */}
-      <div style={{
-        padding: "0 16px", background: "#fff",
-        display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px",
-      }}>
-        <Tabs
-          active={tab}
-          onChange={(id) => setTab(id as TabId)}
-          tabs={[
-            { id: "dados", label: "Dados do Pedido" },
-            { id: "vinculados", label: "Entregas Vinculadas", badge: entregasAtuais.length },
-            { id: "adicionar", label: "Adicionar Entregas", badge: selectedEntregas.size > 0 ? `+${selectedEntregas.size}` : entregasDisp.length },
-          ]}
-        />
-        <div style={{ display: "flex", gap: "8px", flexShrink: 0, padding: "6px 0" }}>
+      {/* Linha das abas + botões de ação.
+          No desktop: abas e botões ficam na mesma linha (space-between).
+          No mobile: empilhados em coluna — abas no topo, botões abaixo (m-tabs-scroll). */}
+      <div style={{ background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
+        <div style={{ padding: "0 16px", display: "flex", alignItems: "center", justifyContent: "space-between", gap: "12px" }}>
+          <div className="m-tabs-scroll" style={{ flex: 1, overflowX: "auto" }}>
+            <Tabs
+              active={tab}
+              onChange={(id) => setTab(id as TabId)}
+              tabs={[
+                { id: "dados", label: "Dados do Pedido" },
+                { id: "vinculados", label: "Entregas Vinculadas", badge: entregasAtuais.length },
+                { id: "adicionar", label: "Adicionar Entregas", badge: selectedEntregas.size > 0 ? `+${selectedEntregas.size}` : entregasDisp.length },
+              ]}
+            />
+          </div>
+          <div className="m-hide" style={{ display: "flex", gap: "8px", flexShrink: 0, padding: "6px 0" }}>
+            <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
+            <Btn type="submit" variant="primary" disabled={saving}>
+              {saving ? "Salvando..." : "Atualizar Pedido"}
+            </Btn>
+          </div>
+        </div>
+        {/* Botões de ação visíveis apenas no mobile, abaixo das abas */}
+        <div className="m-show" style={{ padding: "8px 16px", gap: "8px", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9" }}>
           <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
           <Btn type="submit" variant="primary" disabled={saving}>
             {saving ? "Salvando..." : "Atualizar Pedido"}
@@ -351,6 +361,7 @@ export default function EditarPedidoPage() {
                     <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
                       defaultValue={f.valor_pedido}
                       onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
+                      inputMode="decimal"
                       style={inputStyle} placeholder="R$ 0,00" />
                   </FormField>
                   <FormField label="Data Prevista (início)">
@@ -407,7 +418,7 @@ export default function EditarPedidoPage() {
                   </div>
                   {isGestor && (
                     <button type="button" onClick={() => setKmEditavel(true)}
-                      style={{ fontSize: "12px", fontWeight: 600, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "8px", padding: "8px 12px", cursor: "pointer", whiteSpace: "nowrap", alignSelf: "center" }}>
+                      style={{ fontSize: "12px", fontWeight: 600, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "8px", padding: "8px 12px", minHeight: "44px", cursor: "pointer", whiteSpace: "nowrap", alignSelf: "center" }}>
                       Ajuste manual (gestor)
                     </button>
                   )}
@@ -425,8 +436,8 @@ export default function EditarPedidoPage() {
                 <thead>
                   <tr>
                     <Th>Rota</Th>
-                    <Th>Cliente</Th>
-                    <Th>Coleta</Th>
+                    <Th className="m-hide">Cliente</Th>
+                    <Th className="m-hide">Coleta</Th>
                     <Th>Status</Th>
                     <Th></Th>
                   </tr>
@@ -436,13 +447,13 @@ export default function EditarPedidoPage() {
                     const cliente = one<{ nome_fantasia: string }>(fr.clientes);
                     return (
                       <Tr key={fr.id}>
-                        <Td style={{ fontWeight: 600 }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
-                        <Td>{cliente?.nome_fantasia ?? fr.nome_cliente_avulso ?? "—"}</Td>
-                        <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
+                        <Td style={{ fontWeight: 600, maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
+                        <Td className="m-hide">{cliente?.nome_fantasia ?? fr.nome_cliente_avulso ?? "—"}</Td>
+                        <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
                         <Td><Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>{ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}</Badge></Td>
                         <Td>
                           <button type="button" onClick={() => desvincularEntrega(fr.id)}
-                            style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer", padding: "2px 6px" }}>
+                            style={{ fontSize: "12px", color: "#ef4444", background: "none", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", padding: "6px 10px", minHeight: "44px", whiteSpace: "nowrap" }}>
                             Desvincular
                           </button>
                         </Td>
@@ -467,8 +478,8 @@ export default function EditarPedidoPage() {
                     <tr>
                       <Th style={{ width: "32px" }}></Th>
                       <Th>Rota</Th>
-                      <Th>Cliente</Th>
-                      <Th>Coleta Prevista</Th>
+                      <Th className="m-hide">Cliente</Th>
+                      <Th className="m-hide">Coleta Prevista</Th>
                     </tr>
                   </thead>
                   <tbody>
@@ -484,9 +495,9 @@ export default function EditarPedidoPage() {
                             <input type="checkbox" checked={checked} onChange={() => toggleEntrega(fr.id)} onClick={e => e.stopPropagation()}
                               style={{ width: "16px", height: "16px", accentColor: "#2563eb", cursor: "pointer" }} />
                           </Td>
-                          <Td style={{ fontWeight: 600 }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
-                          <Td>{cliente?.nome_fantasia ?? fr.nome_cliente_avulso ?? "—"}</Td>
-                          <Td>{fmtDate(fr.data_coleta_prevista)}</Td>
+                          <Td style={{ fontWeight: 600, maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
+                          <Td className="m-hide">{cliente?.nome_fantasia ?? fr.nome_cliente_avulso ?? "—"}</Td>
+                          <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
                         </Tr>
                       );
                     })}

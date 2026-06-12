@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 type Motorista = { id: string; nome: string };
@@ -33,10 +34,10 @@ export default function EditarAdiantamentoPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       const [{ data: mots }, { data: adiant }] = await Promise.all([
@@ -145,6 +146,7 @@ export default function EditarAdiantamentoPage() {
                   value={f.valor}
                   onChange={set("valor")}
                   type="number"
+                  inputMode="decimal"
                   step="0.01"
                   min="0.01"
                   placeholder="0,00"
@@ -197,17 +199,20 @@ export default function EditarAdiantamentoPage() {
               )}
 
               {f.status === "prestado" && (
-                <FormField label="Valor Prestado em Contas (R$)">
-                  <input
-                    value={f.valor_prestado_contas}
-                    onChange={set("valor_prestado_contas")}
-                    type="number"
-                    step="0.01"
-                    min="0"
-                    placeholder="0,00"
-                    style={inputStyle}
-                  />
-                </FormField>
+                <div style={{ gridColumn: "span 2" }}>
+                  <FormField label="Valor Prestado em Contas (R$)">
+                    <input
+                      value={f.valor_prestado_contas}
+                      onChange={set("valor_prestado_contas")}
+                      type="number"
+                      inputMode="decimal"
+                      step="0.01"
+                      min="0"
+                      placeholder="0,00"
+                      style={inputStyle}
+                    />
+                  </FormField>
+                </div>
               )}
             </div>
           </FormSection>

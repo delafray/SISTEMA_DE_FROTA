@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, Th, Td, Tr, Badge, EmptyState, Btn, FormField, selectStyle, Alert } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 type KmLog = {
   id: string; created_at: string | null; km_lido: number;
@@ -186,45 +187,75 @@ export default function LogsTab({ veiculoId, empresaId }: { veiculoId: string; e
       {linhas.length === 0
         ? <EmptyState icon="📜" message="Nenhum log de KM para este veículo ainda." />
         : (
-          <DataTable count={linhas.length} label="logs">
-            <thead>
-              <tr>
-                <Th>Data/Hora</Th>
-                <Th>Fonte</Th>
-                <Th>Quem</Th>
-                <Th style={{ textAlign: "right" }}>KM</Th>
-                <Th>Descrição</Th>
-                <Th style={{ width: "120px" }}>Ação</Th>
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop */}
+            <div className="m-hide">
+              <DataTable count={linhas.length} label="logs">
+                <thead>
+                  <tr>
+                    <Th>Data/Hora</Th>
+                    <Th>Fonte</Th>
+                    <Th>Quem</Th>
+                    <Th style={{ textAlign: "right" }}>KM</Th>
+                    <Th>Descrição</Th>
+                    <Th style={{ width: "120px" }}>Ação</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {linhas.map(l => (
+                    <Tr key={l.id} muted={l.correcao}>
+                      <Td style={{ whiteSpace: "nowrap" }}>{fmtDateTime(l.created_at)}</Td>
+                      <Td>
+                        <Badge variant={l.fonte === "motorista" ? "info" : l.fonte === "gestor" ? "purple" : "default"}>
+                          {l.fonte === "motorista" ? "🚛 Motorista" : l.fonte === "gestor" ? "👤 Gestor" : "Sistema"}
+                        </Badge>
+                      </Td>
+                      <Td style={{ fontWeight: 500 }}>{l.quem}</Td>
+                      <Td style={{ textAlign: "right", fontWeight: 600 }}>
+                        {l.km != null ? `${l.km.toLocaleString("pt-BR")} km` : "—"}
+                      </Td>
+                      <Td style={{ maxWidth: "320px", fontSize: "11px", color: "#475569" }}>
+                        <div style={{ whiteSpace: "normal", lineHeight: 1.4 }}>{l.descricao}</div>
+                        {l.correcao && <Badge variant="warning">corrigido</Badge>}
+                      </Td>
+                      <Td>
+                        {l.reatribuirHandler && !l.correcao && (
+                          <Btn size="xs" variant="outline" type="button" onClick={l.reatribuirHandler}>
+                            Reatribuir
+                          </Btn>
+                        )}
+                      </Td>
+                    </Tr>
+                  ))}
+                </tbody>
+              </DataTable>
+            </div>
+            {/* Mobile */}
+            <MobileList count={linhas.length} label="logs">
               {linhas.map(l => (
-                <Tr key={l.id} muted={l.correcao}>
-                  <Td style={{ whiteSpace: "nowrap" }}>{fmtDateTime(l.created_at)}</Td>
-                  <Td>
+                <MobileCard
+                  key={l.id}
+                  title={l.quem}
+                  subtitle={fmtDateTime(l.created_at)}
+                  badge={
                     <Badge variant={l.fonte === "motorista" ? "info" : l.fonte === "gestor" ? "purple" : "default"}>
-                      {l.fonte === "motorista" ? "🚛 Motorista" : l.fonte === "gestor" ? "👤 Gestor" : "Sistema"}
+                      {l.fonte === "motorista" ? "Motorista" : l.fonte === "gestor" ? "Gestor" : "Sistema"}
                     </Badge>
-                  </Td>
-                  <Td style={{ fontWeight: 500 }}>{l.quem}</Td>
-                  <Td style={{ textAlign: "right", fontWeight: 600 }}>
-                    {l.km != null ? `${l.km.toLocaleString("pt-BR")} km` : "—"}
-                  </Td>
-                  <Td style={{ maxWidth: "320px", fontSize: "11px", color: "#475569" }}>
-                    <div style={{ whiteSpace: "normal", lineHeight: 1.4 }}>{l.descricao}</div>
-                    {l.correcao && <Badge variant="warning">corrigido</Badge>}
-                  </Td>
-                  <Td>
-                    {l.reatribuirHandler && !l.correcao && (
-                      <Btn size="xs" variant="outline" type="button" onClick={l.reatribuirHandler}>
-                        Reatribuir
-                      </Btn>
-                    )}
-                  </Td>
-                </Tr>
+                  }
+                  highlight={l.correcao ? "#f59e0b" : undefined}
+                  details={[
+                    { label: "KM", value: l.km != null ? `${l.km.toLocaleString("pt-BR")} km` : "—" },
+                    { label: "Descrição", value: l.descricao },
+                  ]}
+                  actions={l.reatribuirHandler && !l.correcao ? (
+                    <Btn size="xs" variant="outline" type="button" onClick={l.reatribuirHandler}>
+                      Reatribuir
+                    </Btn>
+                  ) : undefined}
+                />
               ))}
-            </tbody>
-          </DataTable>
+            </MobileList>
+          </>
         )}
 
       {/* Modal Reatribuir */}

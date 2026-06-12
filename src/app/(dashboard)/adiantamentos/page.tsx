@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao, type Ordem } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
@@ -240,12 +241,12 @@ export default function AdiantamentosPage() {
   useEffect(() => {
     const init = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase
         .from("usuario_empresas")
         .select("empresa_id")
-        .eq("usuario_id", auth.user.id)
+        .eq("usuario_id", user.id)
         .eq("is_padrao", true)
         .single();
       if (!ue?.empresa_id) return;
@@ -322,6 +323,23 @@ export default function AdiantamentosPage() {
           <KpiCard label="Total Prestado"   value={kpiPrestado   !== null ? fmt.format(kpiPrestado)   : "..."} color="info" />
         </div>
 
+        {/* Busca e filtro — visível no mobile (fora do m-hide) */}
+        <div className="m-show" style={{ flexDirection: "column", gap: "8px", marginBottom: "8px" }}>
+          <SearchInput
+            placeholder="Buscar por motorista, tipo, justificativa..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+          <select value={filtroStatus} onChange={e => setFiltroStatus(e.target.value)}
+            style={{ ...selectStyle, width: "100%" }}>
+            <option value="">Todos os status</option>
+            <option value="pendente">Pendente</option>
+            <option value="aprovado">Aprovado</option>
+            <option value="recusado">Recusado</option>
+            <option value="prestado">Prestado</option>
+          </select>
+        </div>
+
         {/* Desktop: tabela */}
         <div className="m-hide">
         <DataTable count={linhas.length} label="adiantamentos" toolbar={toolbar}>
@@ -379,16 +397,18 @@ export default function AdiantamentosPage() {
         </DataTable>
         </div>
 
-        {/* Botão "Carregar mais" — desktop e mobile */}
-        {temMais && !loading && (
-          <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
-            <Btn variant="outline" onClick={handleCarregarMais} disabled={loadingMais}>
-              {loadingMais
-                ? "Carregando..."
-                : `Carregar mais (${linhas.length} de ${total ?? "?"})`}
-            </Btn>
-          </div>
-        )}
+        {/* Botão "Carregar mais" — somente desktop (dentro do m-hide para não aparecer entre cards) */}
+        <div className="m-hide">
+          {temMais && !loading && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+              <Btn variant="outline" onClick={handleCarregarMais} disabled={loadingMais}>
+                {loadingMais
+                  ? "Carregando..."
+                  : `Carregar mais (${linhas.length} de ${total ?? "?"})`}
+              </Btn>
+            </div>
+          )}
+        </div>
 
         {/* Mobile: cards */}
         <MobileList count={linhas.length} label="adiantamentos">
@@ -415,6 +435,19 @@ export default function AdiantamentosPage() {
             );
           })}
         </MobileList>
+
+        {/* Botão "Carregar mais" — somente mobile (após os cards) */}
+        <div className="m-show-block">
+          {temMais && !loading && (
+            <div style={{ display: "flex", justifyContent: "center", marginTop: "16px" }}>
+              <Btn variant="outline" onClick={handleCarregarMais} disabled={loadingMais}>
+                {loadingMais
+                  ? "Carregando..."
+                  : `Carregar mais (${linhas.length} de ${total ?? "?"})`}
+              </Btn>
+            </div>
+          )}
+        </div>
 
         <MobileFAB href="/adiantamentos/novo" label="Novo Adiantamento" />
       </div>

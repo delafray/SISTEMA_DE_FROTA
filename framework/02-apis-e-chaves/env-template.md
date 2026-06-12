@@ -80,6 +80,9 @@ VIACEP_URL=https://viacep.com.br/ws
 # ── Tracking de uso de APIs ─────────────────────────
 USO_APIS_ENC_KEY=chave-criptografia-32-chars-aqui          ← chave AES para criptografar dados de uso
 
+# ── Monitoramento (opcional) ────────────────────────
+# NEXT_PUBLIC_MONITOR_URL=http://SEU-MONITOR:3001           ← painel (Uptime Kuma etc.); sem a var, o badge "Sistemas OK" da sidebar vira só indicador (sem link)
+
 # ── Build (automático na Vercel, não precisa setar) ──
 # NEXT_PUBLIC_BUILD_SHA=abc123                             ← preenchido automaticamente pelo Vercel
 ```

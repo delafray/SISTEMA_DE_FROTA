@@ -10,6 +10,8 @@ import {
   nomeCacheStatic,
   deveLimparCache,
   shellsParaPrecache,
+  deveCachearNavegacao,
+  shellsFallbackPara,
   type RequisicaoSW,
 } from '@/lib/offline/swCache';
 
@@ -52,6 +54,38 @@ describe('classificarRequisicao', () => {
 
   it('GET same-origin que nao e navegacao nem asset conhecido → passthrough', () => {
     expect(classificarRequisicao(req({ pathname: '/algo.json', mode: 'cors' }))).toBe('passthrough');
+  });
+});
+
+describe('deveCachearNavegacao', () => {
+  it('resposta ok sem redirect → cacheia', () => {
+    expect(deveCachearNavegacao({ ok: true, redirected: false })).toBe(true);
+  });
+
+  it('resposta REDIRECIONADA nunca entra no cache (gravava /login sob URL do dashboard)', () => {
+    expect(deveCachearNavegacao({ ok: true, redirected: true })).toBe(false);
+  });
+
+  it('resposta de erro nao cacheia', () => {
+    expect(deveCachearNavegacao({ ok: false, redirected: false })).toBe(false);
+  });
+});
+
+describe('shellsFallbackPara (fallback offline POR ÁREA)', () => {
+  it('/login cai na propria shell de login', () => {
+    expect(shellsFallbackPara('/login')).toEqual(['/login']);
+  });
+
+  it('area do motorista usa as shells offline-first do app', () => {
+    expect(shellsFallbackPara('/motorista')).toEqual(['/motorista', '/mobile/rota', '/login']);
+    expect(shellsFallbackPara('/motorista/pedidos/123')).toEqual(['/motorista', '/mobile/rota', '/login']);
+    expect(shellsFallbackPara('/mobile/rota')).toEqual(['/motorista', '/mobile/rota', '/login']);
+  });
+
+  it('dashboard do gestor NUNCA recebe shell de login (back offline mostrava login logado)', () => {
+    expect(shellsFallbackPara('/')).toEqual([]);
+    expect(shellsFallbackPara('/pedidos')).toEqual([]);
+    expect(shellsFallbackPara('/despacho/abc-123')).toEqual([]);
   });
 });
 

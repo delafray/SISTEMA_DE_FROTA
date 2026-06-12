@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useDeferredValue } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
@@ -26,10 +27,10 @@ export default function ClientesPage() {
   useEffect(() => {
     const load = async () => {
       const supabase = createClient();
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      const user = await usuarioSessao();
+      if (!user) { router.replace("/login"); return; }
       const { data: ue } = await supabase.from("usuario_empresas").select("empresa_id")
-        .eq("usuario_id", auth.user.id).eq("is_padrao", true).single();
+        .eq("usuario_id", user.id).eq("is_padrao", true).single();
       if (!ue?.empresa_id) return;
 
       const data = await loadAll<Cliente>((from, to) =>
@@ -93,6 +94,23 @@ export default function ClientesPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Toolbar mobile — visível só no mobile, acima das cards */}
+        <div className="m-show-block" style={{ marginBottom: "12px" }}>
+          <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+            <SearchInput
+              placeholder="Buscar por nome, CNPJ/CPF, cidade..."
+              value={busca}
+              onChange={e => setBusca(e.target.value)}
+            />
+            <select value={filtroAtivo} onChange={e => setFiltroAtivo(e.target.value)}
+              style={{ ...selectStyle, width: "100%" }}>
+              <option value="">Todos</option>
+              <option value="true">Ativos</option>
+              <option value="false">Inativos</option>
+            </select>
+          </div>
+        </div>
+
         {/* Desktop: tabela */}
         <div className="m-hide">
         <DataTable count={filtrados.length} label="clientes" toolbar={toolbar}>

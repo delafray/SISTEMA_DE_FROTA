@@ -101,21 +101,33 @@ async function cacheFirst(req) {
   return res;
 }
 
+// shellsFallbackPara — espelha src/lib/offline/swCache.ts: fallback POR ÁREA.
+// Servir '/login' pra rota do dashboard fazia o back offline cair no login.
+function shellsFallback(pathname) {
+  if (pathname === '/login') return ['/login'];
+  if (pathname.startsWith('/motorista') || pathname.startsWith('/mobile')) {
+    return ['/motorista', '/mobile/rota', '/login'];
+  }
+  return [];
+}
+
 async function networkFirstNav(req) {
   const cache = await caches.open(CACHE_SHELL);
   try {
     // SEM timeout: online sempre espera o HTML fresco (nunca serve cache por lentidao).
     const res = await fetch(req);
-    if (res && res.ok) cache.put(req, res.clone());
+    // deveCachearNavegacao (swCache.ts): redirecionada NUNCA entra no cache —
+    // gravaria o HTML do destino (ex.: /login) sob a URL original.
+    if (res && res.ok && !res.redirected) cache.put(req, res.clone());
     return res;
   } catch {
     // Offline REAL (fetch rejeitou) — serve o cache desta navegacao, ou um shell
-    // pre-cacheado (qualquer rota interna abre num shell util em vez do erro).
+    // pre-cacheado DA MESMA ÁREA (dashboard sem cache → tela 503, nunca /login).
     let hit =
       (await cache.match(req)) ||
       (await cache.match(new URL(req.url).pathname));
     if (!hit) {
-      for (const shell of PRECACHE_SHELLS) {
+      for (const shell of shellsFallback(new URL(req.url).pathname)) {
         hit = await cache.match(shell);
         if (hit) break;
       }

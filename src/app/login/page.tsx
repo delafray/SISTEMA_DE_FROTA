@@ -2,12 +2,55 @@
 
 import { login } from './actions'
 import { inputStyle } from "@/components/ui/ds";
-import { useSearchParams } from 'next/navigation'
-import { Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
+import { Suspense, useEffect } from 'react'
+import { useFormStatus } from 'react-dom'
+import { createClient } from '@/lib/supabase/client'
+
+// Botão separado por causa do useFormStatus (precisa estar DENTRO do <form>).
+// Sem o "Entrando...", em rede móvel o gestor clicava 3x achando que travou.
+function BotaoEntrar() {
+  const { pending } = useFormStatus()
+  return (
+    <button
+      formAction={login}
+      disabled={pending}
+      style={{
+        width: "100%",
+        padding: "12px",
+        minHeight: "48px",
+        background: pending ? "#93c5fd" : "#2563eb",
+        color: "#fff",
+        fontWeight: 600,
+        fontSize: "14px",
+        borderRadius: "8px",
+        border: "none",
+        cursor: pending ? "wait" : "pointer",
+        marginTop: "8px",
+        transition: "background 150ms"
+      }}
+      onMouseEnter={(e) => { if (!pending) e.currentTarget.style.background = "#1d4ed8" }}
+      onMouseLeave={(e) => { if (!pending) e.currentTarget.style.background = "#2563eb" }}
+    >
+      {pending ? "ENTRANDO..." : "ENTRAR"}
+    </button>
+  )
+}
 
 function LoginForm() {
   const searchParams = useSearchParams()
+  const router = useRouter()
   const error = searchParams.get('error')
+
+  // Guarda reversa: se uma entrada /login sobrou no histórico (chute indevido
+  // de guard ou o próprio pós-login), o botão voltar do celular caía aqui MESMO
+  // LOGADO. Com sessão válida, devolve pro painel sem poluir o histórico.
+  useEffect(() => {
+    if (error) return // veio de uma falha de login — deixa o formulário aparecer
+    createClient().auth.getSession().then(({ data }) => {
+      if (data.session) router.replace('/')
+    })
+  }, [error, router])
 
   return (
     <div style={{
@@ -73,26 +116,7 @@ function LoginForm() {
           />
         </div>
 
-        <button
-          formAction={login}
-          style={{
-            width: "100%",
-            padding: "12px",
-            background: "#2563eb",
-            color: "#fff",
-            fontWeight: 600,
-            fontSize: "14px",
-            borderRadius: "8px",
-            border: "none",
-            cursor: "pointer",
-            marginTop: "8px",
-            transition: "background 150ms"
-          }}
-          onMouseEnter={(e) => e.currentTarget.style.background = "#1d4ed8"}
-          onMouseLeave={(e) => e.currentTarget.style.background = "#2563eb"}
-        >
-          ENTRAR
-        </button>
+        <BotaoEntrar />
       </form>
     </div>
   )

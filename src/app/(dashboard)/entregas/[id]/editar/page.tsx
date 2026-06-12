@@ -26,6 +26,7 @@ export default function EditarPedidoPage() {
   const [veiculos,   setVeiculos]   = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [motoristaSel, setMotoristaSel] = useState<Motorista | null>(null);
+  const [valorPedidoInicial, setValorPedidoInicial] = useState("");
 
   const [f, setF] = useState({
     veiculo_id: "", motorista_id: "",
@@ -74,6 +75,7 @@ export default function EditarPedidoPage() {
           observacoes_financeiras: pedido.observacoes_financeiras ?? "",
         });
         setMotoristaSel((m.data ?? []).find(mt => mt.id === pedido.motorista_id) ?? null);
+        setValorPedidoInicial(pedido.valor_pedido != null ? String(pedido.valor_pedido) : "");
       }
       setLoading(false);
     };
@@ -87,8 +89,13 @@ export default function EditarPedidoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.veiculo_id || !f.motorista_id || !f.km_inicial) {
-      setErr("Preencha: Veículo, Motorista e KM Inicial"); return;
+    if (!f.veiculo_id || !f.motorista_id) {
+      setTab("operacional");
+      setErr("Preencha: Veículo e Motorista"); return;
+    }
+    if (!f.km_inicial) {
+      setTab("cronograma");
+      setErr("Preencha: KM Inicial"); return;
     }
     setSaving(true);
     const { error: dbErr } = await supabase.from("pedidos").update({
@@ -249,8 +256,8 @@ export default function EditarPedidoPage() {
                 <FormField label="Valor do Pedido (R$)">
                   {/* defaultValue (não-controlado): com `value` a máscara briga com o
                       estado a cada tecla e trava. O form só monta depois do load. */}
-                  <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
-                    defaultValue={f.valor_pedido}
+                  <IMaskInput key={valorPedidoInicial} mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                    defaultValue={valorPedidoInicial}
                     onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
                     style={inputStyle} />
                 </FormField>

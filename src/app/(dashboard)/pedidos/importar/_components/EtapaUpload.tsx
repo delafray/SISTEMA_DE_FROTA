@@ -110,6 +110,8 @@ export function EtapaUpload({
                   background: modo === m ? "#eff6ff" : "#fff",
                   boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
                   textAlign: "left",
+                  minHeight: "80px",
+                  display: "flex", flexDirection: "column", justifyContent: "center",
                 }}
               >
                 <div style={{ fontSize: "15px", fontWeight: 700, color: modo === m ? "#1d4ed8" : "#1e293b" }}>
@@ -227,7 +229,7 @@ export function EtapaUpload({
                   <h3 style={{ fontSize: "13px", fontWeight: 700, color: "#475569", marginBottom: "12px" }}>
                     Mapeamento de colunas
                   </h3>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
+                  <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px" }}>
                     {(
                       [
                         { key: "endereco", label: "Endereço *", obrigatorio: true },

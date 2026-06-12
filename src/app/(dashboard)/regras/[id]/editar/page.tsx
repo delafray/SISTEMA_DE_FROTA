@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn } from "@/components/ui/ds";
 import { REGRA_PUBLICOS, regraSchema, PRESETS_ACESSO, presetDeAcoes, type RegraPublico } from "@/lib/schemas/regra";
 
@@ -32,8 +33,7 @@ export default function EditarRegraPage() {
 
   useEffect(() => {
     const load = async () => {
-      const { data: auth } = await supabase.auth.getUser();
-      if (!auth.user) { router.push("/login"); return; }
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const { data, error } = await supabase.from("regras").select("*").eq("id", id).single();
       if (error || !data) { setErro("Regra não encontrada."); setLoading(false); return; }
       setFixa(!!data.fixa);

@@ -273,7 +273,7 @@ export function FinanceiroPedido({
     <div style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: "10px", padding: "12px 14px", margin: "6px 0 10px" }}>
 
       {/* ── condições ─────────────────────────────────────────────────────── */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))", gap: "8px", alignItems: "end" }}>
+      <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))", gap: "8px", alignItems: "end" }}>
         <div>
           <label style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>Empresa de faturamento</label>
           <select style={{ ...selectStyle, fontSize: "12px", padding: "6px 8px" }} value={empFat} onChange={e => setEmpFat(e.target.value)}>
@@ -288,14 +288,14 @@ export function FinanceiroPedido({
         </div>
         <div>
           <label style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>Acréscimos (R$)</label>
-          <input type="number" step="0.01" min="0" disabled={temAjustes === false}
+          <input type="number" step="0.01" min="0" inputMode="decimal" disabled={temAjustes === false}
             style={{ ...inputStyle, fontSize: "12px", padding: "6px 8px" }} value={acrescimos}
             onChange={e => setAcrescimos(e.target.value)}
             title={temAjustes === false ? "Rode db/migration_pedido_acrescimos_descontos.sql" : undefined} />
         </div>
         <div>
           <label style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>Descontos (R$)</label>
-          <input type="number" step="0.01" min="0" disabled={temAjustes === false}
+          <input type="number" step="0.01" min="0" inputMode="decimal" disabled={temAjustes === false}
             style={{ ...inputStyle, fontSize: "12px", padding: "6px 8px" }} value={descontos}
             onChange={e => setDescontos(e.target.value)}
             title={temAjustes === false ? "Rode db/migration_pedido_acrescimos_descontos.sql" : undefined} />
@@ -334,18 +334,18 @@ export function FinanceiroPedido({
             )}
           </span>
           {parcelas.length === 0 ? (
-            <div style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
+            <div className="m-stack" style={{ display: "flex", gap: "6px", alignItems: "center", flexWrap: "wrap" }}>
               <span style={{ fontSize: "11px", color: "#64748b" }}>Dividir em</span>
-              <input type="number" min={1} max={36} style={{ ...inputStyle, width: "52px", padding: "4px 6px", fontSize: "12px" }}
+              <input type="number" min={1} max={36} inputMode="numeric" style={{ ...inputStyle, width: "52px", padding: "4px 6px", fontSize: "12px" }}
                 value={qtdGerar} onChange={e => setQtdGerar(e.target.value)} />
               <span style={{ fontSize: "11px", color: "#64748b" }}>x, 1ª vence</span>
-              <input type="date" style={{ ...inputStyle, width: "130px", padding: "4px 6px", fontSize: "12px" }}
+              <input type="date" style={{ ...inputStyle, padding: "4px 6px", fontSize: "12px" }}
                 value={primeiroVenc} onChange={e => setPrimeiroVenc(e.target.value)} />
               <Btn variant="outline" size="xs" disabled={salvando || total <= 0} onClick={gerarParcelas}>Gerar parcelas</Btn>
             </div>
           ) : (
-            <button onClick={removerParcelas}
-              style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: "pointer" }}>
+            <button onClick={removerParcelas} disabled={salvando}
+              style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: salvando ? "not-allowed" : "pointer", opacity: salvando ? 0.5 : 1 }}>
               Remover parcelamento
             </button>
           )}
@@ -368,8 +368,8 @@ export function FinanceiroPedido({
               }}>
                 <span style={{ fontSize: "12px", fontWeight: 700, color: "#475569", minWidth: "26px" }}>{p.numero}ª</span>
                 <input
-                  type="number" step="0.01" min="0"
-                  style={{ ...inputStyle, width: "100px", padding: "4px 8px", fontSize: "12px" }}
+                  type="number" step="0.01" min="0" inputMode="decimal"
+                  style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }}
                   value={valorEdit[p.id] ?? String(p.valor)}
                   disabled={p.pago || salvando}
                   onChange={e => setValorEdit(prev => ({ ...prev, [p.id]: e.target.value }))}
@@ -378,7 +378,7 @@ export function FinanceiroPedido({
                 />
                 <input
                   type="date"
-                  style={{ ...inputStyle, width: "130px", padding: "4px 8px", fontSize: "12px" }}
+                  style={{ ...inputStyle, padding: "4px 8px", fontSize: "12px" }}
                   value={p.vencimento ?? ""}
                   disabled={p.pago || salvando}
                   onChange={e => atualizarParcela(p, { vencimento: e.target.value || null })}

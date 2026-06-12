@@ -69,6 +69,7 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
   const [editandoId, setEditandoId] = useState<string | null>(null);
   const [form, setForm] = useState<Form>(formVazio());
   const [filtroAtivo, setFiltroAtivo] = useState<"todos" | "ativas" | "inativas">("ativas");
+  const [excluindo, setExcluindo] = useState(false);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -156,9 +157,12 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
 
   const excluir = async (id: string) => {
     if (!confirm("Excluir esta recorrência?")) return;
+    setExcluindo(true);
     const { error } = await supabase.from("recorrencias_financeiras").delete().eq("id", id);
-    if (error) setErro(error.message);
-    else await carregar();
+    if (error) { setErro(error.message); setExcluindo(false); return; }
+    fecharModal();
+    await carregar();
+    setExcluindo(false);
   };
 
   const toggleAtivo = async (id: string, ativo: boolean) => {
@@ -202,7 +206,7 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
         {([["ativas", "Ativas"], ["inativas", "Inativas"], ["todos", "Todas"]] as const).map(([v, l]) => (
           <button key={v} type="button" onClick={() => setFiltroAtivo(v)}
             style={{
-              padding: "4px 12px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
+              padding: "4px 12px", minHeight: "44px", fontSize: "12px", fontWeight: 600, borderRadius: "6px",
               background: filtroAtivo === v ? "#2563eb" : "#fff",
               color: filtroAtivo === v ? "#fff" : "#475569",
               border: "1px solid #cbd5e1", cursor: "pointer",
@@ -284,6 +288,18 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
                   { label: "Valor/Mês", value: fmtBRL(r.valor) },
                   { label: "Status", value: r.ativo ? "Ativa" : "Inativa" },
                 ]}
+                actions={
+                  <div style={{ display: "flex", gap: "6px" }}>
+                    <Btn
+                      size="xs"
+                      variant={r.ativo ? "outline" : "outline"}
+                      onClick={() => toggleAtivo(r.id, !r.ativo)}
+                    >
+                      {r.ativo ? "⏸ Desativar" : "▶ Ativar"}
+                    </Btn>
+                    <Btn size="xs" variant="danger" onClick={() => excluir(r.id)}>✕ Excluir</Btn>
+                  </div>
+                }
               />
             ))}
           </MobileList>
@@ -362,7 +378,9 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
             <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
               <Btn variant="outline" onClick={fecharModal} disabled={salvando}>Cancelar</Btn>
               {editandoId && (
-                <Btn variant="danger" onClick={() => excluir(editandoId).then(fecharModal)} disabled={salvando}>Excluir</Btn>
+                <Btn variant="danger" onClick={() => excluir(editandoId)} disabled={salvando || excluindo} loading={excluindo}>
+                  {excluindo ? "Excluindo..." : "Excluir"}
+                </Btn>
               )}
               <Btn variant="primary" onClick={salvar} disabled={salvando}>
                 {salvando ? "Salvando..." : editandoId ? "Salvar" : "Criar Recorrência"}
