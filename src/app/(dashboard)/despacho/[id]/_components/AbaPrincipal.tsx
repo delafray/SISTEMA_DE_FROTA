@@ -6,6 +6,7 @@
  * observações) + bloco de Despacho e Execução (caminhão, motorista, KMs).
  */
 
+import { useState } from "react";
 import { Btn, Badge } from "@/components/ui/ds";
 import { FluxoStepper } from "./FluxoStepper";
 import { Bloco, LinhaCampos, Campo } from "./shared";
@@ -68,6 +69,23 @@ export function AbaPrincipal({
 }: AbaPrincipalProps) {
   const emRota    = pedido.status === "em_andamento" || pedido.status === "concluida" || pedido.status === "concluido";
   const concluido = pedido.status === "concluida" || pedido.status === "concluido";
+
+  // Popup do local de carregamento (dono 12/06: o ✕ apagava SEM perguntar).
+  // Abre com o endereço editável: dá pra corrigir e salvar, apagar ou cancelar.
+  const [localModal, setLocalModal] = useState<{ index: number; texto: string } | null>(null);
+
+  const salvarEdicaoLocal = () => {
+    if (!localModal || !localModal.texto.trim()) return;
+    const lista = locais.map((l, j) => (j === localModal.index ? localModal.texto.trim() : l));
+    onSalvarLocais(lista);
+    setLocalModal(null);
+  };
+
+  const apagarLocal = () => {
+    if (!localModal) return;
+    onSalvarLocais(locais.filter((_, j) => j !== localModal.index));
+    setLocalModal(null);
+  };
 
   const etapasFluxo = [
     { label: "Lançado",    done: true },
@@ -140,11 +158,11 @@ export function AbaPrincipal({
                 <span style={{ fontSize: "13px", color: "#1e293b", flex: 1 }}>{l}</span>
                 {!finalizado && (
                   <button
-                    onClick={() => onSalvarLocais(locais.filter((_, j) => j !== i))}
+                    onClick={() => setLocalModal({ index: i, texto: l })}
                     disabled={salvandoLocal}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#ef4444", padding: "8px", minHeight: "44px", minWidth: "44px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px" }}
-                    title="Remover este local"
-                  >✕</button>
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#64748b", padding: "8px", minHeight: "44px", minWidth: "44px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px" }}
+                    title="Editar ou remover este local"
+                  >✏️</button>
                 )}
               </div>
             ))}
@@ -226,6 +244,62 @@ export function AbaPrincipal({
         </Bloco>
 
       </div>
+
+      {/* Popup do local: editar (troca e salva), apagar (com certeza) ou cancelar */}
+      {localModal && (
+        <div
+          onClick={() => { if (!salvandoLocal) setLocalModal(null); }}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: "14px", width: "100%", maxWidth: 460,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)", padding: "20px",
+              display: "flex", flexDirection: "column", gap: "12px",
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: "15px", color: "#1e293b" }}>
+              📍 Local de carregamento ({localModal.index + 1}º)
+            </div>
+            <div>
+              <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>
+                Quer corrigir o endereço? É só trocar abaixo e salvar.
+              </label>
+              <input
+                value={localModal.texto}
+                onChange={e => setLocalModal(m => m ? { ...m, texto: e.target.value } : m)}
+                autoFocus
+                style={{
+                  width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px",
+                  padding: "10px 12px", fontSize: "13px", color: "#1e293b",
+                  minHeight: "44px", boxSizing: "border-box",
+                }}
+              />
+            </div>
+            <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setLocalModal(null)} disabled={salvandoLocal}>
+                ← Cancelar
+              </Btn>
+              <Btn variant="danger" onClick={apagarLocal} disabled={salvandoLocal} loading={salvandoLocal}>
+                🗑️ Apagar este local
+              </Btn>
+              <Btn
+                variant="primary"
+                onClick={salvarEdicaoLocal}
+                disabled={salvandoLocal || !localModal.texto.trim() || localModal.texto.trim() === locais[localModal.index]}
+                loading={salvandoLocal}
+              >
+                💾 Salvar alteração
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

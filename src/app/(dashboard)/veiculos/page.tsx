@@ -7,7 +7,6 @@ import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useTableSort } from "@/components/ui/ds";
-import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { ReportPdfButton } from "@/components/ui/ReportPdfButton";
 import jsPDF from "jspdf";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
@@ -382,9 +381,11 @@ export default function VeiculosPage() {
                     </Td>
                     <Td><Badge variant={v.ativo ? "success" : "default"}>{v.ativo ? "Ativo" : "Inativo"}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
+                      {/* Excluir saiu da listagem (regra do dono 12/06): excluir
+                          só DENTRO do veículo e só se nunca teve movimento;
+                          com histórico, o máximo é desativar lá dentro. */}
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
                         <Btn href={`/veiculos/${v.id}/editar`} size="xs" variant="outline">Editar</Btn>
-                        <DeleteBtn id={v.id} table="veiculos" label="veículo" />
                       </div>
                     </Td>
                   </Tr>
@@ -410,11 +411,6 @@ export default function VeiculosPage() {
                 { label: "KM Atual", value: v.km_atual?.toLocaleString("pt-BR") ?? "—" },
                 { label: "Tipo", value: `${v.tipo}${v.categoria ? ` / ${v.categoria}` : ""}` },
               ]}
-              actions={
-                <div onClick={e => e.stopPropagation()}>
-                  <DeleteBtn id={v.id} table="veiculos" label="veículo" />
-                </div>
-              }
             />
           ))}
         </MobileList>

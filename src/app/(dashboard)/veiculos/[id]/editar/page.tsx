@@ -37,6 +37,14 @@ export default function EditarVeiculoPage() {
   const [empresaOriginal, setEmpresaOriginal] = useState<string>("");
   const [mostrarTransfer, setMostrarTransfer] = useState(false);
 
+  // Excluir x desativar (regra do dono 12/06): excluir SÓ se o caminhão nunca
+  // teve movimento (cadastro duplicado); com qualquer histórico, o máximo é
+  // desativar. null = ainda contando.
+  const [movimentos, setMovimentos] = useState<{ rotulo: string; qtd: number }[] | null>(null);
+  const [confirmExcluir, setConfirmExcluir] = useState(false);
+  const [excluindo, setExcluindo] = useState(false);
+  const [erroExcluir, setErroExcluir] = useState("");
+
   const [f, setF] = useState({
     placa: "", marca: "", modelo: "", ano: "", chassi: "", renavam: "",
     combustivel: "diesel", tipo: "caminhao", categoria: "", cor: "", apelido: "",
@@ -58,6 +66,23 @@ export default function EditarVeiculoPage() {
       setAbastecimentos(a.data ?? []);
       setPedidoHist(f.data ?? []);
     });
+
+    // Conta o movimento do caminhão (decide se pode excluir ou só desativar)
+    const tabelasMovimento: Array<[string, string]> = [
+      ["pedidos", "pedido(s)"],
+      ["entregas", "entrega(s)"],
+      ["abastecimentos", "abastecimento(s)"],
+      ["manutencoes", "manutenção(ões)"],
+      ["avarias", "avaria(s)"],
+      ["alocacoes", "vínculo(s) de motorista"],
+      ["plano_manutencao_veiculo", "item(ns) do plano de manutenção"],
+    ];
+    Promise.all(tabelasMovimento.map(([t]) =>
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      (supabase.from(t as any) as any).select("id", { count: "exact", head: true }).eq("veiculo_id", id)
+    )).then((rs: Array<{ count: number | null }>) => {
+      setMovimentos(rs.map((r, i) => ({ rotulo: tabelasMovimento[i][1], qtd: r.count ?? 0 })));
+    }).catch(() => setMovimentos(null));
 
     supabase.from("veiculos").select("*").eq("id", id).single().then(({ data }) => {
       if (data) {
@@ -325,6 +350,45 @@ export default function EditarVeiculoPage() {
                         <VinculoResponsavel veiculoId={id} empresaId={empresaId} kmAtual={kmAtualNum} onKm={(km) => setF((p) => ({ ...p, km_atual: String(km) }))} />
                       </FormSection>
                     )}
+
+                    {/* Excluir x desativar: excluir só existe pra cadastro que
+                        nunca rodou (duplicidade); com histórico, só desativa. */}
+                    <FormSection title="Excluir ou desativar este caminhão">
+                      {movimentos === null ? (
+                        <p style={{ fontSize: 12, color: "#94a3b8", margin: 0 }}>Verificando o histórico do caminhão…</p>
+                      ) : (() => {
+                        const comMov = movimentos.filter(m => m.qtd > 0);
+                        if (comMov.length > 0) {
+                          return (
+                            <div style={{
+                              padding: "12px 14px", background: "#fffbeb", border: "1px solid #fde68a",
+                              borderRadius: "8px", fontSize: "13px", color: "#854d0e", lineHeight: 1.6,
+                            }}>
+                              🔒 Este caminhão já tem movimento ({comMov.map(m => `${m.qtd} ${m.rotulo}`).join(", ")}) e por isso
+                              <b> não pode ser excluído</b> — o histórico depende dele.
+                              Se ele saiu de operação, mude o <b>Status</b> acima para <b>Inativo</b> e clique em Atualizar Veículo.
+                            </div>
+                          );
+                        }
+                        return (
+                          <div style={{
+                            padding: "12px 14px", background: "#fef2f2", border: "1px solid #fca5a5",
+                            borderRadius: "8px", fontSize: "13px", color: "#7f1d1d", lineHeight: 1.6,
+                            display: "flex", flexDirection: "column", gap: "10px",
+                          }}>
+                            <span>
+                              Este cadastro <b>nunca foi usado</b> (nenhum pedido, abastecimento, manutenção, avaria ou vínculo).
+                              Se foi cadastrado em duplicidade, pode excluir de vez.
+                            </span>
+                            <div>
+                              <Btn type="button" variant="danger" onClick={() => setConfirmExcluir(true)}>
+                                🗑️ Excluir veículo
+                              </Btn>
+                            </div>
+                          </div>
+                        );
+                      })()}
+                    </FormSection>
                   </>
                 )}
 
@@ -498,6 +562,67 @@ export default function EditarVeiculoPage() {
           onDone={() => { router.push("/veiculos"); router.refresh(); }}
           onCancel={() => setMostrarTransfer(false)}
         />
+      )}
+
+      {/* Confirmação da exclusão — só chega aqui caminhão SEM movimento */}
+      {confirmExcluir && (
+        <div
+          onClick={() => { if (!excluindo) setConfirmExcluir(false); }}
+          style={{
+            position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
+            zIndex: 1200, display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            onClick={e => e.stopPropagation()}
+            style={{
+              background: "#fff", borderRadius: "14px", width: "100%", maxWidth: 440,
+              boxShadow: "0 20px 60px rgba(0,0,0,0.25)", padding: "20px",
+              display: "flex", flexDirection: "column", gap: "12px",
+            }}
+          >
+            <div style={{ fontWeight: 700, fontSize: "15px", color: "#991b1b" }}>
+              🗑️ Excluir o veículo {f.placa}{f.apelido ? ` (${f.apelido})` : ""}
+            </div>
+            <div style={{ fontSize: "13px", color: "#475569", lineHeight: 1.6 }}>
+              O cadastro será apagado de vez — esta ação não pode ser desfeita.
+              Use apenas para cadastro duplicado ou feito por engano.
+            </div>
+            {erroExcluir && (
+              <div role="alert" style={{
+                padding: "10px 12px", background: "#fef2f2", border: "1px solid #fca5a5",
+                borderRadius: "8px", color: "#991b1b", fontSize: "13px", fontWeight: 600,
+              }}>
+                ⚠️ {erroExcluir}
+              </div>
+            )}
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end", flexWrap: "wrap" }}>
+              <Btn type="button" variant="outline" onClick={() => setConfirmExcluir(false)} disabled={excluindo}>
+                ← Voltar
+              </Btn>
+              <Btn
+                type="button"
+                variant="danger"
+                loading={excluindo}
+                onClick={async () => {
+                  setExcluindo(true);
+                  setErroExcluir("");
+                  const { error } = await supabase.from("veiculos").delete().eq("id", id);
+                  if (error) {
+                    setErroExcluir(`Não foi possível excluir: ${error.message}`);
+                    setExcluindo(false);
+                    return;
+                  }
+                  router.replace("/veiculos");
+                  router.refresh();
+                }}
+              >
+                Sim, excluir de vez
+              </Btn>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
