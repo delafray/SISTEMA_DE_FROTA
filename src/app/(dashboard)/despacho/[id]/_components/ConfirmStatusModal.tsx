@@ -7,6 +7,7 @@
  */
 
 import { useState } from "react";
+import { Btn } from "@/components/ui/ds";
 
 const ACAO: Record<string, { titulo: string; descricao: string; botao: string; cor: string }> = {
   em_andamento: {
@@ -89,30 +90,23 @@ export function ConfirmStatusModal({
         </div>
 
         <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-          <button
+          <Btn
+            type="button"
+            variant="ghost"
             onClick={onClose}
             disabled={saving}
-            style={{
-              padding: "8px 14px", background: "none", border: "1px solid #e2e8f0",
-              borderRadius: "8px", fontSize: "12px", fontWeight: 600,
-              color: "#64748b", cursor: "pointer", minHeight: "44px",
-            }}
           >
             ← Voltar
-          </button>
-          <button
-            onClick={() => onConfirm(nota.trim())}
+          </Btn>
+          <Btn
+            type="button"
+            variant={status === "cancelada" ? "danger" : "primary"}
+            loading={saving}
             disabled={saving}
-            style={{
-              padding: "8px 14px",
-              background: saving ? "#d1d5db" : acao.cor,
-              color: "#fff", border: "none", borderRadius: "8px",
-              fontSize: "12px", fontWeight: 600,
-              cursor: saving ? "default" : "pointer", minHeight: "44px",
-            }}
+            onClick={() => onConfirm(nota.trim())}
           >
-            {saving ? "..." : acao.botao}
-          </button>
+            {acao.botao}
+          </Btn>
         </div>
       </div>
     </div>

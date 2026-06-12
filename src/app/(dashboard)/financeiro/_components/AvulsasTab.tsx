@@ -75,6 +75,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
   const [filtroPago, setFiltroPago] = useState<"todos" | "pago" | "pendente">("todos");
   const [salvandoId, setSalvandoId] = useState<string | null>(null);
   const [excluindo, setExcluindo] = useState(false);
+  const [confirmExcluir, setConfirmExcluir] = useState<{ id: string; descricao: string } | null>(null);
 
   const carregar = useCallback(async () => {
     setErro("");
@@ -133,8 +134,13 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
   const fecharModal = () => { setModalAberto(false); setEditandoId(null); };
 
   const salvar = async () => {
-    if (!form.descricao.trim() || !form.valor || isNaN(parseFloat(form.valor))) {
-      setErro("Preencha descrição e valor."); return;
+    const valorNormalizado = form.valor.replace(",", ".");
+    const valorNum = parseFloat(valorNormalizado);
+    if (!form.descricao.trim() || !form.valor || isNaN(valorNum) || valorNum <= 0) {
+      setErro("Preencha descrição e informe um valor válido (ex: 150,00)."); return;
+    }
+    if (form.pago && !form.data_pagamento) {
+      setErro("Informe a data de pagamento quando marcar como pago."); return;
     }
     setSalvando(true);
     setErro("");
@@ -143,7 +149,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
       empresa_id: empresas[0], // despesa avulsa: grava na 1ª empresa do gestor
       descricao: form.descricao.trim(),
       categoria: form.categoria,
-      valor: parseFloat(form.valor),
+      valor: valorNum,
       data_vencimento: form.data_vencimento,
       fornecedor: form.fornecedor.trim() || null,
       forma_pagamento: form.forma_pagamento.trim() || null,
@@ -164,10 +170,15 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
     setSalvando(false);
   };
 
-  const excluir = async (id: string) => {
-    if (!confirm("Excluir esta despesa?")) return;
+  const excluir = (id: string, descricao?: string) => {
+    setConfirmExcluir({ id, descricao: descricao ?? "esta despesa" });
+  };
+
+  const confirmarExcluir = async () => {
+    if (!confirmExcluir) return;
     setExcluindo(true);
-    const { error } = await supabase.from("despesas_avulsas").delete().eq("id", id);
+    setConfirmExcluir(null);
+    const { error } = await supabase.from("despesas_avulsas").delete().eq("id", confirmExcluir.id);
     if (error) { setErro(error.message); setExcluindo(false); return; }
     fecharModal();
     await carregar();
@@ -275,7 +286,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                           ? <ActionBtn title="Desfazer pagamento" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, false)}>↩</ActionBtn>
                           : <ActionBtn title="Marcar como pago" variant="success" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, true)}>✓</ActionBtn>
                         }
-                        <ActionBtn title="Excluir" variant="danger" onClick={() => excluir(d.id)}>✕</ActionBtn>
+                        <ActionBtn title="Excluir" variant="danger" onClick={() => excluir(d.id, d.descricao)}>✕</ActionBtn>
                       </div>
                     </Td>
                   </Tr>
@@ -311,7 +322,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                         ? <Btn size="xs" variant="outline" disabled={salvandoId === d.id} loading={salvandoId === d.id} onClick={() => marcarPago(d.id, false)}>↩ Desfazer</Btn>
                         : <Btn size="xs" variant="outline" disabled={salvandoId === d.id} loading={salvandoId === d.id} onClick={() => marcarPago(d.id, true)}>✓ Pagar</Btn>
                       }
-                      <Btn size="xs" variant="danger" onClick={() => excluir(d.id)}>✕ Excluir</Btn>
+                      <Btn size="xs" variant="danger" onClick={() => excluir(d.id, d.descricao)}>✕ Excluir</Btn>
                     </div>
                   }
                 />
@@ -325,12 +336,12 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
 
       {/* Modal CRUD */}
       {modalAberto && (
-        <div style={{
+        <div className="m-modal-overlay" style={{
           position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
           alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto",
           padding: "40px 16px",
         }}>
-          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
               {editandoId ? "Editar Despesa" : "Nova Despesa Avulsa"}
             </h2>
@@ -350,9 +361,9 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                   </select>
                 </FormField>
                 <FormField label="Valor (R$) *">
-                  <input type="number" step="0.01" min="0" style={inputStyle} value={form.valor}
+                  <input type="text" inputMode="decimal" style={inputStyle} value={form.valor}
                     onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-                    placeholder="0,00" />
+                    placeholder="150,00" />
                 </FormField>
               </div>
 
@@ -401,12 +412,36 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
             <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
               <Btn variant="outline" onClick={fecharModal} disabled={salvando}>Cancelar</Btn>
               {editandoId && (
-                <Btn variant="danger" onClick={() => excluir(editandoId)} disabled={salvando || excluindo} loading={excluindo}>
+                <Btn variant="danger" onClick={() => excluir(editandoId, form.descricao)} disabled={salvando || excluindo} loading={excluindo}>
                   {excluindo ? "Excluindo..." : "Excluir"}
                 </Btn>
               )}
               <Btn variant="primary" onClick={salvar} disabled={salvando}>
                 {salvando ? "Salvando..." : editandoId ? "Salvar" : "Criar Despesa"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de exclusão */}
+      {confirmExcluir && (
+        <div className="m-modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "16px",
+        }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#dc2626", margin: "0 0 8px" }}>Excluir despesa</h2>
+            <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 4px" }}>
+              <strong>{confirmExcluir.descricao}</strong>
+            </p>
+            <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 20px" }}>
+              Esta ação não pode ser desfeita.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmExcluir(null)} disabled={excluindo}>Voltar</Btn>
+              <Btn variant="danger" onClick={confirmarExcluir} loading={excluindo} disabled={excluindo}>
+                {excluindo ? "Excluindo..." : "Excluir"}
               </Btn>
             </div>
           </div>

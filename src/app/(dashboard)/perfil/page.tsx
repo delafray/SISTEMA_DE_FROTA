@@ -6,7 +6,7 @@ import { PageHeader, FormSection, FormField, inputStyle, Btn, Alert } from "@/co
 
 export default function PerfilPage() {
   const [nome, setNome]           = useState("");
-  const [_senhaAtual, setSenhaAtual] = useState("");
+  const [senhaAtual, setSenhaAtual] = useState("");
   const [novaSenha, setNovaSenha] = useState("");
   const [confirmar, setConfirmar] = useState("");
   const [saving, setSaving]       = useState(false);
@@ -37,11 +37,31 @@ export default function PerfilPage() {
       setMsg({ tipo: "erro", texto: "As senhas não coincidem." });
       return;
     }
+    if (novaSenha && !senhaAtual) {
+      setMsg({ tipo: "erro", texto: "Informe a senha atual para confirmar a troca de senha." });
+      return;
+    }
 
     setSaving(true);
     const supabase = createClient();
 
     if (novaSenha) {
+      // Valida a senha atual antes de trocar
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user?.email) {
+        setSaving(false);
+        setMsg({ tipo: "erro", texto: "Não foi possível identificar o usuário." });
+        return;
+      }
+      const { error: signInError } = await supabase.auth.signInWithPassword({
+        email: user.email,
+        password: senhaAtual,
+      });
+      if (signInError) {
+        setSaving(false);
+        setMsg({ tipo: "erro", texto: "Senha atual incorreta. Verifique e tente novamente." });
+        return;
+      }
       const { error } = await supabase.auth.updateUser({ password: novaSenha });
       if (error) {
         setSaving(false);
@@ -80,6 +100,16 @@ export default function PerfilPage() {
 
             <FormSection title="Trocar senha">
               <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                <FormField label="Senha atual">
+                  <input
+                    type="password"
+                    value={senhaAtual}
+                    onChange={e => setSenhaAtual(e.target.value)}
+                    style={inputStyle}
+                    placeholder="Digite sua senha atual"
+                    autoComplete="current-password"
+                  />
+                </FormField>
                 <FormField label="Nova senha">
                   <input
                     type="password"
@@ -88,6 +118,7 @@ export default function PerfilPage() {
                     style={inputStyle}
                     placeholder="Mínimo 6 caracteres"
                     minLength={6}
+                    autoComplete="new-password"
                   />
                 </FormField>
                 <FormField label="Confirmar nova senha">

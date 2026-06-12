@@ -58,6 +58,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
   const [modalStep, setModalStep] = useState(0);
   const [saving, setSaving] = useState(false);
+  const [confirmRemoverAjuste, setConfirmRemoverAjuste] = useState<string | null>(null);
 
   // Form for new ajuste
   const [novoAjuste, setNovoAjuste] = useState({ tipo: "desconto", descricao: "", valor: "", parcelas: "1" });
@@ -322,12 +323,12 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
               <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Ano</div>
               <div style={{ display: "flex", gap: "4px", marginBottom: "4px" }}>
                 {yearsFirst.map(y => (
-                  <span key={y} style={y === selectedYear ? chipActive : chipInactive} onClick={() => selectDate(y, selectedMonth)}>{y}</span>
+                  <button key={y} type="button" style={y === selectedYear ? chipActive : chipInactive} onClick={() => selectDate(y, selectedMonth)}>{y}</button>
                 ))}
               </div>
               <div style={{ display: "flex", gap: "4px" }}>
                 {yearsSecond.map(y => (
-                  <span key={y} style={y === selectedYear ? chipActive : chipInactive} onClick={() => selectDate(y, selectedMonth)}>{y}</span>
+                  <button key={y} type="button" style={y === selectedYear ? chipActive : chipInactive} onClick={() => selectDate(y, selectedMonth)}>{y}</button>
                 ))}
               </div>
             </div>
@@ -338,12 +339,12 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
               <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase", letterSpacing: "0.05em", marginBottom: "6px" }}>Mês</div>
               <div style={{ display: "flex", gap: "4px", marginBottom: "4px", flexWrap: "wrap" }}>
                 {monthsFirst.map(m => (
-                  <span key={m} style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</span>
+                  <button key={m} type="button" style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</button>
                 ))}
               </div>
               <div style={{ display: "flex", gap: "4px", flexWrap: "wrap" }}>
                 {monthsSecond.map(m => (
-                  <span key={m} style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</span>
+                  <button key={m} type="button" style={m === selectedMonth ? chipActive : chipInactive} onClick={() => selectDate(selectedYear, m)}>{String(m).padStart(2, "0")}</button>
                 ))}
               </div>
             </div>
@@ -374,7 +375,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
       <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "2fr 1fr", gap: "24px" }}>
 
         {/* LEFT COLUMN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+        <div style={{ display: "flex", flexDirection: "column", gap: "24px", order: 2 }}>
 
           <FormSection title="Pedidos Concluídos no Mês">
             <div style={{ display: "flex", justifyContent: "space-between", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
@@ -398,7 +399,8 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
           {adiantamentosMes.length > 0 && (
             <FormSection title="Adiantamentos do Mês (deduzidos)">
-              <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse" }}>
+              <div style={{ overflowX: "auto" }}>
+              <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", minWidth: "320px" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
                     <th style={{ padding: "8px" }}>Data</th>
@@ -416,12 +418,14 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                   ))}
                 </tbody>
               </table>
+              </div>
             </FormSection>
           )}
 
           <FormSection title="Ajustes (Bônus, Descontos, Reembolsos)">
             {ajustes.length > 0 && (
-              <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", marginBottom: "16px" }}>
+              <div style={{ overflowX: "auto", marginBottom: "16px" }}>
+              <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", minWidth: "320px" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
                     <th style={{ padding: "8px" }}>Tipo</th>
@@ -435,14 +439,14 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                     const isPos = a.tipo === "bonus" || a.tipo === "reembolso";
                     return (
                       <tr key={a.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "8px", textTransform: "capitalize" }}>{a.tipo}</td>
-                        <td style={{ padding: "8px" }}>{a.descricao} {a.total_parcelas > 1 ? `(${a.parcela_atual}/${a.total_parcelas})` : ""}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: isPos ? "#16a34a" : "#dc2626", fontWeight: 600 }}>
+                        <td style={{ padding: "8px", textTransform: "capitalize", whiteSpace: "nowrap" }}>{a.tipo}</td>
+                        <td style={{ padding: "8px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.descricao}>{a.descricao} {a.total_parcelas > 1 ? `(${a.parcela_atual}/${a.total_parcelas})` : ""}</td>
+                        <td style={{ padding: "8px", textAlign: "right", color: isPos ? "#16a34a" : "#dc2626", fontWeight: 600, whiteSpace: "nowrap" }}>
                           {isPos ? "+" : "-"}{fmtMoeda(a.valor)}
                         </td>
                         <td style={{ padding: "8px", textAlign: "center" }}>
                           {!isFechado && (
-                            <button type="button" onClick={() => removeAjuste(a.id)} style={{ fontSize: "12px", color: "#dc2626", background: "transparent", border: "none", cursor: "pointer" }}>Excluir</button>
+                            <button type="button" onClick={() => setConfirmRemoverAjuste(a.id)} style={{ minHeight: "44px", padding: "0 8px", color: "#dc2626", background: "transparent", border: "none", cursor: "pointer", fontSize: "12px" }}>Excluir</button>
                           )}
                         </td>
                       </tr>
@@ -450,6 +454,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                   })}
                 </tbody>
               </table>
+              </div>
             )}
 
             {!isFechado && (
@@ -484,7 +489,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
         </div>
 
         {/* RIGHT COLUMN: Resumo */}
-        <div>
+        <div style={{ order: 1 }}>
           <div style={{ background: "#0f172a", color: "#fff", padding: "24px", borderRadius: "12px", position: "sticky", top: "24px" }}>
             <h4 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 500, color: "#94a3b8" }}>Resumo do Mês</h4>
 
@@ -691,6 +696,19 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
         </div>
       )}
 
+      {/* Modal confirmação remoção de ajuste */}
+      {confirmRemoverAjuste && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 200, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "20px", width: "100%", maxWidth: "360px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}>Excluir ajuste?</h3>
+            <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>Este ajuste afeta o cálculo salarial do motorista. Confirma a remoção?</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <button type="button" onClick={() => setConfirmRemoverAjuste(null)} style={{ padding: "8px 14px", background: "#fff", color: "#475569", border: "1px solid #cbd5e1", borderRadius: "8px", fontWeight: 600, cursor: "pointer", fontSize: "13px" }}>Voltar</button>
+              <button type="button" onClick={() => { removeAjuste(confirmRemoverAjuste); setConfirmRemoverAjuste(null); }} style={{ padding: "8px 14px", background: "#ef4444", color: "#fff", border: "none", borderRadius: "8px", fontWeight: 600, cursor: "pointer", fontSize: "13px" }}>Confirmar</button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

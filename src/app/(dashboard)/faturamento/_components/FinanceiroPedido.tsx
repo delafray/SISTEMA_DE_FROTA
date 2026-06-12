@@ -17,7 +17,7 @@
  * desconto aparecem travados com aviso — o resto funciona normal.
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Btn, Badge, inputStyle, selectStyle } from "@/components/ui/ds";
 import {
@@ -77,6 +77,14 @@ export function FinanceiroPedido({
   const [primeiroVenc, setPrimeiroVenc] = useState(hojeISO());
   // edição local dos valores (committa no blur com reconciliação)
   const [valorEdit, setValorEdit] = useState<Record<string, string>>({});
+  // edição local das datas de vencimento (committa no blur para evitar múltiplas gravações por seleção)
+  const [dataEdit, setDataEdit] = useState<Record<string, string>>({});
+  // confirmação de estorno de parcela paga
+  const [confirmEstorno, setConfirmEstorno] = useState<Parcela | null>(null);
+  // confirmação de remoção do parcelamento
+  const [confirmRemover, setConfirmRemover] = useState(false);
+  // ref para bloquear duplo clique no salvar data
+  const salvandoDataRef = useRef<Record<string, boolean>>({});
 
   const total = totalAReceber(valorPedido, parseFloat(acrescimos) || 0, parseFloat(descontos) || 0);
   const somaParcelas = Math.round(parcelas.reduce((s, p) => s + (p.valor ?? 0), 0) * 100) / 100;
@@ -205,12 +213,17 @@ export function FinanceiroPedido({
     setSalvando(false);
   };
 
-  const removerParcelas = async () => {
+  const removerParcelas = () => {
     if (parcelas.some(p => p.pago)) { setErro("Há parcela paga — estorne antes de remover."); return; }
-    if (!window.confirm("Remover todas as parcelas e voltar ao pagamento único?")) return;
+    setConfirmRemover(true);
+  };
+
+  const confirmarRemoverParcelas = async () => {
+    setConfirmRemover(false);
     setSalvando(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    await (supabase as any).from("pedido_parcelas").delete().eq("pedido_id", pedidoId);
+    const { error } = await (supabase as any).from("pedido_parcelas").delete().eq("pedido_id", pedidoId);
+    if (error) { setErro(error.message); setSalvando(false); return; }
     setParcelas([]);
     onMudou();
     setSalvando(false);
@@ -251,6 +264,16 @@ export function FinanceiroPedido({
     setSalvando(false);
   };
 
+  const salvarDataParcela = async (parcela: Parcela) => {
+    const novaData = dataEdit[parcela.id];
+    if (novaData == null || novaData === (parcela.vencimento ?? "")) return;
+    if (salvandoDataRef.current[parcela.id]) return;
+    salvandoDataRef.current[parcela.id] = true;
+    await atualizarParcela(parcela, { vencimento: novaData || null });
+    setDataEdit(prev => { const n = { ...prev }; delete n[parcela.id]; return n; });
+    salvandoDataRef.current[parcela.id] = false;
+  };
+
   const atualizarParcela = async (p: Parcela, patch: Partial<Parcela>) => {
     setSalvando(true);
     setErro("");
@@ -283,8 +306,16 @@ export function FinanceiroPedido({
         </div>
         <div>
           <label style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>Forma de pagamento</label>
-          <input style={{ ...inputStyle, fontSize: "12px", padding: "6px 8px" }} value={forma}
-            onChange={e => setForma(e.target.value)} placeholder="PIX, boleto, 30/60/90…" />
+          <select style={{ ...selectStyle, fontSize: "12px", padding: "6px 8px" }} value={forma} onChange={e => setForma(e.target.value)}>
+            <option value="">— A definir —</option>
+            <option value="PIX">PIX</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Cartão Débito">Cartão Débito</option>
+            <option value="Cartão Crédito">Cartão Crédito</option>
+            <option value="Boleto">Boleto</option>
+            <option value="Transferência">Transferência</option>
+            <option value="30/60/90">30/60/90</option>
+          </select>
         </div>
         <div>
           <label style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, display: "block", marginBottom: "3px" }}>Acréscimos (R$)</label>
@@ -344,10 +375,9 @@ export function FinanceiroPedido({
               <Btn variant="outline" size="xs" disabled={salvando || total <= 0} onClick={gerarParcelas}>Gerar parcelas</Btn>
             </div>
           ) : (
-            <button onClick={removerParcelas} disabled={salvando}
-              style={{ fontSize: "11px", color: "#ef4444", background: "none", border: "none", cursor: salvando ? "not-allowed" : "pointer", opacity: salvando ? 0.5 : 1 }}>
+            <Btn variant="danger" size="xs" disabled={salvando} onClick={removerParcelas}>
               Remover parcelamento
-            </button>
+            </Btn>
           )}
         </div>
 
@@ -367,34 +397,39 @@ export function FinanceiroPedido({
                 borderRadius: "8px", border: "1px solid " + (p.pago ? "#bbf7d0" : "#e2e8f0"),
               }}>
                 <span style={{ fontSize: "12px", fontWeight: 700, color: "#475569", minWidth: "26px" }}>{p.numero}ª</span>
-                <input
-                  type="number" step="0.01" min="0" inputMode="decimal"
-                  style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }}
-                  value={valorEdit[p.id] ?? String(p.valor)}
-                  disabled={p.pago || salvando}
-                  onChange={e => setValorEdit(prev => ({ ...prev, [p.id]: e.target.value }))}
-                  onBlur={() => salvarValorParcela(p)}
-                  title="Ao salvar, as parcelas seguintes não pagas redistribuem o restante"
-                />
+                <div style={{ position: "relative" }}>
+                  <input
+                    type="number" step="0.01" min="0" inputMode="decimal"
+                    style={{
+                      ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px",
+                      borderColor: salvando && valorEdit[p.id] != null ? "#2563eb" : undefined,
+                    }}
+                    value={valorEdit[p.id] ?? String(p.valor)}
+                    disabled={p.pago || salvando}
+                    onChange={e => setValorEdit(prev => ({ ...prev, [p.id]: e.target.value }))}
+                    onBlur={() => salvarValorParcela(p)}
+                    title="Ao salvar, as parcelas seguintes não pagas redistribuem o restante"
+                  />
+                  {salvando && valorEdit[p.id] != null && (
+                    <span style={{ fontSize: "10px", color: "#2563eb", position: "absolute", bottom: "-14px", left: 0, whiteSpace: "nowrap" }}>Salvando…</span>
+                  )}
+                </div>
                 <input
                   type="date"
                   style={{ ...inputStyle, padding: "4px 8px", fontSize: "12px" }}
-                  value={p.vencimento ?? ""}
+                  value={dataEdit[p.id] ?? (p.vencimento ?? "")}
                   disabled={p.pago || salvando}
-                  onChange={e => atualizarParcela(p, { vencimento: e.target.value || null })}
+                  onChange={e => setDataEdit(prev => ({ ...prev, [p.id]: e.target.value }))}
+                  onBlur={() => salvarDataParcela(p)}
                 />
                 {!p.pago && p.vencimento && p.vencimento < hojeISO() && (
                   <Badge variant="danger">vencida</Badge>
                 )}
                 <div style={{ marginLeft: "auto" }}>
                   {p.pago ? (
-                    <button
-                      onClick={() => atualizarParcela(p, { pago: false, data_pagamento: null })}
-                      disabled={salvando}
-                      style={{ fontSize: "11px", color: "#64748b", background: "none", border: "none", cursor: "pointer" }}
-                    >
-                      ✓ Paga {p.data_pagamento ? fmtDate(p.data_pagamento) : ""} · estornar
-                    </button>
+                    <Btn variant="outline" size="xs" disabled={salvando} onClick={() => setConfirmEstorno(p)}>
+                      ✓ Paga {p.data_pagamento ? fmtDate(p.data_pagamento) : ""} · Estornar
+                    </Btn>
                   ) : (
                     <Btn variant="outline" size="xs" disabled={salvando}
                       onClick={() => atualizarParcela(p, { pago: true, data_pagamento: hojeISO() })}>
@@ -407,6 +442,55 @@ export function FinanceiroPedido({
           </div>
         )}
       </div>
+      {/* Modal de confirmação de estorno de parcela */}
+      {confirmEstorno && (
+        <div className="m-modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "16px",
+        }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>Confirmar estorno</h2>
+            <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 4px" }}>
+              Parcela {confirmEstorno.numero}ª — {fmtBRL(confirmEstorno.valor)}
+            </p>
+            <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 20px" }}>
+              A parcela será marcada como não paga e o pedido será reaberto se necessário.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmEstorno(null)} disabled={salvando}>Voltar</Btn>
+              <Btn variant="danger" disabled={salvando} loading={salvando}
+                onClick={async () => {
+                  const p = confirmEstorno;
+                  setConfirmEstorno(null);
+                  await atualizarParcela(p, { pago: false, data_pagamento: null });
+                }}>
+                Confirmar estorno
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de remoção do parcelamento */}
+      {confirmRemover && (
+        <div className="m-modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "16px",
+        }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>Remover parcelamento</h2>
+            <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 20px" }}>
+              Todas as parcelas serão removidas e o pedido voltará ao pagamento único. Esta ação não pode ser desfeita.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmRemover(false)} disabled={salvando}>Voltar</Btn>
+              <Btn variant="danger" disabled={salvando} loading={salvando} onClick={confirmarRemoverParcelas}>
+                Confirmar remoção
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

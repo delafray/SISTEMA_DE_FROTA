@@ -100,6 +100,7 @@ export default function EditarVeiculoPage() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (saving) return;
     setErr("");
     if (!f.placa || !f.marca || !f.modelo || !f.ano || !f.chassi || !f.renavam) {
       setErr("Preencha todos os campos obrigatórios (*)"); return;
@@ -150,8 +151,8 @@ export default function EditarVeiculoPage() {
             {tab === "dados" && (
               <>
                 <span className="m-hide"><Btn href="/veiculos" variant="outline">Cancelar</Btn></span>
-                <Btn type="button" onClick={handleSubmit} variant="primary" disabled={saving}>
-                  {saving ? "Salvando..." : "Atualizar"}
+                <Btn type="button" onClick={handleSubmit} variant="primary" loading={saving}>
+                  Atualizar
                 </Btn>
               </>
             )}
@@ -262,7 +263,7 @@ export default function EditarVeiculoPage() {
                           </FormField>
                         </div>
                         <FormField label="Ano *">
-                          <IMaskInput mask="0000" value={f.ano}
+                          <IMaskInput mask="0000" inputMode="numeric" value={f.ano}
                             onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} />
                         </FormField>
 

@@ -174,7 +174,7 @@ export function EtapaUpload({
                       <button
                         type="button"
                         onClick={onToggleFalhas}
-                        style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                        style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: "10px 8px", minHeight: "44px" }}
                       >
                         {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
                       </button>
@@ -278,7 +278,7 @@ export function EtapaUpload({
                       <button
                         type="button"
                         onClick={onToggleFalhas}
-                        style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+                        style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: "10px 8px", minHeight: "44px" }}
                       >
                         {falhasExpandidas ? "▲ Ocultar falhas" : "▼ Ver falhas"}
                       </button>

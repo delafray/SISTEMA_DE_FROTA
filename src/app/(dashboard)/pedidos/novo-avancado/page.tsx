@@ -302,6 +302,7 @@ export default function NovoPedidoAvancadoPage() {
         .in("id", Array.from(selectedEntregas));
     }
 
+    setSaving(false);
     router.push(`/pedidos/${pedido.id}`);
     router.refresh();
   };
@@ -369,8 +370,8 @@ export default function NovoPedidoAvancadoPage() {
               </FormField>
 
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
-                <Btn type="button" variant="primary" onClick={handleMotoristaNext} disabled={checkingVeiculo}>
-                  Avançar para Entregas →
+                <Btn type="button" variant="primary" onClick={handleMotoristaNext} disabled={checkingVeiculo} loading={checkingVeiculo}>
+                  {checkingVeiculo ? "Verificando..." : "Avançar para Entregas →"}
                 </Btn>
               </div>
             </div>
@@ -414,7 +415,14 @@ export default function NovoPedidoAvancadoPage() {
                               />
                             </Td>
                             <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>
-                              {fr.origem?.split("-")[0] ?? "—"} → {fr.destino?.split("-")[0] ?? "—"}
+                              <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                {fr.origem?.split("-")[0] ?? "—"} → {fr.destino?.split("-")[0] ?? "—"}
+                              </div>
+                              {cliente?.nome_fantasia && (
+                                <div className="m-show-block" style={{ fontSize: "11px", color: "#64748b", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                                  {cliente.nome_fantasia}
+                                </div>
+                              )}
                             </Td>
                             <Td className="m-hide">{cliente?.nome_fantasia ?? "—"}</Td>
                             <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
@@ -489,9 +497,9 @@ export default function NovoPedidoAvancadoPage() {
                               </span>
                             )}
                           </div>
-                          <button type="button" onClick={() => { setVeiculoPadrao(null); setVeiculoId(""); setVeiculoWarning(null); }} style={{ fontSize: "13px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", textDecoration: "underline" }}>
+                          <Btn type="button" variant="outline" size="xs" onClick={() => { setVeiculoPadrao(null); setVeiculoId(""); setVeiculoWarning(null); }}>
                             Trocar
-                          </button>
+                          </Btn>
                         </div>
                       </div>
                     ) : (

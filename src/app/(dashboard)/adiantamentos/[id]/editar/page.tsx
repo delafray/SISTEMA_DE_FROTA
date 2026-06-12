@@ -17,6 +17,7 @@ export default function EditarAdiantamentoPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [confirmModal, setConfirmModal] = useState<{ status: string } | null>(null);
 
   const [f, setF] = useState({
     motorista_id: "",
@@ -64,29 +65,44 @@ export default function EditarAdiantamentoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [id]);
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErr("");
-    if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
-    if (!f.valor || parseFloat(f.valor) <= 0) { setErr("Informe um valor válido"); return; }
+  const normNum = (s: string) => parseFloat(s.replace(",", "."));
+
+  const doSave = async () => {
     setSaving(true);
+    const valorNum = normNum(f.valor);
+    const vpContasNum = f.valor_prestado_contas ? normNum(f.valor_prestado_contas) : null;
 
     const { error: dbErr } = await supabase.from("adiantamentos").update({
       motorista_id: f.motorista_id,
       tipo: f.tipo,
-      valor: parseFloat(f.valor),
+      valor: valorNum,
       justificativa: f.justificativa || null,
       data_pagamento: f.data_pagamento || null,
       status: f.status,
       recusa_motivo: f.status === "recusado" ? (f.recusa_motivo || null) : null,
-      valor_prestado_contas: f.status === "prestado" && f.valor_prestado_contas
-        ? parseFloat(f.valor_prestado_contas)
+      valor_prestado_contas: f.status === "prestado" && vpContasNum != null && !isNaN(vpContasNum)
+        ? vpContasNum
         : null,
     }).eq("id", id);
     setSaving(false);
     if (dbErr) { setErr(dbErr.message); return; }
     router.push("/adiantamentos");
     router.refresh();
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
+    const valorNum = normNum(f.valor);
+    if (!f.valor || isNaN(valorNum) || valorNum <= 0) { setErr("Informe um valor válido (use vírgula ou ponto como separador decimal)"); return; }
+    if (f.status === "recusado" && !f.recusa_motivo.trim()) { setErr("Informe o motivo da recusa"); return; }
+    if (f.valor_prestado_contas && isNaN(normNum(f.valor_prestado_contas))) { setErr("Valor prestado em contas inválido. Use ponto ou vírgula como separador decimal."); return; }
+    if (f.status === "recusado" || f.status === "prestado") {
+      setConfirmModal({ status: f.status });
+      return;
+    }
+    await doSave();
   };
 
   if (loading) {
@@ -105,13 +121,13 @@ export default function EditarAdiantamentoPage() {
       <PageHeader
         title="Editar Adiantamento"
         actions={
-          <>
+          <span className="m-hide">
             <Btn href="/adiantamentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
-          </>
+          </span>
         }
       />
 
@@ -145,10 +161,9 @@ export default function EditarAdiantamentoPage() {
                 <input
                   value={f.valor}
                   onChange={set("valor")}
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="0.01"
-                  min="0.01"
+                  pattern="[0-9]*[.,]?[0-9]*"
                   placeholder="0,00"
                   style={inputStyle}
                 />
@@ -204,10 +219,9 @@ export default function EditarAdiantamentoPage() {
                     <input
                       value={f.valor_prestado_contas}
                       onChange={set("valor_prestado_contas")}
-                      type="number"
+                      type="text"
                       inputMode="decimal"
-                      step="0.01"
-                      min="0"
+                      pattern="[0-9]*[.,]?[0-9]*"
                       placeholder="0,00"
                       style={inputStyle}
                     />
@@ -225,6 +239,22 @@ export default function EditarAdiantamentoPage() {
           </div>
         </div>
       </div>
+
+      {/* Modal de confirmação para status recusado/prestado */}
+      {confirmModal && (
+        <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <div style={{ fontSize: "15px", fontWeight: 600, color: "#1e293b", marginBottom: "8px" }}>Confirmar alteração</div>
+            <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>
+              Você está marcando este adiantamento como <strong>{confirmModal.status}</strong>. Esta ação afeta o acerto do motorista. Confirmar?
+            </div>
+            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmModal(null)}>Voltar</Btn>
+              <Btn variant="danger" loading={saving} onClick={async () => { setConfirmModal(null); await doSave(); }}>Confirmar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

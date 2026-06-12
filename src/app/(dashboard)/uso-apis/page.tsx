@@ -69,8 +69,9 @@ export default async function UsoApisPage() {
                 alignItems: 'flex-start',
               }}
             >
-              {/* Coluna do % (ou traço) */}
+              {/* Coluna do % (ou traço) — sobe para cima do conteúdo em mobile */}
               <div
+                className="m-hide"
                 style={{
                   flexShrink: 0,
                   width: 72,
@@ -92,6 +93,19 @@ export default async function UsoApisPage() {
 
               {/* Conteúdo */}
               <div style={{ flex: 1, minWidth: 0 }}>
+                {/* Barra de progresso compacta — só no mobile, no topo do conteúdo */}
+                <div className="m-show-block" style={{ marginBottom: 8 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <span style={{ fontSize: 14, fontWeight: 800, color: c.texto, minWidth: 36 }}>
+                    {api.pct === null ? '—' : `${api.pct}%`}
+                  </span>
+                  {api.pct !== null && (
+                    <div style={{ flex: 1, height: 5, background: '#e2e8f0', borderRadius: 3, overflow: 'hidden' }}>
+                      <div style={{ width: `${api.pct}%`, height: '100%', background: c.barra }} />
+                    </div>
+                  )}
+                </div>
+                </div>
                 <div style={{ fontSize: 15, fontWeight: 700, color: '#0f172a' }}>
                   {api.nomeOficial}{' '}
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#2563eb' }}>· {api.apelido}</span>
@@ -104,13 +118,13 @@ export default async function UsoApisPage() {
                 </div>
 
                 {/* Links: cobrança + uso */}
-                <div style={{ display: 'flex', gap: 16, marginTop: 10, flexWrap: 'wrap' }}>
+                <div style={{ display: 'flex', gap: 8, marginTop: 10, flexWrap: 'wrap' }}>
                   {api.urlCobranca && (
                     <a
                       href={api.urlCobranca}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', textDecoration: 'none' }}
+                      style={{ fontSize: 13, fontWeight: 600, color: '#dc2626', textDecoration: 'none', border: '1px solid #fca5a5', borderRadius: 6, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', minHeight: 44 }}
                     >
                       💳 Cobrança ↗
                     </a>
@@ -120,7 +134,7 @@ export default async function UsoApisPage() {
                       href={api.urlUso}
                       target="_blank"
                       rel="noreferrer"
-                      style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none' }}
+                      style={{ fontSize: 13, fontWeight: 600, color: '#2563eb', textDecoration: 'none', border: '1px solid #bfdbfe', borderRadius: 6, padding: '6px 10px', display: 'inline-flex', alignItems: 'center', minHeight: 44 }}
                     >
                       📊 Uso / console ↗
                     </a>

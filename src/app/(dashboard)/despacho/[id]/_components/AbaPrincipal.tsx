@@ -37,6 +37,8 @@ export type AbaPrincipalProps = {
   onSalvarLocais: (lista: string[]) => void;
   onAbrirDespacho: () => void;
   onChangeStatus: (status: string) => void;
+  /** Abre o popup de confirmação de cancelamento */
+  onCancelar: () => void;
 };
 
 export function AbaPrincipal({
@@ -57,6 +59,7 @@ export function AbaPrincipal({
   onSalvarLocais,
   onAbrirDespacho,
   onChangeStatus,
+  onCancelar,
 }: AbaPrincipalProps) {
   const emRota    = pedido.status === "em_andamento" || pedido.status === "concluida" || pedido.status === "concluido";
   const concluido = pedido.status === "concluida" || pedido.status === "concluido";
@@ -70,8 +73,8 @@ export function AbaPrincipal({
 
   const proximaAcao =
     !despachado ? { label: "🚚 Despachar agora", onClick: onAbrirDespacho } :
-    !emRota     ? { label: "▶ Iniciar Pedido",   onClick: () => onChangeStatus("em_andamento"), disabled: updatingStatus } :
-    !concluido  ? { label: "✓ Concluir Pedido",  onClick: () => onChangeStatus("concluida"),    disabled: updatingStatus } :
+    !emRota     ? { label: "▶ Iniciar Pedido",   onClick: () => onChangeStatus("em_andamento"), disabled: updatingStatus, loading: updatingStatus } :
+    !concluido  ? { label: "✓ Concluir Pedido",  onClick: () => onChangeStatus("concluida"),    disabled: updatingStatus, loading: updatingStatus } :
     null;
 
   return (
@@ -83,6 +86,13 @@ export function AbaPrincipal({
           cancelado={pedido.status === "cancelada" || pedido.status === "cancelado"}
           acao={proximaAcao}
         />
+        {!finalizado && (
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
+            <Btn variant="danger" size="sm" disabled={updatingStatus} onClick={onCancelar}>
+              Cancelar pedido
+            </Btn>
+          </div>
+        )}
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: "16px", maxWidth: "900px" }}>
@@ -95,14 +105,16 @@ export function AbaPrincipal({
         >
           {/* Agrupado (dono 11/06): valor perto da legenda, em linhas compactas.
               Grid de 4 colunas nas duas linhas → bordas alinhadas entre elas. */}
-          <LinhaCampos cols={4}>
-            <Campo label="Cliente" value={cliente} span={2} />
+          <LinhaCampos cols={2}>
+            <Campo label="Cliente" value={cliente} />
             <Campo label="Nº do pedido" value={<span style={{ fontFamily: "ui-monospace, monospace" }}>{rotuloPedido(pedido.numero, pedido.id)}</span>} />
+          </LinhaCampos>
+          <LinhaCampos cols={2}>
             <Campo label="Entregas" value={<Badge variant="info">{entregas.length}</Badge>} />
           </LinhaCampos>
-          <LinhaCampos cols={4}>
-            <Campo label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} span={2} />
-            <Campo label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} span={2} />
+          <LinhaCampos cols={2}>
+            <Campo label="Início Previsto" value={fmtDate(pedido.data_inicio_prevista)} />
+            <Campo label="Fim Previsto"    value={fmtDate(pedido.data_fim_prevista)} />
           </LinhaCampos>
 
           {/* Locais de carregamento — pode ter MAIS DE UM */}
@@ -125,7 +137,7 @@ export function AbaPrincipal({
                   <button
                     onClick={() => onSalvarLocais(locais.filter((_, j) => j !== i))}
                     disabled={salvandoLocal}
-                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "12px", color: "#ef4444", padding: 0 }}
+                    style={{ background: "none", border: "none", cursor: "pointer", fontSize: "14px", color: "#ef4444", padding: "8px", minHeight: "44px", minWidth: "44px", display: "flex", alignItems: "center", justifyContent: "center", borderRadius: "8px" }}
                     title="Remover este local"
                   >✕</button>
                 )}
@@ -134,13 +146,14 @@ export function AbaPrincipal({
             {!finalizado && (
               <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
                 <input
+                  inputMode="text"
                   style={{ fontSize: "12px", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: "8px", flex: 1 }}
                   value={novoLocal}
                   onChange={e => onNovoLocalChange(e.target.value)}
-                  onKeyDown={e => { if (e.key === "Enter" && novoLocal.trim()) { e.preventDefault(); onSalvarLocais([...locais, novoLocal]); } }}
+                  onKeyDown={e => { if (e.key === "Enter" && novoLocal.trim()) { e.preventDefault(); onSalvarLocais([...locais, novoLocal.trim()]); } }}
                   placeholder="Endereço de coleta (ex.: depósito, fornecedor...)"
                 />
-                <Btn variant="outline" size="sm" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => onSalvarLocais([...locais, novoLocal])}>
+                <Btn variant="outline" size="sm" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => onSalvarLocais([...locais, novoLocal.trim()])}>
                   {salvandoLocal ? "..." : "+ Adicionar"}
                 </Btn>
               </div>

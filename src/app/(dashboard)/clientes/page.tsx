@@ -148,7 +148,7 @@ export default function ClientesPage() {
                   <Td><Badge variant={c.ativo !== false ? "success" : "default"}>{c.ativo !== false ? "Ativo" : "Inativo"}</Badge></Td>
                   <Td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                      <a href={`/clientes/${c.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                      <Btn href={`/clientes/${c.id}/editar`} variant="outline" size="xs">Editar</Btn>
                       <DeleteBtn id={c.id} table="clientes" label="cliente" />
                     </div>
                   </Td>

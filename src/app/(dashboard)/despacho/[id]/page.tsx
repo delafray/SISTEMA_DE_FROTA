@@ -294,18 +294,7 @@ export default function DespachoDetalhePage() {
         title={`Pedido ${rotuloPedido(pedido.numero, pedido.id)} — ${cliente}`}
         subtitle={`Criado em ${fmtDT(pedido.created_at)}`}
         actions={
-          <>
-            <Btn href="/despacho" variant="ghost">← Voltar</Btn>
-            {!finalizado && (
-              <Btn
-                variant="danger"
-                disabled={updatingStatus}
-                onClick={() => setConfirmStatus("cancelada")}
-              >
-                Cancelar
-              </Btn>
-            )}
-          </>
+          <Btn href="/despacho" variant="ghost">← Voltar</Btn>
         }
       >
         <Badge variant={STATUS_VAR[pedido.status] ?? "default"}>
@@ -339,6 +328,7 @@ export default function DespachoDetalhePage() {
               onClick={() => habilitada && setAbaTela(v)}
               style={{
                 padding: "6px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600,
+                minHeight: "44px",
                 cursor: habilitada ? "pointer" : "not-allowed",
                 opacity: habilitada ? 1 : 0.45,
                 border: abaTela === v ? "none" : "1px solid #cbd5e1",
@@ -370,6 +360,7 @@ export default function DespachoDetalhePage() {
             onSalvarLocais={salvarLocais}
             onAbrirDespacho={abrirDespacho}
             onChangeStatus={(s) => setConfirmStatus(s)}
+            onCancelar={() => setConfirmStatus("cancelada")}
           />
         )}
 

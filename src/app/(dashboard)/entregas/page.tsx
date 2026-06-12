@@ -369,9 +369,12 @@ export default function PedidosPage() {
 
   // ── Marcar pago ──────────────────────────────────────────────────────────
   const [loadingPago, setLoadingPago] = useState<Set<string>>(new Set());
+  const [confirmReceberPedido, setConfirmReceberPedido] = useState<string | null>(null);
+  const [erroPago, setErroPago] = useState("");
 
   const handleMarcarPago = async (id: string) => {
     if (loadingPago.has(id)) return;
+    setErroPago("");
     setLoadingPago(prev => new Set(prev).add(id));
     try {
       const supabase = createClient();
@@ -381,14 +384,14 @@ export default function PedidosPage() {
         .update({ pago: true, data_pagamento: today })
         .eq("id", id);
       if (error) {
-        alert("Erro ao salvar pagamento: " + error.message);
+        setErroPago("Erro ao salvar pagamento: " + error.message);
       } else {
         setLinhas(prev => prev.map(p => p.id === id ? { ...p, pago: true, data_pagamento: today } : p));
         // Atualiza KPIs
         if (empresaId) carregarKpis(createClient(), empresaId);
       }
     } catch (err) {
-      alert("Erro inesperado: " + (err instanceof Error ? err.message : String(err)));
+      setErroPago("Erro inesperado: " + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoadingPago(prev => { const s = new Set(prev); s.delete(id); return s; });
     }
@@ -461,15 +464,21 @@ export default function PedidosPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+        {erroPago && (
+          <div style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", marginBottom: "4px" }}>
+            {erroPago}
+            <button onClick={() => setErroPago("")} style={{ float: "right", background: "none", border: "none", cursor: "pointer", fontWeight: 700, color: "#b91c1c" }}>✕</button>
+          </div>
+        )}
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
           <KpiCard label="Agendados" value={kpiAgendado === null ? "..." : kpiAgendado} color="warning" />
           <KpiCard label="Em Andamento" value={kpiEmAndamento === null ? "..." : kpiEmAndamento} color="info" />
           <KpiCard label="Concluídos" value={kpiConcluido === null ? "..." : kpiConcluido} color="success"
             sub={kpiConcluidoPendente === null ? undefined : `${kpiConcluidoPendente} pendentes / ${kpiConcluidoPago} pagos`} />
           <KpiCard label={receitaExibidaLabel}
-            value={receitaExibida === null ? "..." : `R$ ${receitaExibida.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            value={receitaExibida === null ? "..." : `R$ ${receitaExibida.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
             color="success"
-            sub={receitaTotal === null ? undefined : `Total Geral: R$ ${receitaTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`} />
+            sub={receitaTotal === null ? undefined : `Total: R$ ${receitaTotal.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`} />
         </div>
 
         <div className="m-show-block" style={{ display: "none" }}>
@@ -487,6 +496,14 @@ export default function PedidosPage() {
             <Btn variant={mostrarPagos ? "primary" : "outline"} onClick={() => { setMostrarPagos(!mostrarPagos); if (!mostrarPagos) setFiltroStatus(""); setPagina(0); }}>
               {mostrarPagos ? "↩ Ativos" : "💰 Pagos"}
             </Btn>
+            {mostrarPagos && (
+              <select value={filtroPeriodo} onChange={e => { setFiltroPeriodo(e.target.value); setPagina(0); }}
+                style={{ ...selectStyle, flex: "1 1 120px" }}>
+                <option value="mes_atual">Mês Atual</option>
+                <option value="ano_atual">Ano Atual</option>
+                <option value="todos">Todos</option>
+              </select>
+            )}
           </div>
         </div>
 
@@ -528,11 +545,13 @@ export default function PedidosPage() {
                         {STATUS_LABEL[pedido.status] ?? pedido.status}
                       </Badge>
                     </Td>
-                    <Td>
+                    <Td style={{ maxWidth: "140px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={veiculo ? `${veiculo.placa} (${veiculo.modelo})` : ""}>
                       {veiculo?.placa ?? "—"}
                       {veiculo?.modelo && <span style={{ color: "#94a3b8", fontSize: "10px", marginLeft: "4px" }}>({veiculo.modelo})</span>}
                     </Td>
-                    <Td>{motorista?.nome ?? "—"}</Td>
+                    <Td style={{ maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}
+                      title={motorista?.nome ?? ""}>{motorista?.nome ?? "—"}</Td>
                     <Td>
                       {pedido.data_inicio_prevista
                         ? new Date(pedido.data_inicio_prevista + "T00:00:00").toLocaleDateString("pt-BR")
@@ -556,22 +575,22 @@ export default function PedidosPage() {
                     </Td>
                     <Td style={{ textAlign: "right" }}>{pedido.km_inicial?.toLocaleString("pt-BR") ?? "—"}</Td>
                     <Td style={{ textAlign: "right" }}>
-                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", alignItems: "center" }}>
-                        <a href={`/entregas/${pedido.id}`} style={{ color: "#64748b", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Ver</a>
-                        <a href={`/entregas/${pedido.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                      <div style={{ display: "flex", justifyContent: "flex-end", gap: "8px", alignItems: "center" }}>
+                        <Btn href={`/entregas/${pedido.id}`} variant="ghost" size="sm" onClick={e => e.stopPropagation()}>Ver</Btn>
+                        <Btn href={`/entregas/${pedido.id}/editar`} variant="outline" size="sm" onClick={e => e.stopPropagation()}>Editar</Btn>
                         {!pedido.pago && concluido && (
-                          <button
+                          <Btn
+                            variant="outline"
+                            size="sm"
+                            loading={loadingPago.has(pedido.id)}
                             onClick={async (e) => {
                               e.stopPropagation();
-                              if (confirm("Confirmar recebimento deste pedido?")) {
-                                await handleMarcarPago(pedido.id);
-                              }
+                              setConfirmReceberPedido(pedido.id);
                             }}
-                            disabled={loadingPago.has(pedido.id)}
-                            style={{ background: "none", border: "none", color: "#16a34a", fontWeight: 600, cursor: loadingPago.has(pedido.id) ? "wait" : "pointer", padding: "8px 4px", minHeight: "44px", fontSize: "inherit", fontFamily: "inherit", opacity: loadingPago.has(pedido.id) ? 0.6 : 1 }}
+                            style={{ color: "#16a34a", borderColor: "#16a34a" }}
                           >
-                            {loadingPago.has(pedido.id) ? "..." : "Receber"}
-                          </button>
+                            Receber
+                          </Btn>
                         )}
                         <DeleteBtn id={pedido.id} table="pedidos" label="pedido" />
                       </div>
@@ -584,8 +603,10 @@ export default function PedidosPage() {
         </DataTable>
         </div>
 
-        <MobileList count={linhas.length} label="pedidos">
-          {loading ? null : linhas.map(pedido => {
+        <MobileList count={loading ? undefined : linhas.length} label="pedidos">
+          {loading ? (
+            <div style={{ padding: "32px 0", textAlign: "center", color: "#94a3b8", fontSize: "14px" }}>Carregando pedidos...</div>
+          ) : linhas.map(pedido => {
             const veiculo   = Array.isArray(pedido.veiculos) ? pedido.veiculos[0] : pedido.veiculos;
             const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
             const concluido = pedido.status === "concluido" || pedido.status === "concluida";
@@ -606,7 +627,20 @@ export default function PedidosPage() {
                   { label: "Pgto", value: pedido.pago ? <Badge variant="success">Pago</Badge> : concluido ? <Badge variant="danger">Pendente</Badge> : "A faturar" },
                 ]}
                 actions={
-                  <Btn href={`/entregas/${pedido.id}/editar`} size="sm" variant="outline" onClick={e => e.stopPropagation()}>Editar</Btn>
+                  <>
+                    <Btn href={`/entregas/${pedido.id}/editar`} size="sm" variant="outline" onClick={e => e.stopPropagation()}>Editar</Btn>
+                    {!pedido.pago && concluido && (
+                      <Btn
+                        size="sm"
+                        variant="outline"
+                        loading={loadingPago.has(pedido.id)}
+                        onClick={(e) => { e.stopPropagation(); setConfirmReceberPedido(pedido.id); }}
+                        style={{ color: "#16a34a", borderColor: "#16a34a" }}
+                      >
+                        Receber
+                      </Btn>
+                    )}
+                  </>
                 }
               />
             );
@@ -616,6 +650,31 @@ export default function PedidosPage() {
 
         <MobileFAB href="/entregas/novo" label="Novo Pedido" />
       </div>
+
+      {/* Modal de confirmação — Receber pagamento */}
+      {confirmReceberPedido && (
+        <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Confirmar recebimento</h3>
+            <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#475569" }}>Deseja marcar este pedido como pago? A data de hoje será registrada como data de pagamento.</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmReceberPedido(null)}>Voltar</Btn>
+              <Btn
+                variant="primary"
+                loading={loadingPago.has(confirmReceberPedido)}
+                onClick={async () => {
+                  const pedidoId = confirmReceberPedido;
+                  setConfirmReceberPedido(null);
+                  await handleMarcarPago(pedidoId);
+                }}
+                style={{ background: "#16a34a" }}
+              >
+                Confirmar
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

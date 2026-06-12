@@ -78,8 +78,8 @@ export default function NovaRegraPage() {
   };
 
   const checkbox = (checked: boolean, onChange: () => void, label: string) => (
-    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "#334155" }}>
-      <input type="checkbox" checked={checked} onChange={onChange} />
+    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "#334155", minHeight: 44 }}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ width: 20, height: 20, cursor: "pointer" }} />
       {label}
     </label>
   );

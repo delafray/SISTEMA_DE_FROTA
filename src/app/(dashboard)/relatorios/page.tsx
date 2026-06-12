@@ -81,6 +81,7 @@ export default function RelatoriosPage() {
   const [veiculosRes, setVeiculosRes] = useState<VeiculoResultado[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab]     = useState<"periodo" | "motorista" | "veiculo">("periodo");
+  const [exportMsg, setExportMsg] = useState<string | null>(null);
 
   const periodo = useMemo(() => {
     if (modo === "range") {
@@ -204,6 +205,7 @@ export default function RelatoriosPage() {
   };
 
   const exportCSV = () => {
+    try {
     if (tab === "periodo") {
       const headers = ["Status","Data Início","Receita","KM Total","Qtd Entregas","Motorista","Veículo"];
       const rows = pedidos.map(f => {
@@ -243,6 +245,12 @@ export default function RelatoriosPage() {
       ]);
       saveAs(toCSV(headers, rows), `relatorio-veiculos-${periodoLabel}.csv`);
     }
+    setExportMsg("Download iniciado!");
+    setTimeout(() => setExportMsg(null), 3000);
+    } catch {
+      setExportMsg("Erro ao gerar o arquivo. Tente novamente.");
+      setTimeout(() => setExportMsg(null), 4000);
+    }
   };
 
   const meses = [
@@ -260,6 +268,12 @@ export default function RelatoriosPage() {
           ↓ Exportar CSV
         </Btn>
       </PageHeader>
+
+      {exportMsg && (
+        <div role="status" style={{ padding: "8px 16px", background: exportMsg.startsWith("Erro") ? "#fef2f2" : "#f0fdf4", borderBottom: `1px solid ${exportMsg.startsWith("Erro") ? "#fecaca" : "#bbf7d0"}`, color: exportMsg.startsWith("Erro") ? "#b91c1c" : "#15803d", fontSize: 13 }}>
+          {exportMsg}
+        </div>
+      )}
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "16px" }}>
 
@@ -301,24 +315,24 @@ export default function RelatoriosPage() {
           )}
 
           {modo === "range" && (
-            <>
+            <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap", flex: 1 }}>
               <input type="date" value={dataInicio} onChange={e => setDataInicio(e.target.value)}
-                style={{ ...selectStyle, minWidth: "130px", flex: 1 }} />
-              <span style={{ color: "#94a3b8", fontSize: "13px" }}>→</span>
+                style={{ ...selectStyle, minWidth: 0, flex: 1 }} />
+              <span style={{ color: "#94a3b8", fontSize: "13px", flexShrink: 0 }}>→</span>
               <input type="date" value={dataFim} onChange={e => setDataFim(e.target.value)}
-                style={{ ...selectStyle, minWidth: "130px", flex: 1 }} />
-            </>
+                style={{ ...selectStyle, minWidth: 0, flex: 1 }} />
+            </div>
           )}
 
           {loading && <span style={{ fontSize: "12px", color: "#94a3b8" }}>Carregando...</span>}
         </div>
 
         {/* KPIs */}
-        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px", minWidth: 0 }}>
           <KpiCard label="Pedidos no Período" value={loading ? "..." : kpis.qtd} />
-          <KpiCard label="Receita Total"       value={loading ? "..." : fmtBRL(kpis.receita)}  color="success" />
-          <KpiCard label="Custo Total"         value={loading ? "..." : fmtBRL(kpis.custo)}    color="danger" />
-          <KpiCard label="Lucro Bruto"         value={loading ? "..." : fmtBRL(kpis.lucro)}    color={kpis.lucro >= 0 ? "success" : "danger"} />
+          <KpiCard label="Receita Total"       value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.receita)}</span>}  color="success" />
+          <KpiCard label="Custo Total"         value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.custo)}</span>}    color="danger" />
+          <KpiCard label="Lucro Bruto"         value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.lucro)}</span>}    color={kpis.lucro >= 0 ? "success" : "danger"} />
           <KpiCard label="Margem"              value={loading ? "..." : fmtPct(kpis.margem)}   color={kpis.margem >= 0 ? "success" : "danger"} />
           <KpiCard label="KM Rodados"          value={loading ? "..." : kpis.km.toLocaleString("pt-BR")} color="info" />
         </div>

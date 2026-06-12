@@ -383,7 +383,7 @@ export default function VeiculosPage() {
                     <Td><Badge variant={v.ativo ? "success" : "default"}>{v.ativo ? "Ativo" : "Inativo"}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                        <a href={`/veiculos/${v.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                        <Btn href={`/veiculos/${v.id}/editar`} size="xs" variant="outline">Editar</Btn>
                         <DeleteBtn id={v.id} table="veiculos" label="veículo" />
                       </div>
                     </Td>
@@ -400,7 +400,7 @@ export default function VeiculosPage() {
           {loading ? null : ordenados.map(v => (
             <MobileCard
               key={v.id}
-              href={`/veiculos/${v.id}/editar`}
+              onClick={() => router.push(`/veiculos/${v.id}/editar`)}
               title={`${v.placa}${v.apelido ? ` — ${v.apelido}` : ""}`}
               subtitle={`${v.marca} ${v.modelo}${v.ano ? ` • ${v.ano}` : ""}`}
               badge={<Badge variant={v.ativo ? "success" : "default"}>{v.ativo ? "Ativo" : "Inativo"}</Badge>}
@@ -410,6 +410,11 @@ export default function VeiculosPage() {
                 { label: "KM Atual", value: v.km_atual?.toLocaleString("pt-BR") ?? "—" },
                 { label: "Tipo", value: `${v.tipo}${v.categoria ? ` / ${v.categoria}` : ""}` },
               ]}
+              actions={
+                <div onClick={e => e.stopPropagation()}>
+                  <DeleteBtn id={v.id} table="veiculos" label="veículo" />
+                </div>
+              }
             />
           ))}
         </MobileList>

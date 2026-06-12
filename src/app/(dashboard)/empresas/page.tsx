@@ -89,6 +89,15 @@ export default function EmpresasPage() {
       </PageHeader>
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
+        {/* Toolbar mobile — visível só no mobile, acima das cards */}
+        <div className="m-show-block" style={{ marginBottom: "12px" }}>
+          <SearchInput
+            placeholder="Buscar por nome, CNPJ, cidade..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+        </div>
+
         <div className="m-hide">
         <DataTable count={filtradas.length} label="empresas" toolbar={toolbar}>
           <thead>
@@ -126,7 +135,7 @@ export default function EmpresasPage() {
                   <Td>{e.telefone ?? "—"}</Td>
                   <Td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                      <a href={`/empresas/${e.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                      <Btn href={`/empresas/${e.id}/editar`} variant="outline" size="xs">Editar</Btn>
                       {e.id !== empresaId && (
                         <DeleteBtn id={e.id} table="empresas" label="empresa" />
                       )}

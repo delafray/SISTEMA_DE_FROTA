@@ -55,6 +55,8 @@ export default function EditarPedidoPage() {
   const [loading, setLoading]           = useState(true);
   const [err, setErr]                   = useState("");
   const [tab, setTab]                   = useState<TabId>("dados");
+  const [confirmDesvincular, setConfirmDesvincular] = useState<string | null>(null); // entregaId pendente
+  const [desvinculando, setDesvinculando] = useState(false);
 
   // Somente-leitura (vem do Despacho / fluxo do motorista)
   const [motoristaNome, setMotoristaNome] = useState<string | null>(null);
@@ -170,12 +172,22 @@ export default function EditarPedidoPage() {
     });
   };
 
-  const desvincularEntrega = async (entregaId: string) => {
+  const confirmarDesvincular = async () => {
+    if (!confirmDesvincular) return;
+    const entregaId = confirmDesvincular;
+    setDesvinculando(true);
     const supabase = createClient();
-    await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
+    const { error: errDesv } = await supabase.from("entregas").update({ pedido_id: null }).eq("id", entregaId);
+    setDesvinculando(false);
+    if (errDesv) {
+      setErr(`Erro ao desvincular: ${errDesv.message}`);
+      setConfirmDesvincular(null);
+      return;
+    }
     const entrega = entregasAtuais.find(fr => fr.id === entregaId);
     setEntregasAtuais(p => p.filter(fr => fr.id !== entregaId));
     if (entrega) setEntregasDisp(p => [...p, entrega]);
+    setConfirmDesvincular(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -222,6 +234,7 @@ export default function EditarPedidoPage() {
       await supabase.from("entregas").update(vinc).in("id", Array.from(selectedEntregas));
     }
 
+    setSaving(false);
     router.push(`/despacho/${id}`);
     router.refresh();
   };
@@ -452,7 +465,7 @@ export default function EditarPedidoPage() {
                         <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
                         <Td><Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>{ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}</Badge></Td>
                         <Td>
-                          <button type="button" onClick={() => desvincularEntrega(fr.id)}
+                          <button type="button" onClick={() => setConfirmDesvincular(fr.id)}
                             style={{ fontSize: "12px", color: "#ef4444", background: "none", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", padding: "6px 10px", minHeight: "44px", whiteSpace: "nowrap" }}>
                             Desvincular
                           </button>
@@ -471,7 +484,7 @@ export default function EditarPedidoPage() {
             : (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  Selecione as entregas que serão incluídas neste pedido e clique em <strong>Atualizar</strong> no topo pra confirmar.
+                  Selecione as entregas que serão incluídas neste pedido e clique em <strong>Atualizar Pedido</strong> (no celular: abaixo das abas) pra confirmar.
                 </div>
                 <DataTable count={entregasDisp.length} label="entregas disponíveis">
                   <thead>
@@ -508,6 +521,43 @@ export default function EditarPedidoPage() {
         )}
 
       </div>
+
+      {/* Modal de confirmação: desvincular entrega */}
+      {confirmDesvincular && (
+        <div
+          className="m-modal-overlay"
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="m-modal-content m-modal-body"
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "28px",
+              width: "100%", maxWidth: "400px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 12px" }}>
+              Desvincular entrega?
+            </h3>
+            <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 24px" }}>
+              A entrega será removida deste pedido e voltará para a lista de disponíveis. Deseja continuar?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <Btn type="button" variant="ghost" onClick={() => setConfirmDesvincular(null)} disabled={desvinculando}>
+                Voltar
+              </Btn>
+              <Btn type="button" variant="danger" onClick={confirmarDesvincular} loading={desvinculando} disabled={desvinculando}>
+                {desvinculando ? "Desvinculando..." : "Sim, desvincular"}
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

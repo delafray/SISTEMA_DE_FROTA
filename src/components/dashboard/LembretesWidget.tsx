@@ -151,7 +151,7 @@ function CienteModal({
           </div>
         )}
 
-        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end" }}>
+        <div style={{ display: "flex", gap: "8px", flexWrap: "wrap", justifyContent: "flex-end", paddingBottom: "max(0px, env(safe-area-inset-bottom))" }}>
           <button
             onClick={onClose}
             disabled={salvando}
@@ -200,13 +200,17 @@ function CienteModal({
 function HistoricoModal({ onClose }: { onClose: () => void }) {
   const [todos, setTodos]           = useState<Lembrete[]>([]);
   const [loading, setLoading]       = useState(true);
+  const [erroHist, setErroHist]     = useState("");
   const [cienteAlvo, setCienteAlvo] = useState<Lembrete | null>(null);
 
   useEffect(() => {
     fetch('/api/lembretes?historico=true', { cache: 'no-store' })
       .then(r => r.json())
       .then(d => { setTodos(d.lembretes ?? []); setLoading(false); })
-      .catch(() => setLoading(false));
+      .catch(() => {
+        setErroHist("Não foi possível carregar o histórico. Verifique sua conexão.");
+        setLoading(false);
+      });
   }, []);
 
   const aoDarCiente = (id: string, nota: string, ocultar: boolean) => {
@@ -254,7 +258,11 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
           </span>
           <button
             onClick={onClose}
-            style={{ background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "#94a3b8", lineHeight: 1 }}
+            style={{
+              background: "none", border: "none", cursor: "pointer", fontSize: "20px", color: "#94a3b8",
+              width: "44px", height: "44px", display: "flex", alignItems: "center", justifyContent: "center",
+              flexShrink: 0,
+            }}
           >✕</button>
         </div>
 
@@ -264,7 +272,16 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
             <div style={{ textAlign: "center", color: "#94a3b8", padding: "24px" }}>Carregando...</div>
           )}
 
-          {!loading && todos.length === 0 && (
+          {!loading && erroHist && (
+            <div role="alert" style={{
+              padding: "10px 12px", background: "#fef2f2", border: "1px solid #fca5a5",
+              borderRadius: "8px", color: "#991b1b", fontSize: "13px",
+            }}>
+              ⚠️ {erroHist}
+            </div>
+          )}
+
+          {!loading && !erroHist && todos.length === 0 && (
             <div style={{ textAlign: "center", color: "#94a3b8", padding: "24px", fontSize: "13px" }}>
               Nenhum lembrete registrado ainda.
             </div>
@@ -372,16 +389,23 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
 
 // ─── Widget principal ────────────────────────────────────────────────
 export function LembretesWidget() {
-  const [lembretes, setLembretes]   = useState<Lembrete[]>([]);
-  const [cienteAlvo, setCienteAlvo] = useState<Lembrete | null>(null);
-  const [modalAberto, setModal]     = useState(false);
+  const [lembretes, setLembretes]       = useState<Lembrete[]>([]);
+  const [cienteAlvo, setCienteAlvo]     = useState<Lembrete | null>(null);
+  const [modalAberto, setModal]         = useState(false);
+  const [carregando, setCarregando]     = useState(true);
+  const [erroCarregar, setErroCarregar] = useState("");
 
   const carregar = useCallback(async () => {
+    setErroCarregar("");
     try {
       const res = await fetch('/api/lembretes', { cache: 'no-store' });
       const { lembretes: data } = await res.json();
       setLembretes(data ?? []);
-    } catch { /* ignora */ }
+    } catch {
+      setErroCarregar("Não foi possível carregar os lembretes. Verifique sua conexão.");
+    } finally {
+      setCarregando(false);
+    }
   }, []);
 
   // Atualização INSTANTÂNEA via Supabase Realtime — SEM polling. O banco empurra
@@ -428,8 +452,32 @@ export function LembretesWidget() {
 
   return (
     <>
-      {/* Widget só aparece se houver pendentes OU sempre (para mostrar o botão Histórico) */}
-      {lembretes.length > 0 ? (
+      {/* Estado de carregamento inicial */}
+      {carregando && (
+        <div style={{ fontSize: "13px", color: "#94a3b8", padding: "8px 0" }}>Carregando lembretes...</div>
+      )}
+
+      {/* Erro de carregamento */}
+      {!carregando && erroCarregar && (
+        <div role="alert" style={{
+          padding: "10px 12px", background: "#fef2f2", border: "1px solid #fca5a5",
+          borderRadius: "8px", color: "#991b1b", fontSize: "13px",
+          display: "flex", alignItems: "center", justifyContent: "space-between", gap: "8px",
+        }}>
+          <span>⚠️ {erroCarregar}</span>
+          <button
+            onClick={() => { setCarregando(true); carregar(); }}
+            style={{
+              background: "none", border: "1px solid #fca5a5", borderRadius: "6px",
+              padding: "4px 10px", fontSize: "12px", color: "#991b1b", cursor: "pointer",
+              whiteSpace: "nowrap",
+            }}
+          >Tentar novamente</button>
+        </div>
+      )}
+
+      {/* Widget só aparece depois de carregar e sem erro */}
+      {!carregando && !erroCarregar && (lembretes.length > 0 ? (
         <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
           {/* Cabeçalho com botão Histórico */}
           <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
@@ -469,7 +517,7 @@ export function LembretesWidget() {
               <button
                 onClick={() => setCienteAlvo(l)}
                 style={{
-                  flexShrink: 0, padding: "6px 12px",
+                  flexShrink: 0, padding: "6px 12px", minHeight: "44px",
                   background: "#16a34a",
                   color: "#fff", border: "none", borderRadius: "6px",
                   fontSize: "12px", fontWeight: 600,
@@ -496,7 +544,7 @@ export function LembretesWidget() {
             📋 Histórico de lembretes
           </button>
         </div>
-      )}
+      ))}
 
       {cienteAlvo && (
         <CienteModal

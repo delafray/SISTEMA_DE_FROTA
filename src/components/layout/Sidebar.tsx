@@ -160,8 +160,11 @@ function SectionLabel({ children }: { children: React.ReactNode }) {
 /* ─── Sidebar Content (shared between desktop + drawer) ──────── */
 function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
   const router = useRouter();
+  const [saindo, setSaindo] = useState(false);
 
   const handleSignOut = async () => {
+    if (saindo) return;
+    setSaindo(true);
     const supabase = createClient();
     await supabase.auth.signOut();
     router.replace("/login");
@@ -257,17 +260,19 @@ function SidebarContent({ onNavigate }: { onNavigate?: () => void }) {
             color: "rgba(191, 219, 254, 0.5)",
             background: "transparent",
             border: "none",
-            cursor: "pointer",
+            cursor: saindo ? "wait" : "pointer",
             transition: "all 150ms",
             fontSize: "14px",
             fontWeight: 500,
+            opacity: saindo ? 0.6 : 1,
           }}
           onClick={handleSignOut}
-          onMouseEnter={e => { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.color = "rgba(252,165,165,0.8)"; }}
+          disabled={saindo}
+          onMouseEnter={e => { if (!saindo) { e.currentTarget.style.backgroundColor = "rgba(239,68,68,0.15)"; e.currentTarget.style.color = "rgba(252,165,165,0.8)"; } }}
           onMouseLeave={e => { e.currentTarget.style.backgroundColor = "transparent"; e.currentTarget.style.color = "rgba(191,219,254,0.5)"; }}
         >
           <LogOutIcon style={{ width: "16px", height: "16px" }} />
-          <span>Sair</span>
+          <span>{saindo ? "Saindo..." : "Sair"}</span>
         </button>
         <div style={{ padding: "0 8px 4px" }}>
           <p style={{ fontSize: "9px", color: "rgba(191,219,254,0.5)", fontWeight: 500, lineHeight: "1.6" }}>

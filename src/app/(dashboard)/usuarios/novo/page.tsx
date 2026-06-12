@@ -37,6 +37,9 @@ export default function NovoUsuarioPage() {
         actions={
           <>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
+            <Btn type="submit" form="user-form" size="md" disabled={pending}>
+              {pending ? "Criando..." : "Salvar Usuário"}
+            </Btn>
           </>
         }
       />

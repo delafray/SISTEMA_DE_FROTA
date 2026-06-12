@@ -114,6 +114,8 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
   const atrasados = useMemo(() => eventos.filter(e => !e.pago && e.data < range.dataAtual && !e.isProvisao), [eventos, range.dataAtual]);
   const saldoFinal = linhas.length > 0 ? linhas[linhas.length - 1].saldoAcum : saldoBanco;
 
+  const [diaExpandido, setDiaExpandido] = useState<string | null>(null);
+
   if (loading) return <p style={{ color: "#94a3b8", padding: "16px" }}>Carregando fluxo...</p>;
 
   return (
@@ -137,8 +139,9 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
           ) : (
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>{fmtBRL(saldoBanco)}</span>
-              <button type="button" onClick={() => { setSaldoInput(String(saldoBanco)); setEditandoSaldo(true); }}
-                style={{ background: "transparent", border: "none", color: "#2563eb", fontSize: "11px", cursor: "pointer", textDecoration: "underline" }}>editar</button>
+              <Btn variant="outline" size="xs" onClick={() => { setSaldoInput(String(saldoBanco)); setEditandoSaldo(true); }}>
+                Editar saldo
+              </Btn>
             </div>
           )}
         </div>
@@ -289,25 +292,69 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
 
           {/* Mobile: daily cards */}
           <MobileList count={eventos.length} label="lançamentos">
-            {linhas.map(l => (
-              <MobileCard
-                key={l.data}
-                title={`${fmtDate(l.data)} ${fmtDiaSemana(l.data)}`}
-                subtitle={`${l.eventos.length} lançamento(s)`}
-                badge={
-                  l.data === range.dataAtual ? <Badge variant="info">HOJE</Badge>
-                  : l.data < range.dataAtual ? <Badge variant="danger">Passado</Badge>
-                  : <Badge variant="default">Futuro</Badge>
-                }
-                highlight={l.saldoDia >= 0 ? "#16a34a" : "#dc2626"}
-                details={[
-                  { label: "Entradas", value: l.entradas > 0 ? fmtBRL(l.entradas) : "—" },
-                  { label: "Saídas", value: l.saidas > 0 ? fmtBRL(l.saidas) : "—" },
-                  { label: "Saldo Dia", value: fmtBRL(l.saldoDia) },
-                  { label: "Acumulado", value: fmtBRL(l.saldoAcum) },
-                ]}
-              />
-            ))}
+            {linhas.map(l => {
+              const expandido = diaExpandido === l.data;
+              return (
+                <div key={l.data} style={{ display: "flex", flexDirection: "column", gap: "0" }}>
+                  <MobileCard
+                    title={`${fmtDate(l.data)} ${fmtDiaSemana(l.data)}`}
+                    subtitle={`${l.eventos.length} lançamento(s)`}
+                    badge={
+                      l.data === range.dataAtual ? <Badge variant="info">HOJE</Badge>
+                      : l.data < range.dataAtual ? <Badge variant="danger">Passado</Badge>
+                      : <Badge variant="default">Futuro</Badge>
+                    }
+                    highlight={l.saldoDia >= 0 ? "#16a34a" : "#dc2626"}
+                    details={[
+                      { label: "Entradas", value: l.entradas > 0 ? fmtBRL(l.entradas) : "—" },
+                      { label: "Saídas", value: l.saidas > 0 ? fmtBRL(l.saidas) : "—" },
+                      { label: "Saldo Dia", value: fmtBRL(l.saldoDia) },
+                      { label: "Acumulado", value: fmtBRL(l.saldoAcum) },
+                    ]}
+                    actions={
+                      <Btn variant="ghost" size="xs" onClick={() => setDiaExpandido(expandido ? null : l.data)}>
+                        {expandido ? "▴ Ocultar lançamentos" : "▾ Ver lançamentos"}
+                      </Btn>
+                    }
+                  />
+                  {expandido && (
+                    <div style={{ background: "#f8fafc", borderRadius: "0 0 10px 10px", padding: "8px 12px", display: "flex", flexDirection: "column", gap: "6px", border: "1px solid #e2e8f0", borderTop: "none" }}>
+                      {l.eventos.map(ev => {
+                        const atrasado = !ev.pago && ev.data < range.dataAtual && !ev.isProvisao;
+                        return (
+                          <div key={ev.id} style={{
+                            display: "flex", alignItems: "center", gap: "8px",
+                            fontSize: "12px", padding: "4px 0", borderBottom: "1px solid #f1f5f9",
+                          }}>
+                            <span style={{
+                              width: "6px", height: "6px", borderRadius: "50%", flexShrink: 0,
+                              background: ev.tipo === "entrada" ? "#16a34a" : "#dc2626",
+                              opacity: ev.isProvisao ? 0.4 : 1,
+                            }} />
+                            <span style={{
+                              flex: 1, color: atrasado ? "#94a3b8" : "#1e293b",
+                              fontStyle: ev.isProvisao ? "italic" : "normal",
+                              overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap",
+                            }} title={ev.descricao}>{ev.descricao}</span>
+                            <span style={{
+                              fontSize: "11px", fontWeight: 600, whiteSpace: "nowrap",
+                              color: ev.tipo === "entrada" ? (atrasado ? "#94a3b8" : "#16a34a") : "#dc2626",
+                              textDecoration: atrasado ? "line-through" : undefined,
+                            }}>{ev.tipo === "entrada" ? "+" : "-"}{fmtBRL(ev.valor)}</span>
+                            {!ev.pago && !ev.isProvisao && (
+                              <span style={{ fontSize: "10px", color: atrasado ? "#dc2626" : "#d97706", flexShrink: 0 }}>
+                                {atrasado ? "🔴" : "⏳"}
+                              </span>
+                            )}
+                            {ev.pago && <span style={{ fontSize: "10px", color: "#16a34a", flexShrink: 0 }}>✓</span>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </MobileList>
           </>
         )}

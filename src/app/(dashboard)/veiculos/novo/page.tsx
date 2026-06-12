@@ -124,7 +124,7 @@ export default function NovoVeiculoPage() {
                   </FormField>
                 </div>
                 <FormField label="Ano *">
-                  <IMaskInput mask="0000" onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} placeholder="2022" />
+                  <IMaskInput mask="0000" inputMode="numeric" onAccept={(v) => setF(p => ({ ...p, ano: v as string }))} style={inputStyle} placeholder="2022" />
                 </FormField>
 
                 <FormField label="Tipo *">
@@ -191,7 +191,17 @@ export default function NovoVeiculoPage() {
                   <input value={f.apolice_numero} onChange={set("apolice_numero")} style={inputStyle} />
                 </FormField>
                 <FormField label="Valor Aquisição (R$)">
-                  <input value={f.valor_aquisicao} onChange={set("valor_aquisicao")} type="number" inputMode="decimal" style={inputStyle} />
+                  <IMaskInput
+                    mask="R$ num"
+                    blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                    inputMode="decimal"
+                    onAccept={(_v, maskRef) => {
+                      const raw = maskRef.unmaskedValue.replace(",", ".");
+                      setF(p => ({ ...p, valor_aquisicao: raw }));
+                    }}
+                    style={inputStyle}
+                    placeholder="R$ 0,00"
+                  />
                 </FormField>
               </div>
             </FormSection>

@@ -38,6 +38,8 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
   const [manutCount, setManutCount] = useState<Map<string, number>>(new Map());
   const [loading, setLoading] = useState(true);
   const [savingId, setSavingId] = useState<string | null>(null);
+  const [salvandoIntervalo, setSalvandoIntervalo] = useState<string | null>(null);
+  const [salvouIntervalo, setSalvouIntervalo] = useState<string | null>(null);
   const [erro, setErro] = useState("");
   const [busca, setBusca] = useState("");
   const [cat, setCat] = useState<string>("");
@@ -122,12 +124,17 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
   const atualizarIntervalo = async (plano: Plano, campo: "intervalo_km" | "intervalo_meses", valor: string) => {
     const num = valor === "" ? null : parseInt(valor);
     setPlanos(p => p.map(x => x.id === plano.id ? { ...x, [campo]: num } : x));
+    const chave = `${plano.id}_${campo}`;
+    setSalvandoIntervalo(chave);
     const payload = campo === "intervalo_km"
       ? { intervalo_km: num }
       : { intervalo_meses: num };
     const { error } = await supabase.from("plano_manutencao_veiculo")
       .update(payload).eq("id", plano.id);
-    if (error) setErro(error.message);
+    setSalvandoIntervalo(null);
+    if (error) { setErro(error.message); return; }
+    setSalvouIntervalo(chave);
+    setTimeout(() => setSalvouIntervalo(prev => prev === chave ? null : prev), 1500);
   };
 
   const setNF = (k: keyof typeof nf) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
@@ -236,27 +243,38 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                     {
                       label: "Ativo",
                       value: (
-                        <input
-                          type="checkbox"
-                          checked={ativo}
-                          disabled={savingId === t.id || locked}
-                          onChange={e => toggleAtivo(t, e.target.checked)}
-                          style={{ cursor: locked ? "not-allowed" : "pointer", width: "18px", height: "18px", accentColor: "#2563eb" }}
-                          title={locked ? `Bloqueado: ${count} manutenção(ões) registrada(s)` : ""}
-                        />
+                        <label style={{ display: "inline-flex", alignItems: "center", minHeight: "44px", cursor: locked ? "not-allowed" : "pointer", gap: "8px" }}
+                          title={locked ? `Bloqueado: ${count} manutenção(ões) registrada(s)` : ""}>
+                          <input
+                            type="checkbox"
+                            checked={ativo}
+                            disabled={savingId === t.id || locked}
+                            onChange={e => toggleAtivo(t, e.target.checked)}
+                            style={{ cursor: locked ? "not-allowed" : "pointer", width: "18px", height: "18px", accentColor: "#2563eb" }}
+                          />
+                          <span style={{ fontSize: "12px", color: "#475569" }}>{ativo ? "Sim" : "Não"}</span>
+                        </label>
                       ),
                     },
                     {
                       label: "Int. KM",
-                      value: ativo && p
-                        ? <input type="number" value={p.intervalo_km ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }} />
-                        : (t.intervalo_km?.toLocaleString("pt-BR") ?? "—"),
+                      value: ativo && p ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <input type="number" value={p.intervalo_km ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }} />
+                          {salvandoIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                        </div>
+                      ) : (t.intervalo_km?.toLocaleString("pt-BR") ?? "—"),
                     },
                     {
                       label: "Int. Meses",
-                      value: ativo && p
-                        ? <input type="number" value={p.intervalo_meses ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "70px", padding: "4px 8px", fontSize: "12px" }} />
-                        : (t.intervalo_meses ?? "—"),
+                      value: ativo && p ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                          <input type="number" value={p.intervalo_meses ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "70px", padding: "4px 8px", fontSize: "12px" }} />
+                          {salvandoIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                        </div>
+                      ) : (t.intervalo_meses ?? "—"),
                     },
                     {
                       label: "Próxima",
@@ -318,24 +336,32 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                     <Td style={{ textTransform: "capitalize" }}>{t.categoria}</Td>
                     <Td><Badge variant={CRIT_VARIANT[t.criticidade] ?? "default"}>{t.criticidade}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
-                      {ativo && p
-                        ? <input
+                      {ativo && p ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
+                          <input
                             type="number" value={p.intervalo_km ?? ""}
                             onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)}
                             placeholder="—"
                             style={{ ...inputStyle, width: "100px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
                           />
-                        : <span style={{ color: "#94a3b8" }}>{t.intervalo_km?.toLocaleString("pt-BR") ?? "—"}</span>}
+                          {salvandoIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                        </div>
+                      ) : <span style={{ color: "#94a3b8" }}>{t.intervalo_km?.toLocaleString("pt-BR") ?? "—"}</span>}
                     </Td>
                     <Td style={{ textAlign: "right" }}>
-                      {ativo && p
-                        ? <input
+                      {ativo && p ? (
+                        <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
+                          <input
                             type="number" value={p.intervalo_meses ?? ""}
                             onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)}
                             placeholder="—"
                             style={{ ...inputStyle, width: "70px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
                           />
-                        : <span style={{ color: "#94a3b8" }}>{t.intervalo_meses ?? "—"}</span>}
+                          {salvandoIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                        </div>
+                      ) : <span style={{ color: "#94a3b8" }}>{t.intervalo_meses ?? "—"}</span>}
                     </Td>
                     <Td style={{ fontSize: "11px", color: "#64748b" }}>
                       {!ativo

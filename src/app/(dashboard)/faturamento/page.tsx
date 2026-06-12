@@ -18,7 +18,7 @@
  * loadAll até existir RPC de agregação (mesma exceção dos KPIs de soma).
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usuarioSessao } from "@/lib/auth/temSessao";
@@ -82,6 +82,9 @@ export default function FaturamentoPage() {
   /** pedido com o painel financeiro aberto */
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
+  /** modal de confirmação de baixa rápida */
+  const [confirmBaixa, setConfirmBaixa] = useState<{ pedidoId: string; nomeCliente: string; valor: number } | null>(null);
+  const baixandoRef = useRef(false);
 
   const carregar = useCallback(async () => {
     const supabase = createClient();
@@ -191,15 +194,25 @@ export default function FaturamentoPage() {
   useEffect(() => { carregar(); }, [carregar]);
 
   // ── baixa rápida do pagamento ÚNICO (parcelado dá baixa por parcela no painel) ──
-  const baixarPedido = async (pedidoId: string) => {
-    setBaixando(pedidoId);
+  const confirmarBaixaRapida = async () => {
+    if (!confirmBaixa) return;
+    if (baixandoRef.current) return; // anti-duplo-clique síncrono
+    baixandoRef.current = true;
+    setBaixando(confirmBaixa.pedidoId);
+    setConfirmBaixa(null);
     const supabase = createClient();
-    await supabase.from("pedidos").update({
+    const { error } = await supabase.from("pedidos").update({
       pago: true,
       data_pagamento: hojeISO(),
-    }).eq("id", pedidoId);
-    await carregar();
+    }).eq("id", confirmBaixa.pedidoId);
+    if (error) {
+      // exibe erro para o usuário: re-abre estado de erro visível
+      alert(`Erro ao registrar pagamento: ${error.message}`);
+    } else {
+      await carregar();
+    }
     setBaixando(null);
+    baixandoRef.current = false;
   };
 
   // ── filtros client-side sobre os GRUPOS (a tela já carrega o agregado) ────
@@ -253,7 +266,7 @@ export default function FaturamentoPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
-        <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
+        <div className="m-kpi-grid" style={{ display: "grid", gap: "10px" }}>
           <KpiCard label="Valor Total" value={loading ? "..." : fmtBRL(totais.total)} />
           <KpiCard label="Recebido"    value={loading ? "..." : fmtBRL(totais.pago)}   color="success" />
           <KpiCard label="Em Aberto"   value={loading ? "..." : fmtBRL(totais.aberto)} color="warning" />
@@ -319,24 +332,24 @@ export default function FaturamentoPage() {
                         const temParcelas = (parcelasPorPedido.get(p.id)?.length ?? 0) > 0;
                         return (
                           <div key={p.id} style={{ borderBottom: "1px solid #f8fafc" }}>
-                            <div style={{
-                              display: "flex", alignItems: "center", gap: "10px",
-                              padding: "8px 0", flexWrap: "wrap",
-                            }}>
-                              <span style={{ fontSize: "12px", fontFamily: "monospace", fontWeight: 700, color: "#1e293b" }}>{rotuloPedido(p.numero, p.id)}</span>
-                              <span style={{ fontSize: "12px", color: "#64748b" }}>{fmtDate(p.data_inicio_prevista)}</span>
-                              <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }} title={
-                                (p.acrescimos ?? 0) > 0 || (p.descontos ?? 0) > 0
-                                  ? `Valor ${fmtBRL(p.valor_pedido ?? 0)} + acréscimos ${fmtBRL(p.acrescimos ?? 0)} - descontos ${fmtBRL(p.descontos ?? 0)}`
-                                  : undefined
-                              }>
-                                {fmtBRL(totalDe(p))}
-                              </span>
-                              {p.forma_pagamento && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{p.forma_pagamento}</span>}
-                              {situacaoPedido(p)}
-                              <span className="m-actions-row" style={{ marginLeft: "auto", display: "flex", gap: "6px", flexWrap: "wrap" }}>
+                            <div style={{ padding: "8px 0" }}>
+                              <div style={{ display: "flex", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                                <span style={{ fontSize: "12px", fontFamily: "monospace", fontWeight: 700, color: "#1e293b" }}>{rotuloPedido(p.numero, p.id)}</span>
+                                <span style={{ fontSize: "12px", color: "#64748b" }}>{fmtDate(p.data_inicio_prevista)}</span>
+                                <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }} title={
+                                  (p.acrescimos ?? 0) > 0 || (p.descontos ?? 0) > 0
+                                    ? `Valor ${fmtBRL(p.valor_pedido ?? 0)} + acréscimos ${fmtBRL(p.acrescimos ?? 0)} - descontos ${fmtBRL(p.descontos ?? 0)}`
+                                    : undefined
+                                }>
+                                  {fmtBRL(totalDe(p))}
+                                </span>
+                                {p.forma_pagamento && <span style={{ fontSize: "11px", color: "#94a3b8" }}>{p.forma_pagamento}</span>}
+                                {situacaoPedido(p)}
+                              </div>
+                              <div style={{ display: "flex", gap: "6px", flexWrap: "wrap", justifyContent: "flex-end", marginTop: "6px" }}>
                                 {!temParcelas && !p.pago && (
-                                  <Btn variant="outline" size="sm" disabled={!!baixando} loading={baixando === p.id} onClick={() => baixarPedido(p.id)}>
+                                  <Btn variant="outline" size="sm" disabled={!!baixando} loading={baixando === p.id}
+                                    onClick={() => setConfirmBaixa({ pedidoId: p.id, nomeCliente: g.nome, valor: totalDe(p) })}>
                                     💰 Baixar
                                   </Btn>
                                 )}
@@ -347,7 +360,7 @@ export default function FaturamentoPage() {
                                   💳 Financeiro {financeiroAberto ? "▴" : "▾"}
                                 </Btn>
                                 <Btn href={`/despacho/${p.id}`} variant="ghost" size="sm" title="Detalhe operacional no Despacho">🚚</Btn>
-                              </span>
+                              </div>
                             </div>
                             {financeiroAberto && (
                               <FinanceiroPedido
@@ -369,6 +382,33 @@ export default function FaturamentoPage() {
           </div>
         )}
       </div>
+
+      {/* Modal de confirmação de baixa rápida */}
+      {confirmBaixa && (
+        <div className="m-modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1000, padding: "16px",
+        }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "380px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>Confirmar recebimento</h2>
+            <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 4px" }}>
+              <strong>{confirmBaixa.nomeCliente}</strong>
+            </p>
+            <p style={{ fontSize: "20px", fontWeight: 800, color: "#16a34a", margin: "0 0 20px" }}>
+              {fmtBRL(confirmBaixa.valor)}
+            </p>
+            <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 20px" }}>
+              O pedido será marcado como pago com a data de hoje. Esta ação pode ser revertida editando o pedido.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmBaixa(null)} disabled={!!baixando}>Voltar</Btn>
+              <Btn variant="primary" onClick={confirmarBaixaRapida} loading={!!baixando} disabled={!!baixando}>
+                Confirmar pagamento
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

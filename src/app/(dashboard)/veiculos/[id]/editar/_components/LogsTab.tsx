@@ -36,6 +36,7 @@ export default function LogsTab({ veiculoId, empresaId }: { veiculoId: string; e
   const [veiculosEmpresa, setVeiculosEmpresa] = useState<VeiculoOpcao[]>([]);
   const [loading, setLoading] = useState(true);
   const [erro, setErro] = useState("");
+  const [sucesso, setSucesso] = useState("");
 
   // Reatribuir
   const [reatribuirLog, setReatribuirLog] = useState<KmLog | null>(null);
@@ -131,7 +132,7 @@ export default function LogsTab({ veiculoId, empresaId }: { veiculoId: string; e
     setSalvandoReatr(false);
     setReatribuirLog(null);
     await carregar();
-    alert("Log reatribuído. Verifique manualmente o KM atual dos dois veículos — pode precisar atualizar via 'Atualizar KM' se o trigger do banco não tiver recalculado automaticamente.");
+    setSucesso("Log movido com sucesso. Verifique o KM atual dos dois veículos.");
   };
 
   // Linhas unificadas (km_logs + audit_logs) ordenadas por data
@@ -176,6 +177,7 @@ export default function LogsTab({ veiculoId, empresaId }: { veiculoId: string; e
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {erro && <Alert variant="error">⚠ {erro}</Alert>}
+      {sucesso && <Alert variant="success">{sucesso}</Alert>}
 
       <div style={{ fontSize: "12px", color: "#64748b" }}>
         Total: <strong style={{ color: "#1e293b" }}>{linhas.length}</strong> registro{linhas.length !== 1 ? "s" : ""} ·

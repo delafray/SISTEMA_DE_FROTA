@@ -24,7 +24,7 @@ export function FluxoStepper({
   etapas: EtapaFluxo[];
   cancelado?: boolean;
   /** próxima ação do estágio atual (escondida quando o fluxo terminou/cancelou) */
-  acao?: { label: string; onClick: () => void; disabled?: boolean } | null;
+  acao?: { label: string; onClick: () => void; disabled?: boolean; loading?: boolean } | null;
 }) {
   const atualIdx = etapas.findIndex(e => !e.done); // -1 = tudo concluído
 
@@ -76,7 +76,7 @@ export function FluxoStepper({
       ) : atualIdx === -1 ? (
         <span style={{ fontSize: "12px", fontWeight: 700, color: "#16a34a" }}>🎉 Fluxo concluído</span>
       ) : acao ? (
-        <Btn variant="primary" size="sm" disabled={acao.disabled} onClick={acao.onClick}>
+        <Btn variant="primary" size="sm" loading={acao.loading ?? acao.disabled} disabled={acao.disabled} onClick={acao.onClick}>
           {acao.label}
         </Btn>
       ) : null}

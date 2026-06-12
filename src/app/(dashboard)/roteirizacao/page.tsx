@@ -14,6 +14,7 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { createClient } from '@/lib/supabase/client';
+import { usuarioSessao } from '@/lib/auth/temSessao';
 import {
   PageHeader,
   DataTable,
@@ -111,9 +112,9 @@ export default function RoteirizacaoPage(): React.ReactElement {
   // Carregar empresa do usuario + motoristas + rotas
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
+      const user = await usuarioSessao();
       if (!user) {
-        router.push('/login');
+        router.replace('/login');
         return;
       }
 
@@ -158,7 +159,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
         setOrigemLng(pos.coords.longitude.toFixed(6));
         setErro(null);
       },
-      (err) => setErro(`Falha ao pegar localizacao: ${err.message}`),
+      () => setErro('Não foi possível obter sua localização. Verifique as permissões do navegador e tente novamente.'),
       { enableHighAccuracy: false, timeout: 10000 }
     );
   }, []);
@@ -174,8 +175,8 @@ export default function RoteirizacaoPage(): React.ReactElement {
       setErro('Selecione um motorista.');
       return;
     }
-    if (isNaN(lat) || isNaN(lng) || lat === 0 || lng === 0) {
-      setErro('Informe origem (lat e lng validos).');
+    if (isNaN(lat) || isNaN(lng) || lat < -90 || lat > 90 || lng < -180 || lng > 180) {
+      setErro('Clique em "Usar minha localização" para preencher a origem automaticamente, ou informe coordenadas válidas (latitude entre -90 e 90, longitude entre -180 e 180).');
       return;
     }
 
@@ -279,7 +280,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
           <Btn variant="outline" onClick={handleUsarMinhaLocalizacao}>
             📍 Usar minha localização
           </Btn>
-          <Btn variant="primary" onClick={handleOtimizar} loading={otimizando}>
+          <Btn variant="primary" onClick={handleOtimizar} loading={otimizando} disabled={!empresaId || otimizando}>
             {otimizando ? 'Otimizando…' : '🎯 Otimizar agora'}
           </Btn>
         </div>

@@ -37,8 +37,13 @@ export default function NovoMotoristaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.nome || !f.cpf || !f.whatsapp || !f.cnh_numero || !f.cnh_validade) {
-      setErr("Preencha os campos obrigatórios: Nome, CPF, WhatsApp, CNH e Validade CNH"); return;
+    if (!f.cnh_numero || !f.cnh_validade) {
+      setTab("cnh");
+      setErr("Preencha os campos obrigatórios na aba CNH: Número CNH e Validade"); return;
+    }
+    if (!f.nome || !f.cpf || !f.whatsapp) {
+      setTab("dados");
+      setErr("Preencha os campos obrigatórios na aba Dados Pessoais: Nome, CPF e WhatsApp"); return;
     }
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();

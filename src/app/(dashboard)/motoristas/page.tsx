@@ -194,7 +194,7 @@ export default function MotoristasPage() {
                     <Td><Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "ATIVO" : "INATIVO"}</Badge></Td>
                     <Td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                        <a href={`/motoristas/${m.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                        <Btn href={`/motoristas/${m.id}/editar`} size="xs" variant="outline">Editar</Btn>
                         <DeleteBtn id={m.id} table="motoristas" label="motorista" />
                       </div>
                     </Td>
@@ -215,7 +215,7 @@ export default function MotoristasPage() {
             return (
               <MobileCard
                 key={m.id}
-                href={`/motoristas/${m.id}/editar`}
+                onClick={() => router.push(`/motoristas/${m.id}/editar`)}
                 title={m.nome}
                 subtitle={m.cargo ?? "Motorista"}
                 badge={<Badge variant={m.ativo ? "success" : "default"}>{m.ativo ? "Ativo" : "Inativo"}</Badge>}
@@ -226,6 +226,11 @@ export default function MotoristasPage() {
                   { label: "CNH", value: m.cnh_categoria ?? "—" },
                   { label: "Venc. CNH", value: cnhDate ? <Badge variant={cnhVar}>{cnhDate.toLocaleDateString("pt-BR")}</Badge> : "—" },
                 ]}
+                actions={
+                  <div onClick={e => e.stopPropagation()}>
+                    <DeleteBtn id={m.id} table="motoristas" label="motorista" />
+                  </div>
+                }
               />
             );
           })}

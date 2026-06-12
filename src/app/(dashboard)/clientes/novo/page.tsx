@@ -9,7 +9,7 @@ import { IMaskInput } from "react-imask";
 import { createClient } from "@/lib/supabase/client";
 import { buscarCep } from "@/lib/utils/viacep";
 import { Plus, Trash2, User } from "lucide-react";
-import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn } from "@/components/ui/ds";
+import { PageHeader, FormSection, FormField, inputStyle, selectStyle, Btn, Alert } from "@/components/ui/ds";
 
 // --- Schemas ---
 const contatoSchema = z.object({
@@ -45,6 +45,8 @@ export default function NovoClientePage() {
   const router = useRouter();
   const supabase = createClient();
   const [activeTab, setActiveTab] = useState<"dados" | "contatos">("dados");
+  const [err, setErr] = useState("");
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
 
   const {
     register,
@@ -81,6 +83,7 @@ export default function NovoClientePage() {
   };
 
   const onSubmit = async (data: ClienteComContatosData) => {
+    setErr("");
     const { data: authData } = await supabase.auth.getUser();
     if (!authData.user) return;
     // Cliente é COMPARTILHADO entre os sócios (não pertence a uma empresa) — usa a padrão.
@@ -125,7 +128,10 @@ export default function NovoClientePage() {
         principal: c.principal,
       }));
       const { error: contatosError } = await supabase.from("cliente_contatos").insert(contatosParaSalvar);
-      if (contatosError) console.warn("Erro ao salvar contatos:", contatosError.message);
+      if (contatosError) {
+        setErr("Cliente salvo, mas houve erro ao salvar os contatos. Edite o cliente e tente novamente.");
+        return;
+      }
     }
 
     router.push("/clientes"); router.refresh();
@@ -138,7 +144,7 @@ export default function NovoClientePage() {
         actions={
           <>
             <Btn href="/clientes" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={isSubmitting}>
+            <Btn type="submit" size="md" disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar Cliente"}
             </Btn>
           </>
@@ -147,6 +153,7 @@ export default function NovoClientePage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px" }}>
         <div style={{ width: "100%" }}>
+          {err && <div style={{ marginBottom: "16px" }}><Alert variant="error">⚠ {err}</Alert></div>}
           <div style={{ marginBottom: "16px", padding: "12px 16px", background: "#f8fafc", borderRadius: "8px", fontSize: "13px", color: "#3b82f6", display: "flex", alignItems: "center", gap: "8px" }}>
             <span>ℹ️</span> Preencha os dados básicos e salve para liberar o cadastro de endereços e contatos adicionais.
           </div>
@@ -284,9 +291,17 @@ export default function NovoClientePage() {
                             <input type="checkbox" {...register(`contatos.${index}.principal`)} style={{ accentColor: "#2563eb" }} />
                             <span style={{ fontSize: "13px", color: "#475569" }}>Principal</span>
                           </label>
-                          <button type="button" onClick={() => remove(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
-                            <Trash2 size={16} />
-                          </button>
+                          {confirmRemoveIdx === index ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "12px", color: "#ef4444", fontWeight: 600 }}>Remover?</span>
+                              <button type="button" onClick={() => { remove(index); setConfirmRemoveIdx(null); }} style={{ background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Sim</button>
+                              <button type="button" onClick={() => setConfirmRemoveIdx(null)} style={{ background: "transparent", color: "#64748b", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>Não</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
 

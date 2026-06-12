@@ -17,6 +17,7 @@ export default function ContextoPage() {
   const [res, setRes] = useState<Contexto | null>(null);
   const [carregando, setCarregando] = useState(false);
   const [clf, setClf] = useState<{ autorizado: boolean; motivo?: string; casaram?: string[]; raciocinio?: string; resposta: string } | null>(null);
+  const [erroClassificacao, setErroClassificacao] = useState<string | null>(null);
   const [classificando, setClassificando] = useState(false);
 
   useEffect(() => {
@@ -44,11 +45,17 @@ export default function ContextoPage() {
   };
 
   const classificarIA = async () => {
-    setClassificando(true); setClf(null);
+    setClassificando(true); setClf(null); setErroClassificacao(null);
     try {
       const r = await fetch("/api/regras/classificar", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ telefone, mensagem }) });
-      setClf(await r.json());
-    } catch { setClf({ autorizado: false, resposta: "Erro ao classificar." }); }
+      if (!r.ok) {
+        setErroClassificacao("Erro ao classificar: o servidor retornou um problema. Tente novamente.");
+      } else {
+        setClf(await r.json());
+      }
+    } catch {
+      setErroClassificacao("Erro de rede ao classificar. Verifique sua conexão e tente novamente.");
+    }
     setClassificando(false);
   };
 
@@ -93,6 +100,13 @@ export default function ContextoPage() {
                 <span style={{ color: "#7f1d1d", fontSize: 12 }}>(A IA nem seria acionada; o bot responde &quot;não autorizado&quot;.)</span>
               </div>
             )
+          )}
+
+          {erroClassificacao && (
+            <div role="alert" style={{ padding: "10px 14px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <span>{erroClassificacao}</span>
+              <button onClick={() => setErroClassificacao(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#b91c1c", fontWeight: 700, fontSize: 16, lineHeight: 1 }}>✕</button>
+            </div>
           )}
 
           {clf && (

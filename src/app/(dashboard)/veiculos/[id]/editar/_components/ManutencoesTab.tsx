@@ -2,6 +2,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, Th, Td, Tr, Btn, Badge, EmptyState, FormField, inputStyle, selectStyle, Alert } from "@/components/ui/ds";
+import { IMaskInput } from "react-imask";
 import { MobileCard, MobileList } from "@/components/mobile";
 
 type Tipo = { id: string; nome: string; categoria: string; intervalo_km: number | null; intervalo_meses: number | null };
@@ -43,6 +44,8 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
   const [kmMotivo, setKmMotivo] = useState("");
   const [kmConfirmInput, setKmConfirmInput] = useState("");
   const [salvandoKmGestor, setSalvandoKmGestor] = useState(false);
+  const [confirmExcluirManut, setConfirmExcluirManut] = useState<Manut | null>(null);
+  const [sucesso, setSucesso] = useState("");
 
   const [f, setF] = useState({
     tipo_id: "", data_realizada: "",
@@ -245,12 +248,9 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
   };
 
   const excluir = async (m: Manut) => {
+    setConfirmExcluirManut(null);
     const t = Array.isArray(m.tipos_manutencao) ? m.tipos_manutencao[0] : m.tipos_manutencao;
     const restantes = manuts.filter(x => x.tipo_id === m.tipo_id && x.id !== m.id).length;
-    const aviso = restantes === 0
-      ? `Excluir esta manutenção?\n\n⚠ Essa é a ÚLTIMA manutenção registrada para "${t?.nome ?? "este tipo"}". Ao excluir, o tipo será DESATIVADO automaticamente no Plano de Manutenção.`
-      : "Excluir esta manutenção?";
-    if (!confirm(aviso)) return;
 
     const { error } = await supabase.from("manutencoes").delete().eq("id", m.id);
     if (error) { setErro(error.message); return; }
@@ -260,7 +260,12 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
       if (plano) {
         await supabase.from("plano_manutencao_veiculo").update({ ativo: false }).eq("id", plano.id);
         setPlanos(ps => ps.map(p => p.id === plano.id ? { ...p, ativo: false } : p));
+        setSucesso(`Manutenção excluída. O plano "${t?.nome ?? "do tipo"}" foi desativado automaticamente.`);
+      } else {
+        setSucesso("Manutenção excluída com sucesso.");
       }
+    } else {
+      setSucesso("Manutenção excluída com sucesso.");
     }
     setManuts(ms => ms.filter(x => x.id !== m.id));
   };
@@ -270,6 +275,7 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
       {erro && <Alert variant="error">⚠ {erro}</Alert>}
+      {sucesso && <Alert variant="success">{sucesso}</Alert>}
 
       {/* Barra de KM atual do veículo */}
       <div style={{
@@ -367,10 +373,24 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
             </div>
 
             <FormField label="Custo peças (R$)">
-              <input type="number" step="0.01" value={f.custo_pecas} onChange={set("custo_pecas")} style={inputStyle} />
+              <IMaskInput
+                mask="R$ num"
+                blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                inputMode="decimal"
+                onAccept={(_v, maskRef) => setF(p => ({ ...p, custo_pecas: maskRef.unmaskedValue.replace(",", ".") }))}
+                style={inputStyle}
+                placeholder="R$ 0,00"
+              />
             </FormField>
             <FormField label="Custo mão de obra (R$)">
-              <input type="number" step="0.01" value={f.custo_mao_obra} onChange={set("custo_mao_obra")} style={inputStyle} />
+              <IMaskInput
+                mask="R$ num"
+                blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                inputMode="decimal"
+                onAccept={(_v, maskRef) => setF(p => ({ ...p, custo_mao_obra: maskRef.unmaskedValue.replace(",", ".") }))}
+                style={inputStyle}
+                placeholder="R$ 0,00"
+              />
             </FormField>
             <FormField label="Fornecedor / oficina">
               <input value={f.fornecedor} onChange={set("fornecedor")} style={inputStyle} />
@@ -468,8 +488,8 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
                         <Td style={{ color: "#64748b" }}>{m.fornecedor ?? "—"}</Td>
                         <Td><Badge variant={STATUS_VARIANT[m.status] ?? "default"}>{m.status}</Badge></Td>
                         <Td>
-                          <button type="button" onClick={() => excluir(m)}
-                            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px" }}
+                          <button type="button" onClick={() => setConfirmExcluirManut(m)}
+                            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", minWidth: "44px", padding: "0 8px" }}
                             title="Excluir">🗑</button>
                         </Td>
                       </Tr>
@@ -495,8 +515,8 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
                       { label: "Fornecedor", value: m.fornecedor ?? "—" },
                     ]}
                     actions={
-                      <button type="button" onClick={() => excluir(m)}
-                        style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 8px" }}
+                      <button type="button" onClick={() => setConfirmExcluirManut(m)}
+                        style={{ background: "transparent", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 12px" }}
                         title="Excluir">🗑 Excluir</button>
                     }
                   />
@@ -505,6 +525,29 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
             </MobileList>
           </>
         )}
+
+      {/* Modal confirmação exclusão de manutenção */}
+      {confirmExcluirManut && (() => {
+        const t = Array.isArray(confirmExcluirManut.tipos_manutencao) ? confirmExcluirManut.tipos_manutencao[0] : confirmExcluirManut.tipos_manutencao;
+        const restantes = manuts.filter(x => x.tipo_id === confirmExcluirManut.tipo_id && x.id !== confirmExcluirManut.id).length;
+        return (
+          <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 101, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+            <div style={{ background: "#fff", borderRadius: "12px", padding: "20px", width: "100%", maxWidth: "400px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}>Excluir manutenção?</h3>
+              {restantes === 0 && (
+                <div style={{ background: "#fef9c3", border: "1px solid #fde68a", borderRadius: "6px", padding: "8px 12px", marginBottom: "12px", fontSize: "13px", color: "#854d0e" }}>
+                  Esta é a ULTIMA manutenção de &quot;{t?.nome ?? "este tipo"}&quot;. Ao excluir, o plano deste tipo será desativado automaticamente.
+                </div>
+              )}
+              <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>Esta ação não pode ser desfeita.</p>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <Btn type="button" variant="outline" onClick={() => setConfirmExcluirManut(null)}>Voltar</Btn>
+                <Btn type="button" variant="danger" onClick={() => excluir(confirmExcluirManut)}>Confirmar</Btn>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* MODAL PROTEGIDO — Atualizar KM (Gestor) */}
       {kmModalOpen && (

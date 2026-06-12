@@ -23,13 +23,15 @@ export default function NovoAbastecimentoPage() {
     km_no_abast: "", litros: "", valor_litro: "", valor_total: "", posto: "",
   });
 
+  const normNum = (s: string) => parseFloat(s.replace(",", "."));
+
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const val = e.target.value;
     setF(prev => {
       const next = { ...prev, [k]: val };
       if ((k === "litros" || k === "valor_litro")) {
-        const l = parseFloat(k === "litros" ? val : prev.litros);
-        const v = parseFloat(k === "valor_litro" ? val : prev.valor_litro);
+        const l = normNum(k === "litros" ? val : prev.litros);
+        const v = normNum(k === "valor_litro" ? val : prev.valor_litro);
         if (!isNaN(l) && !isNaN(v) && l > 0 && v > 0) {
           next.valor_total = (l * v).toFixed(2);
         }
@@ -64,15 +66,20 @@ export default function NovoAbastecimentoPage() {
     const empresa_id = await empresaDoVeiculo(supabase, f.veiculo_id);
     if (!empresa_id) { setSaving(false); setErr("Caminhão sem empresa definida"); return; }
 
+    const litrosVal    = normNum(f.litros);
+    const valorTotalVal = normNum(f.valor_total);
+    if (isNaN(litrosVal) || isNaN(valorTotalVal)) {
+      setSaving(false); setErr("Valor inválido. Use ponto ou vírgula como separador decimal."); return;
+    }
     const { error: dbErr } = await supabase.from("abastecimentos").insert({
       empresa_id,
       veiculo_id:   f.veiculo_id,
       motorista_id: f.motorista_id,
-      km_no_abast:  f.km_no_abast  ? parseFloat(f.km_no_abast)  : null,
-      litros:       parseFloat(f.litros),
-      valor_litro:  f.valor_litro  ? parseFloat(f.valor_litro)  : null,
-      valor_total:  parseFloat(f.valor_total),
-      posto:        f.posto || null,
+      km_no_abast:  f.km_no_abast  ? normNum(f.km_no_abast)  : null,
+      litros:       litrosVal,
+      valor_litro:  f.valor_litro  ? normNum(f.valor_litro)  : null,
+      valor_total:  valorTotalVal,
+      posto:        f.posto ? f.posto.trim().toUpperCase() : null,
       confirmado:   false,
     });
     setSaving(false);
@@ -85,13 +92,13 @@ export default function NovoAbastecimentoPage() {
       <PageHeader
         title="Registrar Abastecimento"
         actions={
-          <>
+          <span className="m-hide">
             <Btn href="/abastecimentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/abastecimentos" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
-          </>
+          </span>
         }
       />
 
@@ -128,13 +135,13 @@ export default function NovoAbastecimentoPage() {
                   <input value={f.km_no_abast} onChange={set("km_no_abast")} type="number" inputMode="numeric" min="0" style={inputStyle} placeholder="150000" />
                 </FormField>
                 <FormField label="Litros *">
-                  <input value={f.litros} onChange={set("litros")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="100.00" />
+                  <input value={f.litros} onChange={set("litros")} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" style={inputStyle} placeholder="100,00" />
                 </FormField>
                 <FormField label="Valor por Litro (R$)">
-                  <input value={f.valor_litro} onChange={set("valor_litro")} type="number" inputMode="decimal" step="0.001" min="0" style={inputStyle} placeholder="6.490" />
+                  <input value={f.valor_litro} onChange={set("valor_litro")} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" style={inputStyle} placeholder="6,490" />
                 </FormField>
                 <FormField label="Valor Total (R$) *">
-                  <input value={f.valor_total} onChange={set("valor_total")} type="number" inputMode="decimal" step="0.01" min="0" style={inputStyle} placeholder="649.00" />
+                  <input value={f.valor_total} onChange={set("valor_total")} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" style={inputStyle} placeholder="649,00" />
                 </FormField>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Posto">

@@ -308,7 +308,7 @@ export default function PedidosListPage() {
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
           <KpiCard label="Na lista"     value={kpis.total}      />
           <KpiCard label="Agendados"    value={kpis.agendadas}  color="warning" />
-          <KpiCard label="Em Andamento" value={kpis.andamento}  color="info" />
+          <KpiCard label="Andamento"    value={kpis.andamento}  color="info" />
           <KpiCard label="Concluídos"   value={kpis.concluidas} color="success" />
         </div>
 
@@ -370,7 +370,7 @@ export default function PedidosListPage() {
                     </Td>
                     <Td>{fmtDataPrevista(p.data_inicio_prevista)}</Td>
                     <Td style={{ maxWidth: "240px" }}>
-                      <span style={{ color: "#475569" }}>{resumoDestinos(entregas)}</span>
+                      <span style={{ display: "block", color: "#475569", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={resumoDestinos(entregas)}>{resumoDestinos(entregas)}</span>
                     </Td>
                     <Td style={{ fontSize: "12px" }}>
                       {veicLabel || motorista ? (
@@ -425,7 +425,7 @@ export default function PedidosListPage() {
           </select>
         </div>
 
-        <MobileList count={filtradas.length} label="pedidos">
+        <MobileList count={loading ? undefined : filtradas.length} label="pedidos">
           {loading ? (
             <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8" }}>Carregando...</div>
           ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {

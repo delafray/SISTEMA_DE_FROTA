@@ -226,10 +226,10 @@ export default function AbastecimentosPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px", minWidth: 0 }}>
-          <KpiCard label="Total Abastecimentos" value={kpiCount == null ? "..." : kpiCount} />
-          <KpiCard label="Total Litros"         value={kpiLitros == null ? "..." : kpiLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
-          <KpiCard label="Custo Total"          value={kpiCusto == null ? "..." : kpiCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
-          <KpiCard label="Ticket Médio"         value={kpiCusto == null ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
+          <KpiCard label="Abastecimentos" value={kpiCount == null ? "..." : kpiCount} />
+          <KpiCard label="Litros"         value={kpiLitros == null ? "..." : kpiLitros.toLocaleString("pt-BR", { maximumFractionDigits: 0 }) + " L"} color="info" />
+          <KpiCard label="Custo"          value={kpiCusto == null ? "..." : kpiCusto.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="warning" />
+          <KpiCard label="Ticket Médio"   value={kpiCusto == null ? "..." : ticketMedio.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} color="success" />
         </div>
 
         {/* Busca e filtro — visível no mobile (fora do m-hide) */}
@@ -304,7 +304,7 @@ export default function AbastecimentosPage() {
                     </Td>
                     <Td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                        <a href={`/abastecimentos/${a.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                        <Btn href={`/abastecimentos/${a.id}/editar`} variant="outline" size="xs">Editar</Btn>
                         <DeleteBtn id={a.id} table="abastecimentos" label="abastecimento" />
                       </div>
                     </Td>
@@ -318,7 +318,9 @@ export default function AbastecimentosPage() {
 
         {/* Mobile: cards */}
         <MobileList count={linhas.length} label="abastecimentos">
-          {loading ? null : linhas.map(a => {
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando abastecimentos...</div>
+          ) : linhas.map(a => {
             const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
             return (
               <MobileCard

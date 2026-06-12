@@ -22,6 +22,10 @@ export default function EditarPedidoPage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr]         = useState("");
   const [tab, setTab]         = useState<TabId>("operacional");
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
+  const [confirmStatus, setConfirmStatus] = useState(false);
+  const [pendingSubmit, setPendingSubmit] = useState(false);
+  const [statusOriginal, setStatusOriginal] = useState("");
 
   const [veiculos,   setVeiculos]   = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -76,6 +80,7 @@ export default function EditarPedidoPage() {
         });
         setMotoristaSel((m.data ?? []).find(mt => mt.id === pedido.motorista_id) ?? null);
         setValorPedidoInicial(pedido.valor_pedido != null ? String(pedido.valor_pedido) : "");
+        setStatusOriginal(pedido.status ?? "agendado");
       }
       setLoading(false);
     };
@@ -86,17 +91,8 @@ export default function EditarPedidoPage() {
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) =>
     setF(p => ({ ...p, [k]: e.target.value }));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const executarSalvar = async () => {
     setErr("");
-    if (!f.veiculo_id || !f.motorista_id) {
-      setTab("operacional");
-      setErr("Preencha: Veículo e Motorista"); return;
-    }
-    if (!f.km_inicial) {
-      setTab("cronograma");
-      setErr("Preencha: KM Inicial"); return;
-    }
     setSaving(true);
     const { error: dbErr } = await supabase.from("pedidos").update({
       veiculo_id: f.veiculo_id,
@@ -120,6 +116,33 @@ export default function EditarPedidoPage() {
     router.push("/entregas"); router.refresh();
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    if (!f.veiculo_id || !f.motorista_id) {
+      setTab("operacional");
+      setErr("Preencha: Veículo e Motorista"); return;
+    }
+    if (!f.km_inicial) {
+      setTab("cronograma");
+      setErr("Preencha: KM Inicial"); return;
+    }
+    if (f.km_final && f.km_inicial && parseFloat(f.km_final) < parseFloat(f.km_inicial)) {
+      setTab("cronograma");
+      setErr("KM Final não pode ser menor que KM Inicial"); return;
+    }
+    if (f.pago === "true" && !f.data_pagamento) {
+      setTab("financeiro");
+      setErr("Preencha a data do pagamento quando o pedido está marcado como Pago"); return;
+    }
+    if (f.status === "cancelado" && statusOriginal !== "cancelado") {
+      setPendingSubmit(true);
+      setConfirmStatus(true);
+      return;
+    }
+    await executarSalvar();
+  };
+
   const veiculoSel = veiculos.find(v => v.id === f.veiculo_id);
 
   if (loading) return (
@@ -134,9 +157,9 @@ export default function EditarPedidoPage() {
         title="Editar Pedido"
         actions={
           <>
-            <Btn href="/entregas" variant="ghost">← Voltar</Btn>
-            <Btn href="/entregas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
+            <Btn variant="ghost" className="m-hide" onClick={() => setConfirmCancelar(true)}>← Voltar</Btn>
+            <Btn variant="outline" onClick={() => setConfirmCancelar(true)}>Cancelar</Btn>
+            <Btn type="submit" variant="primary" disabled={saving} loading={saving}>
               {saving ? "Salvando..." : "Atualizar"}
             </Btn>
           </>
@@ -295,12 +318,40 @@ export default function EditarPedidoPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href="/entregas" variant="outline">Cancelar</Btn>
-          <Btn type="submit" disabled={saving}>
+          <Btn variant="outline" onClick={() => setConfirmCancelar(true)}>Cancelar</Btn>
+          <Btn type="submit" disabled={saving} loading={saving}>
             {saving ? "Salvando..." : "Atualizar Pedido"}
           </Btn>
         </div>
       </div>
+
+      {/* Modal: descartar alterações */}
+      {confirmCancelar && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Descartar alterações?</h3>
+            <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#475569" }}>As alterações não salvas serão perdidas.</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmCancelar(false)}>Voltar</Btn>
+              <Btn variant="danger" onClick={() => router.push("/entregas")}>Descartar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal: confirmar cancelamento do pedido */}
+      {confirmStatus && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Cancelar este pedido?</h3>
+            <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#475569" }}>O status será alterado para <strong>Cancelado</strong>. Essa ação é difícil de reverter.</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => { setConfirmStatus(false); setPendingSubmit(false); }}>Voltar</Btn>
+              <Btn variant="danger" loading={saving} onClick={async () => { setConfirmStatus(false); if (pendingSubmit) { setPendingSubmit(false); await executarSalvar(); } }}>Confirmar Cancelamento</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

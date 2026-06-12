@@ -62,6 +62,8 @@ export default function EditarClientePage() {
   const [activeTab, setActiveTab] = useState<"dados" | "contatos" | "locais">("dados");
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
+  const [docValue, setDocValue] = useState("");
+  const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
 
   // Locais de Carregamento (gerenciado fora do react-hook-form)
   const [locais, setLocais] = useState<LocalCarregamento[]>([]);
@@ -82,8 +84,10 @@ export default function EditarClientePage() {
                 supabase.from("locais_carregamento").select("*").eq("cliente_id", id).eq("ativo", true).order("principal", { ascending: false }),
       ]);
       if (cliente) {
+        const docFormatado = fmtDoc(cliente.documento ?? "");
+        setDocValue(docFormatado);
         reset({
-          cnpj_cpf: fmtDoc(cliente.documento ?? ""),
+          cnpj_cpf: docFormatado,
           razao_social: cliente.razao_social ?? "",
           nome_fantasia: cliente.nome_fantasia ?? "",
           apelido: cliente.apelido ?? "",
@@ -173,7 +177,10 @@ export default function EditarClientePage() {
         principal: c.principal,
       }));
       const { error: contatosError } = await supabase.from("cliente_contatos").insert(contatos);
-      if (contatosError) console.warn("Erro ao salvar contatos:", contatosError.message);
+      if (contatosError) {
+        setErr("Cliente atualizado, mas houve erro ao salvar os contatos. Tente novamente.");
+        return;
+      }
     }
 
     // Salvar locais de carregamento (delete + reinsert)
@@ -187,7 +194,10 @@ export default function EditarClientePage() {
         principal: l.principal,
       }));
             const { error: locaisError } = await supabase.from("locais_carregamento").insert(locaisPayload);
-      if (locaisError) console.warn("Erro ao salvar locais:", locaisError.message);
+      if (locaisError) {
+        setErr("Cliente atualizado, mas houve erro ao salvar os locais de carregamento. Tente novamente.");
+        return;
+      }
     }
 
     router.push("/clientes"); router.refresh();
@@ -246,9 +256,8 @@ export default function EditarClientePage() {
                   <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
                     <FormField label="CNPJ / CPF">
                       <IMaskInput mask={[{ mask: "000.000.000-00" }, { mask: "00.000.000/0000-00" }]}
-                        value={typeof (register("cnpj_cpf") as unknown as {value?: string}).value === "string" ? undefined : undefined}
-                        onAccept={(val) => setValue("cnpj_cpf", val as string, { shouldValidate: true })}
-                        defaultValue={undefined}
+                        value={docValue}
+                        onAccept={(val) => { setDocValue(val as string); setValue("cnpj_cpf", val as string, { shouldValidate: true }); }}
                         inputMode="numeric"
                         style={inputStyle} />
                       {errors.cnpj_cpf && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{errors.cnpj_cpf.message}</p>}
@@ -347,9 +356,17 @@ export default function EditarClientePage() {
                             <input type="checkbox" {...register(`contatos.${index}.principal`)} style={{ accentColor: "#2563eb" }} />
                             <span style={{ fontSize: "13px", color: "#475569" }}>Principal</span>
                           </label>
-                          <button type="button" onClick={() => remove(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
-                            <Trash2 size={16} />
-                          </button>
+                          {confirmRemoveIdx === index ? (
+                            <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                              <span style={{ fontSize: "12px", color: "#ef4444", fontWeight: 600 }}>Remover?</span>
+                              <button type="button" onClick={() => { remove(index); setConfirmRemoveIdx(null); }} style={{ background: "#ef4444", color: "#fff", border: "none", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", fontWeight: 600, cursor: "pointer" }}>Sim</button>
+                              <button type="button" onClick={() => setConfirmRemoveIdx(null)} style={{ background: "transparent", color: "#64748b", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>Não</button>
+                            </div>
+                          ) : (
+                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                              <Trash2 size={16} />
+                            </button>
+                          )}
                         </div>
                       </div>
                       <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>

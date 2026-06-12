@@ -77,7 +77,7 @@ export function EtapaPreview({
               />
             </Th>
             <Th>Destinatário / Cliente</Th>
-            <Th>Endereço</Th>
+            <Th className="m-hide">Endereço</Th>
             <Th className="m-hide">Nº Nota</Th>
             <Th className="m-hide" style={{ textAlign: "right" }}>Valor da Nota</Th>
             <Th>Status</Th>
@@ -95,8 +95,13 @@ export function EtapaPreview({
                   style={{ accentColor: "#2563eb" }}
                 />
               </Td>
-              <Td style={{ fontWeight: 500 }}>{l.destinatario || "—"}</Td>
-              <Td style={{ maxWidth: "280px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+              <Td style={{ fontWeight: 500 }}>
+                <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.destinatario || "—"}</div>
+                <div className="m-show-block" style={{ fontSize: "11px", color: "#64748b", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.endereco}>
+                  {l.endereco}
+                </div>
+              </Td>
+              <Td className="m-hide" style={{ maxWidth: "280px", whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
                 {l.endereco}
               </Td>
               <Td className="m-hide">{l.numeroNota || "—"}</Td>
@@ -119,7 +124,7 @@ export function EtapaPreview({
           <button
             type="button"
             onClick={onToggleFalhas}
-            style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer" }}
+            style={{ fontSize: "12px", color: "#2563eb", background: "none", border: "none", cursor: "pointer", padding: "10px 8px", minHeight: "44px" }}
           >
             {falhasExpandidas ? "▲ Ocultar falhas do parse" : `▼ Ver ${todasFalhas.length} falha(s) do parse`}
           </button>

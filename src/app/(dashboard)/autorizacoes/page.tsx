@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import { temSessao } from "@/lib/auth/temSessao";
 import { telefoneCanonico, telefoneExibicao } from "@/lib/utils/telefone";
 import { ordenarAcoes } from "@/lib/schemas/regra";
+import { Btn } from "@/components/ui/ds";
 
 type Nivel = string;
 const META: Record<string, { label: string; short: string; bg: string; color: string; border: string }> = {
@@ -29,7 +30,7 @@ type Tel = {
   ativo: boolean; anotar: boolean; permissoes: Record<string, string>;
 };
 
-const COL_TEL = 132, COL_USR = 150, COL = 30, ROW_H = 26, HEAD_H = 140;
+const COL_TEL = 132, COL_USR = 150, COL = 44, ROW_H = 44, HEAD_H = 140;
 const headBg = "#1e293b";
 
 export default function AutorizacoesPage() {
@@ -43,9 +44,11 @@ export default function AutorizacoesPage() {
   const [telModal, setTelModal] = useState<{ mode: "edit" | "novo"; id?: string; valor: string } | null>(null);
   const [usrModal, setUsrModal] = useState<{ id: string } | null>(null);
   const [salvandoTel, setSalvandoTel] = useState(false);
+  const [erroTelModal, setErroTelModal] = useState<string | null>(null);
 
   // Mobile: qual card de telefone está expandido
   const [expandido, setExpandido] = useState<string | null>(null);
+  const [erroOp, setErroOp] = useState<string | null>(null);
 
   const mapRow = (r: Tel): Tel => ({ ...r, permissoes: (r.permissoes as Record<string, string>) ?? {} });
 
@@ -68,8 +71,13 @@ export default function AutorizacoesPage() {
   }, []);
 
   const patch = async (id: string, fields: Partial<Tel>) => {
+    const anterior = tels.find((t) => t.id === id);
     setTels((p) => p.map((t) => (t.id === id ? { ...t, ...fields } : t)));
-    await supabase.from("telefones").update({ ...fields, atualizado_em: new Date().toISOString() }).eq("id", id);
+    const { error } = await supabase.from("telefones").update({ ...fields, atualizado_em: new Date().toISOString() }).eq("id", id);
+    if (error) {
+      if (anterior) setTels((p) => p.map((t) => (t.id === id ? anterior : t)));
+      setErroOp("Não foi possível salvar. Tente novamente.");
+    }
   };
 
   const ciclar = (tel: Tel, regra: Regra) => {
@@ -87,12 +95,17 @@ export default function AutorizacoesPage() {
     const canon = telefoneCanonico(telModal.valor);
     if (!canon) return;
     setSalvandoTel(true);
+    setErroTelModal(null);
     const exib = telefoneExibicao(canon);
     if (telModal.mode === "novo") {
       const { data, error } = await supabase.from("telefones")
         .insert({ telefone: canon, telefone_exibicao: exib, ativo: true, anotar: true, permissoes: {} })
         .select().single();
-      if (error) { alert(error.message); setSalvandoTel(false); return; }
+      if (error) {
+        setSalvandoTel(false);
+        setErroTelModal(error.message);
+        return;
+      }
       if (data) setTels((p) => [...p, mapRow(data as Tel)]);
     } else if (telModal.id) {
       await patch(telModal.id, { telefone: canon, telefone_exibicao: exib });
@@ -120,10 +133,16 @@ export default function AutorizacoesPage() {
 
   return (
     <div style={{ height: "100%", display: "flex", flexDirection: "column", background: "#f8fafc", fontSize: 11 }}>
+      {erroOp && (
+        <div role="alert" style={{ padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{erroOp}</span>
+          <button onClick={() => setErroOp(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#b91c1c", fontWeight: 700, fontSize: 16, lineHeight: 1 }}>✕</button>
+        </div>
+      )}
       <div style={{ padding: "8px 14px", borderBottom: "1px solid #e2e8f0", background: "#fff" }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
           <div style={{ fontSize: 15, fontWeight: 800 }}>🛡️ Autorizações — Telefones × Permissões</div>
-          <a href="/autorizacoes/empresas" style={{ fontSize: 12, fontWeight: 700, color: "#1d4ed8", textDecoration: "none", border: "1px solid #bfdbfe", borderRadius: 6, padding: "4px 10px", background: "#eff6ff", whiteSpace: "nowrap" }}>🏢 Empresas × Gestor →</a>
+          <Btn href="/autorizacoes/empresas" variant="outline" size="sm">🏢 Empresas × Gestor →</Btn>
         </div>
         <div style={{ display: "flex", gap: 12, marginTop: 6, flexWrap: "wrap", alignItems: "center", color: "#64748b" }}>
           {(["consultar", "alterar", "registrar"] as Nivel[]).map((n) => (
@@ -361,12 +380,17 @@ export default function AutorizacoesPage() {
       )}
 
       {telModal && (
-        <Modal onClose={() => { if (!salvandoTel) setTelModal(null); }} title={telModal.mode === "novo" ? "Novo telefone" : "Editar telefone"}>
+        <Modal onClose={() => { if (!salvandoTel) { setTelModal(null); setErroTelModal(null); } }} title={telModal.mode === "novo" ? "Novo telefone" : "Editar telefone"}>
           <label style={lbl}>Número (digite como quiser, eu normalizo)</label>
           <input autoFocus value={telModal.valor} onChange={(e) => setTelModal({ ...telModal, valor: e.target.value })} placeholder="31 98979-1317" style={inp} inputMode="tel" onKeyDown={(e) => e.key === "Enter" && salvarTel()} />
           {telModal.valor && <div style={{ fontSize: 11, color: "#64748b", marginTop: 6 }}>Vai salvar como: <b>{telefoneCanonico(telModal.valor)}</b> ({telefoneExibicao(telefoneCanonico(telModal.valor))})</div>}
+          {erroTelModal && (
+            <div role="alert" style={{ marginTop: 10, padding: "8px 10px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 6, color: "#b91c1c", fontSize: 12 }}>
+              {erroTelModal}
+            </div>
+          )}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 14 }}>
-            <button style={btnGhost} onClick={() => setTelModal(null)} disabled={salvandoTel}>Cancelar</button>
+            <button style={btnGhost} onClick={() => { setTelModal(null); setErroTelModal(null); }} disabled={salvandoTel}>Cancelar</button>
             <button style={{ ...btnPri, opacity: salvandoTel ? 0.65 : 1, cursor: salvandoTel ? "not-allowed" : "pointer" }} onClick={salvarTel} disabled={salvandoTel}>
               {salvandoTel ? "Salvando…" : (telModal.mode === "novo" ? "Inserir" : "Salvar")}
             </button>
@@ -393,7 +417,7 @@ export default function AutorizacoesPage() {
 }
 
 function flag(on: boolean, cor: string, off = false): React.CSSProperties {
-  return { width: 22, height: 22, borderRadius: 5, border: `2px solid ${on ? cor : "#cbd5e1"}`, background: on ? cor : "#fff", color: "#fff", fontWeight: 900, fontSize: 12, cursor: off ? "not-allowed" : "pointer", opacity: off ? 0.4 : 1 };
+  return { minWidth: 44, minHeight: 44, width: "100%", borderRadius: 5, border: `2px solid ${on ? cor : "#cbd5e1"}`, background: on ? cor : "#fff", color: "#fff", fontWeight: 900, fontSize: 12, cursor: off ? "not-allowed" : "pointer", opacity: off ? 0.4 : 1 };
 }
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {

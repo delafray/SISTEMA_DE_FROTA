@@ -97,6 +97,10 @@ export default function APagarTab({ empresas }: { empresas: string[] }) {
       ({ error } = await supabase.from("manutencoes").update({ pago: true, data_pagamento: modalBaixa.dataPagamento }).eq("id", id));
     } else if (tabela === "despesas_avulsas") {
       ({ error } = await supabase.from("despesas_avulsas").update({ pago: true, data_pagamento: modalBaixa.dataPagamento }).eq("id", id));
+    } else {
+      setErro(`Este tipo de lançamento (${tabela}) não pode ser baixado por aqui. Acesse o cadastro de origem.`);
+      setSalvando(false);
+      return;
     }
 
     if (error) { setErro(error.message); }

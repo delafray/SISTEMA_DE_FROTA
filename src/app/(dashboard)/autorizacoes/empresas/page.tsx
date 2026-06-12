@@ -22,6 +22,7 @@ export default function EmpresasGestorPage() {
   const [empresas, setEmpresas] = useState<Empresa[]>([]);
   const [vinc, setVinc] = useState<Set<string>>(new Set()); // "usuario_id|empresa_id"
   const [loading, setLoading] = useState(true);
+  const [erroToggle, setErroToggle] = useState<string | null>(null);
   // Estado de loading por usuário durante marcarTodas
   const [marcarLoading, setMarcarLoading] = useState<Record<string, string | null>>({}); // uid → mensagem progresso ou null
 
@@ -51,15 +52,15 @@ export default function EmpresasGestorPage() {
     if (tinha) {
       const { error } = await supabase.from("usuario_empresas").delete().eq("usuario_id", uid).eq("empresa_id", eid);
       if (error) {
-        // reverter estado local se banco falhou
         setVinc((prev) => { const n = new Set(prev); n.add(key); return n; });
+        setErroToggle("Não foi possível remover o vínculo. Tente novamente.");
       }
     } else {
       const primeira = ![...vinc].some((k) => k.startsWith(uid + "|")); // 1ª empresa do user = padrão
       const { error } = await supabase.from("usuario_empresas").insert({ usuario_id: uid, empresa_id: eid, is_padrao: primeira });
       if (error) {
-        // reverter estado local se banco falhou
         setVinc((prev) => { const n = new Set(prev); n.delete(key); return n; });
+        setErroToggle("Não foi possível salvar o vínculo. Tente novamente.");
       }
     }
   };
@@ -86,6 +87,13 @@ export default function EmpresasGestorPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Empresas × Gestor" actions={<Btn href="/autorizacoes" variant="ghost">← Autorizações</Btn>} />
+
+      {erroToggle && (
+        <div role="alert" style={{ padding: "10px 16px", background: "#fef2f2", borderBottom: "1px solid #fecaca", color: "#b91c1c", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <span>{erroToggle}</span>
+          <button onClick={() => setErroToggle(null)} style={{ border: "none", background: "none", cursor: "pointer", color: "#b91c1c", fontWeight: 700, fontSize: 16, lineHeight: 1 }}>✕</button>
+        </div>
+      )}
 
       <div style={{ padding: "10px 16px", fontSize: 13, color: "#475569", background: "#f0f9ff", borderBottom: "1px solid #bae6fd" }}>
         Marque quais <b>empresas</b> cada <b>usuário</b> gerencia. Quem gerencia várias vê o <b>fluxo de caixa somado</b> delas e ignora o resto.

@@ -193,7 +193,9 @@ export default function DespachoPage() {
           emptyMessage="Nenhum pedido lançado ainda."
           emptyIcon="🚚"
         >
-          {loading ? null : filtrados.map(({ p, entregas, cliente }) => (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "40px", color: "#94a3b8" }}>Carregando...</div>
+          ) : filtrados.map(({ p, entregas, cliente }) => (
             <CardDespachoMobile
               key={p.id}
               p={p}
@@ -214,10 +216,11 @@ export default function DespachoPage() {
           <button
             type="button"
             onClick={() => abrirModal(Array.from(selecionados))}
+            disabled={modalAberto}
             className="m-fab mobile-only"
             title={`Despachar ${selecionados.size} selecionado(s)`}
             aria-label={`Despachar ${selecionados.size} selecionado(s)`}
-            style={{ fontSize: "12px", minHeight: "44px", minWidth: "44px", paddingLeft: "20px", paddingRight: "20px", borderRadius: "24px", width: "auto" }}
+            style={{ fontSize: "12px", minHeight: "44px", minWidth: "44px", paddingLeft: "20px", paddingRight: "20px", borderRadius: "24px", width: "auto", opacity: modalAberto ? 0.5 : 1 }}
           >
             Despachar {selecionados.size}
           </button>

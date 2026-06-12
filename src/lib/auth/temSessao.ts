@@ -21,9 +21,21 @@ export async function temSessao(): Promise<boolean> {
 
 /**
  * Variante para telas que precisam do usuário (id/email) além do guard.
- * Mesma leitura local da sessão — sem ida à rede.
+ * Mesma leitura local da sessão — sem ida à rede no caminho feliz.
+ *
+ * Tolerância a erro transitório: se getSession() falhar (token expirado com
+ * refresh tropeçando em rede móvel ruim), tenta UMA vez mais antes de devolver
+ * null — sem isso, as telas que dependem do user.id chutavam o gestor logado
+ * pro /login exatamente na janela de oscilação que motivou este módulo.
  */
 export async function usuarioSessao() {
-  const { data } = await createClient().auth.getSession();
-  return data.session?.user ?? null;
+  const supabase = createClient();
+  const { data, error } = await supabase.auth.getSession();
+  if (data.session) return data.session.user;
+  if (error) {
+    await new Promise(r => setTimeout(r, 800));
+    const segunda = await supabase.auth.getSession();
+    if (segunda.data.session) return segunda.data.session.user;
+  }
+  return null;
 }

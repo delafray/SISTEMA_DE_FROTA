@@ -208,7 +208,7 @@ export default async function DashboardPage() {
             {alertas.map((a, i) => (
               <Link key={i} href={a.href} style={{
                 display: "flex", alignItems: "center", gap: "10px",
-                padding: "10px 14px",
+                padding: "10px 14px", minHeight: "44px",
                 background: alertaBg[a.tipo], border: `1px solid ${alertaBorder[a.tipo]}`,
                 borderRadius: "8px", color: alertaColor[a.tipo],
                 fontSize: "13px", fontWeight: 600, textDecoration: "none",
@@ -319,7 +319,7 @@ export default async function DashboardPage() {
           <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "12px", overflow: "hidden" }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #f1f5f9", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
               <span style={{ fontSize: "12px", fontWeight: 700, color: "#1e293b", textTransform: "uppercase", letterSpacing: "0.04em" }}>Pedidos Recentes</span>
-              <Link href="/pedidos" style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "none" }}>Ver todos →</Link>
+              <Link href="/pedidos" style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600, textDecoration: "none", minHeight: "44px", display: "inline-flex", alignItems: "center", padding: "0 4px" }}>Ver todos →</Link>
             </div>
 
             <div className="m-hide" style={{ overflowX: "auto" }}>
@@ -369,10 +369,10 @@ export default async function DashboardPage() {
                           {STATUS_LABEL[p.status] ?? p.status}
                         </span>
                       </div>
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px" }}>
-                        <div style={{ display: "flex", gap: "8px", color: "#64748b", flexWrap: "wrap" }}>
-                          {m && <span>👤 {m.nome}</span>}
-                          {v && <span>🚚 {v.placa}</span>}
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "12px", gap: "8px" }}>
+                        <div style={{ display: "flex", gap: "8px", color: "#64748b", minWidth: 0, overflow: "hidden" }}>
+                          {m && <span style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={m.nome}>👤 {m.nome}</span>}
+                          {v && <span style={{ flexShrink: 0 }}>🚚 {v.placa}</span>}
                         </div>
                         <span style={{ color: "#16a34a", fontWeight: 600, flexShrink: 0 }}>
                           {p.valor_pedido != null ? fmtBRL(p.valor_pedido) : ""}

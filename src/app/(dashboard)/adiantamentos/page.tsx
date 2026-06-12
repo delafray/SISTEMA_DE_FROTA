@@ -70,6 +70,8 @@ export default function AdiantamentosPage() {
 
   // --- debounce da busca ---
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Bloqueio síncrono para "Carregar mais" — evita duplo toque antes do re-render
+  const carregandoMaisRef = useRef(false);
 
   // Ordenação no cabeçalho — corre no SERVIDOR (lista paginada).
   // Ao reordenar, volta para a primeira página para não exibir página parcial.
@@ -280,9 +282,11 @@ export default function AdiantamentosPage() {
   // "Carregar mais"
   // -----------------------------------------------------------------------
   const handleCarregarMais = () => {
-    if (!loadingMais) {
-      buscarPagina(pagina + 1, busca, filtroStatus, true, ordem);
-    }
+    if (carregandoMaisRef.current || loadingMais) return;
+    carregandoMaisRef.current = true;
+    buscarPagina(pagina + 1, busca, filtroStatus, true, ordem).finally(() => {
+      carregandoMaisRef.current = false;
+    });
   };
 
   // -----------------------------------------------------------------------
@@ -385,7 +389,7 @@ export default function AdiantamentosPage() {
                     </Td>
                     <Td style={{ textAlign: "right" }}>
                       <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                        <a href={`/adiantamentos/${a.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                        <Btn href={`/adiantamentos/${a.id}/editar`} variant="outline" size="xs">Editar</Btn>
                         <DeleteBtn id={a.id} table="adiantamentos" label="adiantamento" />
                       </div>
                     </Td>
@@ -412,7 +416,9 @@ export default function AdiantamentosPage() {
 
         {/* Mobile: cards */}
         <MobileList count={linhas.length} label="adiantamentos">
-          {loading ? null : linhas.map(a => {
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando adiantamentos...</div>
+          ) : linhas.map(a => {
             const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
             const statusColor = a.status === "aprovado" ? "#16a34a" : a.status === "recusado" ? "#ef4444" : a.status === "prestado" ? "#2563eb" : "#eab308";
             return (

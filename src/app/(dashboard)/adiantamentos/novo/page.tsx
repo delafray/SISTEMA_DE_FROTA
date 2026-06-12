@@ -42,11 +42,14 @@ export default function NovoAdiantamentoPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  const normNum = (s: string) => parseFloat(s.replace(",", "."));
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
     if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
-    if (!f.valor || parseFloat(f.valor) <= 0) { setErr("Informe um valor válido"); return; }
+    const valorNum = normNum(f.valor);
+    if (!f.valor || isNaN(valorNum) || valorNum <= 0) { setErr("Informe um valor válido (use vírgula ou ponto como separador decimal)"); return; }
     setSaving(true);
     // Pagamento HERDA a empresa do MOTORISTA (o adiantamento é do funcionário da empresa).
     const empresa_id = await empresaDoMotorista(supabase, f.motorista_id);
@@ -56,7 +59,7 @@ export default function NovoAdiantamentoPage() {
       empresa_id,
       motorista_id: f.motorista_id,
       tipo: f.tipo,
-      valor: parseFloat(f.valor),
+      valor: valorNum,
       justificativa: f.justificativa || null,
       data_pagamento: f.data_pagamento || null,
       status: f.status,
@@ -72,13 +75,13 @@ export default function NovoAdiantamentoPage() {
       <PageHeader
         title="Novo Adiantamento"
         actions={
-          <>
+          <span className="m-hide">
             <Btn href="/adiantamentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
-          </>
+          </span>
         }
       />
 
@@ -112,10 +115,9 @@ export default function NovoAdiantamentoPage() {
                 <input
                   value={f.valor}
                   onChange={set("valor")}
-                  type="number"
+                  type="text"
                   inputMode="decimal"
-                  step="0.01"
-                  min="0.01"
+                  pattern="[0-9]*[.,]?[0-9]*"
                   placeholder="0,00"
                   style={inputStyle}
                 />
@@ -128,6 +130,11 @@ export default function NovoAdiantamentoPage() {
                   <option value="recusado">Recusado</option>
                   <option value="prestado">Prestado</option>
                 </select>
+                {f.status !== "pendente" && (
+                  <div style={{ marginTop: "6px", padding: "8px 10px", background: "#fef9c3", border: "1px solid #fde047", borderRadius: "6px", fontSize: "12px", color: "#854d0e" }}>
+                    Atenção: você está criando o adiantamento já como &quot;{f.status}&quot;. Confirme que isso está correto antes de salvar.
+                  </div>
+                )}
               </FormField>
 
               <FormField label="Data de Pagamento">

@@ -22,6 +22,7 @@ export default function NovoPedidoPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<TabId>("operacional");
+  const [camposInvalidos, setCamposInvalidos] = useState<Set<string>>(new Set());
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -70,12 +71,18 @@ export default function NovoPedidoPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
+    setCamposInvalidos(new Set());
     if (!f.veiculo_id || !f.motorista_id) {
       setTab("operacional");
+      const invalidos = new Set<string>();
+      if (!f.veiculo_id) invalidos.add("veiculo_id");
+      if (!f.motorista_id) invalidos.add("motorista_id");
+      setCamposInvalidos(invalidos);
       setErr("Preencha: Veículo e Motorista"); return;
     }
     if (!f.km_inicial) {
       setTab("cronograma");
+      setCamposInvalidos(new Set(["km_inicial"]));
       setErr("Preencha: KM Inicial"); return;
     }
     setSaving(true);
@@ -120,9 +127,6 @@ export default function NovoPedidoPage() {
           <>
             <Btn href="/entregas" variant="ghost">← Voltar</Btn>
             <Btn href="/entregas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving || sem_recursos}>
-              {saving ? "Salvando..." : "Salvar"}
-            </Btn>
           </>
         }
       />
@@ -159,10 +163,11 @@ export default function NovoPedidoPage() {
                 <FormField label="Veículo *">
                   <select value={f.veiculo_id} onChange={(e) => {
                     set("veiculo_id")(e);
+                    setCamposInvalidos(prev => { const s = new Set(prev); s.delete("veiculo_id"); return s; });
                     const v = veiculos.find(v => v.id === e.target.value);
                     if (v?.km_atual != null)
                       setF(p => ({ ...p, veiculo_id: e.target.value, km_inicial: String(v.km_atual) }));
-                  }} style={selectStyle}>
+                  }} style={{ ...selectStyle, ...(camposInvalidos.has("veiculo_id") ? { border: "2px solid #ef4444" } : {}) }}>
                     <option value="">— Selecione —</option>
                     {veiculos.map(v => (
                       <option key={v.id} value={v.id}>{v.placa} — {v.marca} {v.modelo}</option>
@@ -174,8 +179,9 @@ export default function NovoPedidoPage() {
                 <FormField label="Motorista *">
                   <select value={f.motorista_id} onChange={(e) => {
                     set("motorista_id")(e);
+                    setCamposInvalidos(prev => { const s = new Set(prev); s.delete("motorista_id"); return s; });
                     setMotoristaSel(motoristas.find(m => m.id === e.target.value) ?? null);
-                  }} style={selectStyle}>
+                  }} style={{ ...selectStyle, ...(camposInvalidos.has("motorista_id") ? { border: "2px solid #ef4444" } : {}) }}>
                     <option value="">— Selecione —</option>
                     {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                   </select>
@@ -201,7 +207,7 @@ export default function NovoPedidoPage() {
             <FormSection title="Quilometragem">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *" hint={veiculoSel?.km_atual != null ? `Sugestão: ${veiculoSel.km_atual.toLocaleString("pt-BR")} km (atual do veículo)` : undefined}>
-                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" inputMode="decimal" style={inputStyle} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
+                  <input value={f.km_inicial} onChange={e => { set("km_inicial")(e); setCamposInvalidos(prev => { const s = new Set(prev); s.delete("km_inicial"); return s; }); }} type="number" step="0.1" inputMode="decimal" style={{ ...inputStyle, ...(camposInvalidos.has("km_inicial") ? { border: "2px solid #ef4444" } : {}) }} placeholder={veiculoSel?.km_atual?.toString() ?? "0"} />
                   {veiculoSel?.km_atual && parseFloat(f.km_inicial || "0") < veiculoSel.km_atual && f.km_inicial && (
                     <p style={{ color: "#eab308", fontSize: "10px", marginTop: "4px" }}>⚠ KM menor que o atual do veículo ({veiculoSel.km_atual.toLocaleString("pt-BR")})</p>
                   )}

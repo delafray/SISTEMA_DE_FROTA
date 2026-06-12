@@ -152,8 +152,8 @@ export default function PedidoDetalhePage() {
           subtitle={`Criado em ${pedido.created_at ? new Date(pedido.created_at).toLocaleDateString("pt-BR") : "—"}`}
           actions={
             <>
-              <Btn href="/entregas" variant="ghost">← Voltar</Btn>
-              <Btn variant="outline" onClick={() => window.print()}>🖨️ Imprimir</Btn>
+              <Btn href="/entregas" variant="ghost" className="m-hide">← Voltar</Btn>
+              <Btn variant="outline" onClick={() => window.print()} className="m-hide">🖨️ Imprimir</Btn>
               <Btn href={`/entregas/${id}/editar`} variant="outline">Editar</Btn>
             </>
           }
@@ -231,8 +231,8 @@ export default function PedidoDetalhePage() {
                   <tbody>
                     {entregas.map(e => (
                       <Tr key={e.id}>
-                        <Td>{e.origem}</Td>
-                        <Td>{e.destino}</Td>
+                        <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.origem}>{e.origem}</Td>
+                        <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.destino}>{e.destino}</Td>
                         <Td>{e.tipo_carga ?? "—"}</Td>
                         <Td>{e.status}</Td>
                       </Tr>
@@ -245,40 +245,59 @@ export default function PedidoDetalhePage() {
 
           <div style={{ gridColumn: "span 2", overflowX: "auto" }}>
             <FormSection title={`Abastecimentos do Veículo (${abastecimentos.length})`}>
+              <p style={{ fontSize: "11px", color: "#94a3b8", margin: "0 0 8px" }}>Abastecimentos do veículo — todos os registros, não filtrados por pedido.</p>
               {abastecimentos.length === 0 ? (
                 <p style={{ fontSize: "13px", color: "#94a3b8", margin: 0 }}>Nenhum abastecimento registrado para o veículo.</p>
               ) : (
                 <>
-                  <DataTable>
-                    <thead>
-                      <tr>
-                        <Th>Data</Th>
-                        <Th>Posto</Th>
-                        <Th>KM</Th>
-                        <Th>Litros</Th>
-                        <Th>R$/L</Th>
-                        <Th>Total</Th>
-                        <Th>Status</Th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {abastecimentos.map(a => (
-                        <Tr key={a.id}>
-                          <Td>{a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}</Td>
-                          <Td>{a.posto ?? "—"}</Td>
-                          <Td>{a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</Td>
-                          <Td>{a.litros.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} L</Td>
-                          <Td>{a.valor_litro != null ? fmtBRL(a.valor_litro) : "—"}</Td>
-                          <Td><strong>{fmtBRL(a.valor_total)}</strong></Td>
-                          <Td>
-                            {a.confirmado
-                              ? <span style={{ color: "#16a34a", fontWeight: 600 }}>Confirmado</span>
-                              : <span style={{ color: "#94a3b8" }}>Pendente</span>}
-                          </Td>
-                        </Tr>
-                      ))}
-                    </tbody>
-                  </DataTable>
+                  <div className="m-hide">
+                    <DataTable>
+                      <thead>
+                        <tr>
+                          <Th>Data</Th>
+                          <Th>Posto</Th>
+                          <Th>KM</Th>
+                          <Th>Litros</Th>
+                          <Th>R$/L</Th>
+                          <Th>Total</Th>
+                          <Th>Status</Th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {abastecimentos.map(a => (
+                          <Tr key={a.id}>
+                            <Td>{a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}</Td>
+                            <Td>{a.posto ?? "—"}</Td>
+                            <Td>{a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</Td>
+                            <Td>{a.litros.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} L</Td>
+                            <Td>{a.valor_litro != null ? fmtBRL(a.valor_litro) : "—"}</Td>
+                            <Td><strong>{fmtBRL(a.valor_total)}</strong></Td>
+                            <Td>
+                              {a.confirmado
+                                ? <span style={{ color: "#16a34a", fontWeight: 600 }}>Confirmado</span>
+                                : <span style={{ color: "#94a3b8" }}>Pendente</span>}
+                            </Td>
+                          </Tr>
+                        ))}
+                      </tbody>
+                    </DataTable>
+                  </div>
+                  <div className="m-show-block" style={{ display: "none", flexDirection: "column", gap: "8px" }}>
+                    {abastecimentos.map(a => (
+                      <div key={a.id} style={{ background: "#f8fafc", borderRadius: "8px", padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                          <span style={{ fontSize: "13px", fontWeight: 600, color: "#1e293b" }}>{a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—"}</span>
+                          <strong style={{ fontSize: "13px", color: "#dc2626" }}>{fmtBRL(a.valor_total)}</strong>
+                        </div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "4px 8px", fontSize: "12px", color: "#475569" }}>
+                          <span>Posto: {a.posto ?? "—"}</span>
+                          <span>KM: {a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</span>
+                          <span>Litros: {a.litros.toLocaleString("pt-BR", { minimumFractionDigits: 2 })} L</span>
+                          <span style={{ color: a.confirmado ? "#16a34a" : "#94a3b8", fontWeight: 600 }}>{a.confirmado ? "Confirmado" : "Pendente"}</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                   <div style={{ marginTop: "10px", textAlign: "right", fontSize: "13px", color: "#475569" }}>
                     Total em abastecimentos:{" "}
                     <strong style={{ color: "#dc2626" }}>

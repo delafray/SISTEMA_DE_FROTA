@@ -61,8 +61,8 @@ export function LinhaDespacho({
       </Td>
 
       {/* Cliente */}
-      <Td>
-        <div style={{ fontWeight: 600, color: "#1e293b" }}>{cliente}</div>
+      <Td style={{ maxWidth: "180px" }}>
+        <div style={{ fontWeight: 600, color: "#1e293b", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={cliente}>{cliente}</div>
         <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
           Cadastrado em {fmtDataCadastro(p.created_at)}
         </div>
@@ -73,7 +73,7 @@ export function LinhaDespacho({
 
       {/* Destinos */}
       <Td style={{ maxWidth: "240px" }}>
-        <span style={{ color: "#475569" }}>{resumoDestinos(entregas)}</span>
+        <span style={{ color: "#475569", display: "block", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={resumoDestinos(entregas)}>{resumoDestinos(entregas)}</span>
       </Td>
 
       {/* Caminhão / Motorista */}

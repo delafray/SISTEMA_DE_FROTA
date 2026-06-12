@@ -106,8 +106,13 @@ export default function EditarMotoristaPage() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setErr("");
-    if (!f.nome || !f.cpf || !f.whatsapp || !f.cnh_numero || !f.cnh_validade) {
-      setErr("Preencha os campos obrigatórios: Nome, CPF, WhatsApp, CNH e Validade CNH"); return;
+    if (!f.cnh_numero || !f.cnh_validade) {
+      setTab("cnh");
+      setErr("Preencha os campos obrigatórios na aba CNH: Número CNH e Validade"); return;
+    }
+    if (!f.nome || !f.cpf || !f.whatsapp) {
+      setTab("dados");
+      setErr("Preencha os campos obrigatórios na aba Dados Pessoais: Nome, CPF e WhatsApp"); return;
     }
     setSaving(true);
     const { error: dbErr } = await supabase.from("motoristas").update({
@@ -154,10 +159,14 @@ export default function EditarMotoristaPage() {
         actions={
           <>
             <Btn href="/motoristas" variant="ghost">← Voltar</Btn>
-            <span className="m-hide"><Btn href="/motoristas" variant="outline">Cancelar</Btn></span>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Atualizar"}
-            </Btn>
+            {tab !== "veiculo" && tab !== "acerto" && (
+              <>
+                <span className="m-hide"><Btn href="/motoristas" variant="outline">Cancelar</Btn></span>
+                <Btn type="submit" variant="primary" loading={saving}>
+                  Atualizar
+                </Btn>
+              </>
+            )}
           </>
         }
       />
@@ -354,7 +363,7 @@ export default function EditarMotoristaPage() {
                       </div>
                       <p style={{ fontSize: "13px", color: "#64748b", marginTop: "8px" }}>
                         O vínculo motorista↔veículo agora é gerenciado (com histórico) na tela do <b>Veículo</b>, no bloco “Responsável / Vínculo”. Aqui é só leitura.
-                        {v && <> <a href={`/veiculos/${v.id}/editar`} style={{ color: "#2563eb", fontWeight: 600 }}>Abrir veículo →</a></>}
+                        {v && <> <Btn href={`/veiculos/${v.id}/editar`} size="sm" variant="outline">Abrir veículo →</Btn></>}
                       </p>
                     </div>
                   );

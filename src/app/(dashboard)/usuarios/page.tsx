@@ -185,7 +185,7 @@ export default function UsuariosPage() {
                     <Td style={{ textAlign: "right" }}>
                       {!isMe && (
                         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                          <a href={`/usuarios/${u.usuario_id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                          <Btn href={`/usuarios/${u.usuario_id}/editar`} variant="outline" size="xs">Editar</Btn>
                           <RemoverUsuarioBtn usuarioId={u.usuario_id} empresaId={empresaId} />
                         </div>
                       )}

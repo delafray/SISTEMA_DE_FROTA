@@ -281,6 +281,7 @@ export default function NovoPedidoSimplePage() {
       setSaving(false);
       // O pedido já foi criado; o modal só decide se salva os locais no cadastro.
     } else {
+      setSaving(false);
       router.push(`/pedidos/${pedido.id}`);
       router.refresh();
     }
@@ -292,7 +293,7 @@ export default function NovoPedidoSimplePage() {
       const aGravar = avulsosParaSalvar.filter(l => l.nome.trim());
       if (aGravar.length > 0) {
         setSalvandoLocal(true);
-                await supabase.from("locais_carregamento").insert(
+        const { error: errLocal } = await supabase.from("locais_carregamento").insert(
           aGravar.map((l, i) => ({
             empresa_id: empresaId,
             cliente_id: clienteId,
@@ -303,6 +304,11 @@ export default function NovoPedidoSimplePage() {
           }))
         );
         setSalvandoLocal(false);
+        if (errLocal) {
+          setErr(`Pedido criado, mas erro ao salvar local no cadastro: ${errLocal.message}`);
+          setModalSalvarLocal(false);
+          return;
+        }
       }
     }
     setModalSalvarLocal(false);
@@ -330,7 +336,7 @@ export default function NovoPedidoSimplePage() {
               Cliente
             </h2>
 
-            <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", cursor: "pointer", fontSize: "14px", color: "#475569" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "8px", marginBottom: "16px", cursor: "pointer", fontSize: "14px", color: "#475569", minHeight: "44px" }}>
               <input
                 type="checkbox"
                 checked={avulso}
@@ -382,9 +388,11 @@ export default function NovoPedidoSimplePage() {
                         type="button"
                         onClick={limparCliente}
                         style={{
-                          position: "absolute", right: "10px", top: "50%", transform: "translateY(-50%)",
+                          position: "absolute", right: "4px", top: "50%", transform: "translateY(-50%)",
                           background: "none", border: "none", cursor: "pointer",
                           color: "#94a3b8", fontSize: "18px", lineHeight: 1,
+                          width: "44px", height: "44px",
+                          display: "flex", alignItems: "center", justifyContent: "center",
                         }}
                         title="Limpar seleção"
                       >

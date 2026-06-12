@@ -76,6 +76,7 @@ export default function DadosRegraPage() {
   const [loading, setLoading] = useState(true);
   const [salvando, setSalvando] = useState(false);
   const [msg, setMsg] = useState("");
+  const [temAvisoValidacao, setTemAvisoValidacao] = useState(false);
 
   // Estado da seção de escrita
   const [tabelaEscrita, setTabelaEscrita] = useState("");
@@ -178,7 +179,8 @@ export default function DadosRegraPage() {
             if (!valOk && problemas.length > 0) {
               avisoValidacaoTs.current = Date.now();
               const lista = problemas.map((p) => `${p.tabela}.${p.coluna} (${p.tipo})`).join(", ");
-              setMsg(`⚠️ Problemas: ${lista}. Clique Salvar novamente para gravar mesmo assim.`);
+              setMsg(`Problemas encontrados: ${lista}`);
+              setTemAvisoValidacao(true);
               return; // não salva
             }
           }
@@ -193,6 +195,7 @@ export default function DadosRegraPage() {
         .update({ escopo_dados: JSON.parse(JSON.stringify(escopoDadosFinal)), atualizado_em: new Date().toISOString() })
         .eq("id", id);
       avisoValidacaoTs.current = 0; // resetar após salvar
+      setTemAvisoValidacao(false);
       setMsg(error ? `Erro: ${error.message}` : "Salvo ✓");
       setTimeout(() => setMsg(""), 2500);
     } finally {
@@ -219,16 +222,29 @@ export default function DadosRegraPage() {
       <PageHeader title={`Tabelas e campos — ${nome}`} actions={
         <>
           <Btn href={`/regras/${id}/editar`} variant="ghost">← Voltar</Btn>
+          {temAvisoValidacao && (
+            <Btn onClick={salvar} loading={salvando} variant="danger">Salvar mesmo assim</Btn>
+          )}
           <Btn onClick={salvar} loading={salvando}>Salvar</Btn>
         </>
       } />
 
+      {temAvisoValidacao && msg && (
+        <div role="alert" style={{ padding: "10px 14px", background: "#fffbeb", border: "none", borderBottom: "2px solid #fcd34d", color: "#92400e", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+          <span>⚠️ {msg} — Clique em <b>Salvar mesmo assim</b> para gravar com esses problemas.</span>
+          <button onClick={() => { setMsg(""); setTemAvisoValidacao(false); avisoValidacaoTs.current = 0; }} style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: 700, fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+        </div>
+      )}
+
+      {!temAvisoValidacao && msg && (
+        <div role="status" style={{ padding: "8px 14px", background: msg.startsWith("Erro") ? "#fef2f2" : "#f0fdf4", borderBottom: `1px solid ${msg.startsWith("Erro") ? "#fecaca" : "#bbf7d0"}`, color: msg.startsWith("Erro") ? "#b91c1c" : "#15803d", fontSize: 13 }}>
+          {msg}
+        </div>
+      )}
+
       <div style={{ padding: "8px 14px", fontSize: 12, color: "#64748b", background: "#fff", borderBottom: "1px solid #e2e8f0" }}>
         Marque, por <b>coluna</b>, o que <b>esta regra</b> pode: <b style={{ color: "#1d4ed8" }}>Consulta</b> (lê) · <b style={{ color: "#b45309" }}>Altera</b> (muda) · <b style={{ color: "#15803d" }}>Inclui</b> (cria).
-        As ações <b>fora do Acesso da regra</b> ({acoesRegra.join(", ") || "—"}) ficam travadas.{" "}
-        {msg && (
-          <b style={{ marginLeft: 10, color: msg.startsWith("⚠️") ? "#b45309" : "#16a34a" }}>{msg}</b>
-        )}
+        As ações <b>fora do Acesso da regra</b> ({acoesRegra.join(", ") || "—"}) ficam travadas.
       </div>
 
       {/* Matriz de colunas × ações — desktop */}
@@ -387,7 +403,8 @@ export default function DadosRegraPage() {
           {/* Lista de campos */}
           {tabelaEscrita && (
             <>
-              <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 10 }}>
+              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 10, minWidth: 600 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
                     <th style={thSty}>Coluna</th>
@@ -493,7 +510,7 @@ export default function DadosRegraPage() {
                           type="button"
                           title="Remover este campo"
                           onClick={() => setCamposEscrita(camposEscrita.filter((_, i) => i !== idx))}
-                          style={{ border: "none", background: "none", cursor: "pointer", color: "#ef4444", fontWeight: 700, fontSize: 15, lineHeight: 1, padding: "0 4px" }}
+                          style={{ border: "none", background: "none", cursor: "pointer", color: "#ef4444", fontWeight: 700, fontSize: 15, lineHeight: 1, minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
                         >
                           ×
                         </button>
@@ -502,6 +519,7 @@ export default function DadosRegraPage() {
                   ))}
                 </tbody>
               </table>
+              </div>
 
               <button
                 type="button"

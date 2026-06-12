@@ -68,6 +68,9 @@ export default function EditarUsuarioPage() {
         actions={
           <>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
+            <Btn type="submit" form="edit-user-form" size="md" disabled={pending}>
+              {pending ? "Salvando..." : "Atualizar Usuário"}
+            </Btn>
           </>
         }
       />

@@ -67,7 +67,7 @@ export function CadastroApiEditor({ apiId, semCadastro, email, cartaoFinal, obse
             border: "1px solid #bfdbfe",
             borderRadius: 6,
             padding: "8px 12px",
-            minHeight: 36,
+            minHeight: 44,
             cursor: "pointer",
           }}
         >

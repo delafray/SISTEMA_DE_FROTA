@@ -2,6 +2,7 @@
 import { useState, useEffect } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { DataTable, Th, Td, Tr, Btn, Badge, EmptyState, FormField, inputStyle, selectStyle, Alert } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 
 type Avaria = {
   id: string; created_at: string | null; descricao_motorista: string | null;
@@ -23,6 +24,9 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
   const [showForm, setShowForm] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [erro, setErro] = useState("");
+  const [confirmExcluir, setConfirmExcluir] = useState<string | null>(null);
+  const [confirmStatus, setConfirmStatus] = useState<{ id: string; novo: string } | null>(null);
+  const [salvandoStatus, setSalvandoStatus] = useState(false);
   const [f, setF] = useState({
     descricao: "", urgencia: "media", status: "aberta",
   });
@@ -58,17 +62,28 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
     await carregar();
   };
 
-  const mudarStatus = async (av: Avaria, novo: string) => {
+  const mudarStatusPedirConfirm = (av: Avaria, novo: string) => {
+    if (novo === "resolvida" || novo === "cancelada") {
+      setConfirmStatus({ id: av.id, novo });
+    } else {
+      void executarMudarStatus(av.id, novo, av.status);
+    }
+  };
+
+  const executarMudarStatus = async (id: string, novo: string, statusAnterior: string) => {
+    setSalvandoStatus(true);
     const update: { status: string; resolvido_em?: string | null } = { status: novo };
     if (novo === "resolvida") update.resolvido_em = new Date().toISOString();
-    if (av.status === "resolvida" && novo !== "resolvida") update.resolvido_em = null;
-    const { error } = await supabase.from("avarias").update(update).eq("id", av.id);
+    if (statusAnterior === "resolvida" && novo !== "resolvida") update.resolvido_em = null;
+    const { error } = await supabase.from("avarias").update(update).eq("id", id);
+    setSalvandoStatus(false);
+    setConfirmStatus(null);
     if (error) { setErro(error.message); return; }
-    setAvarias(a => a.map(x => x.id === av.id ? { ...x, ...update } : x));
+    setAvarias(a => a.map(x => x.id === id ? { ...x, ...update } : x));
   };
 
   const excluir = async (id: string) => {
-    if (!confirm("Excluir esta avaria?")) return;
+    setConfirmExcluir(null);
     const { error } = await supabase.from("avarias").delete().eq("id", id);
     if (error) { setErro(error.message); return; }
     setAvarias(a => a.filter(x => x.id !== id));
@@ -128,56 +143,124 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
       {avarias.length === 0
         ? <EmptyState icon="🛠" message="Nenhuma avaria registrada para este veículo." />
         : (
-          <DataTable count={avarias.length} label="avarias">
-            <thead>
-              <tr>
-                <Th>Data</Th>
-                <Th>Descrição</Th>
-                <Th>Motorista</Th>
-                <Th>Urgência</Th>
-                <Th>Status</Th>
-                <Th>Resolvida em</Th>
-                <Th style={{ width: "40px" }} />
-              </tr>
-            </thead>
-            <tbody>
+          <>
+            {/* Desktop */}
+            <div className="m-hide">
+              <DataTable count={avarias.length} label="avarias">
+                <thead>
+                  <tr>
+                    <Th>Data</Th>
+                    <Th>Descrição</Th>
+                    <Th>Motorista</Th>
+                    <Th>Urgência</Th>
+                    <Th>Status</Th>
+                    <Th>Resolvida em</Th>
+                    <Th style={{ width: "40px" }} />
+                  </tr>
+                </thead>
+                <tbody>
+                  {avarias.map(av => {
+                    const m = Array.isArray(av.motoristas) ? av.motoristas[0] : av.motoristas;
+                    const desc = av.descricao_motorista || av.descricao_ia || "—";
+                    return (
+                      <Tr key={av.id}>
+                        <Td style={{ whiteSpace: "nowrap" }}>{fmtDateTime(av.created_at)}</Td>
+                        <Td style={{ maxWidth: "280px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={desc}>
+                          {desc}
+                          {av.foto_urls && av.foto_urls.length > 0 && (
+                            <span style={{ fontSize: "10px", color: "#94a3b8", marginLeft: "4px" }}>
+                              📷 {av.foto_urls.length}
+                            </span>
+                          )}
+                        </Td>
+                        <Td style={{ color: "#64748b" }}>{m?.nome ?? "—"}</Td>
+                        <Td><Badge variant={URG_VARIANT[av.urgencia] ?? "default"}>{av.urgencia}</Badge></Td>
+                        <Td>
+                          <select value={av.status} onChange={e => mudarStatusPedirConfirm(av, e.target.value)}
+                            style={{ ...selectStyle, padding: "8px 6px", fontSize: "11px", width: "auto", minHeight: "44px" }}>
+                            <option value="aberta">Aberta</option>
+                            <option value="em_reparo">Em reparo</option>
+                            <option value="resolvida">Resolvida</option>
+                            <option value="cancelada">Cancelada</option>
+                          </select>
+                        </Td>
+                        <Td style={{ color: "#64748b", fontSize: "11px", whiteSpace: "nowrap" }}>{fmtDateTime(av.resolvido_em)}</Td>
+                        <Td>
+                          <button type="button" onClick={() => setConfirmExcluir(av.id)}
+                            style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", minWidth: "44px", padding: "0 8px" }}
+                            title="Excluir">🗑</button>
+                        </Td>
+                      </Tr>
+                    );
+                  })}
+                </tbody>
+              </DataTable>
+            </div>
+            {/* Mobile */}
+            <MobileList count={avarias.length} label="avarias">
               {avarias.map(av => {
                 const m = Array.isArray(av.motoristas) ? av.motoristas[0] : av.motoristas;
                 const desc = av.descricao_motorista || av.descricao_ia || "—";
                 return (
-                  <Tr key={av.id}>
-                    <Td>{fmtDateTime(av.created_at)}</Td>
-                    <Td style={{ maxWidth: "320px" }}>
-                      <div style={{ whiteSpace: "normal", lineHeight: 1.4 }}>{desc}</div>
-                      {av.foto_urls && av.foto_urls.length > 0 && (
-                        <div style={{ fontSize: "10px", color: "#94a3b8", marginTop: "2px" }}>
-                          📷 {av.foto_urls.length} foto{av.foto_urls.length !== 1 ? "s" : ""}
-                        </div>
-                      )}
-                    </Td>
-                    <Td style={{ color: "#64748b" }}>{m?.nome ?? "—"}</Td>
-                    <Td><Badge variant={URG_VARIANT[av.urgencia] ?? "default"}>{av.urgencia}</Badge></Td>
-                    <Td>
-                      <select value={av.status} onChange={e => mudarStatus(av, e.target.value)}
-                        style={{ ...selectStyle, padding: "8px 6px", fontSize: "11px", width: "auto", minHeight: "44px" }}>
-                        <option value="aberta">Aberta</option>
-                        <option value="em_reparo">Em reparo</option>
-                        <option value="resolvida">Resolvida</option>
-                        <option value="cancelada">Cancelada</option>
-                      </select>
-                    </Td>
-                    <Td style={{ color: "#64748b", fontSize: "11px" }}>{fmtDateTime(av.resolvido_em)}</Td>
-                    <Td>
-                      <button type="button" onClick={() => excluir(av.id)}
-                        style={{ background: "transparent", border: "none", cursor: "pointer", color: "#ef4444", fontSize: "13px" }}
-                        title="Excluir">🗑</button>
-                    </Td>
-                  </Tr>
+                  <MobileCard
+                    key={av.id}
+                    title={desc.length > 60 ? desc.slice(0, 60) + "…" : desc}
+                    subtitle={fmtDateTime(av.created_at)}
+                    badge={<Badge variant={URG_VARIANT[av.urgencia] ?? "default"}>{av.urgencia}</Badge>}
+                    details={[
+                      { label: "Motorista", value: m?.nome ?? "—" },
+                      { label: "Status", value: av.status },
+                      { label: "Resolvida em", value: fmtDateTime(av.resolvido_em) },
+                    ]}
+                    actions={
+                      <button type="button" onClick={() => setConfirmExcluir(av.id)}
+                        style={{ background: "transparent", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 12px" }}
+                        title="Excluir">🗑 Excluir</button>
+                    }
+                  />
                 );
               })}
-            </tbody>
-          </DataTable>
+            </MobileList>
+          </>
         )}
+
+      {/* Modal confirmação de exclusão */}
+      {confirmExcluir && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "20px", width: "100%", maxWidth: "360px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}>Excluir avaria?</h3>
+            <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>Esta ação não pode ser desfeita.</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn type="button" variant="outline" onClick={() => setConfirmExcluir(null)}>Voltar</Btn>
+              <Btn type="button" variant="danger" onClick={() => excluir(confirmExcluir)}>Confirmar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal confirmação de status terminal */}
+      {confirmStatus && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.5)", zIndex: 100, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "20px", width: "100%", maxWidth: "360px", boxShadow: "0 10px 40px rgba(0,0,0,0.2)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", fontWeight: 700 }}>
+              Marcar como {confirmStatus.novo === "resolvida" ? "Resolvida" : "Cancelada"}?
+            </h3>
+            <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 16px" }}>
+              Este é um estado terminal. Confirma a mudança de status?
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn type="button" variant="outline" onClick={() => setConfirmStatus(null)} disabled={salvandoStatus}>Voltar</Btn>
+              <Btn type="button" variant="primary" loading={salvandoStatus}
+                onClick={() => {
+                  const av = avarias.find(a => a.id === confirmStatus.id);
+                  if (av) executarMudarStatus(confirmStatus.id, confirmStatus.novo, av.status);
+                }}>
+                Confirmar
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

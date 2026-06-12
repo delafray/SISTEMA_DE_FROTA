@@ -189,14 +189,17 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
             {historico.map((h) => {
               const rodou = h.km_evento != null && h.km_fim != null ? h.km_fim - h.km_evento : null;
               return (
-                <div key={h.id} style={{ display: "flex", gap: 10, fontSize: 12, color: "#475569", padding: "4px 0", borderBottom: "1px solid #f8fafc", flexWrap: "wrap" }}>
-                  <span style={{ minWidth: 140, fontWeight: 600 }}>
+                <div key={h.id} style={{ display: "flex", flexDirection: "column", gap: 2, fontSize: 12, color: "#475569", padding: "6px 0", borderBottom: "1px solid #f8fafc" }}>
+                  <div style={{ fontWeight: 600, color: "#1e293b" }}>
                     {h.status === "operacional" ? nomeMot(h.motorista_id) : (STATUS_LABEL[h.status] ?? h.status)}
-                  </span>
-                  <span style={{ color: "#64748b" }}>Entregue {km(h.km_evento)} → Devolvido {km(h.km_fim)}</span>
-                  {rodou != null && <span style={{ color: "#16a34a", fontWeight: 600 }}>· rodou {km(rodou)} km</span>}
-                  <span style={{ color: "#94a3b8" }}>· {fmt(h.inicio)} → {h.fim ? fmt(h.fim) : "agora"}</span>
-                  <span style={{ marginLeft: "auto", color: "#64748b" }}>ficou {duracao(h.inicio, h.fim)}</span>
+                  </div>
+                  <div style={{ color: "#64748b" }}>
+                    KM: Entregue {km(h.km_evento)} → Devolvido {km(h.km_fim)}
+                    {rodou != null && <span style={{ color: "#16a34a", fontWeight: 600, marginLeft: 6 }}>({km(rodou)} km rodados)</span>}
+                  </div>
+                  <div style={{ color: "#94a3b8" }}>
+                    {fmt(h.inicio)} → {h.fim ? fmt(h.fim) : "agora"} · ficou {duracao(h.inicio, h.fim)}
+                  </div>
                 </div>
               );
             })}
@@ -205,8 +208,8 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
       )}
 
       {popup && (
-        <div onClick={() => setPopup(false)} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460, maxHeight: "80vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+        <div onClick={() => setPopup(false)} className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+          <div onClick={(e) => e.stopPropagation()} className="m-modal-content" style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 460, maxHeight: "80vh", overflow: "auto", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
             <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", fontWeight: 700, fontSize: 14 }}>Trocar vínculo do veículo</div>
             <div style={{ padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
               {erro && <div style={{ padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: 8, color: "#b91c1c", fontSize: 12 }}>{erro}</div>}

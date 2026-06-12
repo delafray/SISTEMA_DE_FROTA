@@ -144,9 +144,10 @@ function WhatsAppSection({ empresaId }: { empresaId: string }) {
             type="button"
             variant="primary"
             loading={loading}
+            disabled={loading || (!!qr && countdown > 0)}
             onClick={handleReconectar}
           >
-            {loading ? 'Gerando QR...' : qr ? '🔄 Novo QR' : '📱 Reconectar WhatsApp'}
+            {loading ? 'Gerando QR...' : qr ? `🔄 Novo QR (${countdown}s)` : '📱 Reconectar WhatsApp'}
           </Btn>
         </div>
 
@@ -261,10 +262,9 @@ export default function EditarEmpresaPage() {
         title={`Editar Empresa — ${form.nome_fantasia || "..."}`}
         actions={
           <>
-            <Btn href="/empresas" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/empresas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Atualizar"}
+            <Btn type="submit" variant="primary" size="md" disabled={saving}>
+              {saving ? "Salvando..." : "Atualizar Empresa"}
             </Btn>
           </>
         }

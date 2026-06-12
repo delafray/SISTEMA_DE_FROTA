@@ -140,7 +140,7 @@ export default function RegrasPage() {
                   <Td>{r.ativa ? <Badge variant="success">Ativa</Badge> : <Badge variant="default">Inativa</Badge>}</Td>
                   <Td style={{ textAlign: "right" }}>
                     <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px" }}>
-                      <a href={`/regras/${r.id}/editar`} style={{ color: "#2563eb", textDecoration: "none", fontWeight: 600, fontSize: "inherit" }}>Editar</a>
+                      <Btn href={`/regras/${r.id}/editar`} size="sm" variant="outline">Editar</Btn>
                       {!r.fixa && <DeleteBtn id={r.id} table="regras" label="regra" />}
                     </div>
                   </Td>

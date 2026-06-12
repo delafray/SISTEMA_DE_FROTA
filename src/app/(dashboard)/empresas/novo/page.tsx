@@ -79,10 +79,9 @@ export default function NovaEmpresaPage() {
         title="Cadastrar Empresa" 
         actions={
           <>
-            <Btn href="/empresas" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/empresas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Salvar"}
+            <Btn type="submit" variant="primary" size="md" disabled={saving}>
+              {saving ? "Salvando..." : "Salvar Empresa"}
             </Btn>
           </>
         }
