@@ -45,9 +45,8 @@ export function AbaRota({ pedidoId, notasMontagem, rotaExec, paradas }: AbaRotaP
         }
       >
           <p style={{ fontSize: "12px", color: "#64748b", margin: "4px 0 0", lineHeight: 1.6 }}>
-            Jogue as notas fiscais aqui: o sistema captura o <strong>endereço</strong> e os <strong>itens</strong> de
-            cada nota pra alimentar o pedido. Os itens (ex.: 3 caixas de cebola, 1 caixa de alho) por enquanto ficam
-            só anotados — depois o sistema vai propor a ordem de carregamento, quando o motorista finalizar a rota.
+            Importe as notas fiscais para registrar os <strong>endereços de entrega</strong> deste pedido.
+            O sistema captura automaticamente os dados de cada nota.
           </p>
       </Bloco>
 

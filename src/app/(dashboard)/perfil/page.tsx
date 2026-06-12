@@ -95,6 +95,7 @@ export default function PerfilPage() {
             <FormSection title="Seus dados">
               <FormField label="Nome">
                 <input value={nome} disabled style={{ ...inputStyle, background: "#f8fafc", color: "#64748b" }} />
+                <p style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px" }}>O nome só pode ser alterado pelo administrador do sistema.</p>
               </FormField>
             </FormSection>
 
@@ -137,7 +138,7 @@ export default function PerfilPage() {
             </FormSection>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: 12, paddingTop: 16, borderTop: "1px solid #e2e8f0" }}>
-              <Btn type="submit" variant="primary" disabled={saving}>
+              <Btn type="submit" variant="primary" loading={saving} disabled={saving}>
                 {saving ? "Salvando..." : "Salvar"}
               </Btn>
             </div>

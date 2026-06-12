@@ -114,6 +114,14 @@ export default function EditarMotoristaPage() {
       setTab("dados");
       setErr("Preencha os campos obrigatórios na aba Dados Pessoais: Nome, CPF e WhatsApp"); return;
     }
+    // valores em R$ aceitam vírgula do leigo e nunca viram NaN no banco
+    const normNum = (s: string) => parseFloat(s.replace(",", "."));
+    const salarioNum = f.salario_fixo ? normNum(f.salario_fixo) : null;
+    const diariaNum  = f.valor_diaria_por_pedido ? normNum(f.valor_diaria_por_pedido) : null;
+    if ((salarioNum !== null && isNaN(salarioNum)) || (diariaNum !== null && isNaN(diariaNum))) {
+      setTab("remuneracao");
+      setErr("Salário/diária inválidos. Use vírgula ou ponto como separador decimal (ex.: 1500,50)."); return;
+    }
     setSaving(true);
     const { error: dbErr } = await supabase.from("motoristas").update({
       nome: f.nome.toUpperCase(),
@@ -129,8 +137,8 @@ export default function EditarMotoristaPage() {
       cnh_validade: f.cnh_validade,
       cnh_primeira_habilitacao: f.cnh_primeira_habilitacao || null,
       cnh_ear: f.cnh_ear,
-      salario_fixo: f.salario_fixo ? parseFloat(f.salario_fixo) : null,
-      valor_diaria_por_pedido: f.valor_diaria_por_pedido ? parseFloat(f.valor_diaria_por_pedido) : null,
+      salario_fixo: salarioNum,
+      valor_diaria_por_pedido: diariaNum,
       cep: f.cep.replace(/\D/g, "") || null,
       logradouro: f.logradouro || null, numero: f.numero || null,
       complemento: f.complemento || null, bairro: f.bairro || null,
@@ -362,9 +370,13 @@ export default function EditarMotoristaPage() {
                         {v ? `${v.placa} — ${v.marca} ${v.modelo}` : "Sem veículo vinculado no momento"}
                       </div>
                       <p style={{ fontSize: "13px", color: "#64748b", marginTop: "8px" }}>
-                        O vínculo motorista↔veículo agora é gerenciado (com histórico) na tela do <b>Veículo</b>, no bloco “Responsável / Vínculo”. Aqui é só leitura.
-                        {v && <> <Btn href={`/veiculos/${v.id}/editar`} size="sm" variant="outline">Abrir veículo →</Btn></>}
+                        O vínculo motorista↔veículo agora é gerenciado (com histórico) na tela do <b>Veículo</b>, no bloco &ldquo;Responsável / Vínculo&rdquo;. Aqui é só leitura.
                       </p>
+                      {v && (
+                        <div style={{ marginTop: "12px" }}>
+                          <Btn href={`/veiculos/${v.id}/editar`} size="md" variant="outline">Abrir veículo →</Btn>
+                        </div>
+                      )}
                     </div>
                   );
                 })()}

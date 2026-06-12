@@ -106,7 +106,7 @@ export default function EditarRegraPage() {
   };
 
   const checkbox = (checked: boolean, onChange: () => void, label: string) => (
-    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "#334155" }}>
+    <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", fontSize: "14px", color: "#334155", minHeight: 44 }}>
       <input type="checkbox" checked={checked} onChange={onChange} />
       {label}
     </label>
@@ -121,7 +121,6 @@ export default function EditarRegraPage() {
         actions={
           <>
             <Btn href="/regras" variant="ghost">← Voltar</Btn>
-            <Btn href={`/regras/${id}/dados`} variant="outline">📊 Tabelas e campos</Btn>
             <Btn href="/regras" variant="outline">Cancelar</Btn>
             <Btn type="submit" variant="primary" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
           </>
@@ -196,9 +195,12 @@ export default function EditarRegraPage() {
             </FormField>
           </FormSection>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-            <Btn href="/regras" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "12px", paddingTop: "16px", borderTop: "1px solid #e2e8f0", flexWrap: "wrap" }}>
+            <Btn href={`/regras/${id}/dados`} variant="outline">📊 Tabelas e campos</Btn>
+            <div style={{ display: "flex", gap: "12px" }}>
+              <Btn href="/regras" variant="outline">Cancelar</Btn>
+              <Btn type="submit" disabled={saving}>{saving ? "Salvando..." : "Salvar"}</Btn>
+            </div>
           </div>
         </div>
       </div>

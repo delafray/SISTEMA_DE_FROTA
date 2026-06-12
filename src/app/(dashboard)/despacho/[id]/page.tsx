@@ -13,8 +13,9 @@
  */
 
 import { useState, useEffect } from "react";
-import { useParams } from "next/navigation";
+import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { temSessao } from "@/lib/auth/temSessao";
 import { PageHeader, Btn, Badge } from "@/components/ui/ds";
 import { ModalDespacho, type VeiculoOpcao, type MotoristaOpcao } from "../_components/ModalDespacho";
 import { empresaDoVeiculo, empresaDoMotorista } from "@/lib/utils/empresaDe";
@@ -37,6 +38,7 @@ const normalizarStatus = (s: string) => STATUS_FEMININO[s] ?? s;
 
 export default function DespachoDetalhePage() {
   const { id } = useParams<{ id: string }>();
+  const router = useRouter();
   const [pedido, setPedido] = useState<Pedido | null>(null);
   const [entregas, setEntregas] = useState<EntregaPedido[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,11 +66,18 @@ export default function DespachoDetalhePage() {
   const [motoristasOp, setMotoristasOp] = useState<MotoristaOpcao[]>([]);
   const [despachoSaving, setDespachoSaving] = useState(false);
   const [despachoErr, setDespachoErr] = useState("");
+  const [abrindoDespacho, setAbrindoDespacho] = useState(false);
+  // Aviso inline quando usuário toca na aba Mapa desabilitada (title não funciona no mobile)
+  const [avisoMapa, setAvisoMapa] = useState(false);
+  // Feedback de sucesso temporário ao salvar local de carregamento
+  const [sucessoLocal, setSucessoLocal] = useState(false);
   // Paradas da rota (montada pelo MOTORISTA no celular — o painel só exibe)
   const [paradas, setParadas] = useState<ParadaMapa[]>([]);
 
   useEffect(() => {
     const load = async () => {
+      // Única tela do dashboard que estava sem guard (deslogado via tela vazia)
+      if (!(await temSessao())) { router.replace("/login"); return; }
       const supabase = createClient();
       const [pedidoRes, entregasRes, paradasRes, rotaRes] = await Promise.all([
         supabase.from("pedidos")
@@ -99,21 +108,26 @@ export default function DespachoDetalhePage() {
       setLoading(false);
     };
     load();
-  }, [id]);
+  }, [id, router]);
 
   /** Abre o modal de despacho/troca (carrega caminhões/motoristas ativos 1x) */
   const abrirDespacho = async () => {
     setDespachoErr("");
     if (veiculosOp.length === 0 && pedido?.empresa_id) {
-      const supabase = createClient();
-      const [{ data: veic }, { data: mot }] = await Promise.all([
-        supabase.from("veiculos").select("id,placa,apelido,marca,modelo")
-          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("placa"),
-        supabase.from("motoristas").select("id,nome")
-          .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("nome"),
-      ]);
-      setVeiculosOp((veic ?? []) as VeiculoOpcao[]);
-      setMotoristasOp((mot ?? []) as MotoristaOpcao[]);
+      setAbrindoDespacho(true);
+      try {
+        const supabase = createClient();
+        const [{ data: veic }, { data: mot }] = await Promise.all([
+          supabase.from("veiculos").select("id,placa,apelido,marca,modelo")
+            .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("placa"),
+          supabase.from("motoristas").select("id,nome")
+            .eq("empresa_id", pedido.empresa_id).eq("ativo", true).order("nome"),
+        ]);
+        setVeiculosOp((veic ?? []) as VeiculoOpcao[]);
+        setMotoristasOp((mot ?? []) as MotoristaOpcao[]);
+      } finally {
+        setAbrindoDespacho(false);
+      }
     }
     setModalDespacho(true);
   };
@@ -194,6 +208,7 @@ export default function DespachoDetalhePage() {
   /** Grava a lista de locais (join " | ") e propaga como origem das entregas. */
   const salvarLocais = async (lista: string[]) => {
     if (!pedido) return;
+    if (salvandoLocal) return; // Enter + clique simultâneos disparavam 2 gravações
     setSalvandoLocal(true);
     setErroGravacao("");
     const supabase = createClient();
@@ -213,6 +228,8 @@ export default function DespachoDetalhePage() {
       setPedido(p => p ? { ...p, local_carregamento: texto } : p);
       setEntregas(prev => prev.map(e => ({ ...e, origem: texto ?? "Depósito" })));
       setNovoLocal("");
+      setSucessoLocal(true);
+      setTimeout(() => setSucessoLocal(false), 2500);
     } catch {
       setErroGravacao("Falha de conexão ao salvar os locais. Verifique a internet e tente de novo.");
     } finally {
@@ -250,16 +267,25 @@ export default function DespachoDetalhePage() {
     if ((abaTela !== "rota" && abaTela !== "mapa") || !pedido) return;
     let cancelado = false;
     const atualizar = async () => {
-      const supabase = createClient();
-      const [{ data: notas }] = await Promise.all([
-        supabase.from("notas_capturadas")
-          .select("id,numero,endereco,status,capturado_em")
-          .eq("pedido_id", pedido.id)
-          .in("status", ["capturada", "geocodificada"])
-          .order("capturado_em", { ascending: true }),
-        recarregarRota(),
-      ]);
-      if (!cancelado) setNotasMontagem((notas ?? []) as unknown as NotaMontagem[]);
+      try {
+        const supabase = createClient();
+        const [{ data: notas, error: errNotas }] = await Promise.all([
+          supabase.from("notas_capturadas")
+            .select("id,numero,endereco,status,capturado_em")
+            .eq("pedido_id", pedido.id)
+            .in("status", ["capturada", "geocodificada"])
+            .order("capturado_em", { ascending: true }),
+          recarregarRota(),
+        ]);
+        if (cancelado) return;
+        if (errNotas) {
+          setErroGravacao("Falha ao atualizar dados da rota. Verifique a internet.");
+          return;
+        }
+        setNotasMontagem((notas ?? []) as unknown as NotaMontagem[]);
+      } catch {
+        if (!cancelado) setErroGravacao("Falha de conexão ao atualizar a rota em tempo real.");
+      }
     };
     void atualizar();
     const intervalo = setInterval(() => { void atualizar(); }, 10_000);
@@ -318,19 +344,21 @@ export default function DespachoDetalhePage() {
         )}
 
         {/* Abas: Principal | Rota (notas + tempo real) | Mapa (só com rota montada) */}
-        <div className="m-tabs-scroll" style={{ display: "flex", gap: "8px", marginBottom: "16px" }}>
+        <div className="m-tabs-scroll" style={{ display: "flex", gap: "8px", marginBottom: avisoMapa ? "6px" : "16px" }}>
           {([["principal", "📋 Principal", true], ["rota", "🚛 Rota", true], ["mapa", "🗺️ Mapa", paradas.length > 0]] as const).map(([v, l, habilitada]) => (
             <button
               key={v}
               type="button"
               disabled={!habilitada}
-              title={!habilitada ? "Habilita quando o motorista montar a rota no celular" : undefined}
-              onClick={() => habilitada && setAbaTela(v)}
+              onClick={() => {
+                if (habilitada) { setAbaTela(v); setAvisoMapa(false); }
+                else if (v === "mapa") setAvisoMapa(true);
+              }}
               style={{
                 padding: "6px 16px", borderRadius: "20px", fontSize: "13px", fontWeight: 600,
                 minHeight: "44px",
                 cursor: habilitada ? "pointer" : "not-allowed",
-                opacity: habilitada ? 1 : 0.45,
+                opacity: habilitada ? 1 : 0.55,
                 border: abaTela === v ? "none" : "1px solid #cbd5e1",
                 background: abaTela === v ? "#2563eb" : "#fff",
                 color: abaTela === v ? "#fff" : "#475569",
@@ -340,6 +368,16 @@ export default function DespachoDetalhePage() {
             </button>
           ))}
         </div>
+        {avisoMapa && (
+          <div style={{
+            marginBottom: "12px", padding: "8px 12px",
+            background: "#fefce8", border: "1px solid #fde68a", borderRadius: "8px",
+            fontSize: "12px", color: "#92400e", display: "flex", alignItems: "center", gap: "8px",
+          }}>
+            <span>🗺️ O mapa fica disponível quando o motorista montar a rota no celular.</span>
+            <button type="button" onClick={() => setAvisoMapa(false)} style={{ background: "none", border: "none", cursor: "pointer", color: "#92400e", fontSize: "14px", marginLeft: "auto", minHeight: "32px", minWidth: "32px" }}>✕</button>
+          </div>
+        )}
 
         {abaTela === "principal" && (
           <AbaPrincipal
@@ -359,6 +397,8 @@ export default function DespachoDetalhePage() {
             onNovoLocalChange={setNovoLocal}
             onSalvarLocais={salvarLocais}
             onAbrirDespacho={abrirDespacho}
+            abrindoDespacho={abrindoDespacho}
+            sucessoLocal={sucessoLocal}
             onChangeStatus={(s) => setConfirmStatus(s)}
             onCancelar={() => setConfirmStatus("cancelada")}
           />

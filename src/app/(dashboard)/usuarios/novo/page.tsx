@@ -37,7 +37,7 @@ export default function NovoUsuarioPage() {
         actions={
           <>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-            <Btn type="submit" form="user-form" size="md" disabled={pending}>
+            <Btn type="submit" form="user-form" size="md" loading={pending} disabled={pending || !!loginAviso}>
               {pending ? "Criando..." : "Salvar Usuário"}
             </Btn>
           </>
@@ -142,7 +142,7 @@ export default function NovoUsuarioPage() {
             </div>
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={pending} form="user-form">
+              <Btn type="submit" loading={pending} disabled={pending || !!loginAviso} form="user-form">
                 {pending ? "Criando usuário..." : "Salvar Usuário"}
               </Btn>
             </div>

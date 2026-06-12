@@ -268,6 +268,8 @@ export default function APagarTab({ empresas }: { empresas: string[] }) {
             <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>Confirmar Pagamento</h2>
             <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 16px" }}>{modalBaixa.evento.descricao}</p>
 
+            {erro && <div style={{ marginBottom: "12px" }}><Alert variant="error">⚠ {erro}</Alert></div>}
+
             <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
               <div>
                 <label style={{ fontSize: "12px", fontWeight: 600, color: "#475569", display: "block", marginBottom: "4px" }}>Valor Pago</label>
@@ -282,8 +284,8 @@ export default function APagarTab({ empresas }: { empresas: string[] }) {
             </div>
 
             <div style={{ display: "flex", gap: "8px", marginTop: "20px", justifyContent: "flex-end" }}>
-              <Btn variant="outline" onClick={() => setModalBaixa(null)} disabled={salvando}>Cancelar</Btn>
-              <Btn variant="danger" onClick={confirmarBaixa} disabled={salvando || !modalBaixa.dataPagamento}>
+              <Btn variant="outline" onClick={() => { setModalBaixa(null); setErro(""); }} disabled={salvando}>Cancelar</Btn>
+              <Btn variant="danger" onClick={confirmarBaixa} disabled={salvando || !modalBaixa.dataPagamento} loading={salvando}>
                 {salvando ? "Salvando..." : "✓ Confirmar Pagamento"}
               </Btn>
             </div>

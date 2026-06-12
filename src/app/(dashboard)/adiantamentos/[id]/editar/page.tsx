@@ -18,6 +18,9 @@ export default function EditarAdiantamentoPage() {
   const [err, setErr] = useState("");
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
   const [confirmModal, setConfirmModal] = useState<{ status: string } | null>(null);
+  // status carregado do banco — confirmação só quando o status MUDA pra um
+  // estado que libera dinheiro/fecha o ciclo (aprovado/recusado/prestado)
+  const [statusOriginal, setStatusOriginal] = useState("");
 
   const [f, setF] = useState({
     motorista_id: "",
@@ -58,6 +61,7 @@ export default function EditarAdiantamentoPage() {
           recusa_motivo: adiant.recusa_motivo ?? "",
           valor_prestado_contas: adiant.valor_prestado_contas != null ? String(adiant.valor_prestado_contas) : "",
         });
+        setStatusOriginal(adiant.status ?? "pendente");
       }
       setLoading(false);
     };
@@ -98,7 +102,10 @@ export default function EditarAdiantamentoPage() {
     if (!f.valor || isNaN(valorNum) || valorNum <= 0) { setErr("Informe um valor válido (use vírgula ou ponto como separador decimal)"); return; }
     if (f.status === "recusado" && !f.recusa_motivo.trim()) { setErr("Informe o motivo da recusa"); return; }
     if (f.valor_prestado_contas && isNaN(normNum(f.valor_prestado_contas))) { setErr("Valor prestado em contas inválido. Use ponto ou vírgula como separador decimal."); return; }
-    if (f.status === "recusado" || f.status === "prestado") {
+    // "aprovado" libera pagamento e afeta o acerto do motorista — também pede
+    // confirmação (dono: nada registrado sem alertar). Só quando o status mudou.
+    const statusSensivel = f.status === "recusado" || f.status === "prestado" || f.status === "aprovado";
+    if (statusSensivel && f.status !== statusOriginal) {
       setConfirmModal({ status: f.status });
       return;
     }
@@ -124,7 +131,7 @@ export default function EditarAdiantamentoPage() {
           <span className="m-hide">
             <Btn href="/adiantamentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
+            <Btn type="submit" variant="primary" loading={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
           </span>
@@ -231,9 +238,9 @@ export default function EditarAdiantamentoPage() {
             </div>
           </FormSection>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0", position: "sticky", bottom: 0, background: "#fff", zIndex: 10, paddingBottom: "16px" }}>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={saving}>
+            <Btn type="submit" loading={saving}>
               {saving ? "Salvando..." : "Salvar Adiantamento"}
             </Btn>
           </div>
@@ -244,13 +251,15 @@ export default function EditarAdiantamentoPage() {
       {confirmModal && (
         <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
           <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
-            <div style={{ fontSize: "15px", fontWeight: 600, color: "#1e293b", marginBottom: "8px" }}>Confirmar alteração</div>
-            <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>
-              Você está marcando este adiantamento como <strong>{confirmModal.status}</strong>. Esta ação afeta o acerto do motorista. Confirmar?
-            </div>
-            <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
-              <Btn variant="outline" onClick={() => setConfirmModal(null)}>Voltar</Btn>
-              <Btn variant="danger" loading={saving} onClick={async () => { setConfirmModal(null); await doSave(); }}>Confirmar</Btn>
+            <div className="m-modal-body">
+              <div style={{ fontSize: "15px", fontWeight: 600, color: "#1e293b", marginBottom: "8px" }}>Confirmar alteração</div>
+              <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>
+                Você está marcando este adiantamento como <strong>{confirmModal.status}</strong>. Esta ação afeta o acerto do motorista. Confirmar?
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <Btn variant="outline" onClick={() => setConfirmModal(null)}>Voltar</Btn>
+                <Btn variant="danger" loading={saving} onClick={async () => { setConfirmModal(null); await doSave(); }}>Confirmar</Btn>
+              </div>
             </div>
           </div>
         </div>

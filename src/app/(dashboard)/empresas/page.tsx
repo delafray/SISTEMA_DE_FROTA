@@ -149,7 +149,9 @@ export default function EmpresasPage() {
         </div>
 
         <MobileList count={filtradas.length} label="empresas">
-          {loading ? null : ordenadas.map(e => (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</div>
+          ) : ordenadas.map(e => (
             <MobileCard
               key={e.id}
               href={`/empresas/${e.id}/editar`}

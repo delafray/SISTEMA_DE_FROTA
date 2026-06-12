@@ -73,14 +73,13 @@ export function CardDespachoMobile({
             </Btn>
             <Btn
               href={`/pedidos/importar?pedido_id=${p.id}`}
-              variant="ghost"
+              variant="outline"
               size="sm"
-              title="Importar notas (XML)"
             >
-              📥
+              📥 Notas
             </Btn>
             <Btn
-              variant={selecionado ? "outline" : "ghost"}
+              variant={selecionado ? "primary" : "outline"}
               size="sm"
               onClick={onToggle}
             >

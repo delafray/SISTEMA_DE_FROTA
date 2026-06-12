@@ -155,6 +155,7 @@ export default function PedidosListPage() {
     if (!empresaId) return;
     const load = async () => {
       setLoading(true);
+      try {
       const supabase = createClient();
       const from = pagina * PAGE_SIZE;
       const to   = from + PAGE_SIZE - 1;
@@ -226,7 +227,13 @@ export default function PedidosListPage() {
       const { data, count } = await (q as unknown as Promise<{ data: Pedido[] | null; count: number | null }>);
       setPedidos(data ?? []);
       setTotal(count ?? 0);
-      setLoading(false);
+      } catch {
+        // sem isto, falha de rede deixava o "Carregando..." infinito
+        setPedidos([]);
+        setTotal(0);
+      } finally {
+        setLoading(false);
+      }
     };
     load();
   }, [empresaId, pagina, filtro, buscaServidor, ordem]);
@@ -303,10 +310,13 @@ export default function PedidosListPage() {
         actions={<Btn href="/pedidos/novo">+ Novo Pedido</Btn>}
       />
 
-      <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
+      <div style={{ flex: 1, overflow: "auto", padding: "16px", paddingBottom: "96px", display: "flex", flexDirection: "column", gap: "12px" }}>
 
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "10px" }}>
-          <KpiCard label="Na lista"     value={kpis.total}      />
+          <KpiCard
+            label={filtro === "abertos" ? "Na lista · Em aberto" : filtro === "" ? "Na lista · Todos" : `Na lista · ${STATUS_LABEL[filtro] ?? filtro}`}
+            value={kpis.total}
+          />
           <KpiCard label="Agendados"    value={kpis.agendadas}  color="warning" />
           <KpiCard label="Andamento"    value={kpis.andamento}  color="info" />
           <KpiCard label="Concluídos"   value={kpis.concluidas} color="success" />
@@ -415,19 +425,32 @@ export default function PedidosListPage() {
             value={busca}
             onChange={e => setBusca(e.target.value)}
           />
-          <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
-            <option value="abertos">Em aberto (não concluídos)</option>
-            <option value="">Todos os status</option>
-            <option value="agendada">Agendado</option>
-            <option value="em_andamento">Em Andamento</option>
-            <option value="concluida">Concluído</option>
-            <option value="cancelada">Cancelado</option>
-          </select>
+          <div>
+            <label style={{ display: "block", fontSize: "11px", fontWeight: 600, color: "#64748b", marginBottom: "4px" }}>
+              Filtrar por status:
+            </label>
+            <select value={filtro} onChange={e => setFiltro(e.target.value)} style={{ ...selectStyle, width: "100%" }}>
+              <option value="abertos">Em aberto (não concluídos)</option>
+              <option value="">Todos os status</option>
+              <option value="agendada">Agendado</option>
+              <option value="em_andamento">Em Andamento</option>
+              <option value="concluida">Concluído</option>
+              <option value="cancelada">Cancelado</option>
+            </select>
+          </div>
         </div>
 
         <MobileList count={loading ? undefined : filtradas.length} label="pedidos">
           {loading ? (
-            <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8" }}>Carregando...</div>
+            <div style={{ padding: "32px", textAlign: "center", color: "#94a3b8", display: "flex", flexDirection: "column", alignItems: "center", gap: "12px" }}>
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+                <circle cx="12" cy="12" r="9" stroke="#cbd5e1" strokeWidth="3" />
+                <path d="M21 12a9 9 0 0 0-9-9" stroke="#2563eb" strokeWidth="3" strokeLinecap="round">
+                  <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+                </path>
+              </svg>
+              <span>Carregando...</span>
+            </div>
           ) : filtradas.map(({ p, cliente, motorista, veiculo, entregas }) => {
             const concluido   = p.status === "concluida" || p.status === "concluido";
             const cancelado   = p.status === "cancelada" || p.status === "cancelado";
@@ -436,7 +459,7 @@ export default function PedidosListPage() {
             return (
               <MobileCard
                 key={p.id}
-                onClick={() => router.push(`/despacho/${p.id}`)}
+                onClick={() => router.push(`/pedidos/${p.id}/editar`)}
                 title={cliente}
                 subtitle={resumoDestinos(entregas)}
                 badge={<Badge variant={STATUS_VAR[p.status] ?? "default"}>{STATUS_LABEL[p.status] ?? p.status}</Badge>}
@@ -445,13 +468,13 @@ export default function PedidosListPage() {
                   { label: "Pedido",     value: rotuloPedido(p.numero, p.id) },
                   { label: "Previsto",   value: fmtDataPrevista(p.data_inicio_prevista) },
                   { label: "Valor",      value: p.valor_pedido != null ? `R$ ${fmtMoeda(p.valor_pedido)}` : "—" },
-                  { label: "Pagamento",  value: cancelado ? "—" : p.pago ? "✅ Pago" : "⏳ Em aberto" },
+                  { label: "Pagamento",  value: cancelado ? "—" : p.pago ? "Pago" : "Em aberto" },
                   { label: "Motorista",  value: motorista?.nome ?? "—" },
                   { label: "Veículo",    value: veicLabel },
                   { label: "Cadastrado", value: fmtDataCadastro(p.created_at) },
                 ]}
                 actions={
-                  <Btn href={`/pedidos/${p.id}/editar`} size="sm" onClick={e => e.stopPropagation()}>Editar</Btn>
+                  <Btn size="sm" variant="ghost" onClick={e => { e.stopPropagation(); router.push(`/despacho/${p.id}`); }}>Ver Despacho</Btn>
                 }
               />
             );

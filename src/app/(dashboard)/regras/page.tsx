@@ -151,6 +151,17 @@ export default function RegrasPage() {
         </DataTable>
         </div>
 
+        <div className="m-show-block" style={{ marginBottom: 8 }}>
+          <SearchInput
+            placeholder="Buscar por nome, tipo, frase..."
+            value={busca}
+            onChange={e => setBusca(e.target.value)}
+          />
+          <div style={{ fontSize: "11px", color: "#94a3b8", marginTop: 4 }}>
+            {filtradas.length} de {todas.length} regras
+          </div>
+        </div>
+
         <MobileList count={filtradas.length} label="regras">
           {loading ? null : ordenadas.map(r => (
             <MobileCard

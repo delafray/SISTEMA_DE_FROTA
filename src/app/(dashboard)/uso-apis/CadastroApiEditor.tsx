@@ -160,6 +160,7 @@ function btnSalvar(pending: boolean): React.CSSProperties {
     padding: "8px 14px",
     fontSize: 13,
     fontWeight: 700,
+    minHeight: 44,
     cursor: pending ? "not-allowed" : "pointer",
     opacity: pending ? 0.6 : 1,
   };
@@ -172,5 +173,6 @@ const btnCancelar: React.CSSProperties = {
   borderRadius: 6,
   padding: "8px 14px",
   fontSize: 13,
+  minHeight: 44,
   cursor: "pointer",
 };

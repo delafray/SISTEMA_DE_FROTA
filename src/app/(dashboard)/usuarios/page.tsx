@@ -199,7 +199,9 @@ export default function UsuariosPage() {
         </div>
 
         <MobileList count={filtrados.length} label="usuários">
-          {loading ? null : ordenados.map(u => {
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</div>
+          ) : ordenados.map(u => {
             const nome = getNome(u);
             const isMe = u.usuario_id === meId;
             return (

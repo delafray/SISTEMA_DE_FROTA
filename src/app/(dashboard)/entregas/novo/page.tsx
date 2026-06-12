@@ -23,6 +23,7 @@ export default function NovoPedidoPage() {
   const [err, setErr] = useState("");
   const [tab, setTab] = useState<TabId>("operacional");
   const [camposInvalidos, setCamposInvalidos] = useState<Set<string>>(new Set());
+  const [confirmCancelar, setConfirmCancelar] = useState(false);
 
   const [veiculos, setVeiculos] = useState<Veiculo[]>([]);
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
@@ -111,6 +112,11 @@ export default function NovoPedidoPage() {
 
   const veiculoSel = veiculos.find(v => v.id === f.veiculo_id);
   const sem_recursos = veiculos.length === 0 || motoristas.length === 0;
+  const formPreenchido = !!(f.veiculo_id || f.motorista_id || f.km_inicial || f.valor_pedido);
+
+  const handleCancelar = () => {
+    if (formPreenchido) { setConfirmCancelar(true); } else { router.push("/entregas"); }
+  };
 
   return (
     <form
@@ -125,8 +131,8 @@ export default function NovoPedidoPage() {
         title="Novo Pedido"
         actions={
           <>
-            <Btn href="/entregas" variant="ghost">← Voltar</Btn>
-            <Btn href="/entregas" variant="outline">Cancelar</Btn>
+            <Btn variant="ghost" onClick={handleCancelar}>← Voltar</Btn>
+            <Btn variant="outline" onClick={handleCancelar}>Cancelar</Btn>
           </>
         }
       />
@@ -234,7 +240,7 @@ export default function NovoPedidoPage() {
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="Valor do Pedido (R$)">
                   <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
-                    onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
+                    onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: m.unmaskedValue === "0" || m.unmaskedValue === "" ? "" : String(m.unmaskedValue) }))}
                     style={inputStyle} placeholder="R$ 0,00" />
                 </FormField>
                 <FormField label="Forma de Pagamento">
@@ -255,12 +261,25 @@ export default function NovoPedidoPage() {
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "24px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
-          <Btn href="/entregas" variant="outline">Cancelar</Btn>
-          <Btn type="submit" disabled={saving || sem_recursos}>
+          <Btn variant="outline" onClick={handleCancelar}>Cancelar</Btn>
+          <Btn type="submit" disabled={saving || sem_recursos} loading={saving}>
             {saving ? "Salvando..." : "Criar Pedido"}
           </Btn>
         </div>
       </div>
+
+      {confirmCancelar && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+          <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
+            <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Descartar novo pedido?</h3>
+            <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#475569" }}>Os dados preenchidos serão perdidos.</p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmCancelar(false)}>Voltar</Btn>
+              <Btn variant="danger" onClick={() => router.push("/entregas")}>Descartar</Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

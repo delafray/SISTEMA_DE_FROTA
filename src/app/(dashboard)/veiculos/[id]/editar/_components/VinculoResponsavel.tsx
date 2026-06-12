@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { Btn } from "@/components/ui/ds";
 
 type Aloc = { id: string; motorista_id: string | null; status: string; km_evento: number | null; km_fim: number | null; inicio: string; fim: string | null };
 type Mot = { id: string; nome: string; usuario_id: string | null; ativo: boolean };
@@ -222,7 +223,7 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
               {acao === "motorista" && (
                 <div>
                   <label style={lbl}>Motorista (🟢 com usuário · 🟠 sem · linha laranja = já está em outro caminhão)</label>
-                  <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
+                  <div style={{ maxHeight: 200, overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 8, WebkitOverflowScrolling: "touch", overscrollBehavior: "contain" }}>
                     {mots.filter((m) => m.ativo).map((m) => {
                       const outro = motoristaVeiculo[m.id];
                       const sel = motSel === m.id;
@@ -258,8 +259,8 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
                 {atual && <button type="button" onClick={() => setDataEvento(toLocal(atual.inicio))} style={chip}>Início do atual ({fmt(atual.inicio)})</button>}
               </div>
               <div style={{ display: "flex", justifyContent: "flex-end", gap: 8, marginTop: 4 }}>
-                <button type="button" style={btnGhost} onClick={() => setPopup(false)}>Cancelar</button>
-                <button type="button" style={btnPri} onClick={confirmar} disabled={salvando}>{salvando ? "Salvando..." : "Confirmar"}</button>
+                <Btn type="button" variant="outline" onClick={() => setPopup(false)} disabled={salvando}>Cancelar</Btn>
+                <Btn type="button" variant="primary" onClick={confirmar} loading={salvando}>Confirmar</Btn>
               </div>
             </div>
           </div>
@@ -275,10 +276,10 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
                 <b>{transfer.mot.nome}</b> já está com o caminhão <b>{transfer.mv.placa ?? "?"}{transfer.mv.apelido ? ` (${transfer.mv.apelido})` : ""}</b>. Ao transferi-lo, o que fazer com esse caminhão? (não pode ir pra outro motorista aqui)
               </div>
               <div style={{ display: "flex", gap: 8 }}>
-                <button type="button" style={btnPri} onClick={() => confirmarTransfer("manutencao")}>🔧 Manutenção</button>
-                <button type="button" style={{ ...btnPri, background: "#64748b" }} onClick={() => confirmarTransfer("parado")}>🅿 Deixar parado</button>
+                <Btn type="button" variant="primary" onClick={() => confirmarTransfer("manutencao")}>🔧 Manutenção</Btn>
+                <Btn type="button" onClick={() => confirmarTransfer("parado")} style={{ background: "#64748b", color: "#fff" }}>🅿 Deixar parado</Btn>
               </div>
-              <button type="button" style={btnGhost} onClick={() => setTransfer(null)}>Cancelar</button>
+              <Btn type="button" variant="outline" onClick={() => setTransfer(null)}>Cancelar</Btn>
             </div>
           </div>
         </div>
@@ -290,5 +291,3 @@ export default function VinculoResponsavel({ veiculoId, empresaId, kmAtual, onKm
 const lbl: React.CSSProperties = { display: "block", fontSize: 11, fontWeight: 600, color: "#475569", marginBottom: 4 };
 const inp: React.CSSProperties = { width: "100%", padding: "8px 10px", border: "1px solid #cbd5e1", borderRadius: 8, fontSize: 13, boxSizing: "border-box" };
 const chip: React.CSSProperties = { padding: "5px 10px", background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: 6, color: "#1d4ed8", fontSize: 11, fontWeight: 600, cursor: "pointer" };
-const btnPri: React.CSSProperties = { padding: "8px 14px", background: "#1e40af", color: "#fff", border: "none", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13 };
-const btnGhost: React.CSSProperties = { padding: "8px 14px", background: "#fff", color: "#475569", border: "1px solid #cbd5e1", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13 };

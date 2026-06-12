@@ -108,6 +108,9 @@ export default function ClientesPage() {
               <option value="true">Ativos</option>
               <option value="false">Inativos</option>
             </select>
+            <span style={{ fontSize: "11px", color: "#94a3b8", marginTop: "2px" }}>
+              {filtrados.length} de {todos.length} clientes
+            </span>
           </div>
         </div>
 
@@ -161,7 +164,9 @@ export default function ClientesPage() {
 
         {/* Mobile: cards */}
         <MobileList count={filtrados.length} label="clientes">
-          {loading ? null : ordenados.map(c => (
+          {loading ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando...</div>
+          ) : ordenados.map(c => (
             <MobileCard
               key={c.id}
               href={`/clientes/${c.id}/editar`}

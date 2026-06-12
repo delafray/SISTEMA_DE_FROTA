@@ -45,6 +45,16 @@ export default function NovoMotoristaPage() {
       setTab("dados");
       setErr("Preencha os campos obrigatórios na aba Dados Pessoais: Nome, CPF e WhatsApp"); return;
     }
+    const camposMoeda: [string, string][] = [
+      [f.salario_fixo, "Salário Fixo"],
+      [f.valor_diaria_por_pedido, "Diária por Pedido"],
+    ];
+    for (const [val, label] of camposMoeda) {
+      if (val && isNaN(parseFloat(val.replace(",", ".")))) {
+        setTab("remuneracao");
+        setErr(`Valor inválido no campo "${label}". Use ponto ou vírgula como separador decimal.`); return;
+      }
+    }
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
@@ -65,8 +75,8 @@ export default function NovoMotoristaPage() {
       cnh_validade: f.cnh_validade,
       cnh_primeira_habilitacao: f.cnh_primeira_habilitacao || null,
       cnh_ear: f.cnh_ear,
-      salario_fixo: f.salario_fixo ? parseFloat(f.salario_fixo) : null,
-      valor_diaria_por_pedido: f.valor_diaria_por_pedido ? parseFloat(f.valor_diaria_por_pedido) : null,
+      salario_fixo: f.salario_fixo ? parseFloat(f.salario_fixo.replace(",", ".")) : null,
+      valor_diaria_por_pedido: f.valor_diaria_por_pedido ? parseFloat(f.valor_diaria_por_pedido.replace(",", ".")) : null,
       cep: f.cep.replace(/\D/g, "") || null,
       logradouro: f.logradouro || null, numero: f.numero || null,
       complemento: f.complemento || null, bairro: f.bairro || null,

@@ -95,7 +95,7 @@ export default function NovoAbastecimentoPage() {
           <span className="m-hide">
             <Btn href="/abastecimentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/abastecimentos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
+            <Btn type="submit" variant="primary" loading={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
           </span>
@@ -142,6 +142,9 @@ export default function NovoAbastecimentoPage() {
                 </FormField>
                 <FormField label="Valor Total (R$) *">
                   <input value={f.valor_total} onChange={set("valor_total")} type="text" inputMode="decimal" pattern="[0-9]*[.,]?[0-9]*" style={inputStyle} placeholder="649,00" />
+                  {f.litros && f.valor_litro && !isNaN(normNum(f.litros)) && !isNaN(normNum(f.valor_litro)) && (
+                    <span style={{ fontSize: "11px", color: "#94a3b8", marginTop: "4px", display: "block" }}>Calculado: litros × valor/litro</span>
+                  )}
                 </FormField>
                 <div style={{ gridColumn: "span 2" }}>
                   <FormField label="Posto">
@@ -151,9 +154,9 @@ export default function NovoAbastecimentoPage() {
               </div>
             </FormSection>
 
-            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0", position: "sticky", bottom: 0, background: "#fff", zIndex: 10, paddingBottom: "16px" }}>
               <Btn href="/abastecimentos" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={saving}>
+              <Btn type="submit" loading={saving}>
                 {saving ? "Salvando..." : "Salvar Abastecimento"}
               </Btn>
             </div>

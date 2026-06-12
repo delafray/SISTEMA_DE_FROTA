@@ -284,7 +284,7 @@ export default function AbastecimentosPage() {
                   // Cliques em button/a/input dentro da linha são ignorados pelo Tr.
                   <Tr key={a.id} onClick={() => router.push(`/abastecimentos/${a.id}/editar`)}>
                     <Td>{data}</Td>
-                    <Td>{a.veiculos ? `${a.veiculos.placa} — ${a.veiculos.modelo}` : "—"}</Td>
+                    <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.veiculos ? `${a.veiculos.placa} — ${a.veiculos.modelo}` : "—"}>{a.veiculos ? `${a.veiculos.placa} — ${a.veiculos.modelo}` : "—"}</Td>
                     <Td>{a.motoristas?.nome ?? "—"}</Td>
                     <Td>{a.posto ?? "—"}</Td>
                     <Td style={{ textAlign: "right" }}>{a.km_no_abast?.toLocaleString("pt-BR") ?? "—"}</Td>
@@ -320,6 +320,17 @@ export default function AbastecimentosPage() {
         <MobileList count={linhas.length} label="abastecimentos">
           {loading ? (
             <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando abastecimentos...</div>
+          ) : linhas.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>
+              {!busca && !filtro ? (
+                <>
+                  <div style={{ marginBottom: "12px" }}>Nenhum abastecimento registrado.</div>
+                  <Btn href="/abastecimentos/novo">+ Registrar primeiro abastecimento</Btn>
+                </>
+              ) : (
+                "Nenhum abastecimento encontrado para esta busca."
+              )}
+            </div>
           ) : linhas.map(a => {
             const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
             return (

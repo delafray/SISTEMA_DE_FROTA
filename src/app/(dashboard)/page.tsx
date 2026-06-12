@@ -51,7 +51,12 @@ const alertaIcon:   Record<string, string> = { danger: "🚫",      warning: "�
 
 export default async function DashboardPage() {
   const supabase = await createClient();
-  const { data: { user } } = await supabase.auth.getUser();
+  // Guard pela sessão do COOKIE (sem ida à rede): getUser() validava no Auth a
+  // cada acesso e, em oscilação de rede móvel, chutava o gestor LOGADO pro
+  // /login — a aba Início era a última tela com esse comportamento. A proteção
+  // real dos dados é o RLS; aqui é só roteamento.
+  const { data: { session } } = await supabase.auth.getSession();
+  const user = session?.user;
   if (!user) return redirect("/login");
 
   const { data: ue } = await supabase
@@ -213,9 +218,9 @@ export default async function DashboardPage() {
                 borderRadius: "8px", color: alertaColor[a.tipo],
                 fontSize: "13px", fontWeight: 600, textDecoration: "none",
               }}>
-                <span>{alertaIcon[a.tipo]}</span>
-                <span>{a.msg}</span>
-                <span style={{ marginLeft: "auto", fontSize: "11px", opacity: 0.7 }}>Editar →</span>
+                <span style={{ flexShrink: 0 }}>{alertaIcon[a.tipo]}</span>
+                <span style={{ minWidth: 0, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.msg}>{a.msg}</span>
+                <span style={{ marginLeft: "auto", fontSize: "11px", opacity: 0.7, flexShrink: 0, alignSelf: "flex-start" }}>Editar →</span>
               </Link>
             ))}
           </div>
@@ -270,12 +275,22 @@ export default async function DashboardPage() {
           <KpiCard label="Veículos Ativos"       value={veiculosAtivos ?? 0}   color="success" />
           <KpiCard label="Motoristas Ativos"     value={motoristasAtivos ?? 0} color="success" />
           <KpiCard label="Receita do Mês"        value={fmtBRL(receitaMes)}    color="success" />
-          <KpiCard
-            label="Adiantamentos Pendentes"
-            value={adtPendentes ?? 0}
-            color={(adtPendentes ?? 0) > 0 ? "warning" : "default"}
-            sub={(adtPendentes ?? 0) > 0 ? "aguardando aprovação" : undefined}
-          />
+          {(adtPendentes ?? 0) > 0 ? (
+            <Link href="/adiantamentos" style={{ textDecoration: "none" }}>
+              <KpiCard
+                label="Adiantamentos Pendentes"
+                value={adtPendentes ?? 0}
+                color="warning"
+                sub="aguardando aprovação — toque para ver"
+              />
+            </Link>
+          ) : (
+            <KpiCard
+              label="Adiantamentos Pendentes"
+              value={0}
+              color="default"
+            />
+          )}
         </div>
 
         {(() => {

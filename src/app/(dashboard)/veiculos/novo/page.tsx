@@ -30,6 +30,17 @@ export default function NovoVeiculoPage() {
     if (!f.placa || !f.marca || !f.modelo || !f.ano || !f.chassi || !f.renavam) {
       setErr("Preencha todos os campos obrigatórios (*)"); return;
     }
+    const numFields: [string, string][] = [
+      [f.km_atual, "KM Atual"],
+      [f.capacidade_carga_kg, "Cap. Carga"],
+      [f.pbt_kg, "PBT"],
+      [f.capacidade_tanque, "Tanque"],
+    ];
+    for (const [val, label] of numFields) {
+      if (val && isNaN(parseFloat(val.replace(",", ".")))) {
+        setErr(`Valor inválido no campo "${label}". Use ponto ou vírgula como separador decimal.`); return;
+      }
+    }
     setSaving(true);
     const { data: auth } = await supabase.auth.getUser();
     if (!auth.user) { setSaving(false); setErr("Não autenticado"); return; }
@@ -43,11 +54,11 @@ export default function NovoVeiculoPage() {
       combustivel: f.combustivel, tipo: f.tipo,
       cor: f.cor || null, apelido: f.apelido || null,
       categoria: f.categoria || null,
-      km_atual: f.km_atual ? parseFloat(f.km_atual) : null,
-      capacidade_carga_kg: f.capacidade_carga_kg ? parseFloat(f.capacidade_carga_kg) : null,
+      km_atual: f.km_atual ? parseFloat(f.km_atual.replace(",", ".")) : null,
+      capacidade_carga_kg: f.capacidade_carga_kg ? parseFloat(f.capacidade_carga_kg.replace(",", ".")) : null,
       eixos: f.eixos ? parseInt(f.eixos) : null,
-      pbt_kg: f.pbt_kg ? parseFloat(f.pbt_kg) : null,
-      capacidade_tanque: f.capacidade_tanque ? parseFloat(f.capacidade_tanque) : null,
+      pbt_kg: f.pbt_kg ? parseFloat(f.pbt_kg.replace(",", ".")) : null,
+      capacidade_tanque: f.capacidade_tanque ? parseFloat(f.capacidade_tanque.replace(",", ".")) : null,
       ipva_vencimento: f.ipva_vencimento || null,
       licenciamento_vencimento: f.licenciamento_vencimento || null,
       seguro_vencimento: f.seguro_vencimento || null,
@@ -69,8 +80,8 @@ export default function NovoVeiculoPage() {
           <>
             <Btn href="/veiculos" variant="ghost">← Voltar para Lista</Btn>
             <span className="m-hide"><Btn href="/veiculos" variant="outline">Cancelar</Btn></span>
-            <Btn type="submit" variant="primary" disabled={saving}>
-              {saving ? "Salvando..." : "Salvar"}
+            <Btn type="submit" variant="primary" loading={saving}>
+              Salvar
             </Btn>
           </>
         }

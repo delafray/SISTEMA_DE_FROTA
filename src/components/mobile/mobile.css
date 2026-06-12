@@ -194,3 +194,11 @@
     gap: 8px !important;
   }
 }
+
+/* ── Desativa sticky no mobile (evita conflito de scroll aninhado) ── */
+@media (max-width: 767px) {
+  .m-hide-sticky {
+    position: static !important;
+    top: auto !important;
+  }
+}

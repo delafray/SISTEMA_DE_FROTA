@@ -159,7 +159,7 @@ export default function EditarPedidoPage() {
           <>
             <Btn variant="ghost" className="m-hide" onClick={() => setConfirmCancelar(true)}>← Voltar</Btn>
             <Btn variant="outline" onClick={() => setConfirmCancelar(true)}>Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving} loading={saving}>
+            <Btn type="submit" variant="primary" disabled={saving} loading={saving} className="m-hide">
               {saving ? "Salvando..." : "Atualizar"}
             </Btn>
           </>
@@ -235,13 +235,18 @@ export default function EditarPedidoPage() {
             <FormSection title="Quilometragem">
               <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "16px" }}>
                 <FormField label="KM Inicial *">
-                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" style={inputStyle} />
+                  <input value={f.km_inicial} onChange={set("km_inicial")} type="number" step="0.1" inputMode="decimal" style={inputStyle} />
                 </FormField>
                 <FormField label="KM Final" hint="Preencher ao concluir o pedido">
-                  <input value={f.km_final} onChange={set("km_final")} type="number" step="0.1" style={inputStyle} placeholder="Preencher ao concluir" />
+                  <input value={f.km_final} onChange={set("km_final")} type="number" step="0.1" inputMode="decimal" style={inputStyle} placeholder="Preencher ao concluir" />
                   {f.km_final && f.km_inicial && parseFloat(f.km_final) > parseFloat(f.km_inicial) && (
                     <p style={{ fontSize: "11px", color: "#2563eb", marginTop: "4px" }}>
                       {(parseFloat(f.km_final) - parseFloat(f.km_inicial)).toLocaleString("pt-BR")} km rodados
+                    </p>
+                  )}
+                  {f.km_final && f.km_inicial && parseFloat(f.km_final) < parseFloat(f.km_inicial) && (
+                    <p style={{ fontSize: "11px", color: "#dc2626", marginTop: "4px" }}>
+                      ⚠ KM Final não pode ser menor que KM Inicial
                     </p>
                   )}
                 </FormField>

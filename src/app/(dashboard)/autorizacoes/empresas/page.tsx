@@ -119,7 +119,9 @@ export default function EmpresasGestorPage() {
                   <td style={{ ...td, textAlign: "left", fontWeight: 600, color: "#1e293b" }}>{p.nome}</td>
                   {empresas.map((e) => (
                     <td key={e.id} style={td}>
-                      <input type="checkbox" checked={tem(p.id, e.id)} onChange={() => toggle(p.id, e.id)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                      <label style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", minWidth: 44, minHeight: 44, cursor: "pointer" }}>
+                        <input type="checkbox" checked={tem(p.id, e.id)} onChange={() => toggle(p.id, e.id)} style={{ width: 18, height: 18, cursor: "pointer" }} />
+                      </label>
                     </td>
                   ))}
                   <td style={td}>

@@ -152,7 +152,7 @@ export default function PedidoDetalhePage() {
           subtitle={`Criado em ${pedido.created_at ? new Date(pedido.created_at).toLocaleDateString("pt-BR") : "—"}`}
           actions={
             <>
-              <Btn href="/entregas" variant="ghost" className="m-hide">← Voltar</Btn>
+              <Btn href="/entregas" variant="ghost">← Voltar</Btn>
               <Btn variant="outline" onClick={() => window.print()} className="m-hide">🖨️ Imprimir</Btn>
               <Btn href={`/entregas/${id}/editar`} variant="outline">Editar</Btn>
             </>
@@ -219,26 +219,52 @@ export default function PedidoDetalhePage() {
           {entregas.length > 0 && (
             <div style={{ gridColumn: "span 2", overflowX: "auto" }}>
               <FormSection title={`Entregas do Pedido (${entregas.length})`}>
-                <DataTable>
-                  <thead>
-                    <tr>
-                      <Th>Origem</Th>
-                      <Th>Destino</Th>
-                      <Th>Carga</Th>
-                      <Th>Status</Th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {entregas.map(e => (
-                      <Tr key={e.id}>
-                        <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.origem}>{e.origem}</Td>
-                        <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.destino}>{e.destino}</Td>
-                        <Td>{e.tipo_carga ?? "—"}</Td>
-                        <Td>{e.status}</Td>
-                      </Tr>
-                    ))}
-                  </tbody>
-                </DataTable>
+                <div className="m-hide">
+                  <DataTable>
+                    <thead>
+                      <tr>
+                        <Th>Origem</Th>
+                        <Th>Destino</Th>
+                        <Th>Carga</Th>
+                        <Th>Status</Th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {entregas.map(e => (
+                        <Tr key={e.id}>
+                          <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.origem}>{e.origem}</Td>
+                          <Td style={{ maxWidth: "180px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.destino}>{e.destino}</Td>
+                          <Td>{e.tipo_carga ?? "—"}</Td>
+                          <Td>
+                            <Badge variant={STATUS_VAR[e.status] ?? "default"}>
+                              {STATUS_LABEL[e.status] ?? e.status}
+                            </Badge>
+                          </Td>
+                        </Tr>
+                      ))}
+                    </tbody>
+                  </DataTable>
+                </div>
+                <div className="m-show-block" style={{ display: "none", flexDirection: "column", gap: "8px" }}>
+                  {entregas.map(e => (
+                    <div key={e.id} style={{ background: "#f8fafc", borderRadius: "8px", padding: "10px 12px", border: "1px solid #e2e8f0" }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                        <Badge variant={STATUS_VAR[e.status] ?? "default"}>
+                          {STATUS_LABEL[e.status] ?? e.status}
+                        </Badge>
+                        {e.tipo_carga && <span style={{ fontSize: "11px", color: "#64748b" }}>{e.tipo_carga}</span>}
+                      </div>
+                      <div style={{ fontSize: "12px", color: "#475569" }}>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={e.origem}>
+                          <span style={{ fontWeight: 600, color: "#64748b" }}>De: </span>{e.origem}
+                        </div>
+                        <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", marginTop: "2px" }} title={e.destino}>
+                          <span style={{ fontWeight: 600, color: "#64748b" }}>Para: </span>{e.destino}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
               </FormSection>
             </div>
           )}

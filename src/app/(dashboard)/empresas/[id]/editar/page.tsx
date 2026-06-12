@@ -263,7 +263,7 @@ export default function EditarEmpresaPage() {
         actions={
           <>
             <Btn href="/empresas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" size="md" disabled={saving}>
+            <Btn type="submit" variant="primary" size="md" loading={saving} disabled={saving}>
               {saving ? "Salvando..." : "Atualizar Empresa"}
             </Btn>
           </>
@@ -354,7 +354,7 @@ export default function EditarEmpresaPage() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/empresas" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={saving}>
+              <Btn type="submit" loading={saving} disabled={saving}>
                 {saving ? "Salvando..." : "Atualizar Empresa"}
               </Btn>
             </div>

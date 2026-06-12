@@ -5,7 +5,7 @@ import { inputStyle } from "@/components/ui/ds";
 import { useRouter, useSearchParams } from 'next/navigation'
 import { Suspense, useEffect } from 'react'
 import { useFormStatus } from 'react-dom'
-import { createClient } from '@/lib/supabase/client'
+import { usuarioSessao } from '@/lib/auth/temSessao'
 
 // Botão separado por causa do useFormStatus (precisa estar DENTRO do <form>).
 // Sem o "Entrando...", em rede móvel o gestor clicava 3x achando que travou.
@@ -47,8 +47,9 @@ function LoginForm() {
   // LOGADO. Com sessão válida, devolve pro painel sem poluir o histórico.
   useEffect(() => {
     if (error) return // veio de uma falha de login — deixa o formulário aparecer
-    createClient().auth.getSession().then(({ data }) => {
-      if (data.session) router.replace('/')
+    // usuarioSessao tem retry: não desiste no primeiro tropeço de rede móvel
+    usuarioSessao().then(user => {
+      if (user) router.replace('/')
     })
   }, [error, router])
 

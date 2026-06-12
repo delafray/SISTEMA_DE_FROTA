@@ -100,7 +100,7 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
     setErro("");
     const count = manutCount.get(tipo.id) ?? 0;
     if (!ativar && count > 0) {
-      alert(`Não é possível desativar: existem ${count} manutenç${count !== 1 ? "ões" : "ão"} lançada${count !== 1 ? "s" : ""} para este tipo. Exclua os registros na aba "Manutenções" primeiro.`);
+      setErro(`Não é possível desativar: existem ${count} manutenç${count !== 1 ? "ões" : "ão"} lançada${count !== 1 ? "s" : ""} para este tipo. Exclua os registros na aba "Manutenções" primeiro.`);
       return;
     }
     setSavingId(tipo.id);
@@ -121,9 +121,16 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
     setSavingId(null);
   };
 
-  const atualizarIntervalo = async (plano: Plano, campo: "intervalo_km" | "intervalo_meses", valor: string) => {
+  // Digitação só mexe no estado local; o banco grava no BLUR — gravar a cada
+  // tecla disparava um update por dígito ("50000" = 5 gravações, a primeira
+  // valendo 5 km).
+  const editarIntervaloLocal = (plano: Plano, campo: "intervalo_km" | "intervalo_meses", valor: string) => {
     const num = valor === "" ? null : parseInt(valor);
     setPlanos(p => p.map(x => x.id === plano.id ? { ...x, [campo]: num } : x));
+  };
+
+  const atualizarIntervalo = async (plano: Plano, campo: "intervalo_km" | "intervalo_meses", valor: string) => {
+    const num = valor === "" ? null : parseInt(valor);
     const chave = `${plano.id}_${campo}`;
     setSalvandoIntervalo(chave);
     const payload = campo === "intervalo_km"
@@ -260,9 +267,9 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                       label: "Int. KM",
                       value: ativo && p ? (
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <input type="number" value={p.intervalo_km ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px" }} />
-                          {salvandoIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
-                          {salvouIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                          <input type="number" value={p.intervalo_km ?? ""} onChange={e => editarIntervaloLocal(p, "intervalo_km", e.target.value)} onBlur={e => atualizarIntervalo(p, "intervalo_km", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "100%", minWidth: "80px", padding: "4px 8px", fontSize: "12px" }} />
+                          {salvandoIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" }}>Salvando</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_km` && <span style={{ fontSize: "11px", color: "#16a34a", whiteSpace: "nowrap" }}>Salvo</span>}
                         </div>
                       ) : (t.intervalo_km?.toLocaleString("pt-BR") ?? "—"),
                     },
@@ -270,9 +277,9 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                       label: "Int. Meses",
                       value: ativo && p ? (
                         <div style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                          <input type="number" value={p.intervalo_meses ?? ""} onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "70px", padding: "4px 8px", fontSize: "12px" }} />
-                          {salvandoIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#94a3b8" }}>…</span>}
-                          {salvouIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "10px", color: "#16a34a" }}>✓</span>}
+                          <input type="number" value={p.intervalo_meses ?? ""} onChange={e => editarIntervaloLocal(p, "intervalo_meses", e.target.value)} onBlur={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)} placeholder="—" inputMode="numeric" style={{ ...inputStyle, width: "100%", minWidth: "70px", padding: "4px 8px", fontSize: "12px" }} />
+                          {salvandoIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "11px", color: "#94a3b8", whiteSpace: "nowrap" }}>Salvando</span>}
+                          {salvouIntervalo === `${p.id}_intervalo_meses` && <span style={{ fontSize: "11px", color: "#16a34a", whiteSpace: "nowrap" }}>Salvo</span>}
                         </div>
                       ) : (t.intervalo_meses ?? "—"),
                     },
@@ -340,7 +347,7 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                         <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
                           <input
                             type="number" value={p.intervalo_km ?? ""}
-                            onChange={e => atualizarIntervalo(p, "intervalo_km", e.target.value)}
+                            onChange={e => editarIntervaloLocal(p, "intervalo_km", e.target.value)} onBlur={e => atualizarIntervalo(p, "intervalo_km", e.target.value)}
                             placeholder="—"
                             style={{ ...inputStyle, width: "100px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
                           />
@@ -354,7 +361,7 @@ export default function PlanoTab({ veiculoId, empresaId }: { veiculoId: string; 
                         <div style={{ display: "flex", alignItems: "center", gap: "4px", justifyContent: "flex-end" }}>
                           <input
                             type="number" value={p.intervalo_meses ?? ""}
-                            onChange={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)}
+                            onChange={e => editarIntervaloLocal(p, "intervalo_meses", e.target.value)} onBlur={e => atualizarIntervalo(p, "intervalo_meses", e.target.value)}
                             placeholder="—"
                             style={{ ...inputStyle, width: "70px", textAlign: "right", padding: "4px 8px", fontSize: "12px" }}
                           />

@@ -433,6 +433,7 @@ export function useDespacho(): UseDespachoReturn {
           grupos.get(st)!.push(pid);
         }
 
+        let jaDespachados = 0; // falha no MEIO do lote: o gestor precisa saber o que já foi
         for (const [statusNorm, ids] of grupos) {
           const pedidoPayload = {
             veiculo_id:           veiculoId,
@@ -446,10 +447,16 @@ export function useDespacho(): UseDespachoReturn {
             .in("id", ids);
 
           if (errPedidos) {
-            setModalErr(fmtErroSupabase(errPedidos, "Erro ao despachar o pedido"));
+            setModalErr(fmtErroSupabase(
+              errPedidos,
+              jaDespachados > 0
+                ? `${jaDespachados} pedido(s) JÁ foram despachados, mas o restante falhou — confira a lista antes de tentar de novo`
+                : "Erro ao despachar o pedido"
+            ));
             setSaving(false);
             return;
           }
+          jaDespachados += ids.length;
         }
 
         // Atualiza entregas dos pedidos despachados (caminhão + motorista).

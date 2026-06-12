@@ -72,6 +72,7 @@ export default function DespachoPage() {
             <Btn
               variant="primary"
               onClick={() => abrirModal(Array.from(selecionados))}
+              disabled={saving || modalAberto}
             >
               Despachar {selecionados.size} selecionado{selecionados.size > 1 ? "s" : ""}
             </Btn>
@@ -213,17 +214,16 @@ export default function DespachoPage() {
 
         {/* FAB Mobile para despachar selecionados */}
         {algumselecionado && (
-          <button
-            type="button"
+          <Btn
+            variant="primary"
             onClick={() => abrirModal(Array.from(selecionados))}
-            disabled={modalAberto}
+            disabled={modalAberto || saving}
+            loading={saving}
             className="m-fab mobile-only"
-            title={`Despachar ${selecionados.size} selecionado(s)`}
-            aria-label={`Despachar ${selecionados.size} selecionado(s)`}
-            style={{ fontSize: "12px", minHeight: "44px", minWidth: "44px", paddingLeft: "20px", paddingRight: "20px", borderRadius: "24px", width: "auto", opacity: modalAberto ? 0.5 : 1 }}
+            style={{ fontSize: "12px", minHeight: "44px", paddingLeft: "20px", paddingRight: "20px", borderRadius: "24px", width: "auto" }}
           >
-            Despachar {selecionados.size}
-          </button>
+            {saving ? "Despachando..." : `Despachar ${selecionados.size}`}
+          </Btn>
         )}
       </div>
 

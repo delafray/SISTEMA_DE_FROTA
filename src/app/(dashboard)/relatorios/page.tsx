@@ -264,7 +264,7 @@ export default function RelatoriosPage() {
   return (
     <div style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader title="Relatórios Financeiros" subtitle="Resultado por período">
-        <Btn variant="outline" onClick={exportCSV} disabled={loading || pedidos.length === 0}>
+        <Btn variant="outline" onClick={exportCSV} disabled={loading || (tab === "periodo" && pedidos.length === 0) || (tab === "motorista" && porMotorista.length === 0) || (tab === "veiculo" && porVeiculo.length === 0)}>
           ↓ Exportar CSV
         </Btn>
       </PageHeader>
@@ -330,9 +330,9 @@ export default function RelatoriosPage() {
         {/* KPIs */}
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "12px", minWidth: 0 }}>
           <KpiCard label="Pedidos no Período" value={loading ? "..." : kpis.qtd} />
-          <KpiCard label="Receita Total"       value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.receita)}</span>}  color="success" />
-          <KpiCard label="Custo Total"         value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.custo)}</span>}    color="danger" />
-          <KpiCard label="Lucro Bruto"         value={<span style={{ fontSize: "clamp(12px,3vw,16px)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", display: "block" }}>{loading ? "..." : fmtBRL(kpis.lucro)}</span>}    color={kpis.lucro >= 0 ? "success" : "danger"} />
+          <KpiCard label="Receita Total"       value={<span style={{ fontSize: "clamp(11px,3vw,16px)", display: "block", wordBreak: "break-all" }}>{loading ? "..." : fmtBRL(kpis.receita)}</span>}  color="success" />
+          <KpiCard label="Custo Total"         value={<span style={{ fontSize: "clamp(11px,3vw,16px)", display: "block", wordBreak: "break-all" }}>{loading ? "..." : fmtBRL(kpis.custo)}</span>}    color="danger" />
+          <KpiCard label="Lucro Bruto"         value={<span style={{ fontSize: "clamp(11px,3vw,16px)", display: "block", wordBreak: "break-all" }}>{loading ? "..." : fmtBRL(kpis.lucro)}</span>}    color={kpis.lucro >= 0 ? "success" : "danger"} />
           <KpiCard label="Margem"              value={loading ? "..." : fmtPct(kpis.margem)}   color={kpis.margem >= 0 ? "success" : "danger"} />
           <KpiCard label="KM Rodados"          value={loading ? "..." : kpis.km.toLocaleString("pt-BR")} color="info" />
         </div>

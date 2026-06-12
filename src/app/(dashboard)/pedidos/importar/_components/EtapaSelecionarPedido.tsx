@@ -41,7 +41,15 @@ export function EtapaSelecionarPedido({
       </p>
 
       {carregandoOpcoes && (
-        <p style={{ fontSize: "13px", color: "#2563eb" }}>Carregando pedidos...</p>
+        <div style={{ display: "flex", alignItems: "center", gap: "10px", padding: "16px 0", color: "#2563eb" }}>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" aria-hidden>
+            <circle cx="12" cy="12" r="9" stroke="#2563eb" strokeOpacity="0.3" strokeWidth="3" />
+            <path d="M21 12a9 9 0 0 0-9-9" stroke="#2563eb" strokeWidth="3" strokeLinecap="round">
+              <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+            </path>
+          </svg>
+          <span style={{ fontSize: "14px", fontWeight: 500 }}>Carregando pedidos...</span>
+        </div>
       )}
 
       {!carregandoOpcoes && opcoesPedido.length === 0 && (

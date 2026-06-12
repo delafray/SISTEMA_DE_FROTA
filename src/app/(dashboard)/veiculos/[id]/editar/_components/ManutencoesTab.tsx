@@ -636,8 +636,8 @@ export default function ManutencoesTab({ veiculoId, empresaId, kmAtualVeiculo }:
               <Btn type="button" variant="outline" onClick={() => setKmModalOpen(false)} disabled={salvandoKmGestor}>
                 Cancelar
               </Btn>
-              <Btn type="button" onClick={salvarKmGestor} disabled={!podeSalvarKm || salvandoKmGestor}>
-                {salvandoKmGestor ? "Salvando..." : "Confirmar alteração"}
+              <Btn type="button" onClick={salvarKmGestor} disabled={!podeSalvarKm} loading={salvandoKmGestor}>
+                Confirmar alteração
               </Btn>
             </div>
           </div>

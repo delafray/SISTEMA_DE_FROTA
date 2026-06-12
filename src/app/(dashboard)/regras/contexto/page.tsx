@@ -79,10 +79,17 @@ export default function ContextoPage() {
             </FormField>
           </div>
 
-          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-            <Btn onClick={montar} variant="outline" disabled={carregando || !telefone.trim()}>{carregando ? "Montando..." : "Montar contexto"}</Btn>
-            <Btn onClick={classificarIA} disabled={classificando || !telefone.trim()}>{classificando ? "Classificando..." : "🤖 Classificar (IA)"}</Btn>
-            <span style={{ fontSize: 12, color: "#94a3b8" }}>{regras.length} regra(s) cadastrada(s)</span>
+          <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 10, flexWrap: "wrap" }}>
+              <Btn onClick={montar} variant="outline" disabled={carregando || !telefone.trim()}>{carregando ? "Montando..." : "Montar contexto"}</Btn>
+              <Btn onClick={classificarIA} disabled={classificando || !telefone.trim()}>{classificando ? "Classificando..." : "🤖 Classificar (IA)"}</Btn>
+              <span style={{ fontSize: 12, color: "#94a3b8" }}>{regras.length} regra(s) cadastrada(s)</span>
+            </div>
+            {!telefone.trim() && (
+              <p style={{ fontSize: 12, color: "#b45309", margin: 0 }}>
+                Digite um número de telefone para habilitar os botões acima.
+              </p>
+            )}
           </div>
 
           {res && (

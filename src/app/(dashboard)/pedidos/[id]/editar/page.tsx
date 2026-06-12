@@ -64,6 +64,7 @@ export default function EditarPedidoPage() {
   const [motoristaId, setMotoristaId]     = useState<string | null>(null);
   const [veiculoId, setVeiculoId]         = useState<string | null>(null);
   const [kmEditavel, setKmEditavel]       = useState(false); // gestor abriu ajuste manual
+  const [confirmarAjusteKm, setConfirmarAjusteKm] = useState(false); // guardrail antes de abrir edição
 
   // Cliente
   const [avulso, setAvulso] = useState(false);
@@ -231,7 +232,12 @@ export default function EditarPedidoPage() {
             const vinc: any = { pedido_id: id };
       if (motoristaId) vinc.motorista_id = motoristaId;
       if (veiculoId)   vinc.veiculo_id   = veiculoId;
-      await supabase.from("entregas").update(vinc).in("id", Array.from(selectedEntregas));
+      const { error: errVinc } = await supabase.from("entregas").update(vinc).in("id", Array.from(selectedEntregas));
+      if (errVinc) {
+        setErr(`Pedido salvo, mas as ${selectedEntregas.size} entregas selecionadas NÃO foram vinculadas: ${errVinc.message}. Tente vincular de novo pela aba "Adicionar Entregas".`);
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);
@@ -281,7 +287,7 @@ export default function EditarPedidoPage() {
           </div>
           <div className="m-hide" style={{ display: "flex", gap: "8px", flexShrink: 0, padding: "6px 0" }}>
             <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
+            <Btn type="submit" variant="primary" disabled={saving} loading={saving}>
               {saving ? "Salvando..." : "Atualizar Pedido"}
             </Btn>
           </div>
@@ -289,7 +295,7 @@ export default function EditarPedidoPage() {
         {/* Botões de ação visíveis apenas no mobile, abaixo das abas */}
         <div className="m-show" style={{ padding: "8px 16px", gap: "8px", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9" }}>
           <Btn href={`/despacho/${id}`} variant="outline">Cancelar</Btn>
-          <Btn type="submit" variant="primary" disabled={saving}>
+          <Btn type="submit" variant="primary" disabled={saving} loading={saving}>
             {saving ? "Salvando..." : "Atualizar Pedido"}
           </Btn>
         </div>
@@ -430,7 +436,7 @@ export default function EditarPedidoPage() {
                     </LinhaCampos>
                   </div>
                   {isGestor && (
-                    <button type="button" onClick={() => setKmEditavel(true)}
+                    <button type="button" onClick={() => setConfirmarAjusteKm(true)}
                       style={{ fontSize: "12px", fontWeight: 600, color: "#d97706", background: "#fef3c7", border: "1px solid #fcd34d", borderRadius: "8px", padding: "8px 12px", minHeight: "44px", cursor: "pointer", whiteSpace: "nowrap", alignSelf: "center" }}>
                       Ajuste manual (gestor)
                     </button>
@@ -460,14 +466,14 @@ export default function EditarPedidoPage() {
                     const cliente = one<{ nome_fantasia: string }>(fr.clientes);
                     return (
                       <Tr key={fr.id}>
-                        <Td style={{ fontWeight: 600, maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
+                        <Td style={{ fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{fr.origem ?? "—"} → {fr.destino ?? "—"}</Td>
                         <Td className="m-hide">{cliente?.nome_fantasia ?? fr.nome_cliente_avulso ?? "—"}</Td>
                         <Td className="m-hide">{fmtDate(fr.data_coleta_prevista)}</Td>
                         <Td><Badge variant={ENTREGA_STATUS_VAR[fr.status] ?? "default"}>{ENTREGA_STATUS_LABEL[fr.status] ?? fr.status}</Badge></Td>
                         <Td>
                           <button type="button" onClick={() => setConfirmDesvincular(fr.id)}
                             style={{ fontSize: "12px", color: "#ef4444", background: "none", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", padding: "6px 10px", minHeight: "44px", whiteSpace: "nowrap" }}>
-                            Desvincular
+                            🗑
                           </button>
                         </Td>
                       </Tr>
@@ -484,8 +490,15 @@ export default function EditarPedidoPage() {
             : (
               <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
                 <div style={{ fontSize: "12px", color: "#64748b" }}>
-                  Selecione as entregas que serão incluídas neste pedido e clique em <strong>Atualizar Pedido</strong> (no celular: abaixo das abas) pra confirmar.
+                  Selecione as entregas que serão incluídas neste pedido e clique em <strong>Atualizar Pedido</strong> pra confirmar.
                 </div>
+                {selectedEntregas.size > 0 && (
+                  <div style={{ position: "sticky", bottom: "8px", zIndex: 10, display: "flex", justifyContent: "flex-end" }}>
+                    <Btn type="submit" variant="primary" disabled={saving} loading={saving} style={{ boxShadow: "0 4px 12px rgba(37,99,235,0.35)" }}>
+                      {saving ? "Salvando..." : `Confirmar +${selectedEntregas.size} entrega${selectedEntregas.size !== 1 ? "s" : ""}`}
+                    </Btn>
+                  </div>
+                )}
                 <DataTable count={entregasDisp.length} label="entregas disponíveis">
                   <thead>
                     <tr>
@@ -521,6 +534,43 @@ export default function EditarPedidoPage() {
         )}
 
       </div>
+
+      {/* Modal de confirmação: ajuste manual de KM */}
+      {confirmarAjusteKm && (
+        <div
+          className="m-modal-overlay"
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="m-modal-content m-modal-body"
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "28px",
+              width: "100%", maxWidth: "400px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 12px" }}>
+              Ajuste manual de KM?
+            </h3>
+            <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 24px" }}>
+              O KM inicial foi registrado pelo motorista no início do pedido. Alterar este valor substitui o registro original. Deseja continuar?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <Btn type="button" variant="ghost" onClick={() => setConfirmarAjusteKm(false)}>
+                Cancelar
+              </Btn>
+              <Btn type="button" variant="danger" onClick={() => { setConfirmarAjusteKm(false); setKmEditavel(true); }}>
+                Sim, alterar KM
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Modal de confirmação: desvincular entrega */}
       {confirmDesvincular && (

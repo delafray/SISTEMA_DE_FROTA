@@ -3,6 +3,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { FormSection, Btn, Alert, inputStyle, selectStyle } from "@/components/ui/ds";
+import { MobileCard, MobileList } from "@/components/mobile";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
@@ -59,6 +60,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
   const [modalStep, setModalStep] = useState(0);
   const [saving, setSaving] = useState(false);
   const [confirmRemoverAjuste, setConfirmRemoverAjuste] = useState<string | null>(null);
+  const [erroAjuste, setErroAjuste] = useState("");
 
   // Form for new ajuste
   const [novoAjuste, setNovoAjuste] = useState({ tipo: "desconto", descricao: "", valor: "", parcelas: "1" });
@@ -194,7 +196,9 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
   }, [acerto, ajustes, motorista, pedidosMes, adiantamentosMes]);
 
   const addAjuste = () => {
-    if (!novoAjuste.descricao || !novoAjuste.valor) return;
+    setErroAjuste("");
+    if (!novoAjuste.descricao.trim()) { setErroAjuste("Informe a descrição do ajuste."); return; }
+    if (!novoAjuste.valor || isNaN(parseFloat(novoAjuste.valor.replace(",", ".")))) { setErroAjuste("Informe um valor válido."); return; }
     setAjustes([...ajustes, {
       id: "tmp_" + Date.now(),
       tipo: novoAjuste.tipo,
@@ -399,7 +403,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
 
           {adiantamentosMes.length > 0 && (
             <FormSection title="Adiantamentos do Mês (deduzidos)">
-              <div style={{ overflowX: "auto" }}>
+              <div className="m-hide" style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", minWidth: "320px" }}>
                 <thead>
                   <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
@@ -419,42 +423,79 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                 </tbody>
               </table>
               </div>
+              <MobileList count={adiantamentosMes.length} label="adiantamentos">
+                {adiantamentosMes.map(a => (
+                  <MobileCard
+                    key={a.id}
+                    title={a.justificativa ?? "Adiantamento"}
+                    subtitle={a.data_pagamento ? format(new Date(a.data_pagamento + "T00:00:00"), "dd/MM/yyyy") : "—"}
+                    details={[
+                      { label: "Valor", value: `-${fmtMoeda(a.valor)}` },
+                    ]}
+                  />
+                ))}
+              </MobileList>
             </FormSection>
           )}
 
           <FormSection title="Ajustes (Bônus, Descontos, Reembolsos)">
             {ajustes.length > 0 && (
-              <div style={{ overflowX: "auto", marginBottom: "16px" }}>
-              <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", minWidth: "320px" }}>
-                <thead>
-                  <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
-                    <th style={{ padding: "8px" }}>Tipo</th>
-                    <th style={{ padding: "8px" }}>Descrição</th>
-                    <th style={{ padding: "8px", textAlign: "right" }}>Valor</th>
-                    <th style={{ padding: "8px", textAlign: "center" }}>Ação</th>
-                  </tr>
-                </thead>
-                <tbody>
+              <>
+                <div className="m-hide" style={{ overflowX: "auto", marginBottom: "16px" }}>
+                <table style={{ width: "100%", fontSize: "14px", borderCollapse: "collapse", minWidth: "320px" }}>
+                  <thead>
+                    <tr style={{ borderBottom: "1px solid #e2e8f0", textAlign: "left", color: "#64748b" }}>
+                      <th style={{ padding: "8px" }}>Tipo</th>
+                      <th style={{ padding: "8px" }}>Descrição</th>
+                      <th style={{ padding: "8px", textAlign: "right" }}>Valor</th>
+                      <th style={{ padding: "8px", textAlign: "center" }}>Ação</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ajustes.map(a => {
+                      const isPos = a.tipo === "bonus" || a.tipo === "reembolso";
+                      return (
+                        <tr key={a.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
+                          <td style={{ padding: "8px", textTransform: "capitalize", whiteSpace: "nowrap" }}>{a.tipo}</td>
+                          <td style={{ padding: "8px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.descricao}>{a.descricao} {a.total_parcelas > 1 ? `(${a.parcela_atual}/${a.total_parcelas})` : ""}</td>
+                          <td style={{ padding: "8px", textAlign: "right", color: isPos ? "#16a34a" : "#dc2626", fontWeight: 600, whiteSpace: "nowrap" }}>
+                            {isPos ? "+" : "-"}{fmtMoeda(a.valor)}
+                          </td>
+                          <td style={{ padding: "8px", textAlign: "center" }}>
+                            {!isFechado && (
+                              <button type="button" onClick={() => setConfirmRemoverAjuste(a.id)} style={{ minHeight: "44px", padding: "0 8px", color: "#dc2626", background: "transparent", border: "none", cursor: "pointer", fontSize: "12px" }}>Excluir</button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+                </div>
+                <MobileList count={ajustes.length} label="ajustes">
                   {ajustes.map(a => {
                     const isPos = a.tipo === "bonus" || a.tipo === "reembolso";
                     return (
-                      <tr key={a.id} style={{ borderBottom: "1px solid #f1f5f9" }}>
-                        <td style={{ padding: "8px", textTransform: "capitalize", whiteSpace: "nowrap" }}>{a.tipo}</td>
-                        <td style={{ padding: "8px", maxWidth: "160px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={a.descricao}>{a.descricao} {a.total_parcelas > 1 ? `(${a.parcela_atual}/${a.total_parcelas})` : ""}</td>
-                        <td style={{ padding: "8px", textAlign: "right", color: isPos ? "#16a34a" : "#dc2626", fontWeight: 600, whiteSpace: "nowrap" }}>
-                          {isPos ? "+" : "-"}{fmtMoeda(a.valor)}
-                        </td>
-                        <td style={{ padding: "8px", textAlign: "center" }}>
-                          {!isFechado && (
-                            <button type="button" onClick={() => setConfirmRemoverAjuste(a.id)} style={{ minHeight: "44px", padding: "0 8px", color: "#dc2626", background: "transparent", border: "none", cursor: "pointer", fontSize: "12px" }}>Excluir</button>
-                          )}
-                        </td>
-                      </tr>
+                      <MobileCard
+                        key={a.id}
+                        title={`${a.descricao}${a.total_parcelas > 1 ? ` (${a.parcela_atual}/${a.total_parcelas})` : ""}`}
+                        subtitle={a.tipo}
+                        details={[
+                          { label: "Valor", value: `${isPos ? "+" : "-"}${fmtMoeda(a.valor)}` },
+                        ]}
+                        actions={
+                          !isFechado ? (
+                            <button type="button" onClick={() => setConfirmRemoverAjuste(a.id)}
+                              style={{ background: "transparent", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 12px" }}>
+                              Excluir
+                            </button>
+                          ) : undefined
+                        }
+                      />
                     );
                   })}
-                </tbody>
-              </table>
-              </div>
+                </MobileList>
+              </>
             )}
 
             {!isFechado && (
@@ -484,13 +525,18 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                 <Btn type="button" onClick={addAjuste}>Adicionar</Btn>
               </div>
             )}
+            {!isFechado && erroAjuste && (
+              <div style={{ marginTop: "8px", padding: "8px 12px", background: "#fef2f2", border: "1px solid #fecaca", borderRadius: "8px", color: "#b91c1c", fontSize: "12px" }}>
+                {erroAjuste}
+              </div>
+            )}
           </FormSection>
 
         </div>
 
         {/* RIGHT COLUMN: Resumo */}
         <div style={{ order: 1 }}>
-          <div style={{ background: "#0f172a", color: "#fff", padding: "24px", borderRadius: "12px", position: "sticky", top: "24px" }}>
+          <div style={{ background: "#0f172a", color: "#fff", padding: "24px", borderRadius: "12px" }} className="m-hide-sticky">
             <h4 style={{ margin: "0 0 16px 0", fontSize: "16px", fontWeight: 500, color: "#94a3b8" }}>Resumo do Mês</h4>
 
             <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "12px", fontSize: "14px" }}>
@@ -665,6 +711,7 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
                       padding: "10px",
                       cursor: "pointer",
                       width: "100%",
+                      minHeight: "44px",
                     }}
                   >
                     ← Voltar à revisão

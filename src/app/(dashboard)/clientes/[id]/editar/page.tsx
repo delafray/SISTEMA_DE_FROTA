@@ -63,6 +63,7 @@ export default function EditarClientePage() {
   const [loading, setLoading] = useState(true);
   const [err, setErr] = useState("");
   const [docValue, setDocValue] = useState("");
+  const [telValue, setTelValue] = useState("");
   const [confirmRemoveIdx, setConfirmRemoveIdx] = useState<number | null>(null);
 
   // Locais de Carregamento (gerenciado fora do react-hook-form)
@@ -86,6 +87,13 @@ export default function EditarClientePage() {
       if (cliente) {
         const docFormatado = fmtDoc(cliente.documento ?? "");
         setDocValue(docFormatado);
+        const telRaw = cliente.telefone ?? "";
+        const telFormatado = telRaw.length === 11
+          ? telRaw.replace(/(\d{2})(\d{5})(\d{4})/, "($1) $2-$3")
+          : telRaw.length === 10
+          ? telRaw.replace(/(\d{2})(\d{4})(\d{4})/, "($1) $2-$3")
+          : telRaw;
+        setTelValue(telFormatado);
         reset({
           cnpj_cpf: docFormatado,
           razao_social: cliente.razao_social ?? "",
@@ -164,7 +172,14 @@ export default function EditarClientePage() {
 
     if (clienteError) { setErr("Erro ao atualizar cliente: " + clienteError.message); return; }
 
-    await supabase.from("cliente_contatos").delete().eq("cliente_id", id);
+    // delete+reinsert não é atômico: se o DELETE falhar, abortamos ANTES de
+    // inserir (evita duplicar); se o INSERT falhar depois do delete, o aviso
+    // precisa dizer a verdade — os contatos antigos JÁ saíram do banco.
+    const { error: delContatosError } = await supabase.from("cliente_contatos").delete().eq("cliente_id", id);
+    if (delContatosError) {
+      setErr("Cliente atualizado, mas não foi possível regravar os contatos: " + delContatosError.message + ". Os contatos antigos foram mantidos.");
+      return;
+    }
     if (data.contatos.length > 0) {
       const contatos = data.contatos.map(c => ({
         empresa_id: ue.empresa_id,
@@ -178,13 +193,17 @@ export default function EditarClientePage() {
       }));
       const { error: contatosError } = await supabase.from("cliente_contatos").insert(contatos);
       if (contatosError) {
-        setErr("Cliente atualizado, mas houve erro ao salvar os contatos. Tente novamente.");
+        setErr("ATENÇÃO: os contatos antigos foram removidos e os novos NÃO foram gravados (" + contatosError.message + "). NÃO saia da tela — clique em Atualizar de novo para regravar os contatos.");
         return;
       }
     }
 
-    // Salvar locais de carregamento (delete + reinsert)
-        await supabase.from("locais_carregamento").delete().eq("cliente_id", id);
+    // Salvar locais de carregamento (delete + reinsert) — mesma proteção
+    const { error: delLocaisError } = await supabase.from("locais_carregamento").delete().eq("cliente_id", id);
+    if (delLocaisError) {
+      setErr("Cliente atualizado, mas não foi possível regravar os locais de carregamento: " + delLocaisError.message + ". Os locais antigos foram mantidos.");
+      return;
+    }
     if (locais.length > 0) {
       const locaisPayload = locais.map(l => ({
         empresa_id: ue.empresa_id,
@@ -193,9 +212,9 @@ export default function EditarClientePage() {
         endereco: l.endereco,
         principal: l.principal,
       }));
-            const { error: locaisError } = await supabase.from("locais_carregamento").insert(locaisPayload);
+      const { error: locaisError } = await supabase.from("locais_carregamento").insert(locaisPayload);
       if (locaisError) {
-        setErr("Cliente atualizado, mas houve erro ao salvar os locais de carregamento. Tente novamente.");
+        setErr("ATENÇÃO: os locais antigos foram removidos e os novos NÃO foram gravados (" + locaisError.message + "). NÃO saia da tela — clique em Atualizar de novo para regravar os locais.");
         return;
       }
     }
@@ -225,7 +244,7 @@ export default function EditarClientePage() {
         actions={
           <>
             <Btn href="/clientes" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={isSubmitting}>
+            <Btn type="submit" loading={isSubmitting} disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Atualizar Cliente"}
             </Btn>
           </>
@@ -280,7 +299,8 @@ export default function EditarClientePage() {
                     </div>
                     <FormField label="Telefone">
                       <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]}
-                        onAccept={(val) => setValue("telefone", val as string)} inputMode="tel" style={inputStyle} />
+                        value={telValue}
+                        onAccept={(val) => { setTelValue(val as string); setValue("telefone", val as string); }} inputMode="tel" style={inputStyle} />
                     </FormField>
                     <FormField label="E-mail">
                       <input {...register("email")} type="email" style={inputStyle} />
@@ -318,14 +338,14 @@ export default function EditarClientePage() {
                         <input {...register("bairro")} style={{ ...inputStyle, textTransform: "uppercase" }} />
                       </FormField>
                     </div>
-                    <div style={{ gridColumn: "span 3" }}>
+                    <div style={{ gridColumn: "span 4", display: "grid", gridTemplateColumns: "3fr 1fr", gap: "16px" }}>
                       <FormField label="Cidade">
                         <input {...register("cidade")} style={{ ...inputStyle, textTransform: "uppercase" }} />
                       </FormField>
+                      <FormField label="UF">
+                        <input {...register("uf")} maxLength={2} style={{ ...inputStyle, textTransform: "uppercase", textAlign: "center" }} />
+                      </FormField>
                     </div>
-                    <FormField label="UF">
-                      <input {...register("uf")} maxLength={2} style={{ ...inputStyle, textTransform: "uppercase", textAlign: "center" }} />
-                    </FormField>
                   </div>
                 </FormSection>
               </div>
@@ -363,7 +383,7 @@ export default function EditarClientePage() {
                               <button type="button" onClick={() => setConfirmRemoveIdx(null)} style={{ background: "transparent", color: "#64748b", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>Não</button>
                             </div>
                           ) : (
-                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} className="m-touch" style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px" }}>
                               <Trash2 size={16} />
                             </button>
                           )}
@@ -382,10 +402,10 @@ export default function EditarClientePage() {
                           </FormField>
                         </div>
                         <FormField label="Telefone">
-                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
+                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} value={field.telefone ?? ""} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <FormField label="WhatsApp">
-                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
+                          <IMaskInput mask="(00) 00000-0000" value={field.whatsapp ?? ""} onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="E-mail">
@@ -436,7 +456,7 @@ export default function EditarClientePage() {
                             />
                             <span style={{ fontSize: "13px", color: "#475569" }}>Principal</span>
                           </label>
-                          <button type="button" onClick={() => setLocais(prev => prev.filter((_, i) => i !== idx))} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                          <button type="button" onClick={() => setLocais(prev => prev.filter((_, i) => i !== idx))} className="m-touch" style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px" }}>
                             <Trash2 size={16} />
                           </button>
                         </div>
@@ -467,7 +487,7 @@ export default function EditarClientePage() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/clientes" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={isSubmitting}>
+              <Btn type="submit" loading={isSubmitting} disabled={isSubmitting}>
                 {isSubmitting ? "Salvando..." : "Atualizar Cliente"}
               </Btn>
             </div>

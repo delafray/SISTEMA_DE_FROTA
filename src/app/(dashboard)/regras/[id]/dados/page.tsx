@@ -222,17 +222,18 @@ export default function DadosRegraPage() {
       <PageHeader title={`Tabelas e campos — ${nome}`} actions={
         <>
           <Btn href={`/regras/${id}/editar`} variant="ghost">← Voltar</Btn>
-          {temAvisoValidacao && (
+          {temAvisoValidacao ? (
             <Btn onClick={salvar} loading={salvando} variant="danger">Salvar mesmo assim</Btn>
+          ) : (
+            <Btn onClick={salvar} loading={salvando}>Salvar</Btn>
           )}
-          <Btn onClick={salvar} loading={salvando}>Salvar</Btn>
         </>
       } />
 
       {temAvisoValidacao && msg && (
         <div role="alert" style={{ padding: "10px 14px", background: "#fffbeb", border: "none", borderBottom: "2px solid #fcd34d", color: "#92400e", fontSize: 13, display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
           <span>⚠️ {msg} — Clique em <b>Salvar mesmo assim</b> para gravar com esses problemas.</span>
-          <button onClick={() => { setMsg(""); setTemAvisoValidacao(false); avisoValidacaoTs.current = 0; }} style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: 700, fontSize: 16, lineHeight: 1, flexShrink: 0 }}>✕</button>
+          <button onClick={() => { setMsg(""); setTemAvisoValidacao(false); avisoValidacaoTs.current = 0; }} style={{ border: "none", background: "none", cursor: "pointer", color: "#92400e", fontWeight: 700, fontSize: 16, lineHeight: 1, flexShrink: 0, minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
       )}
 
@@ -403,7 +404,8 @@ export default function DadosRegraPage() {
           {/* Lista de campos */}
           {tabelaEscrita && (
             <>
-              <div style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
+              {/* Variante desktop: tabela horizontal */}
+              <div className="m-hide" style={{ overflowX: "auto", WebkitOverflowScrolling: "touch" }}>
               <table style={{ borderCollapse: "collapse", width: "100%", marginBottom: 10, minWidth: 600 }}>
                 <thead>
                   <tr style={{ background: "#f8fafc" }}>
@@ -425,7 +427,6 @@ export default function DadosRegraPage() {
                   )}
                   {camposEscrita.map((cf, idx) => (
                     <tr key={idx}>
-                      {/* Coluna (select das colunas da tabela selecionada) */}
                       <td style={tdSty}>
                         <select
                           value={cf.campo}
@@ -442,8 +443,6 @@ export default function DadosRegraPage() {
                           ))}
                         </select>
                       </td>
-
-                      {/* Rótulo */}
                       <td style={tdSty}>
                         <input
                           type="text"
@@ -457,8 +456,6 @@ export default function DadosRegraPage() {
                           style={{ ...inputSty, width: 160 }}
                         />
                       </td>
-
-                      {/* Tipo */}
                       <td style={tdSty}>
                         <select
                           value={cf.tipo}
@@ -474,8 +471,6 @@ export default function DadosRegraPage() {
                           <option value="data">data</option>
                         </select>
                       </td>
-
-                      {/* Obrigatório */}
                       <td style={{ ...tdSty, textAlign: "center" }}>
                         <input
                           type="checkbox"
@@ -488,8 +483,6 @@ export default function DadosRegraPage() {
                           style={{ cursor: "pointer" }}
                         />
                       </td>
-
-                      {/* Pergunta */}
                       <td style={tdSty}>
                         <input
                           type="text"
@@ -503,8 +496,6 @@ export default function DadosRegraPage() {
                           style={{ ...inputSty, width: 240 }}
                         />
                       </td>
-
-                      {/* Remover */}
                       <td style={{ ...tdSty, textAlign: "center" }}>
                         <button
                           type="button"
@@ -521,10 +512,65 @@ export default function DadosRegraPage() {
               </table>
               </div>
 
+              {/* Variante mobile: cards empilhados por campo */}
+              <div className="m-show-block" style={{ marginBottom: 10 }}>
+                {camposEscrita.length === 0 && (
+                  <div style={{ color: "#94a3b8", fontSize: 12, padding: "10px 0" }}>
+                    Nenhum campo ainda. Toque em &ldquo;+ Adicionar campo&rdquo; abaixo.
+                  </div>
+                )}
+                {camposEscrita.map((cf, idx) => (
+                  <div key={idx} style={{ background: "#f8fafc", border: "1px solid #e2e8f0", borderRadius: 8, padding: "12px", marginBottom: 8, display: "flex", flexDirection: "column", gap: 8 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <span style={{ fontSize: 12, fontWeight: 700, color: "#15803d" }}>Campo {idx + 1}</span>
+                      <button
+                        type="button"
+                        title="Remover este campo"
+                        onClick={() => setCamposEscrita(camposEscrita.filter((_, i) => i !== idx))}
+                        style={{ border: "none", background: "none", cursor: "pointer", color: "#ef4444", fontWeight: 700, fontSize: 15, minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}
+                      >
+                        ×
+                      </button>
+                    </div>
+                    <div>
+                      <label style={labelSty}>Coluna</label>
+                      <select
+                        value={cf.campo}
+                        onChange={(e) => { const novo = [...camposEscrita]; novo[idx] = { ...novo[idx], campo: e.target.value }; setCamposEscrita(novo); }}
+                        style={{ ...selectSty, width: "100%" }}
+                      >
+                        <option value="">— coluna —</option>
+                        {colunasDisponiveis.map((c) => <option key={c} value={c}>{c}</option>)}
+                      </select>
+                    </div>
+                    <div>
+                      <label style={labelSty}>Rótulo amigável</label>
+                      <input type="text" value={cf.rotulo ?? ""} placeholder="ex.: Motorista" onChange={(e) => { const novo = [...camposEscrita]; novo[idx] = { ...novo[idx], rotulo: e.target.value }; setCamposEscrita(novo); }} style={{ ...inputSty, width: "100%" }} />
+                    </div>
+                    <div>
+                      <label style={labelSty}>Tipo</label>
+                      <select value={cf.tipo} onChange={(e) => { const novo = [...camposEscrita]; novo[idx] = { ...novo[idx], tipo: e.target.value as TipoCampo }; setCamposEscrita(novo); }} style={{ ...selectSty, width: "100%" }}>
+                        <option value="texto">texto</option>
+                        <option value="numero">numero</option>
+                        <option value="data">data</option>
+                      </select>
+                    </div>
+                    <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 12, color: "#475569", minHeight: 44, cursor: "pointer" }}>
+                      <input type="checkbox" checked={cf.obrigatorio ?? false} onChange={(e) => { const novo = [...camposEscrita]; novo[idx] = { ...novo[idx], obrigatorio: e.target.checked }; setCamposEscrita(novo); }} style={{ cursor: "pointer" }} />
+                      Obrigatório
+                    </label>
+                    <div>
+                      <label style={labelSty}>Pergunta do bot</label>
+                      <input type="text" value={cf.pergunta ?? ""} placeholder="O que o bot pergunta se faltar?" onChange={(e) => { const novo = [...camposEscrita]; novo[idx] = { ...novo[idx], pergunta: e.target.value }; setCamposEscrita(novo); }} style={{ ...inputSty, width: "100%" }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
               <button
                 type="button"
                 onClick={() => setCamposEscrita([...camposEscrita, campoVazio()])}
-                style={{ fontSize: 12, color: "#15803d", background: "#dcfce7", border: "1px solid #86efac", borderRadius: 4, padding: "4px 10px", cursor: "pointer", fontWeight: 600 }}
+                style={{ fontSize: 13, color: "#15803d", background: "#dcfce7", border: "1px solid #86efac", borderRadius: 6, padding: "0 16px", cursor: "pointer", fontWeight: 600, minHeight: 44, display: "inline-flex", alignItems: "center" }}
               >
                 + Adicionar campo
               </button>

@@ -26,7 +26,7 @@ import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
-  PageHeader, Btn, Badge, KpiCard, EmptyState, SearchInput,
+  PageHeader, Btn, Badge, KpiCard, EmptyState, SearchInput, Alert,
 } from "@/components/ui/ds";
 import { FinanceiroPedido, type EmpresaOpcao } from "./_components/FinanceiroPedido";
 
@@ -82,6 +82,7 @@ export default function FaturamentoPage() {
   /** pedido com o painel financeiro aberto */
   const [pedidoAberto, setPedidoAberto] = useState<string | null>(null);
   const [baixando, setBaixando] = useState<string | null>(null);
+  const [erroBaixa, setErroBaixa] = useState("");
   /** modal de confirmação de baixa rápida */
   const [confirmBaixa, setConfirmBaixa] = useState<{ pedidoId: string; nomeCliente: string; valor: number } | null>(null);
   const baixandoRef = useRef(false);
@@ -199,16 +200,16 @@ export default function FaturamentoPage() {
     if (baixandoRef.current) return; // anti-duplo-clique síncrono
     baixandoRef.current = true;
     setBaixando(confirmBaixa.pedidoId);
-    setConfirmBaixa(null);
+    setErroBaixa("");
     const supabase = createClient();
     const { error } = await supabase.from("pedidos").update({
       pago: true,
       data_pagamento: hojeISO(),
     }).eq("id", confirmBaixa.pedidoId);
     if (error) {
-      // exibe erro para o usuário: re-abre estado de erro visível
-      alert(`Erro ao registrar pagamento: ${error.message}`);
+      setErroBaixa(`Erro ao registrar pagamento: ${error.message}`);
     } else {
+      setConfirmBaixa(null);
       await carregar();
     }
     setBaixando(null);
@@ -309,7 +310,12 @@ export default function FaturamentoPage() {
                     }}
                   >
                     <span style={{ fontSize: "13px", color: "#94a3b8", width: "14px" }}>{aberto ? "▾" : "▸"}</span>
-                    <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b", flex: 1 }}>{g.nome}</span>
+                    <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: "1px", minWidth: 0 }}>
+                      <span style={{ fontSize: "14px", fontWeight: 700, color: "#1e293b" }}>{g.nome}</span>
+                      <span className="m-show" style={{ fontSize: "11px", color: "#64748b" }}>
+                        {g.qtd} pedido{g.qtd !== 1 ? "s" : ""} · total {fmtBRL(g.valorTotal)}
+                      </span>
+                    </div>
                     <span className="m-hide" style={{ fontSize: "12px", color: "#64748b", whiteSpace: "nowrap" }}>
                       {g.qtd} pedido{g.qtd !== 1 ? "s" : ""} · {g.qtdPagos} pago{g.qtdPagos !== 1 ? "s" : ""} · faltam {g.qtd - g.qtdPagos}
                     </span>
@@ -400,8 +406,9 @@ export default function FaturamentoPage() {
             <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 20px" }}>
               O pedido será marcado como pago com a data de hoje. Esta ação pode ser revertida editando o pedido.
             </p>
+            {erroBaixa && <div style={{ marginBottom: "12px" }}><Alert variant="error">⚠ {erroBaixa}</Alert></div>}
             <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <Btn variant="outline" onClick={() => setConfirmBaixa(null)} disabled={!!baixando}>Voltar</Btn>
+              <Btn variant="outline" onClick={() => { setConfirmBaixa(null); setErroBaixa(""); }} disabled={!!baixando}>Voltar</Btn>
               <Btn variant="primary" onClick={confirmarBaixaRapida} loading={!!baixando} disabled={!!baixando}>
                 Confirmar pagamento
               </Btn>

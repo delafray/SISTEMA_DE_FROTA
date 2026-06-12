@@ -54,7 +54,7 @@ export function FluxoStepper({
                   {done ? "✓" : i + 1}
                 </div>
                 <span style={{
-                  fontSize: "10px", fontWeight: atual ? 700 : 500, whiteSpace: "nowrap",
+                  fontSize: "12px", fontWeight: atual ? 700 : 500, whiteSpace: "nowrap",
                   color: done ? "#16a34a" : atual ? "#2563eb" : "#94a3b8",
                 }}>
                   {e.label}

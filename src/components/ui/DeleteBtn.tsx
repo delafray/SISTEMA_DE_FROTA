@@ -44,12 +44,13 @@ export function DeleteBtn({ id, table, label = "registro" }: {
         onClick={(e) => { e.stopPropagation(); setConfirmando(true); }}
         className="m-touch"
         style={{
-          background: "none",
-          border: "none",
+          background: "#fef2f2",
+          border: "1px solid #fca5a5",
+          borderRadius: "6px",
           color: "#ef4444",
           cursor: "pointer",
           fontSize: "inherit",
-          padding: "4px 6px",
+          padding: "4px 10px",
           fontWeight: 600,
         }}
       >

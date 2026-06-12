@@ -114,7 +114,7 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
       descricao: r.descricao,
       categoria: r.categoria,
       tipo: r.tipo,
-      valor: String(r.valor),
+      valor: r.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       dia_vencimento: String(r.dia_vencimento),
       data_inicio: r.data_inicio,
       data_fim: r.data_fim ?? "",
@@ -330,74 +330,78 @@ export default function RecorrenciasTab({ empresas }: { empresas: string[] }) {
           alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto",
           padding: "40px 16px",
         }}>
-          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
-              {editandoId ? "Editar Recorrência" : "Nova Recorrência Financeira"}
-            </h2>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+            <div style={{ padding: "24px 24px 0" }}>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
+                {editandoId ? "Editar Recorrência" : "Nova Recorrência Financeira"}
+              </h2>
+            </div>
 
-            <FormSection>
-              <FormField label="Descrição *">
-                <input style={inputStyle} value={form.descricao}
-                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                  placeholder="Ex: Seguro Frota, IPVA Caminhão 1..." />
-              </FormField>
+            <div className="m-modal-body" style={{ flex: 1, overflowY: "auto", padding: "0 24px" }}>
+              <FormSection>
+                <FormField label="Descrição *">
+                  <input style={inputStyle} value={form.descricao}
+                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                    placeholder="Ex: Seguro Frota, IPVA Caminhão 1..." />
+                </FormField>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <FormField label="Categoria *">
-                  <select style={selectStyle} value={form.categoria}
-                    onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
-                    {CATEGORIAS_REC.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
-                  </select>
-                </FormField>
-                <FormField label="Tipo *">
-                  <select style={selectStyle} value={form.tipo}
-                    onChange={e => setForm(f => ({ ...f, tipo: e.target.value as "entrada" | "saida" }))}>
-                    <option value="saida">↓ Saída (Despesa)</option>
-                    <option value="entrada">↑ Entrada (Receita)</option>
-                  </select>
-                </FormField>
-              </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <FormField label="Categoria *">
+                    <select style={selectStyle} value={form.categoria}
+                      onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+                      {CATEGORIAS_REC.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Tipo *">
+                    <select style={selectStyle} value={form.tipo}
+                      onChange={e => setForm(f => ({ ...f, tipo: e.target.value as "entrada" | "saida" }))}>
+                      <option value="saida">↓ Saída (Despesa)</option>
+                      <option value="entrada">↑ Entrada (Receita)</option>
+                    </select>
+                  </FormField>
+                </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <FormField label="Valor Mensal (R$) *">
-                  <input type="text" inputMode="decimal" style={inputStyle} value={form.valor}
-                    onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-                    placeholder="150,00" />
-                </FormField>
-                <FormField label="Dia do Vencimento *" hint="Entre 1 e 31">
-                  <input type="number" min="1" max="31" style={inputStyle} value={form.dia_vencimento}
-                    onChange={e => setForm(f => ({ ...f, dia_vencimento: e.target.value }))} />
-                </FormField>
-              </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <FormField label="Valor Mensal (R$) *">
+                    <input type="text" inputMode="decimal" style={inputStyle} value={form.valor}
+                      onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+                      placeholder="150,00" />
+                  </FormField>
+                  <FormField label="Dia do Vencimento *" hint="Entre 1 e 31">
+                    <input type="number" min="1" max="31" style={inputStyle} value={form.dia_vencimento}
+                      onChange={e => setForm(f => ({ ...f, dia_vencimento: e.target.value }))} />
+                  </FormField>
+                </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <FormField label="Data de Início *">
-                  <input type="date" style={inputStyle} value={form.data_inicio}
-                    onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))} />
-                </FormField>
-                <FormField label="Data de Término" hint="Deixe vazio para sem fim">
-                  <input type="date" style={inputStyle} value={form.data_fim}
-                    onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))} />
-                </FormField>
-              </div>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <FormField label="Data de Início *">
+                    <input type="date" style={inputStyle} value={form.data_inicio}
+                      onChange={e => setForm(f => ({ ...f, data_inicio: e.target.value }))} />
+                  </FormField>
+                  <FormField label="Data de Término" hint="Deixe vazio para sem fim">
+                    <input type="date" style={inputStyle} value={form.data_fim}
+                      onChange={e => setForm(f => ({ ...f, data_fim: e.target.value }))} />
+                  </FormField>
+                </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f0fdf4", borderRadius: "8px" }}>
-                <input type="checkbox" id="chk-ativo" checked={form.ativo}
-                  onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} />
-                <label htmlFor="chk-ativo" style={{ fontSize: "13px", fontWeight: 600, color: "#16a34a", cursor: "pointer" }}>
-                  Recorrência ativa (será gerada no fluxo de caixa)
-                </label>
-              </div>
-            </FormSection>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f0fdf4", borderRadius: "8px" }}>
+                  <input type="checkbox" id="chk-ativo" checked={form.ativo}
+                    onChange={e => setForm(f => ({ ...f, ativo: e.target.checked }))} />
+                  <label htmlFor="chk-ativo" style={{ fontSize: "13px", fontWeight: 600, color: "#16a34a", cursor: "pointer" }}>
+                    Recorrência ativa (será gerada no fluxo de caixa)
+                  </label>
+                </div>
+              </FormSection>
+            </div>
 
-            <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
+            <div style={{ padding: "16px 24px 24px", display: "flex", gap: "8px", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9" }}>
               <Btn variant="outline" onClick={fecharModal} disabled={salvando}>Cancelar</Btn>
               {editandoId && (
                 <Btn variant="danger" onClick={() => excluir(editandoId, form.descricao)} disabled={salvando || excluindo} loading={excluindo}>
                   {excluindo ? "Excluindo..." : "Excluir"}
                 </Btn>
               )}
-              <Btn variant="primary" onClick={salvar} disabled={salvando}>
+              <Btn variant="primary" onClick={salvar} disabled={salvando} loading={salvando}>
                 {salvando ? "Salvando..." : editandoId ? "Salvar" : "Criar Recorrência"}
               </Btn>
             </div>

@@ -53,6 +53,9 @@ export async function criarUsuarioAction(
   if (!["master", "gestor", "motorista"].includes(role)) {
     return { error: "Perfil/Role selecionado é inválido." };
   }
+  if (role === "motorista" && !beta_rota && !motorista_id) {
+    return { error: "Selecione o motorista para vincular a este usuário." };
+  }
 
   // Normaliza username → email (igual ao login)
   const normalized = username

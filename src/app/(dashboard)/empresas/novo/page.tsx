@@ -80,7 +80,7 @@ export default function NovaEmpresaPage() {
         actions={
           <>
             <Btn href="/empresas" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" size="md" disabled={saving}>
+            <Btn type="submit" variant="primary" size="md" loading={saving} disabled={saving}>
               {saving ? "Salvando..." : "Salvar Empresa"}
             </Btn>
           </>
@@ -177,7 +177,7 @@ export default function NovaEmpresaPage() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/empresas" variant="outline">Cancelar</Btn>
-              <Btn type="submit" disabled={saving}>
+              <Btn type="submit" loading={saving} disabled={saving}>
                 {saving ? "Salvando..." : "Salvar Empresa"}
               </Btn>
             </div>

@@ -32,6 +32,7 @@ export default function NovoPedidoSimplePage() {
   const [clientes, setClientes] = useState<Cliente[]>([]);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [warnValorZero, setWarnValorZero] = useState(false);
 
   // Cliente
   const [avulso, setAvulso] = useState(false);
@@ -188,6 +189,9 @@ export default function NovoPedidoSimplePage() {
     if (valorPedido !== "" && parseFloat(valorPedido) < 0) {
       setErr("Valor do pedido não pode ser negativo."); return;
     }
+    if (valorPedido !== "" && parseFloat(valorPedido) === 0 && !warnValorZero) {
+      setWarnValorZero(true); return;
+    }
     if (!empresaId) {
       setErr("Empresa padrão não encontrada. Verifique seu cadastro."); return;
     }
@@ -254,10 +258,12 @@ export default function NovoPedidoSimplePage() {
             .insert(rowsEntregas );
 
     if (errEntregas) {
-      // Pedido foi criado mas entregas falharam — avisa sem bloquear
-      setErr(`Pedido criado, mas erro ao inserir entregas: ${errEntregas.message}`);
+      // Pedido criado mas entregas falharam: FICAR na tela — redirecionar
+      // escondia o aviso (sumia em frações de segundo) e o pedido seguia órfão
+      // sem o gestor saber. Ele decide: tentar de novo ou abrir o pedido.
+      setErr(`O pedido foi criado, mas as entregas NÃO foram gravadas (${errEntregas.message}). ` +
+        `Abra o pedido em Despacho e adicione as entregas por lá, ou tente salvar de novo.`);
       setSaving(false);
-      router.push(`/pedidos/${pedido.id}`);
       return;
     }
 
@@ -329,6 +335,11 @@ export default function NovoPedidoSimplePage() {
           style={{ maxWidth: "680px", margin: "0 auto", display: "flex", flexDirection: "column", gap: "24px" }}
         >
           {err && <Alert variant="error">{err}</Alert>}
+          {warnValorZero && (
+            <Alert variant="warning">
+              O valor informado é R$ 0,00. Se isso estiver correto, clique em <strong>Criar Pedido</strong> novamente para confirmar.
+            </Alert>
+          )}
 
           {/* ── BLOCO CLIENTE ── */}
           <div style={{ background: "#fff", borderRadius: "12px", padding: "24px", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
@@ -563,7 +574,8 @@ export default function NovoPedidoSimplePage() {
                   onClick={adicionarLocalAvulso}
                   style={{
                     padding: "8px 16px",
-                    background: "#f8fafc", border: "1px dashed #cbd5e1",
+                    minHeight: "44px",
+                    background: "#f0fdf4", border: "1px solid #86efac",
                     borderRadius: "8px", cursor: "pointer",
                     fontSize: "13px", color: "#059669", fontWeight: 500,
                     display: "flex", alignItems: "center", gap: "6px",
@@ -583,13 +595,16 @@ export default function NovoPedidoSimplePage() {
             </h2>
 
             <div className="m-grid" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px" }}>
-              <FormField label="Valor do pedido (R$)">
+              <div style={{ marginBottom: "8px" }}>
+                <label htmlFor="valor-pedido" style={{ display: "block", fontSize: "12px", fontWeight: 600, color: "#475569", marginBottom: "4px" }}>
+                  Valor do pedido (R$)
+                </label>
                 {/* Máscara de moeda — sem `value` (não-controlado, senão trava a digitação) */}
-                <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
-                  onAccept={(_, m) => setValorPedido(String(m.unmaskedValue))}
+                <IMaskInput id="valor-pedido" mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
+                  onAccept={(_, m) => { setValorPedido(String(m.unmaskedValue)); setWarnValorZero(false); }}
                   inputMode="decimal"
                   style={inputStyle} placeholder="R$ 0,00" />
-              </FormField>
+              </div>
 
               <FormField label="Data prevista">
                 <input
@@ -656,7 +671,8 @@ export default function NovoPedidoSimplePage() {
               onClick={adicionarEndereco}
               style={{
                 marginTop: "12px", padding: "8px 16px",
-                background: "#f8fafc", border: "1px dashed #cbd5e1",
+                minHeight: "44px",
+                background: "#eff6ff", border: "1px solid #93c5fd",
                 borderRadius: "8px", cursor: "pointer",
                 fontSize: "13px", color: "#2563eb", fontWeight: 500,
                 display: "flex", alignItems: "center", gap: "6px",
@@ -684,7 +700,7 @@ export default function NovoPedidoSimplePage() {
           {/* ── AÇÕES ── */}
           <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", paddingBottom: "32px" }}>
             <Btn href="/pedidos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving} style={{ minWidth: "160px" }}>
+            <Btn type="submit" variant="primary" disabled={saving} loading={saving} style={{ minWidth: "160px" }}>
               {saving ? "Criando pedido..." : "Criar Pedido"}
             </Btn>
           </div>
@@ -742,6 +758,11 @@ export default function NovoPedidoSimplePage() {
                   </FormField>
                 </div>
               ))}
+              {!avulsosParaSalvar.some(l => l.nome.trim()) && (
+                <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0", fontStyle: "italic" }}>
+                  Preencha o nome acima para habilitar o botão de salvar.
+                </p>
+              )}
             </div>
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
@@ -758,6 +779,7 @@ export default function NovoPedidoSimplePage() {
                 variant="primary"
                 onClick={() => handleSalvarLocaisNoCadastro(true)}
                 disabled={salvandoLocal || !avulsosParaSalvar.some(l => l.nome.trim())}
+                loading={salvandoLocal}
                 style={{ background: "#059669" }}
               >
                 {salvandoLocal ? "Salvando..." : "Salvar no cadastro"}

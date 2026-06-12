@@ -36,6 +36,9 @@ export type AbaPrincipalProps = {
   onNovoLocalChange: (v: string) => void;
   onSalvarLocais: (lista: string[]) => void;
   onAbrirDespacho: () => void;
+  abrindoDespacho?: boolean;
+  /** Feedback temporário após salvar local de carregamento com sucesso */
+  sucessoLocal?: boolean;
   onChangeStatus: (status: string) => void;
   /** Abre o popup de confirmação de cancelamento */
   onCancelar: () => void;
@@ -58,6 +61,8 @@ export function AbaPrincipal({
   onNovoLocalChange,
   onSalvarLocais,
   onAbrirDespacho,
+  abrindoDespacho = false,
+  sucessoLocal = false,
   onChangeStatus,
   onCancelar,
 }: AbaPrincipalProps) {
@@ -72,7 +77,7 @@ export function AbaPrincipal({
   ];
 
   const proximaAcao =
-    !despachado ? { label: "🚚 Despachar agora", onClick: onAbrirDespacho } :
+    !despachado ? { label: "🚚 Despachar agora", onClick: onAbrirDespacho, disabled: abrindoDespacho, loading: abrindoDespacho } :
     !emRota     ? { label: "▶ Iniciar Pedido",   onClick: () => onChangeStatus("em_andamento"), disabled: updatingStatus, loading: updatingStatus } :
     !concluido  ? { label: "✓ Concluir Pedido",  onClick: () => onChangeStatus("concluida"),    disabled: updatingStatus, loading: updatingStatus } :
     null;
@@ -88,7 +93,7 @@ export function AbaPrincipal({
         />
         {!finalizado && (
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "8px" }}>
-            <Btn variant="danger" size="sm" disabled={updatingStatus} onClick={onCancelar}>
+            <Btn variant="danger" size="sm" disabled={updatingStatus} loading={updatingStatus} onClick={onCancelar}>
               Cancelar pedido
             </Btn>
           </div>
@@ -143,18 +148,27 @@ export function AbaPrincipal({
                 )}
               </div>
             ))}
+            {sucessoLocal && (
+              <div style={{
+                padding: "6px 10px", marginTop: "4px", marginBottom: "2px",
+                background: "#f0fdf4", border: "1px solid #bbf7d0", borderRadius: "8px",
+                fontSize: "12px", color: "#166534", fontWeight: 600,
+              }}>
+                ✓ Local salvo!
+              </div>
+            )}
             {!finalizado && (
               <div style={{ display: "flex", gap: "6px", marginTop: "6px" }}>
                 <input
                   inputMode="text"
-                  style={{ fontSize: "12px", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: "8px", flex: 1 }}
+                  style={{ fontSize: "12px", padding: "6px 10px", border: "1px solid #cbd5e1", borderRadius: "8px", flex: 1, minHeight: "44px" }}
                   value={novoLocal}
                   onChange={e => onNovoLocalChange(e.target.value)}
                   onKeyDown={e => { if (e.key === "Enter" && novoLocal.trim()) { e.preventDefault(); onSalvarLocais([...locais, novoLocal.trim()]); } }}
                   placeholder="Endereço de coleta (ex.: depósito, fornecedor...)"
                 />
-                <Btn variant="outline" size="sm" disabled={salvandoLocal || !novoLocal.trim()} onClick={() => onSalvarLocais([...locais, novoLocal.trim()])}>
-                  {salvandoLocal ? "..." : "+ Adicionar"}
+                <Btn variant="outline" size="sm" disabled={salvandoLocal || !novoLocal.trim()} loading={salvandoLocal} onClick={() => onSalvarLocais([...locais, novoLocal.trim()])}>
+                  + Adicionar
                 </Btn>
               </div>
             )}
@@ -179,8 +193,8 @@ export function AbaPrincipal({
           acoes={
             !finalizado ? (
               despachado
-                ? <Btn variant="outline" size="xs" onClick={onAbrirDespacho}>🔁 Trocar caminhão/motorista</Btn>
-                : <Btn variant="primary" size="xs" onClick={onAbrirDespacho}>🚚 Despachar agora</Btn>
+                ? <Btn variant="outline" size="xs" disabled={abrindoDespacho} loading={abrindoDespacho} onClick={onAbrirDespacho}>🔁 Trocar caminhão/motorista</Btn>
+                : <Btn variant="primary" size="xs" disabled={abrindoDespacho} loading={abrindoDespacho} onClick={onAbrirDespacho}>🚚 Despachar agora</Btn>
             ) : undefined
           }
         >

@@ -24,7 +24,6 @@ import {
   Badge,
   Btn,
   EmptyState,
-  inputStyle,
   selectStyle,
 } from '@/components/ui/ds';
 import { googleMapsMultiStop } from '@/lib/routing/deepLinks';
@@ -232,7 +231,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
           🚀 Otimizar nova rota
         </h2>
 
-        <div className="m-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: 12, marginBottom: 12 }}>
+        <div className="m-grid" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12, marginBottom: 12 }}>
           <div>
             <label style={labelStyle}>Motorista *</label>
             <select
@@ -250,36 +249,29 @@ export default function RoteirizacaoPage(): React.ReactElement {
           </div>
 
           <div>
-            <label style={labelStyle}>Origem — Latitude *</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.000001"
-              value={origemLat}
-              onChange={(e) => setOrigemLat(e.target.value)}
-              placeholder="-23.5505"
-              style={inputStyle}
-            />
-          </div>
-
-          <div>
-            <label style={labelStyle}>Origem — Longitude *</label>
-            <input
-              type="number"
-              inputMode="decimal"
-              step="0.000001"
-              value={origemLng}
-              onChange={(e) => setOrigemLng(e.target.value)}
-              placeholder="-46.6333"
-              style={inputStyle}
-            />
+            <label style={labelStyle}>Origem *</label>
+            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+              <Btn variant="outline" onClick={handleUsarMinhaLocalizacao}>
+                📍 Usar minha localização
+              </Btn>
+              {origemLat && origemLng && (
+                <span style={{ fontSize: 12, color: "#16a34a", fontWeight: 600 }}>✓ Localização obtida</span>
+              )}
+            </div>
+            {/* Coordenadas brutas como campos ocultos — só para usuários avançados */}
+            {(origemLat || origemLng) && (
+              <div style={{ fontSize: 11, color: "#94a3b8", marginTop: 4 }}>
+                {origemLat}, {origemLng}
+              </div>
+            )}
           </div>
         </div>
 
+        {/* Campos de coordenadas acessíveis para edição manual (ocultos visualmente mas funcionais) */}
+        <input type="hidden" value={origemLat} readOnly />
+        <input type="hidden" value={origemLng} readOnly />
+
         <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-          <Btn variant="outline" onClick={handleUsarMinhaLocalizacao}>
-            📍 Usar minha localização
-          </Btn>
           <Btn variant="primary" onClick={handleOtimizar} loading={otimizando} disabled={!empresaId || otimizando}>
             {otimizando ? 'Otimizando…' : '🎯 Otimizar agora'}
           </Btn>
@@ -386,7 +378,7 @@ export default function RoteirizacaoPage(): React.ReactElement {
                       <Td>
                         <a
                           href={`/mobile/ajuste-rota?rota_id=${r.id}`}
-                          style={{ color: '#2563eb', fontSize: 13 }}
+                          style={{ color: '#2563eb', fontSize: 12, fontWeight: 600, minHeight: 44, display: 'inline-flex', alignItems: 'center', padding: '0 10px', border: '1px solid #bfdbfe', borderRadius: 6, background: '#eff6ff', textDecoration: 'none' }}
                           target="_blank"
                           rel="noreferrer"
                         >

@@ -418,6 +418,17 @@ export default function AdiantamentosPage() {
         <MobileList count={linhas.length} label="adiantamentos">
           {loading ? (
             <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>Carregando adiantamentos...</div>
+          ) : linhas.length === 0 ? (
+            <div style={{ textAlign: "center", padding: "32px", color: "#94a3b8", fontSize: "13px" }}>
+              {total === 0 && !busca && !filtroStatus ? (
+                <>
+                  <div style={{ marginBottom: "12px" }}>Nenhum adiantamento cadastrado.</div>
+                  <Btn href="/adiantamentos/novo">+ Novo Adiantamento</Btn>
+                </>
+              ) : (
+                "Nenhum adiantamento encontrado para esta busca."
+              )}
+            </div>
           ) : linhas.map(a => {
             const data = a.created_at ? new Date(a.created_at).toLocaleDateString("pt-BR") : "—";
             const statusColor = a.status === "aprovado" ? "#16a34a" : a.status === "recusado" ? "#ef4444" : a.status === "prestado" ? "#2563eb" : "#eab308";

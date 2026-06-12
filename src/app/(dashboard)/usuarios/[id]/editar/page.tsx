@@ -17,6 +17,7 @@ export default function EditarUsuarioPage() {
   const [motoristaId, setMotoristaId] = useState("");
   const [motoristas, setMotoristas] = useState<{ id: string; nome: string }[]>([]);
   const [betaRota, setBetaRota] = useState(false);
+  const [senhaErro, setSenhaErro] = useState("");
 
   useEffect(() => {
     const load = async () => {
@@ -68,7 +69,7 @@ export default function EditarUsuarioPage() {
         actions={
           <>
             <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-            <Btn type="submit" form="edit-user-form" size="md" disabled={pending}>
+            <Btn type="submit" form="edit-user-form" size="md" loading={pending} disabled={pending}>
               {pending ? "Salvando..." : "Atualizar Usuário"}
             </Btn>
           </>
@@ -83,7 +84,13 @@ export default function EditarUsuarioPage() {
             </div>
           )}
 
-          <form id="edit-user-form" action={formAction} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
+          <form id="edit-user-form" action={formAction} onSubmit={(e) => {
+            setSenhaErro("");
+            if (senha && senha.length < 6) {
+              e.preventDefault();
+              setSenhaErro("A nova senha deve ter pelo menos 6 caracteres.");
+            }
+          }} style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
             <input type="hidden" name="usuario_id" value={id} />
 
             <FormSection title="Dados do Usuário">
@@ -128,11 +135,12 @@ export default function EditarUsuarioPage() {
                     name="senha"
                     type="password"
                     value={senha}
-                    onChange={e => setSenha(e.target.value)}
+                    onChange={e => { setSenha(e.target.value); setSenhaErro(""); }}
                     style={inputStyle}
                     placeholder="Mínimo 6 caracteres"
                     minLength={6}
                   />
+                  {senhaErro && <p style={{ color: "#ef4444", fontSize: "11px", marginTop: "4px" }}>{senhaErro}</p>}
                 </FormField>
 
                 {role === "motorista" && (
@@ -181,7 +189,7 @@ export default function EditarUsuarioPage() {
 
             <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
               <Btn href="/usuarios" variant="outline">Cancelar</Btn>
-              <Btn type="submit" form="edit-user-form" disabled={pending}>
+              <Btn type="submit" form="edit-user-form" loading={pending} disabled={pending}>
                 {pending ? "Salvando..." : "Atualizar Usuário"}
               </Btn>
             </div>

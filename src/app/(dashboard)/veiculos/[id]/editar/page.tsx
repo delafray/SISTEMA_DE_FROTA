@@ -103,7 +103,8 @@ export default function EditarVeiculoPage() {
     if (saving) return;
     setErr("");
     if (!f.placa || !f.marca || !f.modelo || !f.ano || !f.chassi || !f.renavam) {
-      setErr("Preencha todos os campos obrigatórios (*)"); return;
+      setDadosSubTab("principal");
+      setErr("Preencha todos os campos obrigatórios (*) na sub-aba Principal"); return;
     }
     setSaving(true);
     const { error: dbErr } = await supabase.from("veiculos").update({
@@ -114,10 +115,10 @@ export default function EditarVeiculoPage() {
       cor: f.cor || null, apelido: f.apelido || null,
       categoria: f.categoria || null,
       // km_atual NUNCA é atualizado pela aba Dados (campo protegido — aba Manutenções)
-      capacidade_carga_kg: f.capacidade_carga_kg ? parseFloat(f.capacidade_carga_kg) : null,
+      capacidade_carga_kg: f.capacidade_carga_kg ? parseFloat(f.capacidade_carga_kg.replace(",", ".")) : null,
       eixos: f.eixos ? parseInt(f.eixos) : null,
-      pbt_kg: f.pbt_kg ? parseFloat(f.pbt_kg) : null,
-      capacidade_tanque: f.capacidade_tanque ? parseFloat(f.capacidade_tanque) : null,
+      pbt_kg: f.pbt_kg ? parseFloat(f.pbt_kg.replace(",", ".")) : null,
+      capacidade_tanque: f.capacidade_tanque ? parseFloat(f.capacidade_tanque.replace(",", ".")) : null,
       ipva_vencimento: f.ipva_vencimento || null,
       licenciamento_vencimento: f.licenciamento_vencimento || null,
       seguro_vencimento: f.seguro_vencimento || null,
@@ -151,7 +152,7 @@ export default function EditarVeiculoPage() {
             {tab === "dados" && (
               <>
                 <span className="m-hide"><Btn href="/veiculos" variant="outline">Cancelar</Btn></span>
-                <Btn type="button" onClick={handleSubmit} variant="primary" loading={saving}>
+                <Btn type="submit" form="form-veiculo" variant="primary" loading={saving}>
                   Atualizar
                 </Btn>
               </>
@@ -192,7 +193,7 @@ export default function EditarVeiculoPage() {
           });
 
           return (
-            <form onSubmit={handleSubmit}>
+            <form id="form-veiculo" onSubmit={handleSubmit}>
               <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
                 {/* SUB-TABS */}
@@ -374,8 +375,8 @@ export default function EditarVeiculoPage() {
 
                 <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
                   <Btn href="/veiculos" variant="outline">Cancelar</Btn>
-                  <Btn type="submit" disabled={saving}>
-                    {saving ? "Salvando..." : "Atualizar Veículo"}
+                  <Btn type="submit" loading={saving}>
+                    Atualizar Veículo
                   </Btn>
                 </div>
               </div>
@@ -397,6 +398,7 @@ export default function EditarVeiculoPage() {
                   fontSize: "12px", fontWeight: histTab === key ? 700 : 500,
                   color: histTab === key ? "#2563eb" : "#64748b",
                   borderBottom: histTab === key ? "2px solid #2563eb" : "2px solid transparent",
+                  minHeight: "44px",
                 }}>{label} ({key === "abast" ? abastecimentos.length : pedidoHist.length})</button>
               ))}
             </div>

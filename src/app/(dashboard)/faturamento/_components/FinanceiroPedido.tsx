@@ -81,6 +81,8 @@ export function FinanceiroPedido({
   const [dataEdit, setDataEdit] = useState<Record<string, string>>({});
   // confirmação de estorno de parcela paga
   const [confirmEstorno, setConfirmEstorno] = useState<Parcela | null>(null);
+  // confirmação de baixa de parcela (evita toque acidental no mobile)
+  const [confirmBaixaParcela, setConfirmBaixaParcela] = useState<Parcela | null>(null);
   // confirmação de remoção do parcelamento
   const [confirmRemover, setConfirmRemover] = useState(false);
   // ref para bloquear duplo clique no salvar data
@@ -135,10 +137,12 @@ export function FinanceiroPedido({
   const sincronizarPagoPedido = async (lista: Parcela[]) => {
     const todasPagas = lista.length > 0 && lista.every(p => p.pago);
     const ultima = [...lista].reverse().find(p => p.data_pagamento);
-    await supabase.from("pedidos").update({
+    const { error } = await supabase.from("pedidos").update({
       pago: todasPagas,
       data_pagamento: todasPagas ? (ultima?.data_pagamento ?? hojeISO()) : null,
     }).eq("id", pedidoId);
+    // dessincronia parcela×pedido é dado financeiro inconsistente — nunca silenciar
+    if (error) setErro(`Parcela gravada, mas falhou ao sincronizar o status do pedido: ${error.message}. Recarregue a tela e confira.`);
   };
 
   // ── salvar condições (forma, empresa, acréscimos/descontos) ───────────────
@@ -171,10 +175,17 @@ export function FinanceiroPedido({
 
     if (novosValores) {
       const mudadas = parcelas.filter((p, i) => Math.abs(p.valor - novosValores![i]) > 0.009);
-      await Promise.all(mudadas.map(p => {
+      const resultados = await Promise.all(mudadas.map(p => {
         const i = parcelas.findIndex(x => x.id === p.id);
         return sb.from("pedido_parcelas").update({ valor: novosValores![i], updated_at: new Date().toISOString() }).eq("id", p.id);
       }));
+      const falhas = resultados.filter((r: { error: { message: string } | null }) => r.error);
+      if (falhas.length > 0) {
+        setErro(`Condições salvas, mas ${falhas.length} parcela(s) não foram reconciliadas: ${falhas[0].error.message}. Recarregando os valores reais do banco.`);
+        await carregar();
+        setSalvando(false);
+        return;
+      }
       setParcelas(prev => prev.map((p, i) => ({ ...p, valor: novosValores![i] })));
     }
     avisar("✓ Condições salvas" + (novosValores ? " — parcelas reconciliadas." : "."));
@@ -194,7 +205,15 @@ export function FinanceiroPedido({
     setSalvando(true);
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
-    await sb.from("pedido_parcelas").delete().eq("pedido_id", pedidoId);
+    // delete+insert não é atômico: se o delete falhar, abortar ANTES do insert
+    // (senão duplicaria parcelas); se o insert falhar, avisar que as antigas
+    // foram removidas — recarregar mostra o estado real do banco.
+    const { error: errDel } = await sb.from("pedido_parcelas").delete().eq("pedido_id", pedidoId);
+    if (errDel) {
+      setErro(`Não foi possível limpar as parcelas antigas: ${errDel.message}. Nada foi alterado.`);
+      setSalvando(false);
+      return;
+    }
     const { error } = await sb.from("pedido_parcelas").insert(novas.map(p => ({
       pedido_id: pedidoId,
       empresa_id: empresaId,
@@ -203,10 +222,13 @@ export function FinanceiroPedido({
       vencimento: p.vencimento,
       pago: false,
     })));
-    if (error) setErro(error.message);
-    else {
+    if (error) {
+      setErro(`As parcelas antigas foram removidas, mas as novas NÃO foram gravadas: ${error.message}. Clique em Gerar de novo para regravar.`);
       await carregar();
-      await supabase.from("pedidos").update({ pago: false, data_pagamento: null }).eq("id", pedidoId);
+    } else {
+      await carregar();
+      const { error: errPedido } = await supabase.from("pedidos").update({ pago: false, data_pagamento: null }).eq("id", pedidoId);
+      if (errPedido) setErro(`Parcelas geradas, mas falhou ao atualizar o status do pedido: ${errPedido.message}. Recarregue e confira.`);
       avisar(`✓ ${novas.length} parcela${novas.length > 1 ? "s" : ""} gerada${novas.length > 1 ? "s" : ""}.`);
       onMudou();
     }
@@ -252,10 +274,18 @@ export function FinanceiroPedido({
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const sb = supabase as any;
     const mudadas = parcelas.filter((p, i) => Math.abs(p.valor - novos[i]) > 0.009);
-    await Promise.all(mudadas.map(p => {
+    const resultados = await Promise.all(mudadas.map(p => {
       const i = parcelas.findIndex(x => x.id === p.id);
       return sb.from("pedido_parcelas").update({ valor: novos[i], updated_at: new Date().toISOString() }).eq("id", p.id);
     }));
+    const falhas = resultados.filter((r: { error: { message: string } | null }) => r.error);
+    if (falhas.length > 0) {
+      setErro(`${falhas.length} parcela(s) não foram gravadas: ${falhas[0].error.message}. Recarregando os valores reais do banco.`);
+      await carregar();
+      setValorEdit(prev => { const n = { ...prev }; delete n[parcela.id]; return n; });
+      setSalvando(false);
+      return;
+    }
     setParcelas(prev => prev.map((p, i) => ({ ...p, valor: novos[i] })));
     setValorEdit(prev => { const n = { ...prev }; delete n[parcela.id]; return n; });
     const seguintes = mudadas.filter(p => p.id !== parcela.id).length;
@@ -335,9 +365,9 @@ export function FinanceiroPedido({
           <div style={{ fontSize: "11px", color: "#64748b", fontWeight: 600, marginBottom: "3px" }}>Total a receber</div>
           <div style={{ fontSize: "15px", fontWeight: 800, color: "#16a34a", padding: "4px 0" }}>{fmtBRL(total)}</div>
         </div>
-        <div>
-          <Btn variant="primary" size="xs" disabled={salvando} onClick={salvarCondicoes}>
-            {salvando ? "Salvando…" : "💾 Salvar"}
+        <div style={{ display: "flex" }}>
+          <Btn variant="primary" size="sm" disabled={salvando} loading={salvando} onClick={salvarCondicoes}>
+            {salvando ? "Salvando…" : "💾 Salvar condições"}
           </Btn>
         </div>
       </div>
@@ -402,7 +432,7 @@ export function FinanceiroPedido({
                     type="number" step="0.01" min="0" inputMode="decimal"
                     style={{
                       ...inputStyle, width: "90px", padding: "4px 8px", fontSize: "12px",
-                      borderColor: salvando && valorEdit[p.id] != null ? "#2563eb" : undefined,
+                      borderColor: valorEdit[p.id] != null ? (salvando ? "#2563eb" : "#d97706") : undefined,
                     }}
                     value={valorEdit[p.id] ?? String(p.valor)}
                     disabled={p.pago || salvando}
@@ -410,6 +440,9 @@ export function FinanceiroPedido({
                     onBlur={() => salvarValorParcela(p)}
                     title="Ao salvar, as parcelas seguintes não pagas redistribuem o restante"
                   />
+                  {valorEdit[p.id] != null && !salvando && (
+                    <span style={{ fontSize: "10px", color: "#d97706", position: "absolute", bottom: "-14px", left: 0, whiteSpace: "nowrap" }}>Não salvo</span>
+                  )}
                   {salvando && valorEdit[p.id] != null && (
                     <span style={{ fontSize: "10px", color: "#2563eb", position: "absolute", bottom: "-14px", left: 0, whiteSpace: "nowrap" }}>Salvando…</span>
                   )}
@@ -432,7 +465,7 @@ export function FinanceiroPedido({
                     </Btn>
                   ) : (
                     <Btn variant="outline" size="xs" disabled={salvando}
-                      onClick={() => atualizarParcela(p, { pago: true, data_pagamento: hojeISO() })}>
+                      onClick={() => setConfirmBaixaParcela(p)}>
                       💰 Baixar
                     </Btn>
                   )}
@@ -465,6 +498,40 @@ export function FinanceiroPedido({
                   await atualizarParcela(p, { pago: false, data_pagamento: null });
                 }}>
                 Confirmar estorno
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal de confirmação de baixa de parcela */}
+      {confirmBaixaParcela && (
+        <div className="m-modal-overlay" style={{
+          position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex",
+          alignItems: "center", justifyContent: "center", zIndex: 1100, padding: "16px",
+        }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 8px" }}>Confirmar recebimento</h2>
+            <p style={{ fontSize: "13px", color: "#475569", margin: "0 0 4px" }}>
+              Parcela {confirmBaixaParcela.numero}ª — {fmtBRL(confirmBaixaParcela.valor)}
+            </p>
+            {confirmBaixaParcela.vencimento && (
+              <p style={{ fontSize: "12px", color: "#64748b", margin: "0 0 20px" }}>
+                Vencimento: {fmtDate(confirmBaixaParcela.vencimento)}
+              </p>
+            )}
+            <p style={{ fontSize: "12px", color: "#94a3b8", margin: "0 0 20px" }}>
+              A parcela será marcada como paga com a data de hoje.
+            </p>
+            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+              <Btn variant="outline" onClick={() => setConfirmBaixaParcela(null)} disabled={salvando}>Voltar</Btn>
+              <Btn variant="primary" disabled={salvando} loading={salvando}
+                onClick={async () => {
+                  const p = confirmBaixaParcela;
+                  setConfirmBaixaParcela(null);
+                  await atualizarParcela(p, { pago: true, data_pagamento: hojeISO() });
+                }}>
+                Confirmar recebimento
               </Btn>
             </div>
           </div>

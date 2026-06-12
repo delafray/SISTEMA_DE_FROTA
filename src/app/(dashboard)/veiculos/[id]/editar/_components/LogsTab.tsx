@@ -311,8 +311,8 @@ export default function LogsTab({ veiculoId, empresaId }: { veiculoId: string; e
               <Btn type="button" variant="outline" onClick={() => setReatribuirLog(null)} disabled={salvandoReatr}>
                 Cancelar
               </Btn>
-              <Btn type="button" onClick={confirmarReatribuir} disabled={salvandoReatr}>
-                {salvandoReatr ? "Reatribuindo..." : "Confirmar reatribuição"}
+              <Btn type="button" onClick={confirmarReatribuir} loading={salvandoReatr}>
+                Confirmar reatribuição
               </Btn>
             </div>
           </div>

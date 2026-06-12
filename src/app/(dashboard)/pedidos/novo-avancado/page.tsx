@@ -50,6 +50,8 @@ export default function NovoPedidoAvancadoPage() {
   const [step, setStep] = useState(1);
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
+  const [loadingDados, setLoadingDados] = useState(true);
+  const [confirmarPedidoVazio, setConfirmarPedidoVazio] = useState(false);
 
   // Form State
   const [motoristaId, setMotoristaId] = useState("");
@@ -132,6 +134,7 @@ export default function NovoPedidoAvancadoPage() {
       if (veicsList.length > 0) {
         await carregarStatusVeiculos(veicsList.map(v => v.id), "");
       }
+      setLoadingDados(false);
     };
     load();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -203,8 +206,8 @@ export default function NovoPedidoAvancadoPage() {
 
   const handleEntregasNext = () => {
     if (selectedEntregas.size === 0) {
-      const confirmEmpty = window.confirm("Você não selecionou nenhuma entrega. Deseja criar um pedido vazio?");
-      if (!confirmEmpty) return;
+      setConfirmarPedidoVazio(true);
+      return;
     }
     setErr("");
     setStep(3);
@@ -291,15 +294,22 @@ export default function NovoPedidoAvancadoPage() {
       return;
     }
 
-    // Vincular entregas selecionadas
+    // Vincular entregas selecionadas — se o vínculo falhar, o gestor PRECISA
+    // saber (pedido criado sem as entregas era falha silenciosa).
     if (selectedEntregas.size > 0) {
-      await supabase.from("entregas")
+      const { error: errVinculo } = await supabase.from("entregas")
         .update({
           pedido_id:    pedido.id,
           motorista_id: motoristaId,
           veiculo_id:   veiculoId,
         })
         .in("id", Array.from(selectedEntregas));
+      if (errVinculo) {
+        setErr(`O pedido foi criado, mas as ${selectedEntregas.size} entregas selecionadas NÃO foram vinculadas (${errVinculo.message}). ` +
+          `Abra o pedido em ✏️ Editar e vincule as entregas pela aba "Adicionar Entregas".`);
+        setSaving(false);
+        return;
+      }
     }
 
     setSaving(false);
@@ -363,14 +373,14 @@ export default function NovoPedidoAvancadoPage() {
               <p style={{ color: "#64748b", marginBottom: "24px", fontSize: "14px" }}>Selecione o motorista responsável por este pedido.</p>
 
               <FormField label="Motorista Selecionado">
-                <select value={motoristaId} onChange={e => setMotoristaId(e.target.value)} style={{ ...selectStyle, fontSize: "16px", padding: "12px" }}>
-                  <option value="">Selecione na lista...</option>
+                <select value={motoristaId} onChange={e => setMotoristaId(e.target.value)} disabled={loadingDados} style={{ ...selectStyle, fontSize: "16px", padding: "12px" }}>
+                  <option value="">{loadingDados ? "Carregando motoristas..." : "Selecione na lista..."}</option>
                   {motoristas.map(m => <option key={m.id} value={m.id}>{m.nome}</option>)}
                 </select>
               </FormField>
 
               <div style={{ display: "flex", justifyContent: "flex-end", marginTop: "32px" }}>
-                <Btn type="button" variant="primary" onClick={handleMotoristaNext} disabled={checkingVeiculo} loading={checkingVeiculo}>
+                <Btn type="button" variant="primary" size="md" onClick={handleMotoristaNext} disabled={checkingVeiculo} loading={checkingVeiculo}>
                   {checkingVeiculo ? "Verificando..." : "Avançar para Entregas →"}
                 </Btn>
               </div>
@@ -414,7 +424,7 @@ export default function NovoPedidoAvancadoPage() {
                                 style={{ width: "18px", height: "18px", accentColor: "#2563eb", cursor: "pointer" }}
                               />
                             </Td>
-                            <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", maxWidth: "180px" }}>
+                            <Td style={{ fontWeight: checked ? 600 : 400, color: checked ? "#1e40af" : "inherit", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                               <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
                                 {fr.origem?.split("-")[0] ?? "—"} → {fr.destino?.split("-")[0] ?? "—"}
                               </div>
@@ -459,7 +469,7 @@ export default function NovoPedidoAvancadoPage() {
 
               <div className="m-stack" style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "32px" }}>
 
-                {/* Lado Esquerdo: Veículo e Roteiro */}
+                {/* Veículo e Roteiro */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "24px" }}>
 
                   {/* Legenda de cores */}
@@ -573,7 +583,7 @@ export default function NovoPedidoAvancadoPage() {
                   </div>
                 </div>
 
-                {/* Lado Direito: Formulário Dados Pedido */}
+                {/* Dados do Pedido */}
                 <div style={{ display: "flex", flexDirection: "column", gap: "16px", background: "#f8fafc", padding: "20px", borderRadius: "8px", border: "1px solid #e2e8f0" }}>
                   <h3 style={{ fontSize: "16px", fontWeight: 600, margin: 0, color: "#334155" }}>Dados do Pedido</h3>
 
@@ -589,8 +599,6 @@ export default function NovoPedidoAvancadoPage() {
                   </FormField>
 
                   <FormField label="Valor do Pedido (R$)">
-                    {/* Máscara de moeda — defaultValue (não-controlado, senão trava a
-                        digitação); preserva o valor ao voltar de outro passo do wizard. */}
                     <IMaskInput mask="R$ num" blocks={{ num: { mask: Number, scale: 2, thousandsSeparator: ".", radix: ",", normalizeZeros: true, padFractionalZeros: true } }}
                       defaultValue={f.valor_pedido}
                       onAccept={(_, m) => setF(p => ({ ...p, valor_pedido: String(m.unmaskedValue) }))}
@@ -637,6 +645,7 @@ export default function NovoPedidoAvancadoPage() {
                   type="submit"
                   variant="primary"
                   disabled={saving || !!veiculoEmManutencao}
+                  loading={saving}
                   style={{ padding: "0 32px", fontSize: "16px" }}
                 >
                   {saving ? "Gerando Pedido..." : "Confirmar e Criar Pedido ✓"}
@@ -647,6 +656,43 @@ export default function NovoPedidoAvancadoPage() {
 
         </div>
       </div>
+
+      {/* Modal confirmação: avançar sem nenhuma entrega */}
+      {confirmarPedidoVazio && (
+        <div
+          className="m-modal-overlay"
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="m-modal-content m-modal-body"
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "28px",
+              width: "100%", maxWidth: "400px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 12px" }}>
+              Criar pedido sem entregas?
+            </h3>
+            <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 24px" }}>
+              Nenhuma entrega foi selecionada. Você pode adicionar entregas depois pela tela de Edição do pedido. Deseja continuar assim mesmo?
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <Btn type="button" variant="ghost" onClick={() => setConfirmarPedidoVazio(false)}>
+                Voltar e selecionar
+              </Btn>
+              <Btn type="button" variant="primary" onClick={() => { setConfirmarPedidoVazio(false); setErr(""); setStep(3); }}>
+                Criar pedido vazio
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

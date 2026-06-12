@@ -63,9 +63,10 @@ function CienteModal({
   // ocultar=true → some do painel; false → fica/volta pendente na tela
   onDone: (id: string, nota: string, ocultar: boolean) => void;
 }) {
-  const [nota, setNota]         = useState("");
-  const [salvando, setSalvando] = useState(false);
-  const [erro, setErro]         = useState("");
+  const [nota, setNota]               = useState("");
+  const [salvandoAcao, setSalvandoAcao] = useState<"manter" | "ocultar" | null>(null);
+  const salvando = salvandoAcao !== null;
+  const [erro, setErro]               = useState("");
   const jaCiente = !!lembrete.ciente_em;
   // Pendente + sem nota → "manter na tela" seria um clique vazio; já ciente,
   // o botão sempre faz algo (reabre), então libera mesmo sem nota.
@@ -74,7 +75,7 @@ function CienteModal({
   // Se a gravação falhar, o modal FICA ABERTO com o erro — fechar fingindo que
   // salvou fazia o lembrete sumir da tela com o banco intacto.
   const salvar = async (ocultar: boolean) => {
-    setSalvando(true);
+    setSalvandoAcao(ocultar ? "ocultar" : "manter");
     setErro("");
     try {
       const res = await fetch(`/api/lembretes/${lembrete.id}/ciente`, {
@@ -91,13 +92,15 @@ function CienteModal({
     } catch {
       setErro("Falha de conexão ao salvar. Verifique a internet e tente de novo.");
     } finally {
-      setSalvando(false);
+      setSalvandoAcao(null);
     }
   };
 
   return (
     <div
-      onClick={onClose}
+      // toque fora só fecha se NÃO há providência digitada — no celular o toque
+      // acidental no backdrop descartava o texto sem aviso
+      onClick={() => { if (!salvando && nota.trim().length === 0) onClose(); }}
       style={{
         position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)",
         zIndex: 1100, display: "flex", alignItems: "center", justifyContent: "center",
@@ -175,20 +178,20 @@ function CienteModal({
               cursor: salvando || manterDesabilitado ? "default" : "pointer",
             }}
           >
-            {salvando ? "Salvando..." : jaCiente ? "📌 Salvar e voltar pra tela" : "📌 Salvar e manter na tela"}
+            {salvandoAcao === "manter" ? "Salvando..." : jaCiente ? "📌 Salvar e voltar pra tela" : "📌 Salvar e manter na tela"}
           </button>
           <button
             onClick={() => salvar(true)}
             disabled={salvando}
             style={{
               padding: "10px 16px", minHeight: "44px",
-              background: salvando ? "#d1d5db" : "#16a34a",
+              background: salvandoAcao === "ocultar" ? "#d1d5db" : "#16a34a",
               color: "#fff", border: "none", borderRadius: "8px",
               fontSize: "12px", fontWeight: 600,
-              cursor: salvando ? "default" : "pointer",
+              cursor: salvandoAcao === "ocultar" ? "default" : "pointer",
             }}
           >
-            {salvando ? "Salvando..." : jaCiente ? "✅ Salvar e manter oculto" : "✅ Ciente e ocultar"}
+            {salvandoAcao === "ocultar" ? "Salvando..." : jaCiente ? "✅ Salvar e manter oculto" : "✅ Ciente e ocultar"}
           </button>
         </div>
       </div>
@@ -250,7 +253,8 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
       >
         {/* Header */}
         <div style={{
-          padding: "16px 20px", borderBottom: "1px solid #e2e8f0",
+          padding: "16px 20px", paddingTop: "max(16px, env(safe-area-inset-top, 16px))",
+          borderBottom: "1px solid #e2e8f0",
           display: "flex", justifyContent: "space-between", alignItems: "center",
         }}>
           <span style={{ fontWeight: 700, fontSize: "15px", color: "#1e293b" }}>
@@ -314,7 +318,7 @@ function HistoricoModal({ onClose }: { onClose: () => void }) {
                     <button
                       onClick={() => setCienteAlvo(l)}
                       style={{
-                        flexShrink: 0, padding: "8px 12px", minHeight: "44px",
+                        flexShrink: 0, padding: "8px 12px", minHeight: "44px", minWidth: "44px",
                         background: "#16a34a",
                         color: "#fff", border: "none", borderRadius: "6px",
                         fontSize: "11px", fontWeight: 600,
@@ -517,7 +521,7 @@ export function LembretesWidget() {
               <button
                 onClick={() => setCienteAlvo(l)}
                 style={{
-                  flexShrink: 0, padding: "6px 12px", minHeight: "44px",
+                  flexShrink: 0, padding: "6px 12px", minHeight: "44px", minWidth: "44px",
                   background: "#16a34a",
                   color: "#fff", border: "none", borderRadius: "6px",
                   fontSize: "12px", fontWeight: 600,

@@ -49,6 +49,8 @@ export default function AutorizacoesPage() {
   // Mobile: qual card de telefone está expandido
   const [expandido, setExpandido] = useState<string | null>(null);
   const [erroOp, setErroOp] = useState<string | null>(null);
+  const [confirmarRegistrar, setConfirmarRegistrar] = useState<{ tel: Tel; regra: Regra; novasPermissoes: Record<string, string> } | null>(null);
+  const [salvandoRegistrar, setSalvandoRegistrar] = useState(false);
 
   const mapRow = (r: Tel): Tel => ({ ...r, permissoes: (r.permissoes as Record<string, string>) ?? {} });
 
@@ -70,13 +72,15 @@ export default function AutorizacoesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const patch = async (id: string, fields: Partial<Tel>) => {
+  const patch = async (id: string, fields: Partial<Tel>, descricao?: string) => {
     const anterior = tels.find((t) => t.id === id);
     setTels((p) => p.map((t) => (t.id === id ? { ...t, ...fields } : t)));
     const { error } = await supabase.from("telefones").update({ ...fields, atualizado_em: new Date().toISOString() }).eq("id", id);
     if (error) {
       if (anterior) setTels((p) => p.map((t) => (t.id === id ? anterior : t)));
-      setErroOp("Não foi possível salvar. Tente novamente.");
+      const tel = anterior?.telefone_exibicao ?? anterior?.telefone ?? id;
+      const acao = descricao ?? "alterar permissão";
+      setErroOp(`Não foi possível ${acao} de ${tel}. Tente novamente.`);
     }
   };
 
@@ -87,7 +91,11 @@ export default function AutorizacoesPage() {
     const prox = ciclo[(atual + 1) % ciclo.length] ?? "";
     const novo = { ...tel.permissoes };
     if (prox === "") delete novo[regra.id]; else novo[regra.id] = prox;
-    patch(tel.id, { permissoes: novo });
+    if (prox === "registrar") {
+      setConfirmarRegistrar({ tel, regra, novasPermissoes: novo });
+      return;
+    }
+    patch(tel.id, { permissoes: novo }, `alterar permissão de "${regra.nome}"`);
   };
 
   const salvarTel = async () => {
@@ -199,17 +207,17 @@ export default function AutorizacoesPage() {
                 <tr key={t.id}>
                   <td onClick={() => setTelModal({ mode: "edit", id: t.id, valor: t.telefone_exibicao ?? t.telefone })}
                     style={{ ...cell, ...sticky, left: 0, textAlign: "left", padding: "2px 8px", fontWeight: 600, borderRight: "1px solid #e2e8f0", cursor: "pointer", opacity: off ? 0.6 : 1 }} title="Editar telefone">
-                    {t.telefone_exibicao ?? t.telefone}
+                    <span style={{ textDecoration: "underline", textDecorationStyle: "dotted", textDecorationColor: "#94a3b8" }}>{t.telefone_exibicao ?? t.telefone}</span>
                   </td>
                   <td onClick={() => setUsrModal({ id: t.id })}
                     style={{ ...cell, ...sticky, left: COL_TEL, textAlign: "left", padding: "2px 8px", borderRight: "2px solid #cbd5e1", cursor: "pointer", opacity: off ? 0.6 : 1 }} title="Vincular/trocar usuário">
-                    <div style={{ color: t.usuario_nome ? "#1e293b" : "#cbd5e1" }}>{t.usuario_nome ?? "— vincular —"}</div>
+                    <div style={{ color: t.usuario_nome ? "#1e293b" : "#cbd5e1", textDecoration: "underline", textDecorationStyle: "dotted", textDecorationColor: "#94a3b8" }}>{t.usuario_nome ?? "— vincular —"}</div>
                   </td>
                   <td style={{ ...cell, background: rowBg }}>
-                    <button onClick={() => patch(t.id, { ativo: !t.ativo })} title="Pode usar o sistema?" style={flag(t.ativo, "#16a34a")}>{t.ativo ? "✓" : ""}</button>
+                    <button onClick={() => patch(t.id, { ativo: !t.ativo }, "alterar status ativo")} title="Pode usar o sistema?" style={flag(t.ativo, "#16a34a")}>{t.ativo ? "✓" : ""}</button>
                   </td>
                   <td style={{ ...cell, background: rowBg, borderRight: "2px solid #cbd5e1" }}>
-                    <button onClick={() => !off && patch(t.id, { anotar: !t.anotar })} disabled={off} title="Pode anotar?" style={flag(t.anotar && !off, "#0d9488", off)}>{t.anotar && !off ? "✓" : ""}</button>
+                    <button onClick={() => !off && patch(t.id, { anotar: !t.anotar }, "alterar permissão de anotar")} disabled={off} title="Pode anotar?" style={flag(t.anotar && !off, "#0d9488", off)}>{t.anotar && !off ? "✓" : ""}</button>
                   </td>
                   {regras.map((rg) => {
                     const nv = (t.permissoes[rg.id] ?? "") as Nivel;
@@ -298,7 +306,7 @@ export default function AutorizacoesPage() {
                           <div style={{ fontSize: 11, color: "#64748b" }}>Pode usar o sistema</div>
                         </div>
                         <button
-                          onClick={() => patch(t.id, { ativo: !t.ativo })}
+                          onClick={() => patch(t.id, { ativo: !t.ativo }, "alterar status ativo")}
                           style={{ minWidth: 52, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${t.ativo ? "#16a34a" : "#cbd5e1"}`, background: t.ativo ? "#16a34a" : "#fff", color: t.ativo ? "#fff" : "#64748b", fontWeight: 700, fontSize: 13, cursor: "pointer" }}>
                           {t.ativo ? "✓ Sim" : "Não"}
                         </button>
@@ -311,7 +319,7 @@ export default function AutorizacoesPage() {
                           <div style={{ fontSize: 11, color: "#64748b" }}>Pode registrar via bot</div>
                         </div>
                         <button
-                          onClick={() => !off && patch(t.id, { anotar: !t.anotar })}
+                          onClick={() => !off && patch(t.id, { anotar: !t.anotar }, "alterar permissão de anotar")}
                           disabled={off}
                           style={{ minWidth: 52, minHeight: 44, padding: "0 12px", borderRadius: 8, border: `2px solid ${t.anotar && !off ? "#0d9488" : "#cbd5e1"}`, background: t.anotar && !off ? "#0d9488" : "#fff", color: t.anotar && !off ? "#fff" : "#94a3b8", fontWeight: 700, fontSize: 13, cursor: off ? "not-allowed" : "pointer", opacity: off ? 0.5 : 1 }}>
                           {t.anotar && !off ? "✓ Sim" : "Não"}
@@ -398,6 +406,33 @@ export default function AutorizacoesPage() {
         </Modal>
       )}
 
+      {confirmarRegistrar && (
+        <Modal onClose={() => setConfirmarRegistrar(null)} title="Confirmar acesso de REGISTRAR">
+          <p style={{ fontSize: 13, color: "#1e293b", margin: "0 0 14px" }}>
+            Você está dando acesso de <b style={{ color: "#15803d" }}>REGISTRAR</b> (criar dados no sistema) para o número <b>{confirmarRegistrar.tel.telefone_exibicao ?? confirmarRegistrar.tel.telefone}</b> na regra <b>{confirmarRegistrar.regra.nome}</b>.
+          </p>
+          <p style={{ fontSize: 12, color: "#b45309", margin: "0 0 14px", padding: "8px 10px", background: "#fffbeb", borderRadius: 6 }}>
+            ⚠️ Com esse nível, esse número poderá criar registros no banco via bot. Confirme apenas se tiver certeza.
+          </p>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: 8 }}>
+            <button style={btnGhost} onClick={() => setConfirmarRegistrar(null)} disabled={salvandoRegistrar}>Cancelar</button>
+            <button
+              style={{ ...btnPri, background: "#15803d", opacity: salvandoRegistrar ? 0.65 : 1, cursor: salvandoRegistrar ? "wait" : "pointer" }}
+              disabled={salvandoRegistrar}
+              onClick={async () => {
+                // aguarda a gravação ANTES de fechar — fire-and-forget fechava o
+                // modal e, em erro, o rollback acontecia "do nada" pro usuário
+                setSalvandoRegistrar(true);
+                await patch(confirmarRegistrar.tel.id, { permissoes: confirmarRegistrar.novasPermissoes }, `dar acesso REGISTRAR em "${confirmarRegistrar.regra.nome}"`);
+                setSalvandoRegistrar(false);
+                setConfirmarRegistrar(null);
+              }}>
+              {salvandoRegistrar ? "Salvando…" : "Confirmar"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
       {usrModal && (
         <Modal onClose={() => setUsrModal(null)} title="Vincular usuário">
           <div style={{ maxHeight: 280, overflow: "auto", border: "1px solid #e2e8f0", borderRadius: 8 }}>
@@ -422,13 +457,13 @@ function flag(on: boolean, cor: string, off = false): React.CSSProperties {
 
 function Modal({ title, children, onClose }: { title: string; children: React.ReactNode; onClose: () => void }) {
   return (
-    <div onClick={onClose} style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+    <div onClick={onClose} className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(15,23,42,0.45)", zIndex: 60, display: "flex", alignItems: "center", justifyContent: "center", padding: 16 }}>
+      <div onClick={(e) => e.stopPropagation()} className="m-modal-content" style={{ background: "#fff", borderRadius: 12, width: "100%", maxWidth: 420, boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
         <div style={{ padding: "12px 16px", borderBottom: "1px solid #e2e8f0", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span style={{ fontWeight: 700, fontSize: 14 }}>{title}</span>
-          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8" }}>✕</button>
+          <button onClick={onClose} style={{ border: "none", background: "none", cursor: "pointer", fontSize: 18, color: "#94a3b8", minWidth: 44, minHeight: 44, display: "inline-flex", alignItems: "center", justifyContent: "center" }}>✕</button>
         </div>
-        <div style={{ padding: 16 }}>{children}</div>
+        <div className="m-modal-body" style={{ padding: 16 }}>{children}</div>
       </div>
     </div>
   );

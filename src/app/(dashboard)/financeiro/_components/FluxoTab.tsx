@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { Btn, DataTable, Th, Td, Tr, Badge, EmptyState, Alert, inputStyle } from "@/components/ui/ds";
 import { coletarEventos, type EventoFinanceiro, CAT_LABEL, CAT_COR } from "@/lib/financeiro/coletor";
@@ -73,9 +73,16 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [empresas, periodo, incluirProvisao]);
 
+  const [erroSaldo, setErroSaldo] = useState("");
+
   const salvarSaldo = () => {
-    const num = parseFloat(saldoInput);
-    if (isNaN(num)) return;
+    const normalizado = saldoInput.replace(",", ".");
+    const num = parseFloat(normalizado);
+    if (isNaN(num)) {
+      setErroSaldo("Informe um valor válido (ex: 1500,00).");
+      return;
+    }
+    setErroSaldo("");
     setSaldoBanco(num);
     if (typeof window !== "undefined") window.localStorage.setItem(lsKey, String(num));
     setEditandoSaldo(false);
@@ -131,17 +138,24 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
         <div style={{ background: "#fff", border: "1px solid #e2e8f0", borderRadius: "8px", padding: "10px 12px" }}>
           <div style={{ fontSize: "10px", fontWeight: 700, color: "#94a3b8", textTransform: "uppercase" }}>💳 Saldo Banco (hoje)</div>
           {editandoSaldo ? (
-            <div style={{ display: "flex", gap: "4px", marginTop: "4px" }}>
-              <input type="number" step="0.01" value={saldoInput} onChange={e => setSaldoInput(e.target.value)} autoFocus
-                style={{ ...inputStyle, padding: "4px 8px", fontSize: "14px" }} />
-              <Btn type="button" size="xs" onClick={salvarSaldo}>OK</Btn>
+            <div style={{ display: "flex", flexDirection: "column", gap: "4px", marginTop: "4px" }}>
+              <div style={{ display: "flex", gap: "4px" }}>
+                <input type="text" inputMode="decimal" value={saldoInput} onChange={e => { setSaldoInput(e.target.value); setErroSaldo(""); }} autoFocus
+                  style={{ ...inputStyle, padding: "4px 8px", fontSize: "14px" }} placeholder="1500,00" />
+                <Btn type="button" size="xs" onClick={salvarSaldo}>OK</Btn>
+                <Btn type="button" size="xs" variant="outline" onClick={() => { setEditandoSaldo(false); setErroSaldo(""); }}>✕</Btn>
+              </div>
+              {erroSaldo && <span style={{ fontSize: "11px", color: "#dc2626" }}>{erroSaldo}</span>}
             </div>
           ) : (
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-              <span style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>{fmtBRL(saldoBanco)}</span>
-              <Btn variant="outline" size="xs" onClick={() => { setSaldoInput(String(saldoBanco)); setEditandoSaldo(true); }}>
-                Editar saldo
-              </Btn>
+            <div style={{ display: "flex", flexDirection: "column", gap: "2px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b" }}>{fmtBRL(saldoBanco)}</span>
+                <Btn variant="outline" size="xs" onClick={() => { setSaldoInput(saldoBanco.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 })); setEditandoSaldo(true); }}>
+                  Editar saldo
+                </Btn>
+              </div>
+              <span style={{ fontSize: "10px", color: "#94a3b8" }}>Salvo neste aparelho (não sincroniza)</span>
             </div>
           )}
         </div>
@@ -203,10 +217,9 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
             </thead>
             <tbody>
               {linhas.map(l => (
-                <>
+                <React.Fragment key={l.data}>
                   {/* Cabeçalho do dia */}
                   <tr
-                    key={`hd:${l.data}`}
                     style={{
                       background: l.data === range.dataAtual
                         ? "#eff6ff"
@@ -284,7 +297,7 @@ export default function FluxoTab({ empresas }: { empresas: string[] }) {
                       </Tr>
                     );
                   })}
-                </>
+                </React.Fragment>
               ))}
             </tbody>
           </DataTable>

@@ -120,7 +120,7 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
     setForm({
       descricao: d.descricao,
       categoria: d.categoria,
-      valor: String(d.valor),
+      valor: d.valor.toLocaleString("pt-BR", { minimumFractionDigits: 2, maximumFractionDigits: 2 }),
       data_vencimento: d.data_vencimento,
       fornecedor: d.fornecedor ?? "",
       forma_pagamento: d.forma_pagamento ?? "",
@@ -283,10 +283,10 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
                     <Td style={{ textAlign: "center" }}>
                       <div style={{ display: "flex", gap: "4px", justifyContent: "center" }}>
                         {d.pago
-                          ? <ActionBtn title="Desfazer pagamento" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, false)}>↩</ActionBtn>
-                          : <ActionBtn title="Marcar como pago" variant="success" disabled={salvandoId === d.id} onClick={() => marcarPago(d.id, true)}>✓</ActionBtn>
+                          ? <ActionBtn title="Desfazer pagamento" disabled={salvandoId === d.id || excluindo} onClick={() => marcarPago(d.id, false)}>{salvandoId === d.id ? "…" : "↩"}</ActionBtn>
+                          : <ActionBtn title="Marcar como pago" variant="success" disabled={salvandoId === d.id || excluindo} onClick={() => marcarPago(d.id, true)}>{salvandoId === d.id ? "…" : "✓"}</ActionBtn>
                         }
-                        <ActionBtn title="Excluir" variant="danger" onClick={() => excluir(d.id, d.descricao)}>✕</ActionBtn>
+                        <ActionBtn title="Excluir" variant="danger" disabled={excluindo || salvandoId === d.id} onClick={() => excluir(d.id, d.descricao)}>{excluindo ? "…" : "✕"}</ActionBtn>
                       </div>
                     </Td>
                   </Tr>
@@ -341,82 +341,86 @@ export default function AvulsasTab({ empresas }: { empresas: string[] }) {
           alignItems: "flex-start", justifyContent: "center", zIndex: 1000, overflowY: "auto",
           padding: "40px 16px",
         }}>
-          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
-            <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
-              {editandoId ? "Editar Despesa" : "Nova Despesa Avulsa"}
-            </h2>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", width: "100%", maxWidth: "480px", boxShadow: "0 20px 60px rgba(0,0,0,0.3)", display: "flex", flexDirection: "column", maxHeight: "90vh" }}>
+            <div style={{ padding: "24px 24px 0" }}>
+              <h2 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 16px" }}>
+                {editandoId ? "Editar Despesa" : "Nova Despesa Avulsa"}
+              </h2>
+            </div>
 
-            <FormSection>
-              <FormField label="Descrição *">
-                <input style={inputStyle} value={form.descricao}
-                  onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
-                  placeholder="Ex: Pedágio BR-116" />
-              </FormField>
-
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <FormField label="Categoria *">
-                  <select style={selectStyle} value={form.categoria}
-                    onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
-                    {CATEGORIAS.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
-                  </select>
+            <div className="m-modal-body" style={{ flex: 1, overflowY: "auto", padding: "0 24px" }}>
+              <FormSection>
+                <FormField label="Descrição *">
+                  <input style={inputStyle} value={form.descricao}
+                    onChange={e => setForm(f => ({ ...f, descricao: e.target.value }))}
+                    placeholder="Ex: Pedágio BR-116" />
                 </FormField>
-                <FormField label="Valor (R$) *">
-                  <input type="text" inputMode="decimal" style={inputStyle} value={form.valor}
-                    onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
-                    placeholder="150,00" />
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <FormField label="Categoria *">
+                    <select style={selectStyle} value={form.categoria}
+                      onChange={e => setForm(f => ({ ...f, categoria: e.target.value }))}>
+                      {CATEGORIAS.map(c => <option key={c} value={c}>{c.replace(/_/g, " ")}</option>)}
+                    </select>
+                  </FormField>
+                  <FormField label="Valor (R$) *">
+                    <input type="text" inputMode="decimal" style={inputStyle} value={form.valor}
+                      onChange={e => setForm(f => ({ ...f, valor: e.target.value }))}
+                      placeholder="150,00" />
+                  </FormField>
+                </div>
+
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
+                  <FormField label="Data de Vencimento *">
+                    <input type="date" style={inputStyle} value={form.data_vencimento}
+                      onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))} />
+                  </FormField>
+                  <FormField label="Forma de Pagamento">
+                    <select style={selectStyle} value={form.forma_pagamento}
+                      onChange={e => setForm(f => ({ ...f, forma_pagamento: e.target.value }))}>
+                      <option value="">Não informado</option>
+                      <option value="pix">PIX</option>
+                      <option value="dinheiro">Dinheiro</option>
+                      <option value="cartao_debito">Cartão Débito</option>
+                      <option value="cartao_credito">Cartão Crédito</option>
+                      <option value="boleto">Boleto</option>
+                      <option value="transferencia">Transferência</option>
+                    </select>
+                  </FormField>
+                </div>
+
+                <FormField label="Fornecedor / Credor">
+                  <input style={inputStyle} value={form.fornecedor}
+                    onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
+                    placeholder="Ex: Posto Shell" />
                 </FormField>
-              </div>
 
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "8px" }}>
-                <FormField label="Data de Vencimento *">
-                  <input type="date" style={inputStyle} value={form.data_vencimento}
-                    onChange={e => setForm(f => ({ ...f, data_vencimento: e.target.value }))} />
+                <FormField label="Observações">
+                  <textarea style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} value={form.observacoes}
+                    onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} />
                 </FormField>
-                <FormField label="Forma de Pagamento">
-                  <select style={selectStyle} value={form.forma_pagamento}
-                    onChange={e => setForm(f => ({ ...f, forma_pagamento: e.target.value }))}>
-                    <option value="">Não informado</option>
-                    <option value="pix">PIX</option>
-                    <option value="dinheiro">Dinheiro</option>
-                    <option value="cartao_debito">Cartão Débito</option>
-                    <option value="cartao_credito">Cartão Crédito</option>
-                    <option value="boleto">Boleto</option>
-                    <option value="transferencia">Transferência</option>
-                  </select>
-                </FormField>
-              </div>
 
-              <FormField label="Fornecedor / Credor">
-                <input style={inputStyle} value={form.fornecedor}
-                  onChange={e => setForm(f => ({ ...f, fornecedor: e.target.value }))}
-                  placeholder="Ex: Posto Shell" />
-              </FormField>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f0fdf4", borderRadius: "8px" }}>
+                  <input type="checkbox" id="chk-pago" checked={form.pago}
+                    onChange={e => setForm(f => ({ ...f, pago: e.target.checked, data_pagamento: e.target.checked ? hoje_ : "" }))} />
+                  <label htmlFor="chk-pago" style={{ fontSize: "13px", fontWeight: 600, color: "#16a34a", cursor: "pointer" }}>Já pago</label>
+                  {form.pago && (
+                    <input type="date" value={form.data_pagamento}
+                      onChange={e => setForm(f => ({ ...f, data_pagamento: e.target.value }))}
+                      style={{ ...inputStyle, width: "auto", marginLeft: "auto", padding: "4px 8px", fontSize: "12px" }} />
+                  )}
+                </div>
+              </FormSection>
+            </div>
 
-              <FormField label="Observações">
-                <textarea style={{ ...inputStyle, minHeight: "60px", resize: "vertical" }} value={form.observacoes}
-                  onChange={e => setForm(f => ({ ...f, observacoes: e.target.value }))} />
-              </FormField>
-
-              <div style={{ display: "flex", alignItems: "center", gap: "8px", padding: "8px 12px", background: "#f0fdf4", borderRadius: "8px" }}>
-                <input type="checkbox" id="chk-pago" checked={form.pago}
-                  onChange={e => setForm(f => ({ ...f, pago: e.target.checked, data_pagamento: e.target.checked ? hoje_ : "" }))} />
-                <label htmlFor="chk-pago" style={{ fontSize: "13px", fontWeight: 600, color: "#16a34a", cursor: "pointer" }}>Já pago</label>
-                {form.pago && (
-                  <input type="date" value={form.data_pagamento}
-                    onChange={e => setForm(f => ({ ...f, data_pagamento: e.target.value }))}
-                    style={{ ...inputStyle, width: "auto", marginLeft: "auto", padding: "4px 8px", fontSize: "12px" }} />
-                )}
-              </div>
-            </FormSection>
-
-            <div style={{ display: "flex", gap: "8px", marginTop: "16px", justifyContent: "flex-end" }}>
+            <div style={{ padding: "16px 24px 24px", display: "flex", gap: "8px", justifyContent: "flex-end", borderTop: "1px solid #f1f5f9" }}>
               <Btn variant="outline" onClick={fecharModal} disabled={salvando}>Cancelar</Btn>
               {editandoId && (
                 <Btn variant="danger" onClick={() => excluir(editandoId, form.descricao)} disabled={salvando || excluindo} loading={excluindo}>
                   {excluindo ? "Excluindo..." : "Excluir"}
                 </Btn>
               )}
-              <Btn variant="primary" onClick={salvar} disabled={salvando}>
+              <Btn variant="primary" onClick={salvar} disabled={salvando} loading={salvando}>
                 {salvando ? "Salvando..." : editandoId ? "Salvar" : "Criar Despesa"}
               </Btn>
             </div>

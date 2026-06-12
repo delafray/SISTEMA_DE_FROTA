@@ -144,7 +144,7 @@ export default function NovoClientePage() {
         actions={
           <>
             <Btn href="/clientes" variant="outline">Cancelar</Btn>
-            <Btn type="submit" size="md" disabled={isSubmitting}>
+            <Btn type="submit" size="md" loading={isSubmitting} disabled={isSubmitting}>
               {isSubmitting ? "Salvando..." : "Salvar Cliente"}
             </Btn>
           </>
@@ -252,14 +252,14 @@ export default function NovoClientePage() {
                         <input {...register("bairro")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
                       </FormField>
                     </div>
-                    <div style={{ gridColumn: "span 3" }}>
+                    <div style={{ gridColumn: "span 4", display: "grid", gridTemplateColumns: "3fr 1fr", gap: "16px" }}>
                       <FormField label="Cidade">
                         <input {...register("cidade")} type="text" style={{ ...inputStyle, textTransform: "uppercase" }} />
                       </FormField>
+                      <FormField label="UF">
+                        <input {...register("uf")} type="text" maxLength={2} style={{ ...inputStyle, textTransform: "uppercase", textAlign: "center" }} />
+                      </FormField>
                     </div>
-                    <FormField label="UF">
-                      <input {...register("uf")} type="text" maxLength={2} style={{ ...inputStyle, textTransform: "uppercase", textAlign: "center" }} />
-                    </FormField>
                   </div>
                 </FormSection>
               </div>
@@ -298,7 +298,7 @@ export default function NovoClientePage() {
                               <button type="button" onClick={() => setConfirmRemoveIdx(null)} style={{ background: "transparent", color: "#64748b", border: "1px solid #cbd5e1", borderRadius: "4px", padding: "2px 8px", fontSize: "11px", cursor: "pointer" }}>Não</button>
                             </div>
                           ) : (
-                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex" }}>
+                            <button type="button" onClick={() => setConfirmRemoveIdx(index)} className="m-touch" style={{ background: "none", border: "none", color: "#ef4444", cursor: "pointer", display: "flex", alignItems: "center", justifyContent: "center", padding: "12px" }}>
                               <Trash2 size={16} />
                             </button>
                           )}
@@ -318,10 +318,10 @@ export default function NovoClientePage() {
                           </FormField>
                         </div>
                         <FormField label="Telefone">
-                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
+                          <IMaskInput mask={[{ mask: "(00) 0000-0000" }, { mask: "(00) 00000-0000" }]} value={field.telefone ?? ""} onAccept={(val) => setValue(`contatos.${index}.telefone`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <FormField label="WhatsApp">
-                          <IMaskInput mask="(00) 00000-0000" onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
+                          <IMaskInput mask="(00) 00000-0000" value={field.whatsapp ?? ""} onAccept={(val) => setValue(`contatos.${index}.whatsapp`, val as string)} inputMode="tel" style={inputStyle} />
                         </FormField>
                         <div style={{ gridColumn: "span 2" }}>
                           <FormField label="E-mail">

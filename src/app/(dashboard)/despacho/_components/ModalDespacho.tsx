@@ -98,9 +98,14 @@ export function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onC
           boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
         }}
       >
-        <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: "0 0 4px" }}>
-          {titulo}
-        </h2>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", marginBottom: "4px" }}>
+          <h2 style={{ fontSize: "18px", fontWeight: 700, color: "#1e293b", margin: 0 }}>
+            {titulo}
+          </h2>
+          <Btn type="button" variant="ghost" size="xs" onClick={onClose} disabled={saving} style={{ marginLeft: "8px", flexShrink: 0 }}>
+            ✕
+          </Btn>
+        </div>
         <p style={{ fontSize: "13px", color: "#64748b", margin: "0 0 20px" }}>
           {descricao}
         </p>
@@ -158,6 +163,22 @@ export function ModalDespacho({ pedidosIds, veiculos, motoristas, onConfirm, onC
           <p style={{ fontSize: "12px", color: "#f59e0b", margin: "0 0 12px" }}>
             Nenhum motorista padrão encontrado para este caminhão. Selecione manualmente.
           </p>
+        )}
+
+        {veiculoId && motoristaId && (
+          <div style={{
+            padding: "10px 14px", marginBottom: "8px", marginTop: "4px",
+            background: "#eff6ff", border: "1px solid #bfdbfe", borderRadius: "8px",
+            fontSize: "13px", color: "#1e40af", lineHeight: 1.5,
+          }}>
+            <strong>Confirmar:</strong>{" "}
+            {pedidosIds.length > 1
+              ? `${pedidosIds.length} pedidos`
+              : "1 pedido"
+            }{" "}→{" "}
+            <strong>{(() => { const v = veiculos.find(vv => vv.id === veiculoId); return v ? veiculoLabel(v) : veiculoId; })()}</strong>{" "}
+            com <strong>{motoristas.find(m => m.id === motoristaId)?.nome}</strong>
+          </div>
         )}
 
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", marginTop: "24px" }}>

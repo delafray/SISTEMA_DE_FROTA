@@ -13,6 +13,7 @@
 
 import { useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
+import { Btn } from "@/components/ui/ds";
 
 export default function PedidoRedirectPage() {
   const { id } = useParams<{ id: string }>();
@@ -31,19 +32,22 @@ export default function PedidoRedirectPage() {
     return (
       <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "16px", color: "#64748b" }}>
         <span>Não foi possível abrir o pedido.</span>
-        <button
-          onClick={() => router.push("/pedidos")}
-          style={{ padding: "10px 20px", borderRadius: "8px", border: "1px solid #cbd5e1", background: "#fff", color: "#1e293b", fontSize: "14px", cursor: "pointer", minHeight: "44px" }}
-        >
+        <Btn variant="outline" onClick={() => router.push("/pedidos")}>
           Voltar para Pedidos
-        </button>
+        </Btn>
       </div>
     );
   }
 
   return (
-    <div style={{ display: "flex", alignItems: "center", justifyContent: "center", height: "100%", color: "#64748b" }}>
-      Abrindo no Despacho…
+    <div style={{ display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", height: "100%", gap: "12px", color: "#64748b" }}>
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" aria-hidden>
+        <circle cx="12" cy="12" r="9" stroke="#cbd5e1" strokeWidth="3" />
+        <path d="M21 12a9 9 0 0 0-9-9" stroke="#2563eb" strokeWidth="3" strokeLinecap="round">
+          <animateTransform attributeName="transform" type="rotate" from="0 12 12" to="360 12 12" dur="0.8s" repeatCount="indefinite" />
+        </path>
+      </svg>
+      <span>Abrindo no Despacho…</span>
     </div>
   );
 }

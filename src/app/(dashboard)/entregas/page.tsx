@@ -465,9 +465,17 @@ export default function PedidosPage() {
 
       <div style={{ flex: 1, overflow: "auto", padding: "16px", display: "flex", flexDirection: "column", gap: "12px" }}>
         {erroPago && (
-          <div style={{ background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5", borderRadius: "8px", padding: "10px 14px", fontSize: "13px", marginBottom: "4px" }}>
-            {erroPago}
-            <button onClick={() => setErroPago("")} style={{ float: "right", background: "none", border: "none", cursor: "pointer", fontWeight: 700, color: "#b91c1c" }}>✕</button>
+          // fixed: o erro precisa aparecer ONDE o usuário está — no topo da
+          // lista ele ficava fora da viewport depois do scroll e ninguém via
+          <div role="alert" style={{
+            position: "fixed", left: "16px", right: "16px", zIndex: 1300,
+            bottom: "calc(var(--bottom-nav-h, 56px) + env(safe-area-inset-bottom, 0px) + 16px)",
+            background: "#fee2e2", color: "#b91c1c", border: "1px solid #fca5a5",
+            borderRadius: "8px", padding: "12px 14px", fontSize: "13px", fontWeight: 600,
+            boxShadow: "0 8px 24px rgba(0,0,0,0.18)", display: "flex", alignItems: "center", gap: "10px",
+          }}>
+            <span style={{ flex: 1 }}>{erroPago}</span>
+            <button onClick={() => setErroPago("")} style={{ background: "none", border: "none", cursor: "pointer", fontWeight: 700, color: "#b91c1c", minHeight: "44px", minWidth: "44px" }}>✕</button>
           </div>
         )}
         <div className="m-kpi-grid" style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "16px" }}>
@@ -497,12 +505,24 @@ export default function PedidosPage() {
               {mostrarPagos ? "↩ Ativos" : "💰 Pagos"}
             </Btn>
             {mostrarPagos && (
-              <select value={filtroPeriodo} onChange={e => { setFiltroPeriodo(e.target.value); setPagina(0); }}
-                style={{ ...selectStyle, flex: "1 1 120px" }}>
-                <option value="mes_atual">Mês Atual</option>
-                <option value="ano_atual">Ano Atual</option>
-                <option value="todos">Todos</option>
-              </select>
+              <>
+                <select value={filtroPeriodo} onChange={e => { setFiltroPeriodo(e.target.value); setPagina(0); }}
+                  style={{ ...selectStyle, flex: "1 1 120px" }}>
+                  <option value="mes_atual">Mês Atual</option>
+                  <option value="ano_atual">Ano Atual</option>
+                  <option value="personalizado">Personalizado</option>
+                  <option value="todos">Todos</option>
+                </select>
+                {filtroPeriodo === "personalizado" && (
+                  <div style={{ display: "flex", gap: "6px", alignItems: "center", width: "100%" }}>
+                    <input type="date" value={dataInicio} onChange={e => { setDataInicio(e.target.value); setPagina(0); }}
+                      style={{ ...inputStyle, flex: 1, padding: "6px 8px", fontSize: "13px" }} />
+                    <span style={{ fontSize: "11px", color: "#64748b", flexShrink: 0 }}>até</span>
+                    <input type="date" value={dataFim} onChange={e => { setDataFim(e.target.value); setPagina(0); }}
+                      style={{ ...inputStyle, flex: 1, padding: "6px 8px", fontSize: "13px" }} />
+                  </div>
+                )}
+              </>
             )}
           </div>
         </div>
@@ -606,6 +626,22 @@ export default function PedidosPage() {
         <MobileList count={loading ? undefined : linhas.length} label="pedidos">
           {loading ? (
             <div style={{ padding: "32px 0", textAlign: "center", color: "#94a3b8", fontSize: "14px" }}>Carregando pedidos...</div>
+          ) : linhas.length === 0 ? (
+            <div style={{ padding: "32px 16px", textAlign: "center" }}>
+              {buscaServidor || filtroStatus ? (
+                <div>
+                  <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 12px" }}>Nenhum pedido encontrado para esta busca.</p>
+                  <Btn variant="outline" size="sm" onClick={() => { setBusca(""); setBuscaServidor(""); setFiltroStatus(""); setMostrarPagos(false); setPagina(0); }}>
+                    Limpar filtros
+                  </Btn>
+                </div>
+              ) : (
+                <div>
+                  <p style={{ color: "#64748b", fontSize: "14px", margin: "0 0 12px" }}>Nenhum pedido cadastrado.</p>
+                  <Btn href="/entregas/novo" size="sm">+ Criar primeiro pedido</Btn>
+                </div>
+              )}
+            </div>
           ) : linhas.map(pedido => {
             const veiculo   = Array.isArray(pedido.veiculos) ? pedido.veiculos[0] : pedido.veiculos;
             const motorista = Array.isArray(pedido.motoristas) ? pedido.motoristas[0] : pedido.motoristas;
@@ -634,7 +670,7 @@ export default function PedidosPage() {
                         size="sm"
                         variant="outline"
                         loading={loadingPago.has(pedido.id)}
-                        onClick={(e) => { e.stopPropagation(); setConfirmReceberPedido(pedido.id); }}
+                        onClick={(e) => { e.stopPropagation(); if (loadingPago.has(pedido.id)) return; setConfirmReceberPedido(pedido.id); }}
                         style={{ color: "#16a34a", borderColor: "#16a34a" }}
                       >
                         Receber
@@ -652,29 +688,40 @@ export default function PedidosPage() {
       </div>
 
       {/* Modal de confirmação — Receber pagamento */}
-      {confirmReceberPedido && (
-        <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
-          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
-            <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Confirmar recebimento</h3>
-            <p style={{ margin: "0 0 20px", fontSize: "14px", color: "#475569" }}>Deseja marcar este pedido como pago? A data de hoje será registrada como data de pagamento.</p>
-            <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
-              <Btn variant="outline" onClick={() => setConfirmReceberPedido(null)}>Voltar</Btn>
-              <Btn
-                variant="primary"
-                loading={loadingPago.has(confirmReceberPedido)}
-                onClick={async () => {
-                  const pedidoId = confirmReceberPedido;
-                  setConfirmReceberPedido(null);
-                  await handleMarcarPago(pedidoId);
-                }}
-                style={{ background: "#16a34a" }}
-              >
-                Confirmar
-              </Btn>
+      {confirmReceberPedido && (() => {
+        const pedidoConfirm = linhas.find(p => p.id === confirmReceberPedido);
+        const rotulo = rotuloPedido((pedidoConfirm as { numero?: string | null } | undefined)?.numero, confirmReceberPedido);
+        const valorConfirm = pedidoConfirm?.valor_pedido
+          ? `R$ ${pedidoConfirm.valor_pedido.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`
+          : null;
+        return (
+          <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", zIndex: 1000, display: "flex", alignItems: "center", justifyContent: "center", padding: "16px" }}>
+            <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 10px 40px rgba(0,0,0,0.15)" }}>
+              <h3 style={{ margin: "0 0 8px", fontSize: "16px", color: "#1e293b" }}>Confirmar recebimento</h3>
+              <p style={{ margin: "0 0 4px", fontSize: "14px", color: "#475569" }}>
+                Confirmar recebimento do <strong>Pedido {rotulo}</strong>
+                {valorConfirm && <> — <strong style={{ color: "#16a34a" }}>{valorConfirm}</strong></>}?
+              </p>
+              <p style={{ margin: "0 0 20px", fontSize: "13px", color: "#94a3b8" }}>A data de hoje será registrada como data de pagamento.</p>
+              <div style={{ display: "flex", gap: "8px", justifyContent: "flex-end" }}>
+                <Btn variant="outline" onClick={() => setConfirmReceberPedido(null)}>Voltar</Btn>
+                <Btn
+                  variant="primary"
+                  loading={loadingPago.has(confirmReceberPedido)}
+                  onClick={async () => {
+                    const pedidoId = confirmReceberPedido;
+                    setConfirmReceberPedido(null);
+                    await handleMarcarPago(pedidoId);
+                  }}
+                  style={{ background: "#16a34a" }}
+                >
+                  Confirmar
+                </Btn>
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

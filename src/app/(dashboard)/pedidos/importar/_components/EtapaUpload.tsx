@@ -2,7 +2,7 @@
 
 // ─── Etapa 2: Upload de arquivos (XML ou Planilha) ───────────────────────────
 
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { Alert, Btn, FormField, inputStyle, selectStyle } from "@/components/ui/ds";
 import type { RelatorioLote } from "@/lib/import/nfeParser";
 import type { MapeamentoColunas, PlanilhaLida } from "@/lib/import/planilhaParser";
@@ -73,11 +73,15 @@ export function EtapaUpload({
 }: Props) {
   const inputXmlRef = useRef<HTMLInputElement>(null);
   const inputPlanilhaRef = useRef<HTMLInputElement>(null);
+  const [arquivoXmlNome, setArquivoXmlNome] = useState<string | null>(null);
+  const [arquivoPlanilhaNome, setArquivoPlanilhaNome] = useState<string | null>(null);
 
   /** Reseta os inputs de arquivo ao mudar de modo */
   const handleMudarModo = (m: Modo) => {
     if (inputXmlRef.current) inputXmlRef.current.value = "";
     if (inputPlanilhaRef.current) inputPlanilhaRef.current.value = "";
+    setArquivoXmlNome(null);
+    setArquivoPlanilhaNome(null);
     onMudarModo(m);
   };
 
@@ -106,18 +110,27 @@ export function EtapaUpload({
                 onClick={() => handleMudarModo(m)}
                 style={{
                   flex: 1, padding: "16px 20px", borderRadius: "12px", cursor: "pointer",
-                  border: modo === m ? "2px solid #2563eb" : "1px solid #e2e8f0",
-                  background: modo === m ? "#eff6ff" : "#fff",
-                  boxShadow: "0 1px 3px rgba(0,0,0,0.06)",
+                  border: modo === m ? "2px solid #2563eb" : "2px solid #cbd5e1",
+                  background: modo === m ? "#eff6ff" : "#f8fafc",
+                  boxShadow: modo === m ? "0 2px 8px rgba(37,99,235,0.15)" : "0 1px 3px rgba(0,0,0,0.06)",
                   textAlign: "left",
                   minHeight: "80px",
                   display: "flex", flexDirection: "column", justifyContent: "center",
                 }}
               >
-                <div style={{ fontSize: "15px", fontWeight: 700, color: modo === m ? "#1d4ed8" : "#1e293b" }}>
-                  {m === "xml" ? "XML de NFe" : "Planilha"}
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <span style={{
+                    width: "14px", height: "14px", borderRadius: "50%",
+                    border: `2px solid ${modo === m ? "#2563eb" : "#94a3b8"}`,
+                    background: modo === m ? "#2563eb" : "transparent",
+                    flexShrink: 0,
+                    display: "inline-block",
+                  }} />
+                  <span style={{ fontSize: "15px", fontWeight: 700, color: modo === m ? "#1d4ed8" : "#1e293b" }}>
+                    {m === "xml" ? "XML de NFe" : "Planilha"}
+                  </span>
                 </div>
-                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "4px" }}>
+                <div style={{ fontSize: "12px", color: "#64748b", marginTop: "6px" }}>
                   {m === "xml"
                     ? "Arquivos .xml individuais ou .zip com vários XMLs"
                     : "Arquivo .xlsx, .xls ou .csv com endereços"}
@@ -140,9 +153,16 @@ export function EtapaUpload({
                 style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
                 onChange={async (e) => {
                   if (!e.target.files || e.target.files.length === 0) return;
+                  const nomes = Array.from(e.target.files).map(f => f.name).join(", ");
+                  setArquivoXmlNome(nomes);
                   onArquivosXml(e.target.files);
                 }}
               />
+              {arquivoXmlNome && !carregando && (
+                <p style={{ fontSize: "12px", color: "#059669", marginTop: "6px", fontWeight: 500 }}>
+                  Arquivo selecionado: {arquivoXmlNome}
+                </p>
+              )}
               <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
                 Selecione um ou mais arquivos .xml ou um .zip contendo os XMLs.
               </p>
@@ -210,9 +230,15 @@ export function EtapaUpload({
                 style={{ ...inputStyle, padding: "6px 12px", cursor: "pointer" }}
                 onChange={async (e) => {
                   if (!e.target.files?.[0]) return;
+                  setArquivoPlanilhaNome(e.target.files[0].name);
                   onArquivoPlanilha(e.target.files[0]);
                 }}
               />
+              {arquivoPlanilhaNome && !carregando && (
+                <p style={{ fontSize: "12px", color: "#059669", marginTop: "6px", fontWeight: 500 }}>
+                  Arquivo selecionado: {arquivoPlanilhaNome}
+                </p>
+              )}
               <p style={{ fontSize: "12px", color: "#94a3b8", marginTop: "8px" }}>
                 A coluna de <strong>Endereço</strong> é obrigatória. Demais colunas são opcionais.
               </p>

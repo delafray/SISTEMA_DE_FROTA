@@ -2,6 +2,7 @@
 
 // ─── Etapa 3: Preview das entregas antes de confirmar importação ──────────────
 
+import { useState } from "react";
 import { Alert, Btn, Badge, DataTable, Th, Td, Tr } from "@/components/ui/ds";
 import type { LinhaPreview, PedidoAlvo } from "./tipos";
 import { fmtValor } from "./tipos";
@@ -41,6 +42,7 @@ export function EtapaPreview({
   onVoltar,
 }: Props) {
   const countSelecionadas = selecionadas.size;
+  const [confirmandoImport, setConfirmandoImport] = useState(false);
 
   return (
     <>
@@ -97,7 +99,7 @@ export function EtapaPreview({
               </Td>
               <Td style={{ fontWeight: 500 }}>
                 <div style={{ overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{l.destinatario || "—"}</div>
-                <div className="m-show-block" style={{ fontSize: "11px", color: "#64748b", marginTop: "2px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }} title={l.endereco}>
+                <div className="m-show-block" style={{ fontSize: "11px", color: "#64748b", marginTop: "2px", overflow: "hidden", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }} title={l.endereco}>
                   {l.endereco}
                 </div>
               </Td>
@@ -153,7 +155,7 @@ export function EtapaPreview({
           variant="primary"
           disabled={importando || countSelecionadas === 0}
           loading={importando}
-          onClick={onImportar}
+          onClick={() => setConfirmandoImport(true)}
           style={{ minWidth: "200px", minHeight: "44px", padding: "10px 20px", fontSize: "14px" }}
         >
           {importando
@@ -161,6 +163,47 @@ export function EtapaPreview({
             : `Anexar ${countSelecionadas} entrega${countSelecionadas !== 1 ? "s" : ""} ao pedido`}
         </Btn>
       </div>
+
+      {/* Modal de confirmação de importação em massa */}
+      {confirmandoImport && (
+        <div
+          className="m-modal-overlay"
+          style={{
+            position: "fixed", inset: 0, zIndex: 9999,
+            background: "rgba(0,0,0,0.45)",
+            display: "flex", alignItems: "center", justifyContent: "center",
+            padding: "16px",
+          }}
+        >
+          <div
+            className="m-modal-content m-modal-body"
+            style={{
+              background: "#fff", borderRadius: "12px", padding: "28px",
+              width: "100%", maxWidth: "420px",
+              boxShadow: "0 20px 60px rgba(0,0,0,0.2)",
+            }}
+          >
+            <h3 style={{ fontSize: "16px", fontWeight: 700, color: "#1e293b", margin: "0 0 12px" }}>
+              Confirmar importação?
+            </h3>
+            <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 8px" }}>
+              Pedido de destino: <strong>{pedidoAlvo.numero ?? pedidoAlvo.id}</strong>
+            </p>
+            <p style={{ fontSize: "14px", color: "#64748b", margin: "0 0 24px" }}>
+              Serão anexadas <strong>{countSelecionadas}</strong> entrega{countSelecionadas !== 1 ? "s" : ""} a este pedido. Esta ação não pode ser desfeita facilmente.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <Btn type="button" variant="ghost" onClick={() => setConfirmandoImport(false)}>
+                Voltar
+              </Btn>
+              <Btn type="button" variant="primary" onClick={() => { setConfirmandoImport(false); onImportar(); }}
+                style={{ minHeight: "44px" }}>
+                Confirmar e importar
+              </Btn>
+            </div>
+          </div>
+        </div>
+      )}
     </>
   );
 }

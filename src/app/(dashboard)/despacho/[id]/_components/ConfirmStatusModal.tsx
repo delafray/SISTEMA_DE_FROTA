@@ -75,7 +75,6 @@ export function ConfirmStatusModal({
             value={nota}
             onChange={e => setNota(e.target.value)}
             rows={3}
-            autoFocus
             placeholder="Ex.: cliente recebeu tudo / cancelado a pedido do cliente"
             style={{
               width: "100%", border: "1px solid #cbd5e1", borderRadius: "8px",

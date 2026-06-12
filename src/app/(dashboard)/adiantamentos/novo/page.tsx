@@ -14,6 +14,7 @@ export default function NovoAdiantamentoPage() {
   const [saving, setSaving] = useState(false);
   const [err, setErr] = useState("");
   const [motoristas, setMotoristas] = useState<Motorista[]>([]);
+  const [confirmModal, setConfirmModal] = useState(false);
 
   const [f, setF] = useState({
     motorista_id: "",
@@ -44,17 +45,11 @@ export default function NovoAdiantamentoPage() {
 
   const normNum = (s: string) => parseFloat(s.replace(",", "."));
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setErr("");
-    if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
-    const valorNum = normNum(f.valor);
-    if (!f.valor || isNaN(valorNum) || valorNum <= 0) { setErr("Informe um valor válido (use vírgula ou ponto como separador decimal)"); return; }
+  const doInsert = async () => {
     setSaving(true);
-    // Pagamento HERDA a empresa do MOTORISTA (o adiantamento é do funcionário da empresa).
+    const valorNum = normNum(f.valor);
     const empresa_id = await empresaDoMotorista(supabase, f.motorista_id);
     if (!empresa_id) { setSaving(false); setErr("Motorista sem empresa definida"); return; }
-
     const { error: dbErr } = await supabase.from("adiantamentos").insert({
       empresa_id,
       motorista_id: f.motorista_id,
@@ -70,6 +65,19 @@ export default function NovoAdiantamentoPage() {
     router.refresh();
   };
 
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErr("");
+    if (!f.motorista_id) { setErr("Selecione um motorista"); return; }
+    const valorNum = normNum(f.valor);
+    if (!f.valor || isNaN(valorNum) || valorNum <= 0) { setErr("Informe um valor válido (use vírgula ou ponto como separador decimal)"); return; }
+    if (f.status !== "pendente") {
+      setConfirmModal(true);
+      return;
+    }
+    await doInsert();
+  };
+
   return (
     <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", height: "100%" }}>
       <PageHeader
@@ -78,7 +86,7 @@ export default function NovoAdiantamentoPage() {
           <span className="m-hide">
             <Btn href="/adiantamentos" variant="ghost">← Voltar para Lista</Btn>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" variant="primary" disabled={saving}>
+            <Btn type="submit" variant="primary" loading={saving}>
               {saving ? "Salvando..." : "Salvar"}
             </Btn>
           </span>
@@ -130,11 +138,6 @@ export default function NovoAdiantamentoPage() {
                   <option value="recusado">Recusado</option>
                   <option value="prestado">Prestado</option>
                 </select>
-                {f.status !== "pendente" && (
-                  <div style={{ marginTop: "6px", padding: "8px 10px", background: "#fef9c3", border: "1px solid #fde047", borderRadius: "6px", fontSize: "12px", color: "#854d0e" }}>
-                    Atenção: você está criando o adiantamento já como &quot;{f.status}&quot;. Confirme que isso está correto antes de salvar.
-                  </div>
-                )}
               </FormField>
 
               <FormField label="Data de Pagamento">
@@ -160,14 +163,30 @@ export default function NovoAdiantamentoPage() {
             </div>
           </FormSection>
 
-          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0" }}>
+          <div style={{ display: "flex", justifyContent: "flex-end", gap: "12px", marginTop: "16px", paddingTop: "16px", borderTop: "1px solid #e2e8f0", position: "sticky", bottom: 0, background: "#fff", zIndex: 10, paddingBottom: "16px" }}>
             <Btn href="/adiantamentos" variant="outline">Cancelar</Btn>
-            <Btn type="submit" disabled={saving}>
+            <Btn type="submit" loading={saving}>
               {saving ? "Salvando..." : "Salvar Adiantamento"}
             </Btn>
           </div>
         </div>
       </div>
+      {confirmModal && (
+        <div className="m-modal-overlay" style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 9999, padding: "16px" }}>
+          <div className="m-modal-content" style={{ background: "#fff", borderRadius: "12px", padding: "24px", maxWidth: "360px", width: "100%", boxShadow: "0 8px 32px rgba(0,0,0,0.18)" }}>
+            <div className="m-modal-body">
+              <div style={{ fontSize: "15px", fontWeight: 600, color: "#1e293b", marginBottom: "8px" }}>Confirmar status</div>
+              <div style={{ fontSize: "13px", color: "#64748b", marginBottom: "20px" }}>
+                Você está criando este adiantamento já como <strong>&quot;{f.status}&quot;</strong>. Esta ação afeta o acerto do motorista. Confirmar?
+              </div>
+              <div style={{ display: "flex", gap: "12px", justifyContent: "flex-end" }}>
+                <Btn variant="outline" onClick={() => setConfirmModal(false)}>Voltar</Btn>
+                <Btn variant="danger" loading={saving} onClick={async () => { setConfirmModal(false); await doInsert(); }}>Confirmar</Btn>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </form>
   );
 }

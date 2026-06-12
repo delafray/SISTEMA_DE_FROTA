@@ -213,9 +213,22 @@ export default function AvariasTab({ veiculoId, empresaId }: { veiculoId: string
                       { label: "Resolvida em", value: fmtDateTime(av.resolvido_em) },
                     ]}
                     actions={
-                      <button type="button" onClick={() => setConfirmExcluir(av.id)}
-                        style={{ background: "transparent", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 12px" }}
-                        title="Excluir">🗑 Excluir</button>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+                        <select
+                          value={av.status}
+                          onChange={e => mudarStatusPedirConfirm(av, e.target.value)}
+                          disabled={salvandoStatus}
+                          style={{ flex: 1, minHeight: "44px", padding: "8px 6px", fontSize: "13px", border: "1px solid #cbd5e1", borderRadius: "6px", background: "#fff", cursor: "pointer" }}
+                        >
+                          <option value="aberta">Aberta</option>
+                          <option value="em_reparo">Em reparo</option>
+                          <option value="resolvida">Resolvida</option>
+                          <option value="cancelada">Cancelada</option>
+                        </select>
+                        <button type="button" onClick={() => setConfirmExcluir(av.id)}
+                          style={{ background: "transparent", border: "1px solid #fecaca", borderRadius: "6px", cursor: "pointer", color: "#ef4444", fontSize: "13px", minHeight: "44px", padding: "0 12px" }}
+                          title="Excluir">🗑 Excluir</button>
+                      </div>
                     }
                   />
                 );
