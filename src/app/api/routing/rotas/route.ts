@@ -14,6 +14,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_rotas_list');
 
@@ -25,6 +26,8 @@ function getSupabase() {
 }
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { searchParams } = new URL(request.url);
   const empresaId = searchParams.get('empresa_id');
   const motoristaId = searchParams.get('motorista_id');

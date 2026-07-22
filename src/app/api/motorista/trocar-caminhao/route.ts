@@ -22,6 +22,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_motorista_troca');
 
@@ -47,6 +48,8 @@ function rotulo(v: Pick<VeiculoRow, 'apelido' | 'modelo' | 'placa'> | null): str
 }
 
 export async function POST(req: NextRequest) {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: TrocarCaminhaoRequest;
   try {
     body = await req.json();

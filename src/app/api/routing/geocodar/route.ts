@@ -29,6 +29,7 @@ import {
   buscarEntregasDoPedido,
   geocodarEntregas,
 } from '@/lib/routing/geocodarEntregasPedido';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_routing_geocodar');
 
@@ -66,6 +67,8 @@ function googleParaGeocoding(g: ResultadoGoogle): ResultadoGeocoding {
 // ─── GET /api/routing/geocodar?q=...&lat=...&lng=...&limite=... ──────
 
 export async function GET(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { searchParams } = new URL(request.url);
   const q = searchParams.get('q');
   const lat = searchParams.get('lat');
@@ -178,6 +181,8 @@ export async function GET(request: NextRequest): Promise<NextResponse> {
 //                     compatibilidade com chamadas antigas.
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: Partial<GeocodarRequest & { pedido_id: string }>;
   try {
     body = (await request.json()) as Partial<GeocodarRequest & { pedido_id: string }>;

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usuarioSessao } from "@/lib/auth/temSessao";
-import { loadAll } from "@/lib/utils/loadAll";
+import { somasAbastecimentos } from "@/lib/financeiro/kpis";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
@@ -179,16 +179,10 @@ export default function AbastecimentosPage() {
         .eq("empresa_id", eid);
       setKpiCount(count ?? 0);
 
-      // soma precisa de todas as linhas; payload mínimo até existir RPC de agregação
-      const somaData = await loadAll<{ litros: number; valor_total: number }>((from, to) =>
-        supabase
-          .from("abastecimentos")
-          .select("litros,valor_total")
-          .eq("empresa_id", eid)
-          .range(from, to)
-      );
-      setKpiLitros(somaData.reduce((s, a) => s + (a.litros ?? 0), 0));
-      setKpiCusto(somaData.reduce((s, a) => s + (a.valor_total ?? 0), 0));
+      // soma no SERVIDOR (RPC), com fallback interno enquanto a migration não rodou
+      const somas = await somasAbastecimentos(supabase, eid);
+      setKpiLitros(somas.litros);
+      setKpiCusto(somas.valorTotal);
     };
     carregarKpis();
   }, [empresaId]);

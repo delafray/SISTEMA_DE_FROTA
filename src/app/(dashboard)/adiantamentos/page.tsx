@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usuarioSessao } from "@/lib/auth/temSessao";
-import { loadAll } from "@/lib/utils/loadAll";
+import { somasAdiantamentos } from "@/lib/financeiro/kpis";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, useOrdenacao, type Ordem } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
 import { MobileCard, MobileList, MobileFAB } from "@/components/mobile";
@@ -130,35 +130,20 @@ export default function AdiantamentosPage() {
   }, []);
 
   // -----------------------------------------------------------------------
-  // Carrega KPIs (soma de valor por status) — usa loadAll com payload mínimo
+  // Carrega KPIs (soma de valor por status) — soma no SERVIDOR via RPC,
+  // com fallback interno enquanto a migration não rodou.
   // Os KPIs mostram totais GLOBAIS (sem filtros de busca/status da listagem),
   // porque os cards são independentes do filtro ativo (comportamento original).
-  // soma precisa de todas as linhas; payload mínimo até existir RPC de agregação
   // -----------------------------------------------------------------------
   const carregarKpis = useCallback(async (
     supabase: ReturnType<typeof createClient>,
     empresaId: string
   ) => {
-    const linhasValor = await loadAll<{ valor: number; status: string }>((from, to) =>
-      supabase
-        .from("adiantamentos")
-        .select("valor,status")
-        .eq("empresa_id", empresaId)
-        .order("id", { ascending: true })
-        .range(from, to)
-    );
-
-    let solicitado = 0, aprovado = 0, pendente = 0, prestado = 0;
-    for (const a of linhasValor) {
-      solicitado += a.valor ?? 0;
-      if (a.status === "aprovado") aprovado += a.valor ?? 0;
-      if (a.status === "pendente") pendente += a.valor ?? 0;
-      if (a.status === "prestado") prestado += a.valor ?? 0;
-    }
-    setKpiSolicitado(solicitado);
-    setKpiAprovado(aprovado);
-    setKpiPendente(pendente);
-    setKpiPrestado(prestado);
+    const somas = await somasAdiantamentos(supabase, empresaId);
+    setKpiSolicitado(somas.solicitado);
+    setKpiAprovado(somas.aprovado);
+    setKpiPendente(somas.pendente);
+    setKpiPrestado(somas.prestado);
   }, []);
 
   // -----------------------------------------------------------------------

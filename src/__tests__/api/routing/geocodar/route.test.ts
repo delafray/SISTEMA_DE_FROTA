@@ -32,6 +32,11 @@ import { geocodarGoogle } from '@/lib/routing/googleGeocoding';
 import { lerGeocodeCache, gravarGeocodeCache, consumirCota } from '@/lib/routing/geocodeCache';
 import { NextRequest } from 'next/server';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 const vozMock = geocodarVozComVariantes as ReturnType<typeof vi.fn>;
 const cepMock = resolverCepDaRua as ReturnType<typeof vi.fn>;
 const googleMock = geocodarGoogle as ReturnType<typeof vi.fn>;

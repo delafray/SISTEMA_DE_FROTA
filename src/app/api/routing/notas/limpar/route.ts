@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_notas_limpar');
 
@@ -19,6 +20,8 @@ function getSupabase() {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   try {
     const body = await request.json();
     const { motorista_id, empresa_id } = body;

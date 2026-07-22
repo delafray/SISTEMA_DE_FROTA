@@ -121,6 +121,7 @@
 | 35 | `db/schema_routing_completo.sql` | Schema completo de roteirização (entregas, janelas, geocode) |
 | 36 | `db/migration_entregas_despacho_nullable.sql` | Entregas com motorista/veículo nullable (fila do Despacho) |
 | 37 | `db/migration_import_notas.sql` | Colunas NFe em entregas (importação em massa — Fase 4) |
+| 38 | `db/migration_kpis_financeiro.sql` | RPCs de soma dos KPIs (abastecimentos, adiantamentos, receita de pedidos) — somas no servidor em vez de baixar a tabela |
 
 > Após rodar as migrations: popular `empresas.whatsapp_instance` com o nome da instância Evolution
 > (`frota-bot-novo` ou equivalente) e cadastrar a(s) empresa(s) — ver [onboarding-empresa.md](onboarding-empresa.md).

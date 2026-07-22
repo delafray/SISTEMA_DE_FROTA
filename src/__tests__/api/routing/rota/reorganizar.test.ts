@@ -23,6 +23,11 @@ import { POST } from '@/app/api/routing/rota/[id]/reorganizar/route';
 import { otimizarRota } from '@/lib/routing/vroom';
 import { NextRequest } from 'next/server';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 const otimMock = otimizarRota as ReturnType<typeof vi.fn>;
 
 function makeReq(body: unknown = {}) {

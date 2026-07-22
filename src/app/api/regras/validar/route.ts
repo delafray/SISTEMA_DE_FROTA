@@ -12,6 +12,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 // Regex de identificador PostgreSQL simples (apenas a-z, 0-9, _).
 const RE_IDENT = /^[a-z_][a-z0-9_]*$/;
@@ -95,6 +96,8 @@ async function validarPar(tabela: string, coluna: string): Promise<Problema[]> {
 }
 
 export async function POST(req: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const body = await req.json().catch(() => ({})) as {
     escopo_dados?: Record<string, unknown>;
   };

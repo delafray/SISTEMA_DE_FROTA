@@ -31,6 +31,11 @@ import { otimizarRota } from '@/lib/routing/vroom';
 import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
 import { NextRequest } from 'next/server';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 const ORIGEM = { lat: -23.5505, lng: -46.6333 };
 
 function makeReq(body: unknown) {

@@ -26,6 +26,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@/lib/logger';
 import { validarNumero } from '@/lib/routing/overpass/validar';
 import { geocodar, formatarEnderecoParaGeocoding } from '@/lib/routing/geocoding';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_validar_endereco');
 
@@ -41,6 +42,8 @@ interface RequestBody {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: Partial<RequestBody>;
   try {
     body = (await request.json()) as Partial<RequestBody>;

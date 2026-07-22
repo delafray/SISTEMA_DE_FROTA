@@ -23,6 +23,7 @@ import { createLogger } from '@/lib/logger';
 import { otimizarRota, type Job } from '@/lib/routing/vroom';
 import { indexarJobs, montarVeiculo, traduzirParadasComMapping, PRIORIDADE } from '@/lib/routing/restricoes';
 import type { Coordenada, JanelaHorario } from '@/lib/routing/types';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_routing_reorganizar');
 
@@ -48,6 +49,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { id: rotaId } = await params;
   if (!rotaId) {
     return NextResponse.json({ ok: false, error: 'rota_id_obrigatorio' }, { status: 400 });

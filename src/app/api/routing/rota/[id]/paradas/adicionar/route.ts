@@ -32,6 +32,7 @@ import { createLogger } from '@/lib/logger';
 import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
 import { cheapestInsertion } from '@/lib/routing/utils';
 import type { EnderecoCEP } from '@/lib/cep/types';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_paradas_adicionar');
 
@@ -67,6 +68,8 @@ export async function POST(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { id: rotaId } = await params;
   if (!rotaId) {
     return NextResponse.json({ error: 'rota_id_obrigatorio' }, { status: 400 });

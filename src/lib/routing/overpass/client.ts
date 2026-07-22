@@ -13,7 +13,7 @@ import { regexOverpassRua } from './normalizar';
 
 const log = createLogger('overpass-client');
 
-const OVERPASS_URL = process.env.OVERPASS_URL ?? 'http://129.80.27.159:12345/api/interpreter';
+// Sem fallback hard-coded: implantação nova sem a env var NÃO pode bater na VM de outra conta.
 const TIMEOUT_MS = 10_000;
 const BBOX_DELTA = 0.05; // ~5km de raio ao redor do ponto do CEP
 
@@ -28,7 +28,7 @@ export interface ConsultaResultado {
 
 export interface ConsultaErro {
   ok: false;
-  motivo: 'sem_coords' | 'rua_invalida' | 'erro_rede' | 'timeout' | 'http_error' | 'parse_error';
+  motivo: 'sem_coords' | 'rua_invalida' | 'erro_rede' | 'timeout' | 'http_error' | 'parse_error' | 'nao_configurado';
   detalhe?: string;
 }
 
@@ -46,6 +46,12 @@ export async function consultarEnderecos(
   lng: number,
   logradouro: string
 ): Promise<Consulta> {
+  const overpassUrl = process.env.OVERPASS_URL;
+  if (!overpassUrl) {
+    log.error('overpass_url_nao_configurada', {});
+    return { ok: false, motivo: 'nao_configurado', detalhe: 'OVERPASS_URL não configurada (ver framework/02-apis-e-chaves/env-template.md)' };
+  }
+
   if (typeof lat !== 'number' || typeof lng !== 'number' || Number.isNaN(lat) || Number.isNaN(lng)) {
     return { ok: false, motivo: 'sem_coords' };
   }
@@ -71,7 +77,7 @@ export async function consultarEnderecos(
 
   try {
     const inicio = Date.now();
-    const res = await fetch(OVERPASS_URL, {
+    const res = await fetch(overpassUrl, {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
       body: new URLSearchParams({ data: ql }).toString(),

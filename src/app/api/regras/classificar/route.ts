@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { variacoesTelefone } from "@/lib/utils/telefone";
 import { montarContextoIA, type RegraCtx, type TelCtx } from "@/lib/whatsapp/montarContexto";
 import { classificar, type RegraClassif } from "@/lib/whatsapp/classificador";
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 function sb() {
   return createClient(process.env.NEXT_PUBLIC_SUPABASE_URL!, process.env.SUPABASE_SERVICE_ROLE_KEY!);
@@ -11,6 +12,8 @@ function sb() {
 // MODO SEGURO: classifica a mensagem contra as regras que o telefone pode usar e
 // devolve a decisão (1 / ambíguo / nenhuma). NÃO executa nada (não grava KM, etc.).
 export async function POST(req: NextRequest) {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { telefone, mensagem } = await req.json().catch(() => ({}));
   if (!telefone || !mensagem) return NextResponse.json({ error: "telefone e mensagem são obrigatórios" }, { status: 400 });
   const supa = sb();

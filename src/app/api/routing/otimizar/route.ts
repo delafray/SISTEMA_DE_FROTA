@@ -37,6 +37,7 @@ import {
   geocodarEntregas,
   type EntregaRoteavel,
 } from '@/lib/routing/geocodarEntregasPedido';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_routing_otimizar');
 
@@ -374,6 +375,8 @@ async function otimizarPorPedido(
 // ─── HANDLER ────────────────────────────────────────────────────────
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: Partial<OtimizarRequest>;
   try {
     body = (await request.json()) as Partial<OtimizarRequest>;

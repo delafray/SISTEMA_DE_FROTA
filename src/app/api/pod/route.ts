@@ -18,6 +18,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { persistirMidiaNoR2, chaveMidia } from '@/lib/storage/r2';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_pod');
 
@@ -52,6 +53,8 @@ interface PodRequest {
 }
 
 export async function POST(req: NextRequest) {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: PodRequest;
   try {
     body = await req.json();

@@ -16,6 +16,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
 import { resolverCoordenada } from '@/lib/routing/resolverCoordenada';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_notas_sync');
 
@@ -59,6 +60,8 @@ function camposObrigatoriosFaltando(body: Partial<SyncRequest>): string[] {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: Partial<SyncRequest>;
   try {
     body = (await request.json()) as Partial<SyncRequest>;

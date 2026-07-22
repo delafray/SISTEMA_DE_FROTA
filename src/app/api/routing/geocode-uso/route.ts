@@ -10,8 +10,11 @@
 
 import { NextResponse } from 'next/server';
 import { lerUsoMes } from '@/lib/routing/geocodeCache';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 export async function GET(): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const uso = await lerUsoMes();
   return NextResponse.json(
     { ...uso, restante: Math.max(0, uso.limite - uso.total) },

@@ -11,6 +11,11 @@ vi.mock('@/lib/routing/geocodeCache', () => ({
 import { GET } from '@/app/api/routing/geocode-uso/route';
 import { lerUsoMes } from '@/lib/routing/geocodeCache';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 const usoMock = lerUsoMes as ReturnType<typeof vi.fn>;
 
 beforeEach(() => {

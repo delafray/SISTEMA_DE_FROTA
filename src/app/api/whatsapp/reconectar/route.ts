@@ -5,11 +5,20 @@ import { createLogger } from '@/lib/logger';
 
 const log = createLogger('whatsapp-reconectar');
 
-function getEvoBase() {
-  return process.env.EVOLUTION_API_URL ?? 'http://129.80.27.159:8080';
+// Sem fallback hard-coded: implantação nova sem a env var NÃO pode bater na VM de outra conta.
+function getEvoBase(): string | null {
+  return process.env.EVOLUTION_API_URL ?? null;
 }
 function getEvoKey() {
   return process.env.EVOLUTION_API_KEY ?? '';
+}
+
+function erroEvoNaoConfigurada() {
+  log.error('evolution_api_url_nao_configurada', {});
+  return NextResponse.json(
+    { error: 'EVOLUTION_API_URL não configurada. Defina a env var com a URL da Evolution API (ver framework/02-apis-e-chaves/env-template.md).' },
+    { status: 500 }
+  );
 }
 
 async function evoFetch(path: string, opts: RequestInit = {}) {
@@ -38,6 +47,7 @@ export async function GET() {
   const instanceName = empresa?.whatsapp_instance ?? process.env.EVOLUTION_INSTANCE_NAME ?? '';
 
   if (!instanceName) return NextResponse.json({ estado: 'sem_instancia', numero: null });
+  if (!getEvoBase()) return erroEvoNaoConfigurada();
 
   try {
     const res = await evoFetch(`/instance/connectionState/${instanceName}`);
@@ -73,6 +83,7 @@ export async function POST(req: NextRequest) {
 
   const instanceName = empresa?.whatsapp_instance ?? process.env.EVOLUTION_INSTANCE_NAME ?? '';
   if (!instanceName) return NextResponse.json({ error: 'Instância não configurada' }, { status: 400 });
+  if (!getEvoBase()) return erroEvoNaoConfigurada();
 
   log.info('reconectar_iniciado', { instanceName, novoNumero, empresa_id: ue.empresa_id });
 

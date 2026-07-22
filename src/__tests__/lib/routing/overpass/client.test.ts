@@ -15,6 +15,22 @@ afterEach(() => {
 });
 
 describe('consultarEnderecos', () => {
+  it('sem OVERPASS_URL: retorna nao_configurado sem chamar fetch (nada de fallback pra VM alheia)', async () => {
+    const urlSalva = process.env.OVERPASS_URL;
+    delete process.env.OVERPASS_URL;
+    const fetchMock = vi.fn();
+    global.fetch = fetchMock as unknown as typeof fetch;
+
+    try {
+      const r = await consultarEnderecos(-19.92, -43.93, 'Av do Contorno');
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.motivo).toBe('nao_configurado');
+      expect(fetchMock).not.toHaveBeenCalled();
+    } finally {
+      process.env.OVERPASS_URL = urlSalva;
+    }
+  });
+
   it('sucesso: parseia CSV em array de enderecos', async () => {
     const csv = '5771,-19.939,-43.931\n7315,-19.937,-43.945\n104A,-19.92,-43.93\n';
     global.fetch = vi.fn().mockResolvedValue({

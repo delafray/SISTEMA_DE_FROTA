@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usuarioSessao } from "@/lib/auth/temSessao";
 import { loadAll } from "@/lib/utils/loadAll";
+import { receitaPedidosConcluidos } from "@/lib/financeiro/kpis";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import { PageHeader, DataTable, Th, Td, Tr, Badge, Btn, KpiCard, EmptyState, SearchInput, selectStyle, inputStyle, useOrdenacao } from "@/components/ui/ds";
 import { DeleteBtn } from "@/components/ui/DeleteBtn";
@@ -227,18 +228,10 @@ export default function PedidosPage() {
     setKpiConcluido(conRes.count ?? 0);
     setKpiConcluidoPago(conPagoRes.count ?? 0);
 
-    // Receita: soma de valor_pedido nos concluídos — precisa de todas as linhas
-    // soma precisa de todas as linhas; payload mínimo até existir RPC de agregação
-    const [todosConc, todosPago] = await Promise.all([
-      loadAll<{ valor_pedido: number | null }>((from, to) =>
-        supabase.from("pedidos").select("valor_pedido").eq("empresa_id", empId).or("status.eq.concluido,status.eq.concluida").range(from, to)
-      ),
-      loadAll<{ valor_pedido: number | null }>((from, to) =>
-        supabase.from("pedidos").select("valor_pedido").eq("empresa_id", empId).or("status.eq.concluido,status.eq.concluida").eq("pago", true).range(from, to)
-      ),
-    ]);
-    setReceitaTotal(todosConc.reduce((s, r) => s + (r.valor_pedido ?? 0), 0));
-    setReceitaPaga(todosPago.reduce((s, r) => s + (r.valor_pedido ?? 0), 0));
+    // Receita: soma no SERVIDOR via RPC (fallback interno enquanto a migration não rodou)
+    const receita = await receitaPedidosConcluidos(supabase, empId);
+    setReceitaTotal(receita.receitaTotal);
+    setReceitaPaga(receita.receitaPaga);
   }, []);
 
   // Ordenação no SERVIDOR (lista paginada — ordenar só os 100 da página mentiria).

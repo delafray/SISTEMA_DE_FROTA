@@ -643,3 +643,49 @@ GRANT ALL ON ALL FUNCTIONS IN SCHEMA public TO anon, authenticated, service_role
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON TABLES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON SEQUENCES TO anon, authenticated, service_role;
 ALTER DEFAULT PRIVILEGES IN SCHEMA public GRANT ALL ON FUNCTIONS TO anon, authenticated, service_role;
+
+-- =============================================================================
+-- ADENDO 2026-07-22 — Funções de migration_kpis_financeiro.sql
+-- (adicionadas manualmente; a próxima re-geração via gerar_schema_complemento.sql
+--  vai incorporá-las na SEÇÃO 1 automaticamente)
+-- =============================================================================
+
+CREATE OR REPLACE FUNCTION public.somas_abastecimentos(p_empresa_id uuid)
+RETURNS TABLE (qtd bigint, litros numeric, valor_total numeric)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT count(*)::bigint,
+         COALESCE(sum(a.litros), 0)::numeric,
+         COALESCE(sum(a.valor_total), 0)::numeric
+  FROM public.abastecimentos a
+  WHERE a.empresa_id = p_empresa_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.somas_adiantamentos(p_empresa_id uuid)
+RETURNS TABLE (solicitado numeric, aprovado numeric, pendente numeric, prestado numeric)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE(sum(ad.valor), 0)::numeric,
+         COALESCE(sum(ad.valor) FILTER (WHERE ad.status = 'aprovado'), 0)::numeric,
+         COALESCE(sum(ad.valor) FILTER (WHERE ad.status = 'pendente'), 0)::numeric,
+         COALESCE(sum(ad.valor) FILTER (WHERE ad.status = 'prestado'), 0)::numeric
+  FROM public.adiantamentos ad
+  WHERE ad.empresa_id = p_empresa_id;
+$$;
+
+CREATE OR REPLACE FUNCTION public.somas_pedidos_receita(p_empresa_id uuid)
+RETURNS TABLE (receita_concluidos numeric, receita_pagos numeric)
+LANGUAGE sql
+STABLE
+AS $$
+  SELECT COALESCE(sum(p.valor_pedido) FILTER (WHERE p.status IN ('concluido','concluida')), 0)::numeric,
+         COALESCE(sum(p.valor_pedido) FILTER (WHERE p.status IN ('concluido','concluida') AND p.pago), 0)::numeric
+  FROM public.pedidos p
+  WHERE p.empresa_id = p_empresa_id;
+$$;
+
+GRANT EXECUTE ON FUNCTION public.somas_abastecimentos(uuid)   TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.somas_adiantamentos(uuid)    TO anon, authenticated, service_role;
+GRANT EXECUTE ON FUNCTION public.somas_pedidos_receita(uuid)  TO anon, authenticated, service_role;

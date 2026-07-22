@@ -18,6 +18,11 @@ vi.mock('@/lib/routing/coordsAprendidas', () => ({
 import { POST } from '@/app/api/routing/coord-aprendida/route';
 import { NextRequest } from 'next/server';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 function makeReq(body: unknown) {
   return new NextRequest('http://localhost/api/routing/coord-aprendida', {
     method: 'POST',

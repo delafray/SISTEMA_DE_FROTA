@@ -21,6 +21,11 @@ vi.mock('@supabase/supabase-js', () => ({
 import { POST } from '@/app/api/notas/sync/route';
 import { NextRequest } from 'next/server';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 // ─── HELPERS ────────────────────────────────────────────────────────────
 
 function payloadValido(over: Record<string, unknown> = {}) {

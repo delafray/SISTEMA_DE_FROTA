@@ -19,6 +19,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createLogger } from '@/lib/logger';
 import { gravarCoordAprendida, chaveEndereco } from '@/lib/routing/coordsAprendidas';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_coord_aprendida');
 
@@ -30,6 +31,8 @@ interface RequestBody {
 }
 
 export async function POST(request: NextRequest): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   let body: Partial<RequestBody>;
   try {
     body = (await request.json()) as Partial<RequestBody>;

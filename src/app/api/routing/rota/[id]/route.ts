@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { createLogger } from '@/lib/logger';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 const log = createLogger('api_rota_get');
 
@@ -23,6 +24,8 @@ export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'rota_id_obrigatorio' }, { status: 400 });
 
@@ -58,6 +61,8 @@ export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { id } = await params;
   if (!id) return NextResponse.json({ error: 'rota_id_obrigatorio' }, { status: 400 });
 

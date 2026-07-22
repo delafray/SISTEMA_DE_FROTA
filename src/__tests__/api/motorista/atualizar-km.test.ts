@@ -22,6 +22,11 @@ vi.mock('@/lib/storage/r2', () => ({
 
 import { POST } from '@/app/api/motorista/atualizar-km/route';
 
+// Rotas de API exigem sessão (requireSessao); nos testes, usuário sempre logado.
+vi.mock('@/lib/auth/requireSessao', () => ({
+  requireSessao: async () => ({ user: { id: 'user-teste' }, erro: null }),
+}));
+
 function makeReq(body: unknown) {
   return new NextRequest('http://localhost/api/motorista/atualizar-km', {
     method: 'POST',

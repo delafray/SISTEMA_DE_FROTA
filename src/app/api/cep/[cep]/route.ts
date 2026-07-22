@@ -14,11 +14,14 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { consultarCEP } from '@/lib/cep/viacep';
+import { requireSessao } from '@/lib/auth/requireSessao';
 
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ cep: string }> }
 ): Promise<NextResponse> {
+  const { erro: erroSessao } = await requireSessao();
+  if (erroSessao) return erroSessao;
   const { cep } = await params;
   const resultado = await consultarCEP(cep);
 
