@@ -6,6 +6,7 @@ import { FormSection, Btn, Alert, inputStyle, selectStyle } from "@/components/u
 import { MobileCard, MobileList } from "@/components/mobile";
 import { format, startOfMonth, endOfMonth, subMonths } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { calcularTotaisAcerto } from "@/lib/financeiro/acertoMensal";
 
 const fmtMoeda = (v: number) => "R$ " + (v || 0).toFixed(2).replace(".", ",");
 
@@ -162,38 +163,15 @@ export function AcertoMensalTab({ motoristaId }: { motoristaId: string }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refDate, motoristaId]);
 
-  const totais = useMemo(() => {
-    const salarioFixo = Number(motorista?.salario_fixo ?? 0);
-    const valorDiaria = Number(motorista?.valor_diaria_por_pedido ?? 0);
-    const qtdPedidos = pedidosMes.length;
-    const totalDiarias = valorDiaria * qtdPedidos;
-
-    let ajustesVal = 0;
-    ajustes.forEach(a => {
-      const v = Number(a.valor);
-      if (a.tipo === "bonus" || a.tipo === "reembolso") ajustesVal += v;
-      else ajustesVal -= v;
-    });
-
-    const totalAdiantamentos = adiantamentosMes.reduce((s, a) => s + Number(a.valor || 0), 0);
-
-    const final =
-      Number(acerto?.saldo_anterior ?? 0) +
-      salarioFixo +
-      totalDiarias +
-      ajustesVal -
-      totalAdiantamentos;
-
-    return {
-      salarioFixo,
-      valorDiaria,
-      qtdPedidos,
-      totalDiarias,
-      ajustes: ajustesVal,
-      adiantamentos: totalAdiantamentos,
-      final,
-    };
-  }, [acerto, ajustes, motorista, pedidosMes, adiantamentosMes]);
+  // cálculo puro e testado em src/lib/financeiro/acertoMensal.ts
+  const totais = useMemo(() => calcularTotaisAcerto({
+    salarioFixo: motorista?.salario_fixo,
+    valorDiariaPorPedido: motorista?.valor_diaria_por_pedido,
+    qtdPedidos: pedidosMes.length,
+    ajustes,
+    valoresAdiantamentos: adiantamentosMes.map(a => a.valor),
+    saldoAnterior: acerto?.saldo_anterior,
+  }), [acerto, ajustes, motorista, pedidosMes, adiantamentosMes]);
 
   const addAjuste = () => {
     setErroAjuste("");

@@ -14,47 +14,33 @@
  * - KPI "Em atraso" herdado do antigo A Receber: parcela vencida não paga ou
  *   pedido único não pago com data fim prevista passada.
  *
- * Agregação por cliente precisa de TODAS as linhas — payload mínimo via
- * loadAll até existir RPC de agregação (mesma exceção dos KPIs de soma).
+ * Dados (regra das listagens): o resumo por cliente vem da RPC
+ * `faturamento_clientes` em UMA chamada (fallback local sem a migration), e os
+ * pedidos de cada cliente carregam SOB DEMANDA ao expandir, paginados de 100
+ * em 100 — a tela não baixa mais a tabela inteira de pedidos + parcelas.
+ * Lógica de dinheiro centralizada em src/lib/financeiro/faturamentoClientes.ts.
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { usuarioSessao } from "@/lib/auth/temSessao";
-import { loadAll } from "@/lib/utils/loadAll";
 import { normalizar } from "@/lib/utils/normalizar";
 import { rotuloPedido } from "@/lib/utils/numeroPedido";
 import {
   PageHeader, Btn, Badge, KpiCard, EmptyState, SearchInput, Alert,
 } from "@/components/ui/ds";
+import {
+  buscarGruposClientes, buscarPedidosDoCliente, totalDe,
+  type GrupoClienteResumo, type PedidoFin, type ParcelaFin,
+} from "@/lib/financeiro/faturamentoClientes";
 import { FinanceiroPedido, type EmpresaOpcao } from "./_components/FinanceiroPedido";
 
-type PedidoFin = {
-  id: string;
-  numero: string | null;
-  cliente_id: string | null;
-  valor_pedido: number | null;
-  pago: boolean | null;
-  status: string;
-  data_inicio_prevista: string | null;
-  data_fim_prevista: string | null;
-  forma_pagamento: string | null;
-  acrescimos?: number | null;  // migration_pedido_acrescimos_descontos
-  descontos?: number | null;
-};
-
-type ParcelaFin = { pedido_id: string; valor: number; pago: boolean; vencimento: string | null };
-
-type GrupoCliente = {
-  clienteId: string | null;
-  nome: string;
+type DetalheCliente = {
   pedidos: PedidoFin[];
-  qtd: number;
-  qtdPagos: number;
-  valorTotal: number;
-  valorPago: number;
-  valorAberto: number;
+  pagina: number;
+  temMais: boolean;
+  carregando: boolean;
 };
 
 const fmtBRL = (v: number) => v.toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
@@ -64,17 +50,16 @@ const hojeISO = () => {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
 };
 
-/** Total a receber do pedido (valor + acréscimos - descontos). */
-const totalDe = (p: PedidoFin) =>
-  Math.round(((p.valor_pedido ?? 0) + (p.acrescimos ?? 0) - (p.descontos ?? 0)) * 100) / 100;
+const chaveGrupo = (clienteId: string | null) => clienteId ?? "__avulso__";
 
 export default function FaturamentoPage() {
   const router = useRouter();
-  const [grupos, setGrupos] = useState<GrupoCliente[]>([]);
+  const [grupos, setGrupos] = useState<GrupoClienteResumo[]>([]);
+  /** pedidos carregados sob demanda, por grupo (chaveGrupo) */
+  const [detalhes, setDetalhes] = useState<Map<string, DetalheCliente>>(new Map());
   const [parcelasPorPedido, setParcelasPorPedido] = useState<Map<string, ParcelaFin[]>>(new Map());
   const [empresaIdPadrao, setEmpresaIdPadrao] = useState<string>("");
   const [empresas, setEmpresas] = useState<EmpresaOpcao[]>([]);
-  const [valorAtrasado, setValorAtrasado] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busca, setBusca] = useState("");
   const [filtro, setFiltro] = useState<"todos" | "com_pendencia" | "quitados">("com_pendencia");
@@ -86,6 +71,43 @@ export default function FaturamentoPage() {
   /** modal de confirmação de baixa rápida */
   const [confirmBaixa, setConfirmBaixa] = useState<{ pedidoId: string; nomeCliente: string; valor: number } | null>(null);
   const baixandoRef = useRef(false);
+  const empresaIdRef = useRef<string>("");
+  /** espelho de `expandido` pra `carregar()` saber qual grupo re-buscar (sem virar dependência) */
+  const expandidoRef = useRef<string | null>(null);
+
+  // ── pedidos de um cliente, sob demanda (pagina 0 substitui; >0 acrescenta) ──
+  const carregarDetalhe = useCallback(async (clienteId: string | null, pagina: number) => {
+    const eid = empresaIdRef.current;
+    if (!eid) return;
+    const key = chaveGrupo(clienteId);
+    setDetalhes(prev => {
+      const m = new Map(prev);
+      const atual = m.get(key);
+      m.set(key, {
+        pedidos: pagina === 0 ? [] : (atual?.pedidos ?? []),
+        pagina, temMais: false, carregando: true,
+      });
+      return m;
+    });
+
+    const supabase = createClient();
+    const r = await buscarPedidosDoCliente(supabase, eid, clienteId, pagina);
+
+    setParcelasPorPedido(prev => {
+      const m = new Map(prev);
+      for (const [id, pars] of r.parcelasPorPedido) m.set(id, pars);
+      return m;
+    });
+    setDetalhes(prev => {
+      const m = new Map(prev);
+      const atual = m.get(key);
+      m.set(key, {
+        pedidos: pagina === 0 ? r.pedidos : [...(atual?.pedidos ?? []), ...r.pedidos],
+        pagina, temMais: r.temMais, carregando: false,
+      });
+      return m;
+    });
+  }, []);
 
   const carregar = useCallback(async () => {
     const supabase = createClient();
@@ -96,103 +118,37 @@ export default function FaturamentoPage() {
     if (!ue?.empresa_id) { setLoading(false); return; }
     const eid = ue.empresa_id;
     setEmpresaIdPadrao(eid);
+    empresaIdRef.current = eid;
 
-    // agregação por cliente precisa de todas as linhas; payload mínimo até existir RPC.
-    // Pedidos: tenta com acréscimos/descontos (migration nova); sem ela, recarrega sem.
-    const selBase = "id,numero,cliente_id,valor_pedido,pago,status,data_inicio_prevista,data_fim_prevista,forma_pagamento";
-    const buscarPedidos = (sel: string) =>
-      loadAll<PedidoFin>((from, to) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("pedidos")
-          .select(sel)
-          .eq("empresa_id", eid)
-          .not("valor_pedido", "is", null)
-          .gt("valor_pedido", 0)
-          .not("status", "in", "(cancelada,cancelado)")
-          .order("created_at", { ascending: false })
-          .range(from, to)
-      );
-
-    const [pedidos, clientes, parcelas, empresasRes] = await Promise.all([
-      buscarPedidos(`${selBase},acrescimos,descontos`).catch(() => buscarPedidos(selBase)),
-      supabase.from("clientes").select("id,nome_fantasia,apelido").eq("empresa_id", eid),
-      loadAll<ParcelaFin>((from, to) =>
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (supabase as any).from("pedido_parcelas")
-          .select("pedido_id,valor,pago,vencimento")
-          .eq("empresa_id", eid)
-          .range(from, to)
-      ).catch(() => [] as ParcelaFin[]),
+    const [gruposNovos, empresasRes] = await Promise.all([
+      buscarGruposClientes(supabase, eid, hojeISO()),
       supabase.from("empresas").select("id,nome_fantasia,razao_social").order("nome_fantasia"),
     ]);
     setEmpresas((empresasRes.data ?? []) as EmpresaOpcao[]);
-
-    const nomePorCliente = new Map<string, string>();
-    for (const c of clientes.data ?? []) {
-      nomePorCliente.set(c.id, (c as { nome_fantasia: string | null; apelido: string | null }).nome_fantasia
-        ?? (c as { apelido: string | null }).apelido ?? "Cliente");
-    }
-
-    const porPedido = new Map<string, ParcelaFin[]>();
-    for (const p of parcelas) {
-      const lista = porPedido.get(p.pedido_id) ?? [];
-      lista.push(p);
-      porPedido.set(p.pedido_id, lista);
-    }
-    setParcelasPorPedido(porPedido);
-
-    // valor pago de um pedido: parcelado → soma das parcelas pagas; único → tudo ou nada
-    const valorPagoDe = (p: PedidoFin): number => {
-      const pars = porPedido.get(p.id);
-      if (pars && pars.length > 0) return pars.filter(x => x.pago).reduce((s, x) => s + (x.valor ?? 0), 0);
-      return p.pago ? totalDe(p) : 0;
-    };
-    const estaQuitado = (p: PedidoFin): boolean => {
-      const pars = porPedido.get(p.id);
-      if (pars && pars.length > 0) return pars.every(x => x.pago);
-      return !!p.pago;
-    };
-
-    // Em atraso: parcela vencida não paga; único não pago com fim previsto passado.
-    const hoje = hojeISO();
-    let atrasado = 0;
-    for (const p of pedidos) {
-      const pars = porPedido.get(p.id);
-      if (pars && pars.length > 0) {
-        atrasado += pars.filter(x => !x.pago && x.vencimento && x.vencimento < hoje)
-          .reduce((s, x) => s + (x.valor ?? 0), 0);
-      } else if (!p.pago && p.data_fim_prevista && p.data_fim_prevista < hoje) {
-        atrasado += totalDe(p);
-      }
-    }
-    setValorAtrasado(Math.round(atrasado * 100) / 100);
-
-    const mapa = new Map<string, GrupoCliente>();
-    for (const p of pedidos) {
-      const key = p.cliente_id ?? "__avulso__";
-      const nome = p.cliente_id ? (nomePorCliente.get(p.cliente_id) ?? "Cliente") : "Sem cliente / avulsos";
-      const g = mapa.get(key) ?? {
-        clienteId: p.cliente_id, nome, pedidos: [],
-        qtd: 0, qtdPagos: 0, valorTotal: 0, valorPago: 0, valorAberto: 0,
-      };
-      const pagoValor = valorPagoDe(p);
-      const total = totalDe(p);
-      g.pedidos.push(p);
-      g.qtd += 1;
-      if (estaQuitado(p)) g.qtdPagos += 1;
-      g.valorTotal += total;
-      g.valorPago += pagoValor;
-      g.valorAberto += total - pagoValor;
-      mapa.set(key, g);
-    }
-
-    const lista = Array.from(mapa.values()).sort((a, b) => b.valorAberto - a.valorAberto);
-    setGrupos(lista);
+    setGrupos(gruposNovos);
     setLoading(false);
-  }, [router]);
+
+    // recarrega os pedidos do grupo aberto (baixa/painel mudou valores);
+    // grupos fechados descartam o cache e recarregam ao expandir de novo
+    setDetalhes(new Map());
+    const aberto = expandidoRef.current;
+    if (aberto !== null) {
+      const g = gruposNovos.find(x => chaveGrupo(x.clienteId) === aberto);
+      if (g) await carregarDetalhe(g.clienteId, 0);
+      else { expandidoRef.current = null; setExpandido(null); } // grupo sumiu (ex.: último pedido cancelado)
+    }
+  }, [router, carregarDetalhe]);
 
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => { carregar(); }, [carregar]);
+
+  const alternarGrupo = (g: GrupoClienteResumo) => {
+    const key = chaveGrupo(g.clienteId);
+    const abrir = expandido !== key;
+    expandidoRef.current = abrir ? key : null;
+    setExpandido(abrir ? key : null);
+    if (abrir && !detalhes.has(key)) carregarDetalhe(g.clienteId, 0);
+  };
 
   // ── baixa rápida do pagamento ÚNICO (parcelado dá baixa por parcela no painel) ──
   const confirmarBaixaRapida = async () => {
@@ -216,7 +172,7 @@ export default function FaturamentoPage() {
     baixandoRef.current = false;
   };
 
-  // ── filtros client-side sobre os GRUPOS (a tela já carrega o agregado) ────
+  // ── filtros client-side sobre os GRUPOS (resumo por cliente é pequeno) ────
   const termo = normalizar(busca);
   const visiveis = grupos.filter(g => {
     if (filtro === "com_pendencia" && g.valorAberto <= 0.009) return false;
@@ -229,7 +185,8 @@ export default function FaturamentoPage() {
     total: acc.total + g.valorTotal,
     pago: acc.pago + g.valorPago,
     aberto: acc.aberto + g.valorAberto,
-  }), { total: 0, pago: 0, aberto: 0 });
+    atrasado: acc.atrasado + g.valorAtrasado,
+  }), { total: 0, pago: 0, aberto: 0, atrasado: 0 });
 
   const hoje = hojeISO();
 
@@ -271,7 +228,7 @@ export default function FaturamentoPage() {
           <KpiCard label="Valor Total" value={loading ? "..." : fmtBRL(totais.total)} />
           <KpiCard label="Recebido"    value={loading ? "..." : fmtBRL(totais.pago)}   color="success" />
           <KpiCard label="Em Aberto"   value={loading ? "..." : fmtBRL(totais.aberto)} color="warning" />
-          <KpiCard label="Em Atraso"   value={loading ? "..." : fmtBRL(valorAtrasado)} color="danger" />
+          <KpiCard label="Em Atraso"   value={loading ? "..." : fmtBRL(totais.atrasado)} color="danger" />
         </div>
 
         <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
@@ -296,14 +253,15 @@ export default function FaturamentoPage() {
         ) : (
           <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
             {visiveis.map(g => {
-              const key = g.clienteId ?? "__avulso__";
+              const key = chaveGrupo(g.clienteId);
               const aberto = expandido === key;
+              const det = detalhes.get(key);
               return (
                 <div key={key} style={{ background: "#fff", borderRadius: "12px", border: "1px solid #e2e8f0", overflow: "hidden" }}>
                   {/* linha do cliente */}
                   <button
                     type="button"
-                    onClick={() => setExpandido(aberto ? null : key)}
+                    onClick={() => alternarGrupo(g)}
                     style={{
                       display: "flex", alignItems: "center", gap: "12px", width: "100%",
                       padding: "14px 16px", background: "none", border: "none", cursor: "pointer", textAlign: "left",
@@ -330,10 +288,13 @@ export default function FaturamentoPage() {
                     </span>
                   </button>
 
-                  {/* pedidos do cliente */}
+                  {/* pedidos do cliente — carregados sob demanda */}
                   {aberto && (
                     <div style={{ borderTop: "1px solid #f1f5f9", padding: "4px 16px 12px" }}>
-                      {g.pedidos.map(p => {
+                      {det?.carregando && (det.pedidos.length === 0) && (
+                        <p style={{ fontSize: "12px", color: "#94a3b8", padding: "10px 0", margin: 0 }}>Carregando pedidos...</p>
+                      )}
+                      {(det?.pedidos ?? []).map(p => {
                         const financeiroAberto = pedidoAberto === p.id;
                         const temParcelas = (parcelasPorPedido.get(p.id)?.length ?? 0) > 0;
                         return (
@@ -380,6 +341,14 @@ export default function FaturamentoPage() {
                           </div>
                         );
                       })}
+                      {det?.temMais && (
+                        <div style={{ display: "flex", justifyContent: "center", padding: "10px 0 4px" }}>
+                          <Btn variant="outline" size="sm" loading={det.carregando} disabled={det.carregando}
+                            onClick={() => carregarDetalhe(g.clienteId, det.pagina + 1)}>
+                            Carregar mais pedidos ({det.pedidos.length} de {g.qtd})
+                          </Btn>
+                        </div>
+                      )}
                     </div>
                   )}
                 </div>

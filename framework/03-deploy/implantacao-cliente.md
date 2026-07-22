@@ -122,6 +122,7 @@
 | 36 | `db/migration_entregas_despacho_nullable.sql` | Entregas com motorista/veículo nullable (fila do Despacho) |
 | 37 | `db/migration_import_notas.sql` | Colunas NFe em entregas (importação em massa — Fase 4) |
 | 38 | `db/migration_kpis_financeiro.sql` | RPCs de soma dos KPIs (abastecimentos, adiantamentos, receita de pedidos) — somas no servidor em vez de baixar a tabela |
+| 39 | `db/migration_faturamento_clientes.sql` | RPC do Financeiro por Cliente (resumo agregado por cliente; pedidos carregam sob demanda). Requer o bloco de acréscimos/descontos antes |
 
 > Após rodar as migrations: popular `empresas.whatsapp_instance` com o nome da instância Evolution
 > (`frota-bot-novo` ou equivalente) e cadastrar a(s) empresa(s) — ver [onboarding-empresa.md](onboarding-empresa.md).

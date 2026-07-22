@@ -23,7 +23,7 @@
 | # | Decisão | Impacto |
 |---|---|---|
 | 4 | Aquecimento do chip WhatsApp + alertas proativos | Risco de banimento |
-| 11 | **Latência ~10-13s: o gargalo é o transporte (~6s), não o código**. Migração pra Oracle não elimina esse lag (Baileys não-oficial). Decidir: migrar pra **WhatsApp Cloud API oficial** (mais rápida/estável, custo por conversa). | Tempo de resposta do bot |
+| ~~11~~ | ~~Latência ~10-13s~~ **RESOLVIDO (07/2026)**: resposta chegando em **3-5s** confirmada pelo dono. Migração pra Cloud API oficial descartada por ora — só reavaliar se a latência regredir. | ~~Tempo de resposta do bot~~ |
 
 ---
 

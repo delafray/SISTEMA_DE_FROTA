@@ -123,22 +123,18 @@ Se você não pode rodar `npm test` (ambiente sem Node, por exemplo), **declare 
 
 ## 🧩 ÁREAS COM COBERTURA INSUFICIENTE HOJE (PRIORIZE)
 
-| Área | Cobertura atual | Onde criar testes |
+> Atualizado em 22/07/2026 — a tabela estava defasada: TODOS os 10 flows já têm teste.
+
+| Área | Cobertura atual | Onde |
 |---|---|---|
 | Schemas (cliente, motorista, veículo) | ✅ Coberto | `src/__tests__/schemas/` |
 | WhatsApp parser/sender/router/auth | ✅ Coberto | `src/__tests__/whatsapp/` |
-| AvariaFlow | ✅ Coberto | `src/__tests__/whatsapp/flows/` |
-| AbastecimentoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/abastecimentoFlow.test.ts` |
-| KmFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/kmFlow.test.ts` |
-| DespesaFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/despesaFlow.test.ts` |
-| ViagemFlow (= Pedido) | ❌ FALTA | `src/__tests__/whatsapp/flows/viagemFlow.test.ts` |
-| GestorFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/gestorFlow.test.ts` |
-| AdiantamentoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/adiantamentoFlow.test.ts` |
-| ChecklistFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/checklistFlow.test.ts` |
-| ImprevistoFlow | ❌ FALTA | `src/__tests__/whatsapp/flows/imprevistoFlow.test.ts` |
-| Validação status veículo | ❌ FALTA | `src/__tests__/lib/veiculoStatus.test.ts` |
-| Pedido: km_final >= km_inicial | ❌ FALTA | `src/__tests__/lib/pedidoValidation.test.ts` |
-| Cálculo diária do motorista (qtd_pedidos × valor_diaria_por_pedido) | ❌ FALTA | `src/__tests__/lib/acertoMensal.test.ts` |
+| TODOS os 10 flows (Avaria, Abastecimento, Km, Despesa, Viagem, Gestor, Adiantamento, Checklist, Imprevisto, ApagarUltimo) | ✅ Coberto (138 testes) | `src/__tests__/whatsapp/flows/` |
+| Status do veículo via bot (parseStatusVeiculo) | ✅ Coberto (11/06) | `src/__tests__/whatsapp/` |
+| Validação de KM no bot (KmFlow, 18 testes) | ✅ Coberto | `src/__tests__/whatsapp/flows/kmFlow.test.ts` |
+| Cálculo do acerto mensal (salário + diária × pedidos + ajustes − adiantamentos) | ✅ Coberto (22/07) | `src/__tests__/lib/acertoMensal.test.ts` (lógica em `src/lib/financeiro/acertoMensal.ts`) |
+| KPIs financeiros com RPC + fallback | ✅ Coberto (22/07) | `src/__tests__/lib/financeiro/` |
+| Pedido: km_final >= km_inicial nas TELAS (entregas/editar, despacho) | ❌ FALTA (validação hoje só no bot; se centralizar em lib, testar) | `src/__tests__/lib/pedidoValidation.test.ts` |
 | View `pedidos_com_resultado` | ❌ FALTA | `src/__tests__/db/pedidosComResultado.test.ts` |
 | View `veiculos_resultado_periodo` | ❌ FALTA | `src/__tests__/db/veiculosResultadoPeriodo.test.ts` |
 
